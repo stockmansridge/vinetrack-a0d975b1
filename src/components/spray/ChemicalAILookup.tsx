@@ -198,23 +198,28 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     const q = name.trim();
     if (!q) {
       setError("Enter a product name to look up.");
+      setErrorAction(null);
       return;
     }
     // Fail closed: jurisdiction comes from the vineyard, never from a locale.
     if (!countryCode) {
       setError(MISSING_VINEYARD_COUNTRY_MESSAGE);
+      setErrorAction(null);
       return;
     }
     setError(null);
+    setErrorAction(null);
     setSearch(null);
     setSelectedIndex(null);
     setSelected(null);
-    setLoading(true);
+    setPendingCandidate(null);
+    setPhase("searching");
     // One correlation id per lookup FLOW: this search and any structured
     // lookup selected from it share it. Diagnostic only.
     const cid = newLookupCorrelationId();
     setCorrelationId(cid);
 
+    let failure: LookupFailure = "other";
     try {
       const { data, error: searchErr } = await iosSupabase.functions.invoke(
         "chemical-info-lookup",
@@ -226,11 +231,12 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
           setError(
             `No registered product found for "${q}" in ${countryLabel(countryCode)}. Check the spelling or enter it manually.`,
           );
-          setLoading(false);
+          setErrorAction("retry_search");
+          setPhase("idle");
           return;
         }
         setSearch(res);
-        setLoading(false);
+        setPhase("idle");
         // The server decides whether a single result is unambiguous; the
         // portal never auto-picks the top-ranked candidate itself.
         if (!requiresCandidateSelection(res)) {
@@ -239,15 +245,17 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
         return;
       }
       console.warn("[chemical-info-lookup:search] unavailable", searchErr ?? data);
-      // Older deployment without `action: "search"` — fall back to the direct
-      // structured lookup on the free text. Master is NOT consulted first.
-      await runStructuredFallback(q, countryCode, cid);
-      return;
+      failure = await describeLookupFailure(searchErr ?? data);
     } catch (e) {
       console.warn("[chemical-info-lookup:search] failed", e);
-      await runStructuredFallback(q, countryCode, cid, e);
-      return;
+      failure = await describeLookupFailure(e);
     }
+    // BOUNDARY: a failed shortlist NEVER escalates into a full structured
+    // free-text lookup (register + research + label work). The typed query is
+    // preserved and the operator chooses: retry the search, or enter manually.
+    setError(searchFailureMessage(failure));
+    setErrorAction("retry_search");
+    setPhase("idle");
   }
 
   /**
@@ -260,8 +268,10 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     if (!countryCode) return;
     const flowId = cid ?? correlationId ?? newLookupCorrelationId();
     setError(null);
+    setErrorAction(null);
     setSelectedIndex(candidate.index);
-    setLoading(true);
+    setPendingCandidate(candidate);
+    setPhase("enriching");
 
     // Master catalogue reuse — ONLY for the exact same registration identity.
     try {
@@ -272,7 +282,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       const exact = masterForCandidate(rows, candidate);
       if (exact) {
         applyMaster(exact);
-        setLoading(false);
+        setPhase("idle");
         return;
       }
     } catch (e) {
@@ -289,13 +299,13 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
         const result = parseChemicalLookup(data, countryCode);
         if (result.jurisdiction.status !== "mismatch") {
           applyResolved(result, candidate);
-          setLoading(false);
+          setPhase("idle");
           return;
         }
         setError(
           `The label returned is not registered in ${countryLabel(countryCode)}. Enter the chemical manually.`,
         );
-        setLoading(false);
+        setPhase("idle");
         return;
       }
       console.warn("[chemical-info-lookup] unavailable", infoErr ?? data);
@@ -304,46 +314,19 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       console.warn("[chemical-info-lookup] failed", e);
       failure = await describeLookupFailure(e);
     }
-    setError(lookupFailureMessage(failure));
-    setLoading(false);
+    // Enrichment failed: keep the chosen identity on screen. No re-search.
+    setSelected((prev) => prev ?? summaryFromCandidate(candidate));
+    setError(enrichmentFailureMessage(failure));
+    setErrorAction("retry_label");
+    setPhase("idle");
   }
 
-  /** Legacy direct structured lookup for deployments without `action: search`. */
-  async function runStructuredFallback(
-    q: string,
-    cc: string,
-    cid: string,
-    priorError?: unknown,
-  ) {
-    let failure: LookupFailure = priorError
-      ? await describeLookupFailure(priorError)
-      : "other";
-    try {
-      const { data, error: infoErr } = await iosSupabase.functions.invoke(
-        "chemical-info-lookup",
-        { body: buildStructuredLookupBody(q, cc, { correlationId: cid }) },
-      );
-      if (!infoErr && isStructuredLookupEnvelope(data)) {
-        const result = parseChemicalLookup(data, cc);
-        if (result.jurisdiction.status !== "mismatch") {
-          applyResolved(result);
-          setLoading(false);
-          return;
-        }
-        setError(
-          `The label returned is not registered in ${countryLabel(cc)}. Enter the chemical manually.`,
-        );
-        setLoading(false);
-        return;
-      }
-      failure = await describeLookupFailure(infoErr ?? data);
-    } catch (e) {
-      failure = await describeLookupFailure(e);
-    }
-    // Fail closed: no canonical data may come from the legacy AI function.
-    setError(lookupFailureMessage(failure));
-    setLoading(false);
+  /** Retry ONLY the label enrichment for the already-selected registration. */
+  function retryLabelDetails() {
+    if (!pendingCandidate) return;
+    void selectCandidate(pendingCandidate, correlationId ?? undefined);
   }
+
 
   function applyMaster(row: MasterChemicalRow) {
     const finalName = row.registered_product_name?.trim() || name.trim();
