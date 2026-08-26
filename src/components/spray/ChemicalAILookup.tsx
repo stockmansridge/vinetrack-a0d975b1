@@ -160,14 +160,24 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
   const countryCode = vineyardCountryCode(country);
   const [name, setName] = useState(initialName);
 
-  const [loading, setLoading] = useState(false);
+  /**
+   * SEARCH and ENRICHMENT are distinct user-visible phases. They never share a
+   * spinner, a message or an error recovery action.
+   */
+  const [phase, setPhase] = useState<"idle" | "searching" | "enriching">("idle");
+  const loading = phase !== "idle";
   const [error, setError] = useState<string | null>(null);
+  /** Which recovery affordance the current error offers. */
+  const [errorAction, setErrorAction] = useState<"retry_search" | "retry_label" | null>(null);
   /** Server-ordered candidate list. Never re-sorted by the portal. */
   const [search, setSearch] = useState<ChemicalSearchResponse | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [correlationId, setCorrelationId] = useState<string | null>(null);
+  /** Candidate kept so label enrichment can be retried without re-searching. */
+  const [pendingCandidate, setPendingCandidate] = useState<SearchCandidate | null>(null);
   /** The single selected-product summary shown after a one-step selection. */
   const [selected, setSelected] = useState<SelectedProductSummary | null>(null);
+
 
   // Informational only — saved chemicals never re-order or auto-select.
   const existingIdentities: SavedChemicalIdentity[] = existingLibrary.map((c) => ({
