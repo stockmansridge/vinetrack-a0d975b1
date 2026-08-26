@@ -296,7 +296,28 @@ export function ChemicalEditor({
               }
             : null,
         );
+        // Persisted defaults come ONLY from the stored contract. There is no
+        // automatic lookup on reopen, so canonical options stay unavailable and
+        // the saved snapshot is displayed from itself.
+        setDefaultRates(
+          decodePersistedDefaultRates((initial as any).default_rates) ??
+            emptyPersistedDefaultRates(),
+        );
+        setDefaultRatesDirty(false);
+        setCanonicalRateOptions(null);
+        setDefaultsClearedNotice(false);
+        setRateProductIdentity(
+          hydrated.registration?.number
+            ? {
+                country: hydrated.registration.country ?? null,
+                scheme: hydrated.registration.scheme ?? null,
+                number: hydrated.registration.number ?? null,
+              }
+            : null,
+        );
+        setLabelVersion(hydrated.registration?.label_version ?? null);
       } else {
+
         setForm({ ...EMPTY, name: initialName?.trim() ? initialName.trim() : "" });
         setRateStr("");
         setExistingCost(null);
