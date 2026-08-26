@@ -262,14 +262,14 @@ describe("D4B-P2B — failed / ambiguous lookup", () => {
 describe("D4B-P2B — save semantics", () => {
   it("N. an unrelated edit omits default_rates entirely", async () => {
     updates.length = 0;
-    await updateSavedChemical("c1", { notes: "changed" });
+    await updateSavedChemical("c1", { name: "Vicol", notes: "changed" });
     expect("default_rates" in updates[0]).toBe(false);
   });
 
   it("O. an operator selection writes the FULL version-1 object", async () => {
     updates.length = 0;
     const d = withBasisSelection(null, "per_100_litres", operator(threeL));
-    await updateSavedChemical("c1", { default_rates: d });
+    await updateSavedChemical("c1", { name: "Vicol", default_rates: d });
     expect(updates[0].default_rates).toEqual({
       version: 1,
       per_hectare: null,
@@ -298,7 +298,7 @@ describe("D4B-P2B — save semantics", () => {
       { version: 1, per_hectare: ha, per_100_litres: operator(threeL) },
       "per_100_litres",
     );
-    await updateSavedChemical("c1", { default_rates: d });
+    await updateSavedChemical("c1", { name: "Vicol", default_rates: d });
     expect(updates[0].default_rates.per_100_litres).toBeNull();
     expect(updates[0].default_rates.per_hectare).toEqual(ha);
     expect(updates[0].default_rates.version).toBe(1);
@@ -307,7 +307,7 @@ describe("D4B-P2B — save semantics", () => {
   it("Q. a true range persists min/max with value null, exactly", async () => {
     updates.length = 0;
     const d = withBasisSelection(null, "per_hectare", operator(RANGE_OPTION));
-    await updateSavedChemical("c1", { default_rates: d });
+    await updateSavedChemical("c1", { name: "Vicol", default_rates: d });
     expect(updates[0].default_rates.per_hectare).toMatchObject({
       value: null,
       min_value: 1.5,
@@ -323,7 +323,7 @@ describe("D4B-P2B — save semantics", () => {
   it("R. no /100 L <-> /ha conversion ever happens", async () => {
     updates.length = 0;
     const d = withBasisSelection(null, "per_100_litres", operator(threeL));
-    await updateSavedChemical("c1", { default_rates: d });
+    await updateSavedChemical("c1", { name: "Vicol", default_rates: d });
     expect(updates[0].default_rates.per_100_litres.basis).toBe("per_100_litres");
     expect(updates[0].default_rates.per_100_litres.value).toBe(3);
     expect(updates[0].default_rates.per_hectare).toBeNull();
@@ -332,7 +332,7 @@ describe("D4B-P2B — save semantics", () => {
   it("S. a canonical selection never touches legacy rate_per_ha / unit", async () => {
     updates.length = 0;
     const d = withBasisSelection(null, "per_100_litres", operator(threeL));
-    await updateSavedChemical("c1", { default_rates: d });
+    await updateSavedChemical("c1", { name: "Vicol", default_rates: d });
     expect("rate_per_ha" in updates[0]).toBe(false);
     // saved_chemicals.unit is NOT NULL, so the writer defaults it — but never
     // from the label rate unit of the selection.
