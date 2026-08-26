@@ -56,19 +56,19 @@ describe("D4B-P2A — canonical default_rate_options (APVMA 33182 shape)", () =>
 
   it("passes the backend option_key through byte-for-byte", () => {
     expect(options!.per_100_litres.map((o) => o.option_key)).toEqual([
-      "default_option_v1_33182_p100l_2l",
-      "default_option_v1_33182_p100l_3l",
+      "default_option_v1_42d1761ddc477436ffd40e7b881f0255",
+      "default_option_v1_94df25e59456a8a736cdb446e1a7af3e",
     ]);
   });
 
   it("passes exactly the backend rate_ids through, in server order", () => {
     expect(options!.per_100_litres[0].rate_ids).toEqual([
-      "rate_v1_33182_downy_dilute_2l",
-      "rate_v1_33182_powdery_dilute_2l",
+      "rate_v1_2b559abc7cadaefe20e405674c523811",
+      "rate_v1_758843c84a12d817494ccd5acd13720f",
     ]);
     expect(options!.per_100_litres[1].rate_ids).toEqual([
-      "rate_v1_33182_downy_dilute_3l",
-      "rate_v1_33182_powdery_dilute_3l",
+      "rate_v1_347ebfa9ad731449f589ae79458eaa88",
+      "rate_v1_805fb1dea8eb5f2bba9740b95d52a773",
     ]);
   });
 
@@ -322,7 +322,7 @@ describe("D4B-P2A — backend identity round-trip", () => {
       "direction_v1_33182_grapevine_downy",
     );
     expect(draft.registeredUses[0].rates[0].extra?.rate_id).toBe(
-      "rate_v1_33182_downy_dilute_2l",
+      "rate_v1_2b559abc7cadaefe20e405674c523811",
     );
     expect(draft.registeredUses[0].rates[0].extra?.text_layer_text).toBe("2 L/100 L water");
 
@@ -339,10 +339,10 @@ describe("D4B-P2A — backend identity round-trip", () => {
       u.rates.map((r) => r.extra?.rate_id),
     );
     expect(rateIds).toEqual([
-      "rate_v1_33182_downy_dilute_2l",
-      "rate_v1_33182_downy_dilute_3l",
-      "rate_v1_33182_powdery_dilute_2l",
-      "rate_v1_33182_powdery_dilute_3l",
+      "rate_v1_2b559abc7cadaefe20e405674c523811",
+      "rate_v1_347ebfa9ad731449f589ae79458eaa88",
+      "rate_v1_758843c84a12d817494ccd5acd13720f",
+      "rate_v1_805fb1dea8eb5f2bba9740b95d52a773",
     ]);
     expect(
       reopened.registeredUses[1].rates[1].extra?.text_layer_text,
