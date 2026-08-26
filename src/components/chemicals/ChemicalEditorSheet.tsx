@@ -31,23 +31,24 @@ import {
 } from "@/components/ui/collapsible";
 import { GrapevineUsesCard } from "@/components/chemicals/GrapevineUsesCard";
 import { DefaultRatesCard } from "@/components/chemicals/DefaultRatesCard";
-import {
-  decodePersistedDefaultRates,
-  type CanonicalDefaultRateOption,
-  type CanonicalDefaultRateOptions,
-  type CanonicalRateBasis,
-  type PersistedDefaultRates,
+import type {
+  CanonicalDefaultRateOption,
+  CanonicalRateBasis,
 } from "@/lib/chemicalDefaultRatesContract";
 import {
   PRODUCT_CHANGED_MESSAGE,
-  clearAllBasisSelections,
-  clearBasisSelection,
-  emptyPersistedDefaultRates,
-  isKnownDifferentRegisteredProduct,
   matchDefaultRateSlots,
-  selectionFromCanonicalOption,
-  withBasisSelection,
 } from "@/lib/chemicalDefaultRateSelection";
+import {
+  applyAuthoritativeChemistry,
+  applyReplacedChemistry,
+  clearDefaultRate,
+  hydrateDefaultRateLifecycle,
+  invalidateCanonicalOptions,
+  newDefaultRateLifecycle,
+  selectDefaultRate,
+  type DefaultRateLifecycleState,
+} from "@/lib/chemicalDefaultRateLifecycle";
 
 
 import {
