@@ -32,6 +32,24 @@ import {
 import { GrapevineUsesCard } from "@/components/chemicals/GrapevineUsesCard";
 import { DefaultRatesCard } from "@/components/chemicals/DefaultRatesCard";
 import { buildDefaultRateOptions } from "@/lib/chemicalDefaultRates";
+import {
+  decodePersistedDefaultRates,
+  type CanonicalDefaultRateOption,
+  type CanonicalDefaultRateOptions,
+  type CanonicalRateBasis,
+  type PersistedDefaultRates,
+} from "@/lib/chemicalDefaultRatesContract";
+import {
+  PRODUCT_CHANGED_MESSAGE,
+  clearAllBasisSelections,
+  clearBasisSelection,
+  emptyPersistedDefaultRates,
+  isKnownDifferentRegisteredProduct,
+  matchDefaultRateSlots,
+  selectionFromCanonicalOption,
+  withBasisSelection,
+} from "@/lib/chemicalDefaultRateSelection";
+
 
 import {
   MANUFACTURER_LABEL_UNRESOLVED,
