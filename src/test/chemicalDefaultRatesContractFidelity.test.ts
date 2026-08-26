@@ -87,6 +87,27 @@ describe("D4B-P2A.1 — provenance is nullable and tolerant", () => {
     expect(out!.per_100_litres?.rate_ids).toEqual([RATE_2L_A, RATE_2L_B]);
   });
 
+  it("whitespace-only selected_at degrades to null and the selection survives", () => {
+    const out = persisted({ selected_at: "   " });
+    expect(out!.per_100_litres?.option_key).toBe(OPTION_2L);
+    expect(out!.per_100_litres?.selected_at).toBeNull();
+  });
+
+  it("whitespace-only label_version degrades to null and the selection survives", () => {
+    const out = persisted({ label_version: "   " });
+    expect(out!.per_100_litres?.option_key).toBe(OPTION_2L);
+    expect(out!.per_100_litres?.label_version).toBeNull();
+  });
+
+  it("a padded provenance string is trimmed and otherwise untouched", () => {
+    const out = persisted({
+      label_version: "  APVMA 1097  ",
+      selected_at: " 2026-08-26T00:00:00.000Z ",
+    })!.per_100_litres!;
+    expect(out.label_version).toBe("APVMA 1097");
+    expect(out.selected_at).toBe("2026-08-26T00:00:00.000Z");
+  });
+
   it("E. malformed label_version degrades to null without killing the selection", () => {
     const out = persisted({ label_version: {} });
     expect(out!.per_100_litres).not.toBeNull();
