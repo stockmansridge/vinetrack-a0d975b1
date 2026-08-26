@@ -12,7 +12,9 @@ export type CandidatePromptKind =
   | "none"
   | "found"
   | "confirm_single"
-  | "select_multiple";
+  | "select_multiple"
+  | "unverified";
+
 
 export interface CandidatePrompt {
   kind: CandidatePromptKind;
