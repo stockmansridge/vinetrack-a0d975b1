@@ -679,7 +679,7 @@ export function ChemicalEditor({
       intel.registration.country !== next.registration.country ||
       intel.registration.scheme !== next.registration.scheme;
     const usesChanged = intel.registeredUses !== next.registeredUses;
-    if (identityChanged || usesChanged) setCanonicalRateOptions(null);
+    if (identityChanged || usesChanged) invalidateCanonicalRateOptions();
     setIntel(next);
   };
 
