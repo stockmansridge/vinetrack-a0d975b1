@@ -626,6 +626,25 @@ export function ChemicalEditor({
     setDefaultsClearedNotice(false);
   };
 
+  /**
+   * Manual intelligence edits (§16). Canonical options belong to one
+   * authoritative lookup response: if registered uses or registration identity
+   * are hand-edited afterwards, only the IN-MEMORY option set is invalidated.
+   * Persisted defaults are never wiped here.
+   */
+  const handleIntelChange = (next: ChemicalIntelligenceDraft) => {
+    setIntel((prev) => {
+      const identityChanged =
+        prev.registration.number !== next.registration.number ||
+        prev.registration.country !== next.registration.country ||
+        prev.registration.scheme !== next.registration.scheme;
+      const usesChanged = prev.registeredUses !== next.registeredUses;
+      if (identityChanged || usesChanged) setCanonicalRateOptions(null);
+      return next;
+    });
+  };
+
+
   const labelLinks = resolveChemicalLabelLinks({
     sources: intel.sources,
     labelReference: intel.registration.label_reference,
