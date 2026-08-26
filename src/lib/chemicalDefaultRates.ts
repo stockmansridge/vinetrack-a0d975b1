@@ -1,6 +1,12 @@
 // Default rate selection — a USER decision built only from authoritative
 // structured GRAPEVINE label rates.
 //
+// D4B-P2A BOUNDARY: this module is LEGACY / DISPLAY-ONLY until D4B-P2B. Its
+// locally minted option ids (`${basis}|${rate.text}`) are presentation keys and
+// must NEVER be persisted. The operational identity for a persisted operator
+// default is the backend canonical `default_rate_options` contract in
+// `src/lib/chemicalDefaultRatesContract.ts` (`option_key` + `rate_ids`).
+//
 // Hard rules encoded here:
 //   * options come from grapevine registered uses only (never other crops,
 //     never AI suggestions, never brochure text);
