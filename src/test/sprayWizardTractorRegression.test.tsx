@@ -69,7 +69,7 @@ describe("useWizardLookups tractor source", () => {
   it("contains only genuine tractors from public.tractors", async () => {
     let lookups: any;
     render(wrapper(<TestLookups vineyardId="v1" onLookups={(l) => (lookups = l)} />));
-    await new Promise((r) => setTimeout(r, 10));
+    await waitFor(() => expect(lookups?.maps.tractors.size).toBe(2));
     const names = Array.from(lookups.maps.tractors.values());
     expect(names).toContain("New Holland T4");
     expect(names).toContain("Fendt 211");
