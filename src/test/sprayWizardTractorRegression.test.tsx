@@ -2,7 +2,7 @@
 // public.tractors rows. Vineyard Machines must never leak into this dropdown
 // because spray_jobs.tractor_id is a foreign key to public.tractors.id.
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, within, fireEvent } from "@testing-library/react";
+import { render, screen, within, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const fetchList = vi.fn();
