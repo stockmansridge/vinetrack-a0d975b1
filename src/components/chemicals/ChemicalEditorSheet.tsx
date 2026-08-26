@@ -633,16 +633,15 @@ export function ChemicalEditor({
    * Persisted defaults are never wiped here.
    */
   const handleIntelChange = (next: ChemicalIntelligenceDraft) => {
-    setIntel((prev) => {
-      const identityChanged =
-        prev.registration.number !== next.registration.number ||
-        prev.registration.country !== next.registration.country ||
-        prev.registration.scheme !== next.registration.scheme;
-      const usesChanged = prev.registeredUses !== next.registeredUses;
-      if (identityChanged || usesChanged) setCanonicalRateOptions(null);
-      return next;
-    });
+    const identityChanged =
+      intel.registration.number !== next.registration.number ||
+      intel.registration.country !== next.registration.country ||
+      intel.registration.scheme !== next.registration.scheme;
+    const usesChanged = intel.registeredUses !== next.registeredUses;
+    if (identityChanged || usesChanged) setCanonicalRateOptions(null);
+    setIntel(next);
   };
+
 
 
   const labelLinks = resolveChemicalLabelLinks({
