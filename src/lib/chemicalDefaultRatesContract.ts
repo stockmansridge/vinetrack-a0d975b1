@@ -129,9 +129,15 @@ function decodeAmountShape(
   return { value: null, min_value: min, max_value: max };
 }
 
-/** Provenance string slot: absent/null/malformed => null. */
+/**
+ * Provenance string slot (shared D3): null/undefined/non-string/empty/
+ * whitespace-only => null; otherwise the trimmed string. No other
+ * normalization, and never invalidates the selection.
+ */
 function provenanceString(v: unknown): string | null {
-  return typeof v === "string" && v !== "" ? v : null;
+  if (typeof v !== "string") return null;
+  const trimmed = v.trim();
+  return trimmed === "" ? null : trimmed;
 }
 
 /** Non-empty string array, verbatim. */
