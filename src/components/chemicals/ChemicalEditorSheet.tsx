@@ -30,6 +30,9 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { GrapevineUsesCard } from "@/components/chemicals/GrapevineUsesCard";
+import { DefaultRatesCard } from "@/components/chemicals/DefaultRatesCard";
+import { buildDefaultRateOptions } from "@/lib/chemicalDefaultRates";
+
 import {
   MANUFACTURER_LABEL_UNRESOLVED,
   resolveChemicalLabelLinks,
@@ -124,7 +127,7 @@ const EMPTY: SavedChemicalInput = {
 
 export function ChemicalEditor({
   open, onOpenChange, initial, vineyardId, existingLibrary, canSeeCosts, onSaved,
-  initialName,
+  initialName, jurisdiction,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -134,11 +137,18 @@ export function ChemicalEditor({
   canSeeCosts: boolean;
   /** Optional starting product name (new chemicals only). Never a verified identity. */
   initialName?: string | null;
+  /**
+   * Vineyard state / territory (e.g. "NSW") used ONLY to narrow a
+   * state-conditional label rate. The portal has no authoritative state field
+   * today, so this is normally undefined and the conservative rules apply.
+   */
+  jurisdiction?: string | null;
   /** Receives the persisted Saved Chemical row so callers can bind by identity. */
   onSaved: (saved: SavedChemical) => void;
 }) {
   const { toast } = useToast();
   const { currentCountry } = useVineyard();
+
   const [form, setForm] = useState<SavedChemicalInput>(EMPTY);
   const [rateStr, setRateStr] = useState("");
   const [packSizeStr, setPackSizeStr] = useState("");
@@ -159,7 +169,12 @@ export function ChemicalEditor({
   // Master product or accepted a Master update — never inferred by name.
   const [masterLink, setMasterLink] = useState<{ id: string; revision: number | null } | null>(null);
   const [masterUpdateOpen, setMasterUpdateOpen] = useState(false);
+  // Manufacturer's own label URL from the lookup. Never the regulator label.
+  const [manufacturerLabelUrl, setManufacturerLabelUrl] = useState<string | undefined>();
+  // Operator-chosen default rate (grapevine label rate option id).
+  const [defaultRateId, setDefaultRateId] = useState<string | null>(null);
   const showIntelEditor = !initial || upgraded || hasStructuredIntelligence(intel);
+
 
   // Linked Master record — used only for revision-drift detection. The saved
   // chemical's own columns remain the source of truth for display.
@@ -351,10 +366,20 @@ export function ChemicalEditor({
       if (s.master) {
         setMasterLink({ id: s.master.id, revision: masterRevision(s.master) ?? null });
       }
-      // LD-2 authoritative label rate. Only a single-value per-100 L or
-      // per-hectare rate may fill the numeric field; ranges keep their min/max
-      // (shown on the card) and basis "other" is reference text only.
-      const rate = r.fields.ratePer100L ?? r.fields.ratePerHectare;
+      // Default rate is a decision, not a guess. Only the conservative rule in
+      // chemicalDefaultRates may pre-select one; otherwise the field stays
+      // blank and the operator picks from the registered grapevine directions.
+      const rateOptions = buildDefaultRateOptions(r.draft.registeredUses, {
+        jurisdiction,
+      });
+      const recommendedGroup =
+        (rateOptions.per100L.recommendedId && rateOptions.per100L) ||
+        (rateOptions.perHectare.recommendedId && rateOptions.perHectare) ||
+        null;
+      const recommended = recommendedGroup
+        ? recommendedGroup.options.find((o) => o.id === recommendedGroup.recommendedId)
+        : undefined;
+      setManufacturerLabelUrl(r.fields.manufacturerLabelUrl);
       setForm((p) => ({
         ...p,
         name: r.fields.name ?? s.name ?? p.name ?? "",
@@ -363,13 +388,22 @@ export function ChemicalEditor({
         active_ingredient: r.fields.activeIngredientText ?? p.active_ingredient ?? "",
         chemical_group: r.fields.chemicalGroupText ?? p.chemical_group ?? "",
         problem: r.fields.target ?? p.problem ?? "",
-        unit: rate?.composedUnit ?? p.unit ?? "",
+        unit: recommended?.composedUnit ?? p.unit ?? "",
         label_url:
-          r.fields.labelReference && /^https?:\/\//i.test(r.fields.labelReference)
+          r.fields.regulatorLabelUrl ??
+          (r.fields.labelReference && /^https?:\/\//i.test(r.fields.labelReference)
             ? r.fields.labelReference
-            : (p.label_url ?? ""),
+            : (p.label_url ?? "")),
+        // The manufacturer's own product page — never the regulator URL.
+        product_url: r.fields.manufacturerProductUrl ?? p.product_url ?? "",
       }));
-      setRateStr(rate?.autoFillValue != null ? String(rate.autoFillValue) : "");
+      setDefaultRateId(recommended?.id ?? null);
+      setRateStr(
+        recommended && !recommended.isRange && recommended.value != null
+          ? String(recommended.value)
+          : "",
+      );
+
       // Label-backed only. When the structured response does not return a
       // WHP / REI with authoritative provenance the field is CLEARED, so a
       // stale or AI-sourced number can never survive an authoritative apply.
@@ -466,10 +500,16 @@ export function ChemicalEditor({
   };
 
   const structuredUses = intel.registeredUses.length > 0;
+  const defaultRateOptions = useMemo(
+    () => buildDefaultRateOptions(intel.registeredUses, { jurisdiction }),
+    [intel.registeredUses, jurisdiction],
+  );
   const labelLinks = resolveChemicalLabelLinks({
     sources: intel.sources,
     labelReference: intel.registration.label_reference,
     labelUrl: form.label_url,
+    manufacturerLabelUrl,
+
     productUrl: form.product_url,
   });
 
@@ -807,6 +847,38 @@ export function ChemicalEditor({
                   legacyRateBlock
                 )}
               </Section>
+
+              {structuredUses && (
+                <Section title="Default rate">
+                  <DefaultRatesCard
+                    options={defaultRateOptions}
+                    selectedId={defaultRateId}
+                    onSelect={(o) => {
+                      setDefaultRateId(o.id);
+                      // A label range is never collapsed to a single number —
+                      // the basis/unit is set and the operator enters the rate.
+                      setRateStr(!o.isRange && o.value != null ? String(o.value) : "");
+                      if (o.composedUnit) set("unit", o.composedUnit);
+                    }}
+                  />
+                  <div className="mt-2 grid grid-cols-2 gap-3">
+                    <Field label="Default rate">
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        step="any"
+                        value={rateStr}
+                        placeholder="Not set"
+                        onChange={(e) => setRateStr(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Unit">
+                      <Input value={form.unit ?? ""} placeholder="Not set" readOnly />
+                    </Field>
+                  </div>
+                </Section>
+              )}
+
 
               {canSeeCosts && (
                 <Collapsible>
