@@ -660,8 +660,24 @@ interface SelectedProductSummary {
   activeIngredient?: string;
   category?: string;
   verification?: string;
-  source: "registered" | "master" | "existing" | "manual";
+  source: "registered" | "master" | "existing" | "manual" | "pending";
 }
+
+/**
+ * Identity-only summary kept on screen when label enrichment fails. It carries
+ * nothing beyond what the candidate already stated — no estimated label data.
+ */
+function summaryFromCandidate(c: SearchCandidate): SelectedProductSummary {
+  return {
+    name: c.productName ?? "Selected product",
+    registrationNumber: c.registrationNumber,
+    registrant: c.registrant,
+    activeIngredient: c.activeIngredientText,
+    category: c.category,
+    source: "pending",
+  };
+}
+
 
 function Row({ label, value }: { label: string; value?: string | null }) {
   return (
