@@ -188,29 +188,15 @@ export function ChemicalEditor({
   const [masterUpdateOpen, setMasterUpdateOpen] = useState(false);
   // Manufacturer's own label URL from the lookup. Never the regulator label.
   const [manufacturerLabelUrl, setManufacturerLabelUrl] = useState<string | undefined>();
-  // Operator-chosen default rate (grapevine label rate option id).
-  // ---- SQL 214 / D3 persisted operator default rates (Gate D4B-P2B).
-  // Two independent basis slots. NEVER inferred from rate_per_ha, never derived
-  // from the local display-only buildDefaultRateOptions().
-  const [defaultRates, setDefaultRates] = useState<PersistedDefaultRates>(
-    emptyPersistedDefaultRates(),
+  // ---- SQL 214 / D3 persisted operator default rates (Gates D4B-P2B / P2B.1).
+  // ALL transitions live in the pure lifecycle module: two independent basis
+  // slots, the omit-vs-write dirty gate, the canonical-option lifetime rule and
+  // the product-ownership clearing rule. Never inferred from rate_per_ha, never
+  // derived from the local display-only buildDefaultRateOptions().
+  const [rateLife, setRateLife] = useState<DefaultRateLifecycleState>(
+    newDefaultRateLifecycle(),
   );
-  // Omit-vs-write gate: false => default_rates is omitted from the save payload
-  // so the existing DB value survives an unrelated edit.
-  const [defaultRatesDirty, setDefaultRatesDirty] = useState(false);
-  // Backend canonical options from the most recent authoritative lookup in THIS
-  // editor session. null => not fetched (saved snapshot shown as "unavailable").
-  const [canonicalRateOptions, setCanonicalRateOptions] =
-    useState<CanonicalDefaultRateOptions | null>(null);
-  const [defaultsClearedNotice, setDefaultsClearedNotice] = useState(false);
-  // Authoritative registered product identity behind the current canonical
-  // options / persisted defaults (§7). Used only to detect a proven change.
-  const [rateProductIdentity, setRateProductIdentity] = useState<{
-    country?: string | null;
-    scheme?: string | null;
-    number?: string | null;
-  } | null>(null);
-  const [labelVersion, setLabelVersion] = useState<string | null>(null);
+  const { defaultRates, canonicalOptions: canonicalRateOptions } = rateLife;
   const showIntelEditor = !initial || upgraded || hasStructuredIntelligence(intel);
 
 
@@ -298,23 +284,13 @@ export function ChemicalEditor({
         // Persisted defaults come ONLY from the stored contract. There is no
         // automatic lookup on reopen, so canonical options stay unavailable and
         // the saved snapshot is displayed from itself.
-        setDefaultRates(
-          decodePersistedDefaultRates((initial as any).default_rates) ??
-            emptyPersistedDefaultRates(),
+        setRateLife(
+          hydrateDefaultRateLifecycle({
+            storedDefaultRates: (initial as any).default_rates,
+            productIdentity: draftRateProductIdentity(hydrated),
+            labelVersion: hydrated.registration?.label_version ?? null,
+          }),
         );
-        setDefaultRatesDirty(false);
-        setCanonicalRateOptions(null);
-        setDefaultsClearedNotice(false);
-        setRateProductIdentity(
-          hydrated.registration?.number
-            ? {
-                country: hydrated.registration.country ?? null,
-                scheme: hydrated.registration.scheme ?? null,
-                number: hydrated.registration.number ?? null,
-              }
-            : null,
-        );
-        setLabelVersion(hydrated.registration?.label_version ?? null);
       } else {
 
         setForm({ ...EMPTY, name: initialName?.trim() ? initialName.trim() : "" });
@@ -331,12 +307,7 @@ export function ChemicalEditor({
         setIntelBase(emptyDraft());
         setUpgraded(false);
         setMasterLink(null);
-        setDefaultRates(emptyPersistedDefaultRates());
-        setDefaultRatesDirty(false);
-        setCanonicalRateOptions(null);
-        setDefaultsClearedNotice(false);
-        setRateProductIdentity(null);
-        setLabelVersion(null);
+        setRateLife(newDefaultRateLifecycle());
 
       }
       setMasterUpdateOpen(false);
@@ -371,7 +342,7 @@ export function ChemicalEditor({
         // wipe the persisted default; when dirty the FULL version-1 object is
         // written, including explicit null slots. Never set to null just
         // because both slots are null.
-        ...(defaultRatesDirty
+        ...(rateLife.dirty
           ? {
               default_rates: {
                 version: 1 as const,
@@ -425,16 +396,6 @@ export function ChemicalEditor({
   const set = <K extends keyof SavedChemicalInput>(k: K, v: SavedChemicalInput[K]) =>
     setForm((p) => ({ ...p, [k]: v }));
 
-  /**
-   * P2B.1 §6 — the single canonical-option lifetime rule.
-   *
-   * Canonical options are valid ONLY for the exact authoritative structured
-   * lookup that supplied them. Any path where the in-memory chemistry can
-   * diverge from that lookup invalidates them. Invalidation NEVER clears or
-   * dirties `default_rates`.
-   */
-  const invalidateCanonicalRateOptions = () => setCanonicalRateOptions(null);
-
   /** Registered-product identity of a draft, or null when not fully stated. */
   const draftRateProductIdentity = (d: ChemicalIntelligenceDraft) =>
     d.registration.number
@@ -444,28 +405,6 @@ export function ChemicalEditor({
           number: d.registration.number ?? null,
         }
       : null;
-
-  /**
-   * P2B.1 §1 — shared product-ownership boundary. A persisted default cites one
-   * product's rate_v1 identities, so both slots are cleared when the OLD and
-   * NEW registered identities are BOTH fully known and actually differ. Applies
-   * to new and existing Saved Chemicals alike. A label revision is not a
-   * product change, and an incomplete identity never clears.
-   */
-  const applyRateProductIdentity = (
-    nextIdentity: { country?: string | null; scheme?: string | null; number?: string | null } | null,
-  ) => {
-    const changed = isKnownDifferentRegisteredProduct(rateProductIdentity, nextIdentity);
-    if (changed) {
-      setDefaultRates(clearAllBasisSelections());
-      setDefaultRatesDirty(true);
-      setDefaultsClearedNotice(true);
-    } else {
-      setDefaultsClearedNotice(false);
-    }
-    setRateProductIdentity(nextIdentity ?? rateProductIdentity);
-    return changed;
-  };
 
 
   const applySuggestion = (s: AppliedSuggestion) => {
@@ -506,12 +445,19 @@ export function ChemicalEditor({
       // label revision change is NOT a product change. This applies to NEW
       // chemicals too (P2B.1 §1): product A's default may never survive a
       // subsequent authoritative lookup of product B.
-      applyRateProductIdentity(nextIdentity);
       // Canonical options live only for the lookup that supplied them
       // (P2B.1 §2/§6): an authoritative apply with no option block makes the
-      // previous options unavailable. Persisted defaults / dirty stay untouched.
-      setCanonicalRateOptions(r.defaultRateOptions ?? null);
-      setLabelVersion(r.fields.labelVersion ?? null);
+      // previous options unavailable while the persisted selection and dirty
+      // flag stay untouched. Product-ownership clearing applies to NEW
+      // chemicals too (§1): product A's default may not survive a later
+      // authoritative lookup of product B.
+      setRateLife((prev) =>
+        applyAuthoritativeChemistry(prev, {
+          productIdentity: nextIdentity,
+          options: r.defaultRateOptions ?? null,
+          labelVersion: r.fields.labelVersion ?? null,
+        }),
+      );
       setManufacturerLabelUrl(r.fields.manufacturerLabelUrl);
       setForm((p) => ({
         ...p,
@@ -557,8 +503,11 @@ export function ChemicalEditor({
       // P2B.1 §5 — applying another Master product replaces the chemistry, so
       // options from an earlier authoritative lookup are no longer current.
       // Canonical options are NEVER manufactured from Master data.
-      invalidateCanonicalRateOptions();
-      applyRateProductIdentity(draftRateProductIdentity(draft));
+      setRateLife((prev) =>
+        applyReplacedChemistry(prev, {
+          productIdentity: draftRateProductIdentity(draft),
+        }),
+      );
       setForm((p) => ({
         ...p,
         name: s.master!.registered_product_name?.trim() || s.name || p.name || "",
@@ -646,26 +595,12 @@ export function ChemicalEditor({
     option: CanonicalDefaultRateOption,
     basis: CanonicalRateBasis,
   ) => {
-    setDefaultRates((prev) =>
-      withBasisSelection(
-        prev,
-        basis,
-        selectionFromCanonicalOption(option, {
-          source: "operator",
-          selectedAt: new Date().toISOString(),
-          labelVersion,
-        }),
-      ),
-    );
-    setDefaultRatesDirty(true);
-    setDefaultsClearedNotice(false);
+    const selectedAt = new Date().toISOString();
+    setRateLife((prev) => selectDefaultRate(prev, option, basis, selectedAt));
   };
 
-  const handleClearDefaultRate = (basis: CanonicalRateBasis) => {
-    setDefaultRates((prev) => clearBasisSelection(prev, basis));
-    setDefaultRatesDirty(true);
-    setDefaultsClearedNotice(false);
-  };
+  const handleClearDefaultRate = (basis: CanonicalRateBasis) =>
+    setRateLife((prev) => clearDefaultRate(prev, basis));
 
   /**
    * Manual intelligence edits (§16). Canonical options belong to one
@@ -679,7 +614,7 @@ export function ChemicalEditor({
       intel.registration.country !== next.registration.country ||
       intel.registration.scheme !== next.registration.scheme;
     const usesChanged = intel.registeredUses !== next.registeredUses;
-    if (identityChanged || usesChanged) invalidateCanonicalRateOptions();
+    if (identityChanged || usesChanged) setRateLife(invalidateCanonicalOptions);
     setIntel(next);
   };
 
@@ -763,8 +698,11 @@ export function ChemicalEditor({
             // identity or label revision: invalidate the in-memory options and
             // require a fresh authoritative lookup. Defaults are preserved
             // unless the registered product is provably different.
-            invalidateCanonicalRateOptions();
-            applyRateProductIdentity(draftRateProductIdentity(next));
+            setRateLife((prev) =>
+              applyReplacedChemistry(prev, {
+                productIdentity: draftRateProductIdentity(next),
+              }),
+            );
             toast({
               title: "Verified update applied",
               description: "Save the chemical to keep these changes.",
@@ -1040,7 +978,7 @@ export function ChemicalEditor({
 
               {structuredUses && (
                 <Section title="Default rate">
-                  {defaultsClearedNotice && (
+                  {rateLife.productChangedNotice && (
                     <p className="mb-2 rounded-md border border-warning/50 bg-warning/10 p-2 text-[11px]">
                       {PRODUCT_CHANGED_MESSAGE}
                     </p>
