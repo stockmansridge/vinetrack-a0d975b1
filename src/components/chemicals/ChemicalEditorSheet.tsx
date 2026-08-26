@@ -880,11 +880,14 @@ export function ChemicalEditor({
                     <Input
                       value={intel.registration.number ?? ""}
                       placeholder="Not stated"
+                      // P2B.1 §3 — goes through the shared invalidation
+                      // boundary so a hand-edited registration number cannot
+                      // leave stale canonical options selectable.
                       onChange={(e) =>
-                        setIntel((p) => ({
-                          ...p,
-                          registration: { ...p.registration, number: e.target.value },
-                        }))
+                        handleIntelChange({
+                          ...intel,
+                          registration: { ...intel.registration, number: e.target.value },
+                        })
                       }
                     />
                   </Field>
