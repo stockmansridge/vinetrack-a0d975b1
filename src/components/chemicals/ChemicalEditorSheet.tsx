@@ -425,6 +425,49 @@ export function ChemicalEditor({
   const set = <K extends keyof SavedChemicalInput>(k: K, v: SavedChemicalInput[K]) =>
     setForm((p) => ({ ...p, [k]: v }));
 
+  /**
+   * P2B.1 §6 — the single canonical-option lifetime rule.
+   *
+   * Canonical options are valid ONLY for the exact authoritative structured
+   * lookup that supplied them. Any path where the in-memory chemistry can
+   * diverge from that lookup invalidates them. Invalidation NEVER clears or
+   * dirties `default_rates`.
+   */
+  const invalidateCanonicalRateOptions = () => setCanonicalRateOptions(null);
+
+  /** Registered-product identity of a draft, or null when not fully stated. */
+  const draftRateProductIdentity = (d: ChemicalIntelligenceDraft) =>
+    d.registration.number
+      ? {
+          country: d.registration.country ?? null,
+          scheme: d.registration.scheme ?? null,
+          number: d.registration.number ?? null,
+        }
+      : null;
+
+  /**
+   * P2B.1 §1 — shared product-ownership boundary. A persisted default cites one
+   * product's rate_v1 identities, so both slots are cleared when the OLD and
+   * NEW registered identities are BOTH fully known and actually differ. Applies
+   * to new and existing Saved Chemicals alike. A label revision is not a
+   * product change, and an incomplete identity never clears.
+   */
+  const applyRateProductIdentity = (
+    nextIdentity: { country?: string | null; scheme?: string | null; number?: string | null } | null,
+  ) => {
+    const changed = isKnownDifferentRegisteredProduct(rateProductIdentity, nextIdentity);
+    if (changed) {
+      setDefaultRates(clearAllBasisSelections());
+      setDefaultRatesDirty(true);
+      setDefaultsClearedNotice(true);
+    } else {
+      setDefaultsClearedNotice(false);
+    }
+    setRateProductIdentity(nextIdentity ?? rateProductIdentity);
+    return changed;
+  };
+
+
   const applySuggestion = (s: AppliedSuggestion) => {
     // ---- Upgraded resolver result. This branch is TERMINAL: once a
     // structured resolver result has been handled, no legacy AI/lookup
