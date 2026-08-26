@@ -257,7 +257,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       console.warn("[master-chemicals] cache lookup unavailable", e);
     }
 
-    let failure: "quota" | "other" = "other";
+    let failure: LookupFailure = "other";
     try {
       const { data, error: infoErr } = await iosSupabase.functions.invoke(
         "chemical-info-lookup",
@@ -293,7 +293,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     cid: string,
     priorError?: unknown,
   ) {
-    let failure: "quota" | "other" = priorError
+    let failure: LookupFailure = priorError
       ? await describeLookupFailure(priorError)
       : "other";
     try {
