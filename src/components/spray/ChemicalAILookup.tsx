@@ -9,11 +9,7 @@ import {
   isStructuredLookupEnvelope,
   type ChemicalLookupResult,
 } from "@/lib/chemicalLookupResolver";
-import {
-  CHEMICAL_LOOKUP_WAIT_MESSAGE,
-  buildStructuredLookupBody,
-  newLookupCorrelationId,
-} from "@/lib/chemicalLookupRequest";
+import { newLookupCorrelationId } from "@/lib/chemicalLookupRequest";
 import {
   ALREADY_IN_STORE_LABEL,
   isSearchEnvelope,
@@ -530,7 +526,9 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
               onClick={() => {
                 setSelected(null);
                 setSelectedIndex(null);
+                setPendingCandidate(null);
                 setError(null);
+                setErrorAction(null);
               }}
             >
               Change product
