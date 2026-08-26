@@ -24,8 +24,16 @@ import {
 import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import { useSortableTable } from "@/lib/useSortableTable";
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter,
-} from "@/components/ui/sheet";
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Collapsible, CollapsibleContent, CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { GrapevineUsesCard } from "@/components/chemicals/GrapevineUsesCard";
+import {
+  MANUFACTURER_LABEL_UNRESOLVED,
+  resolveChemicalLabelLinks,
+} from "@/lib/chemicalLabelLinks";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -457,367 +465,492 @@ export function ChemicalEditor({
 
   };
 
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:w-[50%] sm:max-w-[50%] overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>{initial ? "Edit chemical" : "New chemical"}</SheetTitle>
-        </SheetHeader>
-        <div className="mt-4 space-y-3 text-sm">
-          <ChemicalAILookup
-            initialName={form.name ?? ""}
-            country={currentCountry}
-            existingLibrary={existingLibrary
-              .filter((c) => !initial || c.id !== initial.id)
-              .map((c) => ({
-                id: c.id,
-                name: c.name,
-                active_ingredient: c.active_ingredient,
-                registration_number: (c as { registration_number?: string | null }).registration_number,
-              }))}
-            onApply={applySuggestion}
-          />
-          {/* Jurisdiction suitability is computed, never stored. Chemistry is
-              kept; only label authority changes. */}
-          <JurisdictionNoticeBanner
-            registrationCountry={intel.registration.country}
-            vineyardCountry={currentCountry}
-          />
-          {masterLink && (
-            <div
-              className={`rounded-md border p-2 text-xs ${
-                masterUpdate ? "border-warning/50 bg-warning/10" : "border-primary/30 bg-primary/5"
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-medium">
-                  {masterUpdate
-                    ? MASTER_UPDATE_MESSAGE
-                    : masterJurisdiction === "compatible"
-                    ? MASTER_CURRENT_MESSAGE
-                    : `Current ${countryLabel(masterRow?.registration_country)} Master information`}
-                </span>
-                {masterUpdate && masterRow && (
-                  <Button type="button" size="sm" variant="outline" onClick={() => setMasterUpdateOpen(true)}>
-                    Review update
-                  </Button>
-                )}
-              </div>
-              <p className="mt-1 text-muted-foreground">
-                Linked to the VineTrack Master Catalogue (revision {masterLink.revision ?? "—"}).
-                Catalogue updates are only applied when you accept them.
-              </p>
-              {masterRow && masterJurisdiction === "mismatch" && (
-                <p className="mt-1 text-muted-foreground">
-                  This is the applicable registration for{" "}
-                  {countryLabel(masterRow.registration_country)}, not for the current
-                  vineyard ({countryLabel(currentCountry)}).
-                </p>
-              )}
-            </div>
-          )}
+  const structuredUses = intel.registeredUses.length > 0;
+  const labelLinks = resolveChemicalLabelLinks({
+    sources: intel.sources,
+    labelReference: intel.registration.label_reference,
+    labelUrl: form.label_url,
+    productUrl: form.product_url,
+  });
 
-          {masterRow && (
-            <MasterUpdateDialog
-              open={masterUpdateOpen}
-              onOpenChange={setMasterUpdateOpen}
-              current={intel}
-              master={masterRow}
-              onAccept={(next, revision) => {
-                setIntel(next);
-                setIntelBase(next);
-                setUpgraded(true);
-                setMasterLink((prev) => (prev ? { ...prev, revision } : prev));
-                toast({
-                  title: "Verified update applied",
-                  description: "Save the chemical to keep these changes.",
-                });
-              }}
-            />
-          )}
-          <Field label="Product name *">
-            <Input value={form.name ?? ""} onChange={(e) => set("name", e.target.value)} />
-          </Field>
-          <Field label="Product type / category">
-            <Select value={form.use ?? ""} onValueChange={(v) => set("use", v)}>
-              <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-              <SelectContent>
-                {PRODUCT_CATEGORIES.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
-              </SelectContent>
-            </Select>
-          </Field>
-
-          {/* Legacy authoritative chemistry is read-only: active ingredient and
-              chemical group are derived from structured Chemical Intelligence. */}
-          {(form.active_ingredient || form.chemical_group) && (
-            <div className="rounded-md border border-border/60 bg-muted/30 p-3 space-y-1 text-[11px]">
-              <div className="font-medium text-xs">
-                {showIntelEditor ? "Derived legacy fields (read-only)" : "Legacy record (read-only)"}
-              </div>
-              <div className="text-muted-foreground">
-                Active ingredient: {form.active_ingredient || "—"}
-              </div>
-              <div className="text-muted-foreground">
-                Chemical group: {form.chemical_group || "—"}
-              </div>
-              <p className="text-muted-foreground">
-                {showIntelEditor
-                  ? "These text fields are generated from the structured chemistry below and are kept for mobile compatibility."
-                  : "This chemical has not been upgraded to structured Chemical Intelligence yet. The original text is preserved exactly until you upgrade it."}
-              </p>
-            </div>
-          )}
-
-          {!showIntelEditor && (
-            <div className="rounded-md border border-border/60 p-3 space-y-2">
-              <p className="text-[11px] text-muted-foreground">
-                Upgrade this chemical to structured chemistry so resistance grouping,
-                registered uses and verification work across the portal and mobile apps.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    // Seed the draft from the preserved legacy text as an
-                    // operator interpretation — never as verified evidence.
-                    setIntel((prev) => ({
-                      ...prev,
-                      actives: prev.actives.length
-                        ? prev.actives
-                        : parseLegacyActiveIngredient(form.active_ingredient ?? "", "legacy_record"),
-                    }));
-                    setUpgraded(true);
-                  }}
-                >
-                  Upgrade to structured chemistry
-                </Button>
-                <Button type="button" size="sm" variant="outline" onClick={() => setUpgraded(true)}>
-                  Start from scratch
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {showIntelEditor && (
-            <ChemicalIntelligenceEditor
-              draft={intel}
-              onChange={setIntel}
-              productName={form.name ?? ""}
-              country={currentCountry}
-            />
-          )}
-
-          <Field label="Supplier / manufacturer">
-            <Input value={form.manufacturer ?? ""} onChange={(e) => set("manufacturer", e.target.value)} />
-          </Field>
-          <Field label="Target pest / disease / weed (optional)">
-            <Input
-              value={form.problem ?? ""}
-              onChange={(e) => set("problem", e.target.value)}
-              placeholder="Leave blank for biostimulants / nutrition products"
-            />
-          </Field>
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="Default rate">
-              <Input type="number" inputMode="decimal" step="any" value={rateStr} onChange={(e) => setRateStr(e.target.value)} />
-            </Field>
-            <Field label="Product type">
-              <Select
-                value={inferProductType(form.unit)}
-                onValueChange={(v) => {
-                  const pt = v as ProductType;
-                  const basis = inferRateBasis(form.unit);
-                  set("unit", composeUnit(defaultUnitFor(pt), basis));
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder="Liquid / Solid" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="liquid">{PRODUCT_TYPE_LABEL.liquid}</SelectItem>
-                  <SelectItem value="solid">{PRODUCT_TYPE_LABEL.solid}</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Unit">
-              <Select
-                value={(normaliseUnit(form.unit) as ChemUnit) || defaultUnitFor(inferProductType(form.unit))}
-                onValueChange={(v) => {
-                  const basis = inferRateBasis(form.unit);
-                  set("unit", composeUnit(v, basis));
-                }}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {unitsFor(inferProductType(form.unit)).map((u) => (
-                    <SelectItem key={u} value={u}>{u}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
-          <Field label="Rate basis">
-            <RadioGroup
-              className="flex gap-6"
-              value={inferRateBasis(form.unit)}
-              onValueChange={(v) => {
-                const basis = v as RateBasis;
-                const cu = chemUnitOnly(form.unit ?? "") || "L";
-                set("unit", composeUnit(cu, basis));
-              }}
-            >
-              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                <RadioGroupItem value="per_hectare" /> {RATE_BASIS_LABEL.per_hectare}
-              </label>
-              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                <RadioGroupItem value="per_100L" /> {RATE_BASIS_LABEL.per_100L}
-              </label>
-            </RadioGroup>
-            <p className="text-[11px] text-muted-foreground mt-1">
-              Choose whether this product rate is applied by area or by spray volume.
-            </p>
-          </Field>
-          {canSeeCosts && (
-            <div className="rounded-md border border-border/60 p-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold">Pricing</h4>
-                {existingCost != null && computedCost == null && (
-                  <span className="text-[11px] text-muted-foreground">
-                    Saved: {fmtMoney(existingCost, currency)} / {packUnit}
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                Enter the pack size and pack price. VineTrack will calculate the cost per L, mL, kg or g for costing.
-              </p>
-              <div className="grid grid-cols-3 gap-3">
-                <Field label="Pack / container size">
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    step="any"
-                    min="0"
-                    value={packSizeStr}
-                    onChange={(e) => setPackSizeStr(e.target.value)}
-                    placeholder="e.g. 20"
-                  />
-                </Field>
-                <Field label="Pack unit">
-                  <Select value={packUnit} onValueChange={setPackUnit}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Litres">Litres</SelectItem>
-                      <SelectItem value="mL">mL</SelectItem>
-                      <SelectItem value="Kg">Kg</SelectItem>
-                      <SelectItem value="g">g</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field label="Pack price">
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    step="0.01"
-                    min="0"
-                    value={packPriceStr}
-                    onChange={(e) => setPackPriceStr(e.target.value)}
-                    placeholder="e.g. 180.00"
-                  />
-                </Field>
-              </div>
-              <div className="grid grid-cols-[minmax(0,1fr),120px] gap-3 items-end">
-                <Field label="Calculated cost per unit">
-                  <div className="vt-field flex w-full items-center px-3.5 py-2 text-sm bg-muted/40 text-muted-foreground">
-                    {computedCost != null
-                      ? `${fmtMoney(computedCost, currency)} / ${packUnit}`
-                      : existingCost != null
-                        ? `${fmtMoney(existingCost, currency)} / ${packUnit} (saved)`
-                        : "—"}
-                  </div>
-                </Field>
-                <Field label="Currency">
-                  <Select value={currency} onValueChange={setCurrency}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="AUD">AUD</SelectItem>
-                      <SelectItem value="NZD">NZD</SelectItem>
-                      <SelectItem value="USD">USD</SelectItem>
-                      <SelectItem value="EUR">EUR</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </Field>
-              </div>
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Withholding period (days)">
-              <Input type="number" inputMode="decimal" step="any" value={whp} onChange={(e) => setWhp(e.target.value)} />
-            </Field>
-            <Field label="Re-entry period (hours)">
-              <Input type="number" inputMode="decimal" step="any" value={rei} onChange={(e) => setRei(e.target.value)} />
-            </Field>
-          </div>
-          <Field label="Other restrictions / safety notes">
-            <Textarea rows={2} value={restNotes} onChange={(e) => setRestNotes(e.target.value)} />
-          </Field>
-          <Field label="Notes">
-            <Textarea rows={3} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
-          </Field>
-          <Field label="Label URL (official label PDF or regulator page)">
-            <Input
-              type="url"
-              inputMode="url"
-              value={form.label_url ?? ""}
-              onChange={(e) => set("label_url", e.target.value)}
-              placeholder="https://…/label.pdf"
-            />
-            <p className="text-[11px] text-muted-foreground mt-1">
-              Label URL should be the official label PDF or regulator label page (e.g. APVMA). Must start with https:// or http://.
-            </p>
-            {form.label_url && /^https?:\/\//i.test(form.label_url.trim()) && (
-              <a
-                href={form.label_url.trim()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline mt-1"
-              >
-                <FileText className="h-3 w-3" />
-                Open label
-              </a>
+  const lookupBlock = (
+    <>
+      <ChemicalAILookup
+        initialName={form.name ?? ""}
+        country={currentCountry}
+        existingLibrary={existingLibrary
+          .filter((c) => !initial || c.id !== initial.id)
+          .map((c) => ({
+            id: c.id,
+            name: c.name,
+            active_ingredient: c.active_ingredient,
+            registration_number: (c as { registration_number?: string | null }).registration_number,
+          }))}
+        onApply={applySuggestion}
+      />
+      {/* Jurisdiction suitability is computed, never stored. Chemistry is
+          kept; only label authority changes. */}
+      <JurisdictionNoticeBanner
+        registrationCountry={intel.registration.country}
+        vineyardCountry={currentCountry}
+      />
+      {masterLink && (
+        <div
+          className={`rounded-md border p-2 text-xs ${
+            masterUpdate ? "border-warning/50 bg-warning/10" : "border-primary/30 bg-primary/5"
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium">
+              {masterUpdate
+                ? MASTER_UPDATE_MESSAGE
+                : masterJurisdiction === "compatible"
+                ? MASTER_CURRENT_MESSAGE
+                : `Current ${countryLabel(masterRow?.registration_country)} Master information`}
+            </span>
+            {masterUpdate && masterRow && (
+              <Button type="button" size="sm" variant="outline" onClick={() => setMasterUpdateOpen(true)}>
+                Review update
+              </Button>
             )}
-          </Field>
-          <Field label="Product / Manufacturer page (optional)">
-            <Input
-              type="url"
-              inputMode="url"
-              value={form.product_url ?? ""}
-              onChange={(e) => set("product_url", e.target.value)}
-              placeholder="https://… (manufacturer/brand page)"
-            />
-            <p className="text-[11px] text-muted-foreground mt-1">
-              Optional link to the manufacturer or distributor product page. This is <strong>not</strong> the official label and will be displayed separately as "Product page".
+          </div>
+          <p className="mt-1 text-muted-foreground">
+            Linked to the VineTrack Master Catalogue (revision {masterLink.revision ?? "—"}).
+            Catalogue updates are only applied when you accept them.
+          </p>
+          {masterRow && masterJurisdiction === "mismatch" && (
+            <p className="mt-1 text-muted-foreground">
+              This is the applicable registration for{" "}
+              {countryLabel(masterRow.registration_country)}, not for the current
+              vineyard ({countryLabel(currentCountry)}).
             </p>
-            {form.product_url && /^https?:\/\//i.test(form.product_url.trim()) && (
-              <a
-                href={form.product_url.trim()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary hover:underline mt-1"
-              >
-                <Globe className="h-3 w-3" />
-                Open product page
-              </a>
-            )}
-          </Field>
+          )}
         </div>
-        <SheetFooter className="mt-6 gap-2">
+      )}
+      {masterRow && (
+        <MasterUpdateDialog
+          open={masterUpdateOpen}
+          onOpenChange={setMasterUpdateOpen}
+          current={intel}
+          master={masterRow}
+          onAccept={(next, revision) => {
+            setIntel(next);
+            setIntelBase(next);
+            setUpgraded(true);
+            setMasterLink((prev) => (prev ? { ...prev, revision } : prev));
+            toast({
+              title: "Verified update applied",
+              description: "Save the chemical to keep these changes.",
+            });
+          }}
+        />
+      )}
+    </>
+  );
+
+  /* Legacy product-level rate editor. Only part of the normal workflow when
+     there are no structured registered uses to act as the operational source;
+     otherwise it lives under Advanced for mobile compatibility. */
+  const legacyRateBlock = (
+    <div className="space-y-3">
+      <Field label="Target pest / disease / weed (optional)">
+        <Input
+          value={form.problem ?? ""}
+          onChange={(e) => set("problem", e.target.value)}
+          placeholder="Leave blank for biostimulants / nutrition products"
+        />
+      </Field>
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="Default rate">
+          <Input type="number" inputMode="decimal" step="any" value={rateStr} onChange={(e) => setRateStr(e.target.value)} />
+        </Field>
+        <Field label="Product type">
+          <Select
+            value={inferProductType(form.unit)}
+            onValueChange={(v) => {
+              const pt = v as ProductType;
+              const basis = inferRateBasis(form.unit);
+              set("unit", composeUnit(defaultUnitFor(pt), basis));
+            }}
+          >
+            <SelectTrigger><SelectValue placeholder="Liquid / Solid" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="liquid">{PRODUCT_TYPE_LABEL.liquid}</SelectItem>
+              <SelectItem value="solid">{PRODUCT_TYPE_LABEL.solid}</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Unit">
+          <Select
+            value={(normaliseUnit(form.unit) as ChemUnit) || defaultUnitFor(inferProductType(form.unit))}
+            onValueChange={(v) => {
+              const basis = inferRateBasis(form.unit);
+              set("unit", composeUnit(v, basis));
+            }}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {unitsFor(inferProductType(form.unit)).map((u) => (
+                <SelectItem key={u} value={u}>{u}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      </div>
+      <Field label="Rate basis">
+        <RadioGroup
+          className="flex gap-6"
+          value={inferRateBasis(form.unit)}
+          onValueChange={(v) => {
+            const basis = v as RateBasis;
+            const cu = chemUnitOnly(form.unit ?? "") || "L";
+            set("unit", composeUnit(cu, basis));
+          }}
+        >
+          <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+            <RadioGroupItem value="per_hectare" /> {RATE_BASIS_LABEL.per_hectare}
+          </label>
+          <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+            <RadioGroupItem value="per_100L" /> {RATE_BASIS_LABEL.per_100L}
+          </label>
+        </RadioGroup>
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Withholding period (days)">
+          <Input type="number" inputMode="decimal" step="any" value={whp} onChange={(e) => setWhp(e.target.value)} />
+        </Field>
+        <Field label="Re-entry period (hours)">
+          <Input type="number" inputMode="decimal" step="any" value={rei} onChange={(e) => setRei(e.target.value)} />
+        </Field>
+      </div>
+      <Field label="Other restrictions / safety notes">
+        <Textarea rows={2} value={restNotes} onChange={(e) => setRestNotes(e.target.value)} />
+      </Field>
+    </div>
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="p-0 gap-0 flex flex-col w-[92vw] max-w-[1200px] sm:max-w-[1200px] max-h-[89vh] overflow-hidden"
+      >
+        <DialogHeader className="shrink-0 border-b px-5 py-3 text-left">
+          <DialogTitle>{initial ? "Edit chemical" : "New chemical"}</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4 text-sm">
+          {lookupBlock}
+
+          <div className="grid gap-4 lg:grid-cols-2 items-start">
+            {/* ------------------------------------------- primary column */}
+            <div className="space-y-4">
+              <Section title="Product">
+                <Field label="Chemical / product name *">
+                  <Input value={form.name ?? ""} onChange={(e) => set("name", e.target.value)} />
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Registration number">
+                    <Input
+                      value={intel.registration.registration_number ?? ""}
+                      placeholder="Not stated"
+                      onChange={(e) =>
+                        setIntel((p) => ({
+                          ...p,
+                          registration: { ...p.registration, registration_number: e.target.value },
+                        }))
+                      }
+                    />
+                  </Field>
+                  <Field label="Category">
+                    <Select value={form.use ?? ""} onValueChange={(v) => set("use", v)}>
+                      <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                      <SelectContent>
+                        {PRODUCT_CATEGORIES.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Liquid / solid">
+                    <Select
+                      value={inferProductType(form.unit)}
+                      onValueChange={(v) => {
+                        const pt = v as ProductType;
+                        set("unit", composeUnit(defaultUnitFor(pt), inferRateBasis(form.unit)));
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Liquid / Solid" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="liquid">{PRODUCT_TYPE_LABEL.liquid}</SelectItem>
+                        <SelectItem value="solid">{PRODUCT_TYPE_LABEL.solid}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="Unit">
+                    <Select
+                      value={(normaliseUnit(form.unit) as ChemUnit) || defaultUnitFor(inferProductType(form.unit))}
+                      onValueChange={(v) => set("unit", composeUnit(v, inferRateBasis(form.unit)))}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {unitsFor(inferProductType(form.unit)).map((u) => (
+                          <SelectItem key={u} value={u}>{u}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+                <Field label="Manufacturer / registrant">
+                  <Input value={form.manufacturer ?? ""} onChange={(e) => set("manufacturer", e.target.value)} />
+                </Field>
+              </Section>
+
+              <Section title="Active ingredients & resistance">
+                {showIntelEditor ? (
+                  <ChemicalIntelligenceEditor
+                    draft={intel}
+                    onChange={setIntel}
+                    productName={form.name ?? ""}
+                    country={currentCountry}
+                    compact
+                    sections={{ actives: true, registration: false, uses: false, sources: false, audit: false }}
+                  />
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-muted-foreground">
+                      This chemical has not been upgraded to structured chemistry yet. The original
+                      text is preserved exactly until you upgrade it.
+                    </p>
+                    <div className="text-xs text-muted-foreground">
+                      Active ingredient: {form.active_ingredient || "Not stated"}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setIntel((prev) => ({
+                            ...prev,
+                            actives: prev.actives.length
+                              ? prev.actives
+                              : parseLegacyActiveIngredient(form.active_ingredient ?? "", "legacy_record"),
+                          }));
+                          setUpgraded(true);
+                        }}
+                      >
+                        Upgrade to structured chemistry
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => setUpgraded(true)}>
+                        Start from scratch
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </Section>
+
+              <Section title="Labels & references">
+                <div className="flex flex-wrap gap-2">
+                  {labelLinks.manufacturerLabelUrl ? (
+                    <Button asChild size="sm" variant="outline" className="gap-1">
+                      <a href={labelLinks.manufacturerLabelUrl} target="_blank" rel="noopener noreferrer">
+                        <FileText className="h-3.5 w-3.5" /> Open manufacturer label
+                      </a>
+                    </Button>
+                  ) : (
+                    <Badge variant="outline" className="text-[11px]">
+                      {MANUFACTURER_LABEL_UNRESOLVED}
+                    </Badge>
+                  )}
+                  {labelLinks.regulatorLabelUrl && (
+                    <Button asChild size="sm" variant="outline" className="gap-1">
+                      <a href={labelLinks.regulatorLabelUrl} target="_blank" rel="noopener noreferrer">
+                        <FileText className="h-3.5 w-3.5" /> Open APVMA label
+                      </a>
+                    </Button>
+                  )}
+                  {labelLinks.productUrl && (
+                    <Button asChild size="sm" variant="outline" className="gap-1">
+                      <a href={labelLinks.productUrl} target="_blank" rel="noopener noreferrer">
+                        <Globe className="h-3.5 w-3.5" /> Open product page
+                      </a>
+                    </Button>
+                  )}
+                </div>
+                <Field label="Regulator label link">
+                  <Input
+                    type="url"
+                    inputMode="url"
+                    value={form.label_url ?? ""}
+                    onChange={(e) => set("label_url", e.target.value)}
+                    placeholder="https://…/label.pdf"
+                  />
+                </Field>
+                <Field label="Product / manufacturer page (optional)">
+                  <Input
+                    type="url"
+                    inputMode="url"
+                    value={form.product_url ?? ""}
+                    onChange={(e) => set("product_url", e.target.value)}
+                    placeholder="https://… (manufacturer/brand page)"
+                  />
+                </Field>
+              </Section>
+            </div>
+
+            {/* --------------------------------------- operational column */}
+            <div className="space-y-4">
+              <Section title="Grapevine uses & rates">
+                {structuredUses ? (
+                  <GrapevineUsesCard uses={intel.registeredUses} />
+                ) : (
+                  legacyRateBlock
+                )}
+              </Section>
+
+              {canSeeCosts && (
+                <Collapsible>
+                  <div className="rounded-md border border-border/60">
+                    <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 text-sm font-semibold">
+                      <span>Purchase &amp; pricing</span>
+                      <span className="text-[11px] font-normal text-muted-foreground">Optional</span>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-3 px-3 pb-3">
+                      {existingCost != null && computedCost == null && (
+                        <p className="text-[11px] text-muted-foreground">
+                          Saved: {fmtMoney(existingCost, currency)} / {packUnit}
+                        </p>
+                      )}
+                      <div className="grid grid-cols-3 gap-3">
+                        <Field label="Pack / container size">
+                          <Input
+                            type="number"
+                            inputMode="decimal"
+                            step="any"
+                            min="0"
+                            value={packSizeStr}
+                            onChange={(e) => setPackSizeStr(e.target.value)}
+                            placeholder="e.g. 20"
+                          />
+                        </Field>
+                        <Field label="Pack unit">
+                          <Select value={packUnit} onValueChange={setPackUnit}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Litres">Litres</SelectItem>
+                              <SelectItem value="mL">mL</SelectItem>
+                              <SelectItem value="Kg">Kg</SelectItem>
+                              <SelectItem value="g">g</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </Field>
+                        <Field label="Pack price">
+                          <Input
+                            type="number"
+                            inputMode="decimal"
+                            step="0.01"
+                            min="0"
+                            value={packPriceStr}
+                            onChange={(e) => setPackPriceStr(e.target.value)}
+                            placeholder="e.g. 180.00"
+                          />
+                        </Field>
+                      </div>
+                      <div className="grid grid-cols-[minmax(0,1fr),120px] gap-3 items-end">
+                        <Field label="Calculated cost per unit">
+                          <div className="vt-field flex w-full items-center px-3.5 py-2 text-sm bg-muted/40 text-muted-foreground">
+                            {computedCost != null
+                              ? `${fmtMoney(computedCost, currency)} / ${packUnit}`
+                              : existingCost != null
+                                ? `${fmtMoney(existingCost, currency)} / ${packUnit} (saved)`
+                                : "—"}
+                          </div>
+                        </Field>
+                        <Field label="Currency">
+                          <Select value={currency} onValueChange={setCurrency}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="AUD">AUD</SelectItem>
+                              <SelectItem value="NZD">NZD</SelectItem>
+                              <SelectItem value="USD">USD</SelectItem>
+                              <SelectItem value="EUR">EUR</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </Field>
+                      </div>
+                    </CollapsibleContent>
+                  </div>
+                </Collapsible>
+              )}
+
+              <Section title="Notes">
+                <Textarea rows={3} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
+              </Section>
+            </div>
+          </div>
+
+          {/* --------------------------------- advanced / verification */}
+          <Collapsible>
+            <div className="rounded-md border border-border/60">
+              <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 text-sm font-semibold">
+                <span>Advanced / verification details</span>
+                <Info className="h-3.5 w-3.5 text-muted-foreground" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-4 px-3 pb-3">
+                <p className="text-[11px] text-muted-foreground">
+                  Registration identity, all registered uses, evidence sources and the derived
+                  legacy fields kept for the mobile apps. Nothing here is discarded — it is simply
+                  outside the normal vineyard workflow.
+                </p>
+
+                {(form.active_ingredient || form.chemical_group) && (
+                  <div className="rounded-md border border-border/60 bg-muted/30 p-3 space-y-1 text-[11px]">
+                    <div className="font-medium text-xs">Derived legacy fields (read-only)</div>
+                    <div className="text-muted-foreground">
+                      Active ingredient: {form.active_ingredient || "Not stated"}
+                    </div>
+                    <div className="text-muted-foreground">
+                      Chemical group: {form.chemical_group || "Not stated"}
+                    </div>
+                    <p className="text-muted-foreground">
+                      Generated from the structured chemistry and kept for mobile compatibility.
+                    </p>
+                  </div>
+                )}
+
+                {structuredUses && legacyRateBlock}
+
+                {showIntelEditor && (
+                  <ChemicalIntelligenceEditor
+                    draft={intel}
+                    onChange={setIntel}
+                    productName={form.name ?? ""}
+                    country={currentCountry}
+                    sections={{ actives: false }}
+                  />
+                )}
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
+        </div>
+
+        <DialogFooter className="shrink-0 border-t px-5 py-3 gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button disabled={saveMut.isPending} onClick={() => saveMut.mutate()}>
-            {saveMut.isPending ? "Saving…" : initial ? "Save changes" : "Create"}
+            {saveMut.isPending ? "Saving…" : "Save chemical"}
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-md border border-border/60 p-3 space-y-3">
+      <h4 className="text-sm font-semibold">{title}</h4>
+      {children}
+    </div>
   );
 }
 

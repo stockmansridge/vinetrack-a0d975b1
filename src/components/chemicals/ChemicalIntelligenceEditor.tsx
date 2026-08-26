@@ -62,12 +62,35 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+/**
+ * Which blocks of the structured editor to render. The New Chemical modal
+ * shows only the chemistry an operator needs in the normal workflow and keeps
+ * the rest under "Advanced / Verification details" — nothing is discarded.
+ */
+export interface IntelligenceEditorSections {
+  actives?: boolean;
+  registration?: boolean;
+  uses?: boolean;
+  sources?: boolean;
+  audit?: boolean;
+}
+
+const ALL_SECTIONS: Required<IntelligenceEditorSections> = {
+  actives: true,
+  registration: true,
+  uses: true,
+  sources: true,
+  audit: true,
+};
+
 export function ChemicalIntelligenceEditor({
   draft,
   onChange,
   disabled,
   productName,
   country,
+  sections,
+  compact,
 }: {
   draft: ChemicalIntelligenceDraft;
   onChange: (next: ChemicalIntelligenceDraft) => void;
@@ -75,7 +98,12 @@ export function ChemicalIntelligenceEditor({
   /** Product name used to resolve the re-verification identity. */
   productName?: string | null;
   country?: string | null;
+  /** Defaults to every section. */
+  sections?: IntelligenceEditorSections;
+  /** Hides the panel header/chrome when embedded in a larger section. */
+  compact?: boolean;
 }) {
+  const show = { ...ALL_SECTIONS, ...(sections ?? {}) };
   const [reverifyOpen, setReverifyOpen] = useState(false);
   const preview = useMemo(() => {
     const withConflicts = { ...draft, conflicts: reconcileConflicts(draft) };
@@ -111,7 +139,8 @@ export function ChemicalIntelligenceEditor({
     patch({ sources: draft.sources.map((s, idx) => (idx === i ? { ...s, ...next } : s)) });
 
   return (
-    <div className="rounded-md border border-border/60 p-3 space-y-4">
+    <div className={compact ? "space-y-4" : "rounded-md border border-border/60 p-3 space-y-4"}>
+      {!compact && (
       <div className="flex items-center justify-between gap-2">
         <div>
           <h4 className="text-sm font-semibold">Chemical intelligence</h4>
@@ -134,6 +163,7 @@ export function ChemicalIntelligenceEditor({
           <Badge className={STATUS_CLASS[preview.status]}>{VERIFICATION_LABEL[preview.status]}</Badge>
         </div>
       </div>
+      )}
 
       <ChemicalReverifyDialog
         open={reverifyOpen}
@@ -161,6 +191,7 @@ export function ChemicalIntelligenceEditor({
       )}
 
       {/* ------------------------------------------------------------ actives */}
+      {show.actives && (
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label className="text-xs font-medium">Active ingredients</Label>
@@ -284,8 +315,10 @@ export function ChemicalIntelligenceEditor({
           <Plus className="h-3.5 w-3.5" /> Add active ingredient
         </Button>
       </div>
+      )}
 
       {/* ------------------------------------------------------- registration */}
+      {show.registration && (
       <div className="space-y-2">
         <Label className="text-xs font-medium">Registration identity</Label>
         <div className="grid grid-cols-2 gap-2">
@@ -352,8 +385,10 @@ export function ChemicalIntelligenceEditor({
           />
         </Row>
       </div>
+      )}
 
       {/* ----------------------------------------------------- registered uses */}
+      {show.uses && (
       <div className="space-y-2">
         <Label className="text-xs font-medium">Registered uses</Label>
         {draft.registeredUses.map((u, ui) => (
@@ -497,8 +532,10 @@ export function ChemicalIntelligenceEditor({
           <Plus className="h-3.5 w-3.5" /> Add registered use
         </Button>
       </div>
+      )}
 
       {/* ------------------------------------------------------------ sources */}
+      {show.sources && (
       <div className="space-y-2">
         <Label className="text-xs font-medium">Evidence / sources</Label>
         <p className="text-[11px] text-muted-foreground">
@@ -556,7 +593,10 @@ export function ChemicalIntelligenceEditor({
           <Plus className="h-3.5 w-3.5" /> Add source
         </Button>
       </div>
+      )}
 
+      {show.audit && (
+      <>
       <Row label="Unresolved fields (comma separated)">
         <Input
           placeholder="e.g. withholding_period_days"
@@ -593,6 +633,8 @@ export function ChemicalIntelligenceEditor({
           when the evidence doesn't support it.
         </span>
       </div>
+      </>
+      )}
     </div>
   );
 }

@@ -182,6 +182,11 @@ export function requiresCandidateSelection(res: ChemicalSearchResponse): boolean
   if (res.candidates.length === 0) return false;
   if (res.candidates.length > 1) return true;
   // Exactly one candidate: only streamline when the server explicitly says the
-  // result is unambiguous.
-  return res.summary?.ambiguous !== false;
+  // result may be taken without confirmation.
+  const s = res.summary;
+  if (!s) return true;
+  if (s.autoSelectAllowed === true) return false;
+  if (s.autoSelectAllowed === false) return true;
+  return s.ambiguous !== false;
 }
+

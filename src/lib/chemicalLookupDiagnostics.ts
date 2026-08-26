@@ -84,6 +84,10 @@ export interface RankingSummary {
   ambiguityReason?: string;
   candidateCount?: number;
   tieBreak?: string;
+  /** Server search state, e.g. "exact", "approximate", "ambiguous". */
+  searchState?: string;
+  /** Server permission to skip manual confirmation of a single candidate. */
+  autoSelectAllowed?: boolean;
   /** Any additional summary fields the server sent. */
   extra?: Record<string, unknown>;
 }
@@ -97,6 +101,10 @@ const SUMMARY_KEYS = [
   "candidateCount",
   "tie_break",
   "tieBreak",
+  "search_state",
+  "searchState",
+  "auto_select_allowed",
+  "autoSelectAllowed",
 ];
 
 export function parseRankingSummary(payload: unknown): RankingSummary | null {
@@ -111,9 +119,12 @@ export function parseRankingSummary(payload: unknown): RankingSummary | null {
     ambiguityReason: str(o.ambiguity_reason ?? o.ambiguityReason),
     candidateCount: num(o.candidate_count ?? o.candidateCount),
     tieBreak: str(o.tie_break ?? o.tieBreak),
+    searchState: str(o.search_state ?? o.searchState),
+    autoSelectAllowed: bool(o.auto_select_allowed ?? o.autoSelectAllowed),
     extra: Object.keys(extra).length ? extra : undefined,
   };
 }
+
 
 /* ------------------------------------------------------------ envelope */
 
