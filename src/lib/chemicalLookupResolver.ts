@@ -21,6 +21,9 @@
 
 import {
   emptyDraft,
+  extrasOf,
+  RATE_KEYS,
+  USE_KEYS,
   normaliseConcentrationUnit,
   normaliseCountry,
   normaliseGroupCode,
@@ -37,7 +40,12 @@ import {
   type WriteLabelRate,
   type WriteRegisteredUse,
   type WriteVerificationStatus,
+  type WireExtras,
 } from "@/lib/chemicalIntelligenceWrite";
+import {
+  decodeCanonicalDefaultRateOptions,
+  type CanonicalDefaultRateOptions,
+} from "@/lib/chemicalDefaultRatesContract";
 import {
   selectRates,
   withholdingDisplay,
@@ -450,6 +458,15 @@ export interface ChemicalLookupResult {
    * portal never re-ranks a server-ranked response.
    */
   rankingSummary: RankingSummary | null;
+  /**
+   * Backend canonical operational default-rate options
+   * (`default_rate_options`). Server pass-through: `option_key` and `rate_ids`
+   * are never minted, grouped or converted here. `null` when the deployed
+   * function does not send the block. The legacy local
+   * `buildDefaultRateOptions()` is display-only and must NEVER stand in for
+   * this canonical set.
+   */
+  defaultRateOptions: CanonicalDefaultRateOptions | null;
 }
 
 const UNRESOLVED_GUIDANCE =
@@ -524,6 +541,33 @@ function decodeActives(raw: any[], gate: FieldGate): WriteActiveIngredient[] {
   return out;
 }
 
+/**
+ * Keys the resolver itself models when reading a wire rate (including the
+ * aliases it tolerates). Anything else — notably the backend identities
+ * `rate_id` and `text_layer_text` — is captured verbatim into `extra` so it
+ * survives lookup -> encode -> save -> draftFromRow unchanged.
+ */
+const LOOKUP_RATE_KEYS = [
+  ...RATE_KEYS,
+  "rate_per_unit",
+  "rate_min",
+  "rate_max",
+  "min",
+  "max",
+  "rate_basis",
+  "conditions",
+];
+
+const LOOKUP_USE_KEYS = [...USE_KEYS];
+
+const mergeExtras = (
+  base: WireExtras | undefined,
+  add: WireExtras | undefined,
+): WireExtras | undefined => {
+  const out = { ...(base ?? {}), ...(add ?? {}) };
+  return Object.keys(out).length ? out : undefined;
+};
+
 function decodeRates(raw: any): WriteLabelRate[] {
   return asArray(raw)
     .map((r) => {
@@ -539,6 +583,8 @@ function decodeRates(raw: any): WriteLabelRate[] {
       const conditionAmbiguous =
         typeof r.condition_ambiguous === "boolean" ? r.condition_ambiguous : undefined;
       const basis = normaliseLabelRateBasis(r.basis ?? r.rate_basis);
+      // Server identities (rate_id, text_layer_text, …) round-trip verbatim.
+      const extra = extrasOf(r as Record<string, unknown>, LOOKUP_RATE_KEYS);
       // A row with no number is only kept when the label stated something we
       // can show as reference text (basis "other"). It never fills a field.
       if (value == null && min == null && max == null && !rawText) return null;
@@ -550,6 +596,7 @@ function decodeRates(raw: any): WriteLabelRate[] {
           raw_text: rawText,
           condition,
           condition_ambiguous: conditionAmbiguous,
+          extra,
         } as WriteLabelRate;
       }
       return {
@@ -562,6 +609,7 @@ function decodeRates(raw: any): WriteLabelRate[] {
         raw_text: rawText,
         condition,
         condition_ambiguous: conditionAmbiguous,
+        extra,
       } as WriteLabelRate;
     })
     .filter((r): r is WriteLabelRate => !!r);
@@ -610,6 +658,8 @@ function decodeUses(raw: any[], gate: FieldGate): WriteRegisteredUse[] {
         u.provenance && typeof u.provenance === "object" && !Array.isArray(u.provenance)
           ? ({ ...u.provenance } as Record<string, unknown>)
           : undefined;
+      // `direction_id` and any other additive server key survive here.
+      const extra = extrasOf(u as Record<string, unknown>, LOOKUP_USE_KEYS);
       return {
         crop,
         target_raw: target,
@@ -619,6 +669,7 @@ function decodeUses(raw: any[], gate: FieldGate): WriteRegisteredUse[] {
         re_entry_period_hours: rei,
         restrictions,
         provenance,
+        extra: mergeExtras(undefined, extra),
       } as WriteRegisteredUse;
     })
     .filter((u): u is WriteRegisteredUse => !!u);
@@ -715,6 +766,7 @@ export function parseChemicalLookup(
       conflicts: [],
       diagnostics,
       rankingSummary,
+      defaultRateOptions: null,
       guidance:
         matchSource === "ambiguous"
           ? AMBIGUOUS_GUIDANCE
@@ -877,6 +929,10 @@ export function parseChemicalLookup(
     master,
     diagnostics,
     rankingSummary,
+    // Decoded straight from the backend envelope. Absent on older deployments.
+    defaultRateOptions: decodeCanonicalDefaultRateOptions(
+      root.default_rate_options ?? p.default_rate_options,
+    ),
 
   };
 }
