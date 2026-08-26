@@ -651,12 +651,12 @@ export function ChemicalEditor({
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Registration number">
                     <Input
-                      value={intel.registration.registration_number ?? ""}
+                      value={intel.registration.number ?? ""}
                       placeholder="Not stated"
                       onChange={(e) =>
                         setIntel((p) => ({
                           ...p,
-                          registration: { ...p.registration, registration_number: e.target.value },
+                          registration: { ...p.registration, number: e.target.value },
                         }))
                       }
                     />
