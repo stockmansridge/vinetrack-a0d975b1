@@ -48,11 +48,17 @@ export interface SearchCandidate {
   registrationCountry?: string;
   identityKey?: string;
   activeIngredientText?: string;
+  /**
+   * Product category / primary use EXACTLY as returned by the server. The
+   * portal never infers or derives a category client-side.
+   */
+  category?: string;
   labelReference?: string;
   ranking: ServerRankingMetadata;
   serverRanked: boolean;
   raw: Record<string, unknown>;
 }
+
 
 export interface ChemicalSearchResponse {
   candidates: SearchCandidate[];
