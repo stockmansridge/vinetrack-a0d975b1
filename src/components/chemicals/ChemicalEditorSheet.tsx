@@ -594,10 +594,38 @@ export function ChemicalEditor({
   };
 
   const structuredUses = intel.registeredUses.length > 0;
-  const defaultRateOptions = useMemo(
-    () => buildDefaultRateOptions(intel.registeredUses, { jurisdiction }),
-    [intel.registeredUses, jurisdiction],
+  // Per-basis match state of the persisted selection against the canonical set.
+  const defaultRateSlots = useMemo(
+    () => matchDefaultRateSlots(defaultRates, canonicalRateOptions),
+    [defaultRates, canonicalRateOptions],
   );
+
+  /** Operator click: copy the backend option and stamp provenance. */
+  const handleSelectDefaultRate = (
+    option: CanonicalDefaultRateOption,
+    basis: CanonicalRateBasis,
+  ) => {
+    setDefaultRates((prev) =>
+      withBasisSelection(
+        prev,
+        basis,
+        selectionFromCanonicalOption(option, {
+          source: "operator",
+          selectedAt: new Date().toISOString(),
+          labelVersion,
+        }),
+      ),
+    );
+    setDefaultRatesDirty(true);
+    setDefaultsClearedNotice(false);
+  };
+
+  const handleClearDefaultRate = (basis: CanonicalRateBasis) => {
+    setDefaultRates((prev) => clearBasisSelection(prev, basis));
+    setDefaultRatesDirty(true);
+    setDefaultsClearedNotice(false);
+  };
+
   const labelLinks = resolveChemicalLabelLinks({
     sources: intel.sources,
     labelReference: intel.registration.label_reference,
