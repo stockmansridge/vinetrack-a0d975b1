@@ -759,6 +759,12 @@ export function ChemicalEditor({
             setIntelBase(next);
             setUpgraded(true);
             setMasterLink((prev) => (prev ? { ...prev, revision } : prev));
+            // P2B.1 §4 — an accepted Master update can change registered uses,
+            // identity or label revision: invalidate the in-memory options and
+            // require a fresh authoritative lookup. Defaults are preserved
+            // unless the registered product is provably different.
+            invalidateCanonicalRateOptions();
+            applyRateProductIdentity(draftRateProductIdentity(next));
             toast({
               title: "Verified update applied",
               description: "Save the chemical to keep these changes.",
