@@ -1,0 +1,137 @@
+{
+  "match_source": "authoritative",
+  "jurisdiction": {
+    "resolved_country_code": "AU",
+    "registration_scheme": "apvma",
+    "requested_country": "AU"
+  },
+  "field_provenance": {
+    "registration": "official_register",
+    "product_name": "official_register",
+    "active_ingredients": "official_register",
+    "registered_uses": "official_label",
+    "label_rates": "official_label",
+    "withholding_periods": "official_label"
+  },
+  "product_name": "VICOL FUNGICIDE",
+  "product_category": "fungicide",
+  "registration": {
+    "country_code": "AU",
+    "scheme": "apvma",
+    "registration_number": "33182",
+    "registrant": "NUFARM AUSTRALIA LIMITED",
+    "registered_product_name": "VICOL FUNGICIDE",
+    "label_reference": "https://elabels.apvma.gov.au/33182ELBL.pdf",
+    "label_version": "APVMA label approval 33182-0623"
+  },
+  "active_ingredients": [
+    {
+      "name": "Copper hydroxide",
+      "concentration": 500,
+      "concentration_unit": "g/kg",
+      "activity_group": { "scheme": "frac", "code": "M1", "common_name": "Inorganic (copper)" },
+      "group_source": "authoritative_classification",
+      "identity_source": "official_register"
+    }
+  ],
+  "activity_groups": ["M1"],
+  "activity_group_scheme": "frac",
+  "registered_uses": [
+    {
+      "direction_id": "direction_v1_33182_grapevine_downy",
+      "crop": "GRAPEVINE",
+      "target_raw": "DOWNY MILDEW",
+      "withholding_period_days": 14,
+      "provenance": { "rates": "official_label", "withholding_period": "official_label" },
+      "rates": [
+        {
+          "rate_id": "rate_v1_33182_downy_dilute_2l",
+          "text_layer_text": "2 L/100 L water",
+          "label": "Dilute spraying",
+          "basis": "per_100_litres",
+          "value": 2,
+          "unit": "L"
+        },
+        {
+          "rate_id": "rate_v1_33182_downy_dilute_3l",
+          "text_layer_text": "3 L/100 L water (high disease pressure)",
+          "label": "Dilute spraying",
+          "basis": "per_100_litres",
+          "value": 3,
+          "unit": "L",
+          "condition": "High disease pressure"
+        }
+      ]
+    },
+    {
+      "direction_id": "direction_v1_33182_grapevine_powdery",
+      "crop": "GRAPEVINE",
+      "target_raw": "POWDERY MILDEW",
+      "provenance": { "rates": "official_label" },
+      "rates": [
+        {
+          "rate_id": "rate_v1_33182_powdery_dilute_2l",
+          "text_layer_text": "2 L/100 L water",
+          "label": "Dilute spraying",
+          "basis": "per_100_litres",
+          "value": 2,
+          "unit": "L"
+        },
+        {
+          "rate_id": "rate_v1_33182_powdery_dilute_3l",
+          "text_layer_text": "3 L/100 L water (high disease pressure)",
+          "label": "Dilute spraying",
+          "basis": "per_100_litres",
+          "value": 3,
+          "unit": "L",
+          "condition": "High disease pressure"
+        }
+      ]
+    }
+  ],
+  "default_rate_options": {
+    "per_hectare": [],
+    "per_100_litres": [
+      {
+        "option_key": "default_option_v1_33182_p100l_2l",
+        "rate_ids": [
+          "rate_v1_33182_downy_dilute_2l",
+          "rate_v1_33182_powdery_dilute_2l"
+        ],
+        "basis": "per_100_litres",
+        "unit": "L",
+        "value": 2,
+        "min_value": null,
+        "max_value": null,
+        "direction_ids": [
+          "direction_v1_33182_grapevine_downy",
+          "direction_v1_33182_grapevine_powdery"
+        ],
+        "targets": ["DOWNY MILDEW", "POWDERY MILDEW"],
+        "crops": ["GRAPEVINE"],
+        "conditions": [],
+        "condition_ambiguous": false
+      },
+      {
+        "option_key": "default_option_v1_33182_p100l_3l",
+        "rate_ids": [
+          "rate_v1_33182_downy_dilute_3l",
+          "rate_v1_33182_powdery_dilute_3l"
+        ],
+        "basis": "per_100_litres",
+        "unit": "L",
+        "value": 3,
+        "min_value": null,
+        "max_value": null,
+        "direction_ids": [
+          "direction_v1_33182_grapevine_downy",
+          "direction_v1_33182_grapevine_powdery"
+        ],
+        "targets": ["DOWNY MILDEW", "POWDERY MILDEW"],
+        "crops": ["GRAPEVINE"],
+        "conditions": ["High disease pressure"],
+        "condition_ambiguous": false
+      }
+    ]
+  }
+}

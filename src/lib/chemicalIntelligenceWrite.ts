@@ -529,7 +529,7 @@ const copyJson = <T>(v: T): T =>
   v == null || typeof v !== "object" ? v : (JSON.parse(JSON.stringify(v)) as T);
 
 /** Keys of `o` that the portal does not model, captured verbatim. */
-function extrasOf(o: Record<string, unknown>, known: string[]): WireExtras | undefined {
+export function extrasOf(o: Record<string, unknown>, known: string[]): WireExtras | undefined {
   const out: WireExtras = {};
   for (const [k, v] of Object.entries(o)) {
     if (known.includes(k)) continue;
@@ -775,7 +775,7 @@ function decodeActive(value: unknown): WriteActiveIngredient | null {
   }) as WriteActiveIngredient;
 }
 
-const RATE_KEYS = [
+export const RATE_KEYS = [
   "label",
   "basis",
   "value",
@@ -820,7 +820,7 @@ export function deriveSprayTarget(targetRaw: string | null | undefined): SprayTa
   return undefined;
 }
 
-const USE_KEYS = [
+export const USE_KEYS = [
   "crop",
   "target",
   "target_raw",

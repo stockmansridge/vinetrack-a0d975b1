@@ -13,6 +13,7 @@
 import { supabase } from "@/integrations/ios-supabase/client";
 import { iosUnitFromAny } from "@/lib/rateBasis";
 import type { EncodedChemicalIntelligence } from "@/lib/chemicalIntelligenceWrite";
+import type { PersistedDefaultRates } from "@/lib/chemicalDefaultRatesContract";
 
 export interface SavedChemical {
   id: string;
@@ -65,6 +66,12 @@ export interface SavedChemical {
   master_chemical_id?: string | null;
   /** Which Master revision (catalogue_version) supplied the current copy. */
   master_source_revision?: number | null;
+  /**
+   * SQL 214 persisted operator default rates. Raw JSONB — decode with
+   * `decodePersistedDefaultRates` before use. Absent on rows written before
+   * SQL 214.
+   */
+  default_rates?: PersistedDefaultRates | null;
 
 }
 
@@ -132,6 +139,15 @@ export interface SavedChemicalInput {
    */
   master_chemical_id?: string | null;
   master_source_revision?: number | null;
+  /**
+   * SQL 214 persisted operator default rates.
+   *  - OMITTED  -> not written; the existing DB value survives.
+   *  - null     -> explicitly cleared.
+   *  - object   -> written verbatim as JSON (no unit/basis coercion).
+   * The nested `unit` is the LABEL rate unit snapshot, NOT the legacy
+   * `saved_chemicals.unit` base unit, so `iosUnitFromAny` must never touch it.
+   */
+  default_rates?: PersistedDefaultRates | null;
 }
 
 const ALLOWED_FIELDS: (keyof SavedChemicalInput)[] = [
@@ -139,6 +155,7 @@ const ALLOWED_FIELDS: (keyof SavedChemicalInput)[] = [
   "crop", "problem", "rate_per_ha", "unit", "restrictions", "notes",
   "label_url", "product_url", "purchase",
   "master_chemical_id", "master_source_revision",
+  "default_rates",
 ];
 
 /**
@@ -151,7 +168,15 @@ function sanitize(input: SavedChemicalInput, mode: "insert" | "update" = "insert
   const out: Record<string, any> = {};
   for (const k of ALLOWED_FIELDS) {
     const v = input[k];
+    // Omitted means "leave the column alone" — critical for default_rates so a
+    // commercial-only edit can never wipe a persisted operator default.
     if (v === undefined) continue;
+    if (k === "default_rates") {
+      // Canonical JSON passes through untouched: no trimming, no unit
+      // coercion, no basis rewriting (wire basis stays per_100_litres).
+      out[k] = v;
+      continue;
+    }
     if (typeof v === "string") {
       const t = v.trim();
       out[k] = t === "" ? null : t;
