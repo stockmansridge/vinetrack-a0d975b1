@@ -90,7 +90,10 @@ export function parseSearchCandidates(payload: unknown): ChemicalSearchResponse 
       identityKey: str(o.registration_identity_key) ?? str(o.identity_key),
       activeIngredientText:
         str(o.active_ingredient) ?? str(o.active_ingredients_text) ?? str(o.actives),
+      category:
+        str(o.product_category) ?? str(o.category) ?? str(o.productCategory) ?? str(o.primary_use),
       labelReference: str(o.label_reference) ?? str(o.label_url),
+
       ranking: c.ranking,
       serverRanked: c.serverRanked,
       raw: o,
