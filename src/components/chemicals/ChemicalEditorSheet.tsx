@@ -31,7 +31,6 @@ import {
 } from "@/components/ui/collapsible";
 import { GrapevineUsesCard } from "@/components/chemicals/GrapevineUsesCard";
 import { DefaultRatesCard } from "@/components/chemicals/DefaultRatesCard";
-import { buildDefaultRateOptions } from "@/lib/chemicalDefaultRates";
 import {
   decodePersistedDefaultRates,
   type CanonicalDefaultRateOption,
@@ -889,7 +888,7 @@ export function ChemicalEditor({
                 {showIntelEditor ? (
                   <ChemicalIntelligenceEditor
                     draft={intel}
-                    onChange={setIntel}
+                    onChange={handleIntelChange}
                     productName={form.name ?? ""}
                     country={currentCountry}
                     compact
@@ -1124,7 +1123,7 @@ export function ChemicalEditor({
                 {showIntelEditor && (
                   <ChemicalIntelligenceEditor
                     draft={intel}
-                    onChange={setIntel}
+                    onChange={handleIntelChange}
                     productName={form.name ?? ""}
                     country={currentCountry}
                     sections={{ actives: false }}
