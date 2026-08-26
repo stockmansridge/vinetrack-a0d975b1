@@ -31,7 +31,24 @@ import {
 } from "@/components/ui/collapsible";
 import { GrapevineUsesCard } from "@/components/chemicals/GrapevineUsesCard";
 import { DefaultRatesCard } from "@/components/chemicals/DefaultRatesCard";
-import { buildDefaultRateOptions } from "@/lib/chemicalDefaultRates";
+import {
+  decodePersistedDefaultRates,
+  type CanonicalDefaultRateOption,
+  type CanonicalDefaultRateOptions,
+  type CanonicalRateBasis,
+  type PersistedDefaultRates,
+} from "@/lib/chemicalDefaultRatesContract";
+import {
+  PRODUCT_CHANGED_MESSAGE,
+  clearAllBasisSelections,
+  clearBasisSelection,
+  emptyPersistedDefaultRates,
+  isKnownDifferentRegisteredProduct,
+  matchDefaultRateSlots,
+  selectionFromCanonicalOption,
+  withBasisSelection,
+} from "@/lib/chemicalDefaultRateSelection";
+
 
 import {
   MANUFACTURER_LABEL_UNRESOLVED,
@@ -172,8 +189,30 @@ export function ChemicalEditor({
   // Manufacturer's own label URL from the lookup. Never the regulator label.
   const [manufacturerLabelUrl, setManufacturerLabelUrl] = useState<string | undefined>();
   // Operator-chosen default rate (grapevine label rate option id).
-  const [defaultRateId, setDefaultRateId] = useState<string | null>(null);
+  // ---- SQL 214 / D3 persisted operator default rates (Gate D4B-P2B).
+  // Two independent basis slots. NEVER inferred from rate_per_ha, never derived
+  // from the local display-only buildDefaultRateOptions().
+  const [defaultRates, setDefaultRates] = useState<PersistedDefaultRates>(
+    emptyPersistedDefaultRates(),
+  );
+  // Omit-vs-write gate: false => default_rates is omitted from the save payload
+  // so the existing DB value survives an unrelated edit.
+  const [defaultRatesDirty, setDefaultRatesDirty] = useState(false);
+  // Backend canonical options from the most recent authoritative lookup in THIS
+  // editor session. null => not fetched (saved snapshot shown as "unavailable").
+  const [canonicalRateOptions, setCanonicalRateOptions] =
+    useState<CanonicalDefaultRateOptions | null>(null);
+  const [defaultsClearedNotice, setDefaultsClearedNotice] = useState(false);
+  // Authoritative registered product identity behind the current canonical
+  // options / persisted defaults (§7). Used only to detect a proven change.
+  const [rateProductIdentity, setRateProductIdentity] = useState<{
+    country?: string | null;
+    scheme?: string | null;
+    number?: string | null;
+  } | null>(null);
+  const [labelVersion, setLabelVersion] = useState<string | null>(null);
   const showIntelEditor = !initial || upgraded || hasStructuredIntelligence(intel);
+
 
 
   // Linked Master record — used only for revision-drift detection. The saved
@@ -256,7 +295,28 @@ export function ChemicalEditor({
               }
             : null,
         );
+        // Persisted defaults come ONLY from the stored contract. There is no
+        // automatic lookup on reopen, so canonical options stay unavailable and
+        // the saved snapshot is displayed from itself.
+        setDefaultRates(
+          decodePersistedDefaultRates((initial as any).default_rates) ??
+            emptyPersistedDefaultRates(),
+        );
+        setDefaultRatesDirty(false);
+        setCanonicalRateOptions(null);
+        setDefaultsClearedNotice(false);
+        setRateProductIdentity(
+          hydrated.registration?.number
+            ? {
+                country: hydrated.registration.country ?? null,
+                scheme: hydrated.registration.scheme ?? null,
+                number: hydrated.registration.number ?? null,
+              }
+            : null,
+        );
+        setLabelVersion(hydrated.registration?.label_version ?? null);
       } else {
+
         setForm({ ...EMPTY, name: initialName?.trim() ? initialName.trim() : "" });
         setRateStr("");
         setExistingCost(null);
@@ -271,6 +331,13 @@ export function ChemicalEditor({
         setIntelBase(emptyDraft());
         setUpgraded(false);
         setMasterLink(null);
+        setDefaultRates(emptyPersistedDefaultRates());
+        setDefaultRatesDirty(false);
+        setCanonicalRateOptions(null);
+        setDefaultsClearedNotice(false);
+        setRateProductIdentity(null);
+        setLabelVersion(null);
+
       }
       setMasterUpdateOpen(false);
     }
@@ -300,6 +367,20 @@ export function ChemicalEditor({
         master_source_revision: masterLink?.revision ?? null,
         rate_per_ha: rateNum,
         restrictions,
+        // Omit-vs-write (§14): omitted while clean so an unrelated edit cannot
+        // wipe the persisted default; when dirty the FULL version-1 object is
+        // written, including explicit null slots. Never set to null just
+        // because both slots are null.
+        ...(defaultRatesDirty
+          ? {
+              default_rates: {
+                version: 1 as const,
+                per_hectare: defaultRates.per_hectare,
+                per_100_litres: defaultRates.per_100_litres,
+              },
+            }
+          : {}),
+
         purchase: canSeeCosts && costNum != null
           ? {
               ...(form.purchase ?? {}),
@@ -366,19 +447,34 @@ export function ChemicalEditor({
       if (s.master) {
         setMasterLink({ id: s.master.id, revision: masterRevision(s.master) ?? null });
       }
-      // Default rate is a decision, not a guess. Only the conservative rule in
-      // chemicalDefaultRates may pre-select one; otherwise the field stays
-      // blank and the operator picks from the registered grapevine directions.
-      const rateOptions = buildDefaultRateOptions(r.draft.registeredUses, {
-        jurisdiction,
-      });
-      const recommendedGroup =
-        (rateOptions.per100L.recommendedId && rateOptions.per100L) ||
-        (rateOptions.perHectare.recommendedId && rateOptions.perHectare) ||
-        null;
-      const recommended = recommendedGroup
-        ? recommendedGroup.options.find((o) => o.id === recommendedGroup.recommendedId)
-        : undefined;
+      // ---- Default rates (Gate D4B-P2B).
+      // Canonical options come ONLY from the backend `default_rate_options`
+      // block. The local display-only buildDefaultRateOptions() may never stand
+      // in for it, and a lookup by itself NEVER changes default_rates.
+      const nextIdentity = r.fields.registrationNumber
+        ? {
+            country: r.fields.registrationCountry ?? null,
+            scheme: r.fields.registrationScheme ?? null,
+            number: r.fields.registrationNumber ?? null,
+          }
+        : null;
+      // A persisted default cites this product's rate_v1 identities. Clear both
+      // slots only when BOTH registrations are known and actually differ; a
+      // label revision change is NOT a product change.
+      const productChanged =
+        !!initial && isKnownDifferentRegisteredProduct(rateProductIdentity, nextIdentity);
+      if (productChanged) {
+        setDefaultRates(clearAllBasisSelections());
+        setDefaultRatesDirty(true);
+        setDefaultsClearedNotice(true);
+      } else {
+        setDefaultsClearedNotice(false);
+      }
+      // null => the deployed function sent no canonical block: keep persisted
+      // selections untouched and leave options unavailable.
+      if (r.defaultRateOptions) setCanonicalRateOptions(r.defaultRateOptions);
+      setRateProductIdentity(nextIdentity ?? rateProductIdentity);
+      setLabelVersion(r.fields.labelVersion ?? null);
       setManufacturerLabelUrl(r.fields.manufacturerLabelUrl);
       setForm((p) => ({
         ...p,
@@ -388,7 +484,9 @@ export function ChemicalEditor({
         active_ingredient: r.fields.activeIngredientText ?? p.active_ingredient ?? "",
         chemical_group: r.fields.chemicalGroupText ?? p.chemical_group ?? "",
         problem: r.fields.target ?? p.problem ?? "",
-        unit: recommended?.composedUnit ?? p.unit ?? "",
+        // §13: a canonical/recommended option never projects into the legacy
+        // unit or rate fields.
+        unit: p.unit ?? "",
         label_url:
           r.fields.regulatorLabelUrl ??
           (r.fields.labelReference && /^https?:\/\//i.test(r.fields.labelReference)
@@ -397,12 +495,7 @@ export function ChemicalEditor({
         // The manufacturer's own product page — never the regulator URL.
         product_url: r.fields.manufacturerProductUrl ?? p.product_url ?? "",
       }));
-      setDefaultRateId(recommended?.id ?? null);
-      setRateStr(
-        recommended && !recommended.isRange && recommended.value != null
-          ? String(recommended.value)
-          : "",
-      );
+
 
       // Label-backed only. When the structured response does not return a
       // WHP / REI with authoritative provenance the field is CLEARED, so a
@@ -500,10 +593,56 @@ export function ChemicalEditor({
   };
 
   const structuredUses = intel.registeredUses.length > 0;
-  const defaultRateOptions = useMemo(
-    () => buildDefaultRateOptions(intel.registeredUses, { jurisdiction }),
-    [intel.registeredUses, jurisdiction],
+  // Per-basis match state of the persisted selection against the canonical set.
+  const defaultRateSlots = useMemo(
+    () => matchDefaultRateSlots(defaultRates, canonicalRateOptions),
+    [defaultRates, canonicalRateOptions],
   );
+
+  /** Operator click: copy the backend option and stamp provenance. */
+  const handleSelectDefaultRate = (
+    option: CanonicalDefaultRateOption,
+    basis: CanonicalRateBasis,
+  ) => {
+    setDefaultRates((prev) =>
+      withBasisSelection(
+        prev,
+        basis,
+        selectionFromCanonicalOption(option, {
+          source: "operator",
+          selectedAt: new Date().toISOString(),
+          labelVersion,
+        }),
+      ),
+    );
+    setDefaultRatesDirty(true);
+    setDefaultsClearedNotice(false);
+  };
+
+  const handleClearDefaultRate = (basis: CanonicalRateBasis) => {
+    setDefaultRates((prev) => clearBasisSelection(prev, basis));
+    setDefaultRatesDirty(true);
+    setDefaultsClearedNotice(false);
+  };
+
+  /**
+   * Manual intelligence edits (§16). Canonical options belong to one
+   * authoritative lookup response: if registered uses or registration identity
+   * are hand-edited afterwards, only the IN-MEMORY option set is invalidated.
+   * Persisted defaults are never wiped here.
+   */
+  const handleIntelChange = (next: ChemicalIntelligenceDraft) => {
+    const identityChanged =
+      intel.registration.number !== next.registration.number ||
+      intel.registration.country !== next.registration.country ||
+      intel.registration.scheme !== next.registration.scheme;
+    const usesChanged = intel.registeredUses !== next.registeredUses;
+    if (identityChanged || usesChanged) setCanonicalRateOptions(null);
+    setIntel(next);
+  };
+
+
+
   const labelLinks = resolveChemicalLabelLinks({
     sources: intel.sources,
     labelReference: intel.registration.label_reference,
@@ -749,7 +888,7 @@ export function ChemicalEditor({
                 {showIntelEditor ? (
                   <ChemicalIntelligenceEditor
                     draft={intel}
-                    onChange={setIntel}
+                    onChange={handleIntelChange}
                     productName={form.name ?? ""}
                     country={currentCountry}
                     compact
@@ -850,34 +989,23 @@ export function ChemicalEditor({
 
               {structuredUses && (
                 <Section title="Default rate">
+                  {defaultsClearedNotice && (
+                    <p className="mb-2 rounded-md border border-warning/50 bg-warning/10 p-2 text-[11px]">
+                      {PRODUCT_CHANGED_MESSAGE}
+                    </p>
+                  )}
+                  {/* Operator-owned shared default_rates contract. The legacy
+                      numeric rate editor lives under Advanced (mobile
+                      compatibility) and is never written from here. */}
                   <DefaultRatesCard
-                    options={defaultRateOptions}
-                    selectedId={defaultRateId}
-                    onSelect={(o) => {
-                      setDefaultRateId(o.id);
-                      // A label range is never collapsed to a single number —
-                      // the basis/unit is set and the operator enters the rate.
-                      setRateStr(!o.isRange && o.value != null ? String(o.value) : "");
-                      if (o.composedUnit) set("unit", o.composedUnit);
-                    }}
+                    options={canonicalRateOptions}
+                    slots={defaultRateSlots}
+                    onSelect={handleSelectDefaultRate}
+                    onClear={handleClearDefaultRate}
                   />
-                  <div className="mt-2 grid grid-cols-2 gap-3">
-                    <Field label="Default rate">
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        step="any"
-                        value={rateStr}
-                        placeholder="Not set"
-                        onChange={(e) => setRateStr(e.target.value)}
-                      />
-                    </Field>
-                    <Field label="Unit">
-                      <Input value={form.unit ?? ""} placeholder="Not set" readOnly />
-                    </Field>
-                  </div>
                 </Section>
               )}
+
 
 
               {canSeeCosts && (
@@ -995,7 +1123,7 @@ export function ChemicalEditor({
                 {showIntelEditor && (
                   <ChemicalIntelligenceEditor
                     draft={intel}
-                    onChange={setIntel}
+                    onChange={handleIntelChange}
                     productName={form.name ?? ""}
                     country={currentCountry}
                     sections={{ actives: false }}
