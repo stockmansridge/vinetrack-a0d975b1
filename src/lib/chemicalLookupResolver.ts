@@ -873,16 +873,20 @@ export function parseChemicalLookup(
   const manufacturerProductUrl =
     httpsUrl(p.manufacturer_product_url) ??
     httpsUrl(p.product_url) ??
+    httpsUrl(labelUrls.manufacturer_product_url) ??
+    httpsUrl(labelUrls.product_url) ??
     httpsUrl(labelUrls.manufacturer_product) ??
     httpsUrl(labelUrls.product);
   const manufacturerLabelUrl =
     httpsUrl(p.manufacturer_label_url) ??
+    httpsUrl(labelUrls.manufacturer_label_url) ??
     httpsUrl(labelUrls.manufacturer) ??
     httpsUrl(
       draft.sources.find((src) => src.kind === "manufacturer_label")?.reference,
     );
   const regulatorLabelUrl =
     httpsUrl(p.regulator_label_url) ??
+    httpsUrl(labelUrls.regulator_label_url) ??
     httpsUrl(labelUrls.regulator) ??
     httpsUrl(labelReference);
 
