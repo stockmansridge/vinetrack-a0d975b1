@@ -924,7 +924,11 @@ export function parseChemicalLookup(
     regulatorLabelUrl,
 
     withholdingDays: use?.withholding_period_days,
-    withholdingText: withholdingDisplay(
+    // Legal wording, when the label states one, is preserved verbatim and is
+    // never replaced by a numeric projection such as "0 days".
+    withholdingText:
+      s((use?.extra as Record<string, unknown> | undefined)?.withholding_period_text) ??
+      withholdingDisplay(
       use?.withholding_period_days,
       [use?.restrictions, ...(use?.rates ?? []).map((r) => r.raw_text)]
         .filter(Boolean)

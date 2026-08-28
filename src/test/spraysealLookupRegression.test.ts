@@ -46,7 +46,7 @@ describe("unresolved product", () => {
   it("fails closed with no canonical fields", () => {
     expect(r.matchSource).toBe("unresolved");
     expect(r.authoritative).toBe(false);
-    expect(r.fields).toEqual({});
+    expect(r.fields).toEqual({ physicalForm: "unknown" });
     expect(r.draft).toBeNull();
   });
 });

@@ -329,7 +329,10 @@ describe("candidate catalogue refresh", () => {
   it("never touches vineyard-private data from the client", () => {
     const file = src("src/lib/masterCatalogueRefresh.ts");
     const ui = src("src/components/chemicals/MasterCatalogueRefreshDialog.tsx");
-    for (const f of [file, ui]) {
+    // Comments describe the guarantee; the CODE must not reference those tables.
+    const strip = (t: string) =>
+      t.split("\n").filter((l) => !l.trim().startsWith("//") && !l.trim().startsWith("*")).join("\n");
+    for (const f of [strip(file), strip(ui)]) {
       expect(f).not.toMatch(/saved_chemicals|spray_|purchase|supplier|stock/i);
       expect(f).not.toMatch(/service_role|SERVICE_ROLE/);
       expect(f).not.toMatch(/review_status\s*[:=]\s*["']approved/);
