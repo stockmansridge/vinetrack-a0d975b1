@@ -450,7 +450,7 @@ export function ChemicalAILookup({
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Search product e.g. Thiovit Jet, Flint, Ridomil…"
+          placeholder="Search a registered product name"
           aria-label="Search product"
           className="h-9 text-sm"
           disabled={!countryCode}

@@ -233,7 +233,7 @@ describe("Custodia 320SC — unresolved", () => {
     expect(r.authoritative).toBe(false);
     expect(r.matchSource).toBe("unresolved");
     expect(r.draft).toBeNull();
-    expect(r.fields).toEqual({});
+    expect(r.fields).toEqual({ physicalForm: "unknown" });
     expect(r.guidance).toBeTruthy();
     expect(r.verificationStatus).toBe("unverified");
   });
