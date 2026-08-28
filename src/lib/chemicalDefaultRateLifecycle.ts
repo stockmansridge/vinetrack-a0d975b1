@@ -27,6 +27,7 @@ import {
   clearBasisSelection,
   emptyPersistedDefaultRates,
   isKnownDifferentRegisteredProduct,
+  narrowedSelectionFromOption,
   selectionFromCanonicalOption,
   withBasisSelection,
   type RegisteredProductIdentity,
@@ -174,6 +175,34 @@ export function selectDefaultRate(
         source: "operator",
         selectedAt,
         labelVersion: state.labelVersion,
+      }),
+    ),
+    dirty: true,
+    productChangedNotice: false,
+  };
+}
+
+/**
+ * PART 10 — the vineyard's usual dose INSIDE an authoritative label range.
+ * The registered range itself is untouched; only the operator's own selection
+ * narrows to a single value that still cites the range option's identity.
+ * Callers must validate the value first (`validateVineyardDose`).
+ */
+export function selectVineyardDose(
+  state: DefaultRateLifecycleState,
+  option: CanonicalDefaultRateOption,
+  basis: CanonicalRateBasis,
+  value: number,
+  selectedAt: string,
+): DefaultRateLifecycleState {
+  return {
+    ...state,
+    defaultRates: withBasisSelection(
+      state.defaultRates,
+      basis,
+      narrowedSelectionFromOption(option, value, {
+        selected_at: selectedAt,
+        label_version: state.labelVersion,
       }),
     ),
     dirty: true,

@@ -12,13 +12,21 @@ import {
   grapevineUseView,
   normalGrapevineUses,
   partitionRegisteredUses,
+  useGroupKey,
 } from "@/lib/chemicalGrapevineUses";
 
 function UseCard({ use }: { use: WriteRegisteredUse }) {
   const v = grapevineUseView(use);
   return (
     <div className="rounded-md border border-border/60 p-2.5 space-y-1.5">
-      <div className="text-sm font-medium leading-tight">{v.target}</div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium leading-tight">{v.target}</span>
+        {v.conditionAmbiguous && (
+          <Badge variant="outline" className="text-[10px] text-amber-600 dark:text-amber-500">
+            Check label conditions
+          </Badge>
+        )}
+      </div>
       {v.rates.length === 0 ? (
         <p className="text-[11px] text-muted-foreground">{NO_GRAPEVINE_RATE_MESSAGE}</p>
       ) : (
@@ -69,8 +77,10 @@ export function GrapevineUsesCard({
         <p className="text-xs text-muted-foreground">{NO_GRAPEVINE_RATE_MESSAGE}</p>
       ) : (
         <div className="space-y-2">
+          {/* Keyed by DIRECTION identity — two legal directions for the same
+              target both survive and are never unioned. */}
           {grapevine.map((u, i) => (
-            <UseCard key={i} use={u} />
+            <UseCard key={`${useGroupKey(u)}#${i}`} use={u} />
           ))}
         </div>
       )}

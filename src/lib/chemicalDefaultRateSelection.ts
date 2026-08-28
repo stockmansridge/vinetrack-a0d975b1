@@ -158,6 +158,82 @@ export function isSameDefaultRateSelection(
   );
 }
 
+/* ------------------------------------- PART 10: vineyard dose within range */
+
+/**
+ * The vineyard's usual operational dose inside an authoritative label RANGE.
+ *
+ * Legal evidence and the vineyard's choice stay separate: the registered range
+ * is never rewritten, and the selection is persisted in the exact shared D3
+ * SINGLE shape (value set, bounds null) while still citing the range option's
+ * `option_key` and `rate_ids`. Bases are never converted into one another.
+ */
+export function isNarrowedSelectionOf(
+  selection: PersistedDefaultRateSelection,
+  option: CanonicalDefaultRateOption,
+): boolean {
+  if (!isDefaultRateRange(option)) return false;
+  if (selection.value == null) return false;
+  if (selection.min_value != null || selection.max_value != null) return false;
+  if (selection.option_key !== option.option_key) return false;
+  if (selection.basis !== option.basis) return false;
+  if (selection.unit !== option.unit) return false;
+  if (!sameRateIdSet(selection.rate_ids, option.rate_ids)) return false;
+  return selection.value >= (option.min_value as number) &&
+    selection.value <= (option.max_value as number);
+}
+
+export type VineyardDoseValidation =
+  | { ok: true; value: number }
+  | { ok: false; message: string };
+
+/**
+ * Validate a typed vineyard dose against the authoritative amount.
+ * Exact single-value label rates stay exact; range rates accept any value
+ * between min and max inclusive.
+ */
+export function validateVineyardDose(
+  option: CanonicalDefaultRateOption,
+  raw: string | number | null | undefined,
+): VineyardDoseValidation {
+  const value = typeof raw === "number" ? raw : Number(String(raw ?? "").trim());
+  if (!Number.isFinite(value)) return { ok: false, message: "Enter a number" };
+  if (isDefaultRateRange(option)) {
+    const min = option.min_value as number;
+    const max = option.max_value as number;
+    if (value < min) return { ok: false, message: `Below the label minimum of ${min} ${option.unit}` };
+    if (value > max) return { ok: false, message: `Above the label maximum of ${max} ${option.unit}` };
+    return { ok: true, value };
+  }
+  if (option.value != null && value !== option.value) {
+    return {
+      ok: false,
+      message: `The label states an exact rate of ${option.value} ${option.unit}`,
+    };
+  }
+  return { ok: true, value };
+}
+
+/** Build the persisted SINGLE selection for a validated vineyard dose. */
+export function narrowedSelectionFromOption(
+  option: CanonicalDefaultRateOption,
+  value: number,
+  meta?: { selected_at?: string | null; label_version?: string | null },
+): PersistedDefaultRateSelection {
+  return {
+    option_key: option.option_key,
+    rate_ids: [...option.rate_ids],
+    basis: option.basis,
+    unit: option.unit,
+    value,
+    min_value: null,
+    max_value: null,
+    source: "operator",
+    selected_at: meta?.selected_at ?? null,
+    label_version: meta?.label_version ?? null,
+  };
+}
+
 function optionsForBasis(
   options: CanonicalDefaultRateOptions | null,
   basis: CanonicalRateBasis,
@@ -185,7 +261,9 @@ export function matchDefaultRateSlot(
     return { basis, status: "unavailable", selection, matchedOption: null };
   }
   const matchedOption =
-    optionsForBasis(options, basis).find((o) => isSameDefaultRateSelection(selection, o)) ?? null;
+    optionsForBasis(options, basis).find(
+      (o) => isSameDefaultRateSelection(selection, o) || isNarrowedSelectionOf(selection, o),
+    ) ?? null;
   return {
     basis,
     status: matchedOption ? "matched" : "needs_review",

@@ -5,7 +5,9 @@
 // never mints an option id, never converts between /100 L and /ha, and never
 // selects anything automatically. /100 L and /ha are two fully independent
 // groups with two independent selected states.
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import type {
@@ -20,6 +22,7 @@ import {
   UNAVAILABLE_MESSAGE,
   defaultRateAmountText,
   isDefaultRateRange,
+  validateVineyardDose,
   type DefaultRateSlotState,
 } from "@/lib/chemicalDefaultRateSelection";
 
@@ -55,17 +58,72 @@ function OptionRow({
   );
 }
 
+/**
+ * PART 10 — the vineyard's usual operational dose inside an authoritative
+ * label RANGE. The registered evidence is never edited: this only narrows the
+ * vineyard's own selection, and only within [min, max].
+ */
+function VineyardDoseInput({
+  option,
+  basis,
+  current,
+  onCommit,
+}: {
+  option: CanonicalDefaultRateOption;
+  basis: CanonicalRateBasis;
+  current: number | null;
+  onCommit: (value: number) => void;
+}) {
+  const [text, setText] = useState(current == null ? "" : String(current));
+  useEffect(() => {
+    setText(current == null ? "" : String(current));
+  }, [current]);
+  const trimmed = text.trim();
+  const validation = trimmed === "" ? null : validateVineyardDose(option, trimmed);
+  return (
+    <div className="mt-1.5 space-y-1">
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] text-muted-foreground">Your usual rate</span>
+        <Input
+          type="number"
+          inputMode="decimal"
+          step="any"
+          aria-label={`Your usual rate ${BASIS_SUFFIX[basis]}`}
+          className="h-7 w-24 text-xs"
+          value={text}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={() => {
+            if (validation?.ok) onCommit(validation.value);
+          }}
+        />
+        <span className="text-[11px] text-muted-foreground">
+          {option.unit} {BASIS_SUFFIX[basis]}
+        </span>
+      </div>
+      {validation && validation.ok === false && (
+        <p className="text-[11px] text-destructive">{validation.message}</p>
+      )}
+      <p className="text-[11px] text-muted-foreground">
+        Label range {defaultRateAmountText(option)} {BASIS_SUFFIX[basis]} is unchanged.
+      </p>
+    </div>
+  );
+}
+
 function Group({
   basis,
   options,
   slot,
   onSelect,
+  onSelectDose,
   onClear,
 }: {
   basis: CanonicalRateBasis;
   options: CanonicalDefaultRateOption[];
   slot: DefaultRateSlotState;
   onSelect: (option: CanonicalDefaultRateOption) => void;
+  onSelectDose: (option: CanonicalDefaultRateOption, value: number) => void;
   onClear: () => void;
 }) {
   // A needs_review / unavailable snapshot NEVER selects a different option.
@@ -108,7 +166,17 @@ function Group({
               className="flex cursor-pointer items-start gap-2 rounded-md border border-border/60 p-2"
             >
               <RadioGroupItem value={o.option_key} className="mt-0.5" />
-              <OptionRow option={o} basis={basis} />
+              <span className="min-w-0 flex-1">
+                <OptionRow option={o} basis={basis} />
+                {selectedKey === o.option_key && isDefaultRateRange(o) && (
+                  <VineyardDoseInput
+                    option={o}
+                    basis={basis}
+                    current={slot.selection?.value ?? null}
+                    onCommit={(v) => onSelectDose(o, v)}
+                  />
+                )}
+              </span>
             </label>
           ))}
         </RadioGroup>
@@ -146,6 +214,7 @@ export function DefaultRatesCard({
   options,
   slots,
   onSelect,
+  onSelectDose,
   onClear,
   className,
 }: {
@@ -153,6 +222,12 @@ export function DefaultRatesCard({
   options: CanonicalDefaultRateOptions | null;
   slots: Record<CanonicalRateBasis, DefaultRateSlotState>;
   onSelect: (option: CanonicalDefaultRateOption, basis: CanonicalRateBasis) => void;
+  /** Vineyard's usual dose inside an authoritative label range. */
+  onSelectDose?: (
+    option: CanonicalDefaultRateOption,
+    basis: CanonicalRateBasis,
+    value: number,
+  ) => void;
   onClear: (basis: CanonicalRateBasis) => void;
   className?: string;
 }) {
@@ -174,6 +249,7 @@ export function DefaultRatesCard({
             options={options?.per_100_litres ?? []}
             slot={slots.per_100_litres}
             onSelect={(o) => onSelect(o, "per_100_litres")}
+            onSelectDose={(o, v) => onSelectDose?.(o, "per_100_litres", v)}
             onClear={() => onClear("per_100_litres")}
           />
           <Group
@@ -181,6 +257,7 @@ export function DefaultRatesCard({
             options={options?.per_hectare ?? []}
             slot={slots.per_hectare}
             onSelect={(o) => onSelect(o, "per_hectare")}
+            onSelectDose={(o, v) => onSelectDose?.(o, "per_hectare", v)}
             onClear={() => onClear("per_hectare")}
           />
           <p className="text-[11px] text-muted-foreground">

@@ -59,6 +59,7 @@ import {
   type RankingSummary,
 } from "@/lib/chemicalLookupDiagnostics";
 import { vineyardCountryCode, countryLabel } from "@/lib/chemicalJurisdiction";
+import { parsePhysicalForm, type PhysicalForm } from "@/lib/chemicalPhysicalForm";
 import {
   normaliseMatchSource,
   parseMasterLookupEnvelope,
@@ -404,9 +405,16 @@ export interface CanonicalChemicalFields {
   registrationCountry?: string;
   registrationScheme?: string;
   registrationNumber?: string;
+  /**
+   * Authoritative physical form (`form_type`). "unknown" when the backend did
+   * not state one — never inferred from a concentration or rate unit.
+   */
+  physicalForm: PhysicalForm;
   /** Legacy projections kept for mobile compatibility. */
   activeIngredientText?: string;
   chemicalGroupText?: string;
+
+
   labelReference?: string;
   labelVersion?: string;
   /** Manufacturer's own product page, when the backend resolved one. */
@@ -765,7 +773,7 @@ export function parseChemicalLookup(
       authoritative: false,
       verificationStatus: "unverified",
       jurisdiction,
-      fields: {},
+      fields: { physicalForm: "unknown" },
       draft: null,
       provenance: map,
       aiSuggestion,
@@ -831,6 +839,16 @@ export function parseChemicalLookup(
   );
   const labelVersion = gated(gate, "label_version", s(p.label_version));
   const categoryRaw = gated(gate, "category", s(p.category ?? p.product_category ?? p.use));
+  // PART 5 — physical form comes ONLY from the authoritative `form_type`
+  // statement. Absent/unevidenced stays "unknown"; it is never inferred from a
+  // concentration unit, an application-rate unit or a rate basis.
+  const formRaw = gated(
+    gate,
+    "form_type",
+    s(p.form_type ?? p.physical_form ?? p.product_form),
+  );
+  const physicalForm: PhysicalForm = parsePhysicalForm(formRaw);
+  if (physicalForm === "unknown") unresolved.add("form_type");
 
   const draft: ChemicalIntelligenceDraft = {
     ...emptyDraft(),
@@ -898,6 +916,7 @@ export function parseChemicalLookup(
     registrationCountry: country,
     registrationScheme: scheme,
     registrationNumber,
+    physicalForm,
     activeIngredientText: actives.length ? legacyActiveIngredientProjection(actives) : undefined,
     chemicalGroupText: actives.length ? legacyChemicalGroupProjection(actives) : undefined,
     labelReference,
