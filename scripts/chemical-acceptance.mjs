@@ -24,7 +24,14 @@ const PRODUCTS = [
   { name: "RIDOMIL GOLD MZ", reg: "50267" },
   { name: "ROUNDUP", reg: "31393" },
   { name: "MANCOZEB", reg: "63839" },
+  // Additional catalogue records for the system mix (herbicide / insecticide /
+  // miticide / alternate formulations and bases).
+  { name: "LORSBAN 500 EC", reg: "34715" },
+  { name: "APPARENT SPRAYSEAL", reg: "33182" },
+  { name: "TOPAS 100 EC", reg: "34681" },
+  { name: "SPRAYSEED 250", reg: "36000" },
 ];
+
 
 const GRAPEVINE = /\b(grape|grapevine|grapevines|vine|vines|vitis)\b/i;
 
