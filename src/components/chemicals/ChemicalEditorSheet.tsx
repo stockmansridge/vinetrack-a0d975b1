@@ -47,6 +47,7 @@ import {
   invalidateCanonicalOptions,
   newDefaultRateLifecycle,
   selectDefaultRate,
+  selectVineyardDose,
   type DefaultRateLifecycleState,
 } from "@/lib/chemicalDefaultRateLifecycle";
 
@@ -74,7 +75,18 @@ import { ChemicalIntelligenceDialog } from "@/components/chemicals/ChemicalIntel
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/ChemicalAILookup";
+import {
+  ChemicalAILookup,
+  type AppliedSuggestion,
+  type ChemicalSelectionMode,
+} from "@/components/spray/ChemicalAILookup";
+import {
+  PHYSICAL_FORM_LABEL,
+  formFromInventoryUnit,
+  inventoryUnitForForm,
+  packUnitForForm,
+  type PhysicalForm,
+} from "@/lib/chemicalPhysicalForm";
 import { JurisdictionNoticeBanner } from "@/components/chemicals/JurisdictionNotice";
 import { countryLabel, jurisdictionSuitability } from "@/lib/chemicalJurisdiction";
 
@@ -171,7 +183,24 @@ export function ChemicalEditor({
   const [rateStr, setRateStr] = useState("");
   const [packSizeStr, setPackSizeStr] = useState("");
   const [packPriceStr, setPackPriceStr] = useState("");
-  const [packUnit, setPackUnit] = useState<string>("Litres");
+  // PART 6 — pack unit is only an editable suggestion derived from the
+  // authoritative physical form. The legacy "Litres" default must never leak
+  // into a solid or unknown-form chemical.
+  const [packUnit, setPackUnit] = useState<string>("");
+  // PART 5 — authoritative physical form. NEVER inferred from a concentration
+  // unit, an application-rate unit, a rate basis or a spray-water volume.
+  const [physicalForm, setPhysicalForm] = useState<PhysicalForm>("unknown");
+  // PART 8 — the authoritative WHP wording, preserved verbatim. A numeric
+  // projection may exist alongside it but never replaces the legal meaning.
+  const [whpLegalText, setWhpLegalText] = useState<string>("");
+  // PART 11 — the specific unresolved items from the structured response.
+  const [unresolvedItems, setUnresolvedItems] = useState<string[]>([]);
+  /**
+   * PART 3/4 — the product editor stays hidden until the operator selects a
+   * registered candidate or explicitly chooses manual entry. Editing an
+   * existing saved chemical always starts unlocked.
+   */
+  const [selectionMode, setSelectionMode] = useState<ChemicalSelectionMode>("none");
   const [existingCost, setExistingCost] = useState<number | null>(null);
   const [currency, setCurrency] = useState("AUD");
   const [whp, setWhp] = useState("");
@@ -261,7 +290,8 @@ export function ChemicalEditor({
         setExistingCost(purchaseCostPerUnit(initial.purchase));
         setPackSizeStr("");
         setPackPriceStr("");
-        setPackUnit(displayBaseUnit(initial.purchase?.unit ?? initial.unit) || "Litres");
+        // No legacy "Litres" fallback: an unknown-form product keeps it unset.
+        setPackUnit(displayBaseUnit(initial.purchase?.unit ?? initial.unit) || "");
         setCurrency(initial.purchase?.currency ?? "AUD");
         const p = parseRestrictions(initial.restrictions);
         setWhp(p.whpDays);
@@ -285,6 +315,10 @@ export function ChemicalEditor({
         // Persisted defaults come ONLY from the stored contract. There is no
         // automatic lookup on reopen, so canonical options stay unavailable and
         // the saved snapshot is displayed from itself.
+        setSelectionMode("existing");
+        setWhpLegalText("");
+        setUnresolvedItems([]);
+        setPhysicalForm(formFromInventoryUnit(normaliseUnit((initial as any).unit)));
         setRateLife(
           hydrateDefaultRateLifecycle({
             storedDefaultRates: (initial as any).default_rates,
@@ -299,7 +333,11 @@ export function ChemicalEditor({
         setExistingCost(null);
         setPackSizeStr("");
         setPackPriceStr("");
-        setPackUnit("Litres");
+        setPackUnit("");
+        setPhysicalForm("unknown");
+        setSelectionMode("none");
+        setWhpLegalText("");
+        setUnresolvedItems([]);
         setCurrency("AUD");
         setWhp("");
         setRei("");
@@ -459,6 +497,13 @@ export function ChemicalEditor({
           labelVersion: r.fields.labelVersion ?? null,
         }),
       );
+      // PART 5/6 — honour the authoritative `form_type` verbatim and derive
+      // only the INVENTORY unit default from it. Unknown stays unset.
+      const authForm = r.fields.physicalForm;
+      setPhysicalForm(authForm);
+      const inventory = inventoryUnitForForm(authForm);
+      const pack = packUnitForForm(authForm);
+      setPackUnit(pack ?? "");
       setManufacturerLabelUrl(r.fields.manufacturerLabelUrl);
       setForm((p) => ({
         ...p,
@@ -469,8 +514,9 @@ export function ChemicalEditor({
         chemical_group: r.fields.chemicalGroupText ?? p.chemical_group ?? "",
         problem: r.fields.target ?? p.problem ?? "",
         // §13: a canonical/recommended option never projects into the legacy
-        // unit or rate fields.
-        unit: p.unit ?? "",
+        // rate value. The unit here is the INVENTORY unit implied by the
+        // authoritative physical form only — never by a rate unit.
+        unit: inventory ? composeUnit(inventory, inferRateBasis(p.unit)) : "",
         label_url:
           r.fields.regulatorLabelUrl ??
           (r.fields.labelReference && /^https?:\/\//i.test(r.fields.labelReference)
@@ -486,6 +532,8 @@ export function ChemicalEditor({
       // stale or AI-sourced number can never survive an authoritative apply.
       setWhp(r.fields.withholdingDays != null ? String(r.fields.withholdingDays) : "");
       setRei(r.fields.reEntryHours != null ? String(r.fields.reEntryHours) : "");
+      setWhpLegalText(r.fields.withholdingText ?? "");
+      setUnresolvedItems(r.unresolvedFields ?? []);
       setRestNotes(r.fields.restrictions ?? "");
       return;
 
@@ -600,6 +648,15 @@ export function ChemicalEditor({
     setRateLife((prev) => selectDefaultRate(prev, option, basis, selectedAt));
   };
 
+  const handleSelectVineyardDose = (
+    option: CanonicalDefaultRateOption,
+    basis: CanonicalRateBasis,
+    value: number,
+  ) =>
+    setRateLife((prev) =>
+      selectVineyardDose(prev, option, basis, value, new Date().toISOString()),
+    );
+
   const handleClearDefaultRate = (basis: CanonicalRateBasis) =>
     setRateLife((prev) => clearDefaultRate(prev, basis));
 
@@ -620,6 +677,36 @@ export function ChemicalEditor({
   };
 
 
+
+  /**
+   * PART 3/4 — SEARCH state gate. "Change product" (mode → "none") returns to
+   * candidate selection and clears the previous authoritative identity so a
+   * product A result can never bleed into a product B review.
+   */
+  const editorUnlocked = selectionMode !== "none";
+  const handleSelectionChange = (mode: ChemicalSelectionMode) => {
+    setSelectionMode((prev) => {
+      if (prev === mode) return prev;
+      if (mode === "none" && !initial) {
+        setForm({ ...EMPTY });
+        setIntel(emptyDraft());
+        setIntelBase(emptyDraft());
+        setUpgraded(false);
+        setMasterLink(null);
+        setManufacturerLabelUrl(undefined);
+        setPhysicalForm("unknown");
+        setPackUnit("");
+        setRateStr("");
+        setWhp("");
+        setRei("");
+        setWhpLegalText("");
+        setRestNotes("");
+        setUnresolvedItems([]);
+        setRateLife(newDefaultRateLifecycle());
+      }
+      return mode;
+    });
+  };
 
   const labelLinks = resolveChemicalLabelLinks({
     sources: intel.sources,
@@ -644,6 +731,7 @@ export function ChemicalEditor({
             registration_number: (c as { registration_number?: string | null }).registration_number,
           }))}
         onApply={applySuggestion}
+        onSelectionChange={handleSelectionChange}
       />
       {/* Jurisdiction suitability is computed, never stored. Chemistry is
           kept; only label authority changes. */}
@@ -807,6 +895,15 @@ export function ChemicalEditor({
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4 text-sm">
           {lookupBlock}
 
+          {!editorUnlocked && (
+            <p className="text-xs text-muted-foreground">
+              Search for the registered product and choose it from the results, or choose
+              “Enter manually”. Nothing has failed — the product details appear once an
+              identity is chosen.
+            </p>
+          )}
+
+          {editorUnlocked && (
           <div className="grid gap-4 lg:grid-cols-2 items-start">
             {/* ------------------------------------------- primary column */}
             <div className="space-y-4">
@@ -840,29 +937,38 @@ export function ChemicalEditor({
                   </Field>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Liquid / solid">
+                  {/* PART 5 — physical form is the authoritative form_type,
+                      or Unknown. It is never inferred from a unit or rate. */}
+                  <Field label="Product form">
                     <Select
-                      value={inferProductType(form.unit)}
+                      value={physicalForm}
                       onValueChange={(v) => {
-                        const pt = v as ProductType;
-                        set("unit", composeUnit(defaultUnitFor(pt), inferRateBasis(form.unit)));
+                        const next = v as PhysicalForm;
+                        setPhysicalForm(next);
+                        const inventory = inventoryUnitForForm(next);
+                        set("unit", inventory ? composeUnit(inventory, inferRateBasis(form.unit)) : "");
+                        setPackUnit(packUnitForForm(next) ?? "");
                       }}
                     >
-                      <SelectTrigger><SelectValue placeholder="Liquid / Solid" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={PHYSICAL_FORM_LABEL.unknown} /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="liquid">{PRODUCT_TYPE_LABEL.liquid}</SelectItem>
-                        <SelectItem value="solid">{PRODUCT_TYPE_LABEL.solid}</SelectItem>
+                        <SelectItem value="liquid">{PHYSICAL_FORM_LABEL.liquid}</SelectItem>
+                        <SelectItem value="solid">{PHYSICAL_FORM_LABEL.solid}</SelectItem>
+                        <SelectItem value="unknown">{PHYSICAL_FORM_LABEL.unknown}</SelectItem>
                       </SelectContent>
                     </Select>
                   </Field>
-                  <Field label="Unit">
+                  {/* PART 6 — inventory / product unit, separate from pack,
+                      concentration and application-rate units. */}
+                  <Field label="Inventory unit">
                     <Select
-                      value={(normaliseUnit(form.unit) as ChemUnit) || defaultUnitFor(inferProductType(form.unit))}
+                      value={(normaliseUnit(form.unit) as ChemUnit) || ""}
                       onValueChange={(v) => set("unit", composeUnit(v, inferRateBasis(form.unit)))}
+                      disabled={physicalForm === "unknown" && !normaliseUnit(form.unit)}
                     >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Not set" /></SelectTrigger>
                       <SelectContent>
-                        {unitsFor(inferProductType(form.unit)).map((u) => (
+                        {unitsFor(physicalForm === "solid" ? "solid" : "liquid").map((u) => (
                           <SelectItem key={u} value={u}>{u}</SelectItem>
                         ))}
                       </SelectContent>
@@ -977,6 +1083,36 @@ export function ChemicalEditor({
                 )}
               </Section>
 
+              {(whpLegalText || rei || unresolvedItems.length > 0) && (
+                <Section title="Withholding, re-entry & verification">
+                  {/* PART 8 — legal wording wins over any numeric projection. */}
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Withholding period: </span>
+                    {whpLegalText ? (
+                      <span>{whpLegalText}</span>
+                    ) : whp ? (
+                      <span>{whp} days</span>
+                    ) : (
+                      <span className="italic text-muted-foreground">Not resolved</span>
+                    )}
+                  </div>
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Re-entry period: </span>
+                    {rei ? (
+                      <span>{rei} hours</span>
+                    ) : (
+                      <span className="italic text-muted-foreground">Not resolved</span>
+                    )}
+                  </div>
+                  {unresolvedItems.length > 0 && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Everything else was resolved from the registered label. Still unresolved:{" "}
+                      {unresolvedItems.join(", ")}.
+                    </p>
+                  )}
+                </Section>
+              )}
+
               {structuredUses && (
                 <Section title="Default rate">
                   {rateLife.productChangedNotice && (
@@ -991,6 +1127,7 @@ export function ChemicalEditor({
                     options={canonicalRateOptions}
                     slots={defaultRateSlots}
                     onSelect={handleSelectDefaultRate}
+                    onSelectDose={handleSelectVineyardDose}
                     onClear={handleClearDefaultRate}
                   />
                 </Section>
@@ -1026,7 +1163,7 @@ export function ChemicalEditor({
                         </Field>
                         <Field label="Pack unit">
                           <Select value={packUnit} onValueChange={setPackUnit}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectTrigger><SelectValue placeholder="Not set" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="Litres">Litres</SelectItem>
                               <SelectItem value="mL">mL</SelectItem>
@@ -1079,8 +1216,10 @@ export function ChemicalEditor({
               </Section>
             </div>
           </div>
+          )}
 
           {/* --------------------------------- advanced / verification */}
+          {editorUnlocked && (
           <Collapsible>
             <div className="rounded-md border border-border/60">
               <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 text-sm font-semibold">
@@ -1123,13 +1262,16 @@ export function ChemicalEditor({
               </CollapsibleContent>
             </div>
           </Collapsible>
+          )}
         </div>
 
         <DialogFooter className="shrink-0 border-t px-5 py-3 gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button disabled={saveMut.isPending} onClick={() => saveMut.mutate()}>
-            {saveMut.isPending ? "Saving…" : "Save chemical"}
-          </Button>
+          {editorUnlocked && (
+            <Button disabled={saveMut.isPending} onClick={() => saveMut.mutate()}>
+              {saveMut.isPending ? "Saving…" : "Save chemical"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

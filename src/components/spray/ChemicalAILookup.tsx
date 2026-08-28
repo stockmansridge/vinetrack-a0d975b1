@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sparkles, Loader2, AlertCircle, Library } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -91,6 +91,12 @@ interface Props {
   country?: string | null;
   /** Apply a candidate (AI lookup OR existing library item). */
   onApply: (s: AppliedSuggestion) => void;
+  /**
+   * PART 3 — the host editor stays in SEARCH state until the operator has
+   * either selected a registered candidate or explicitly chosen manual entry.
+   * "none" is emitted again by "Change product".
+   */
+  onSelectionChange?: (mode: ChemicalSelectionMode) => void;
 }
 
 /**
@@ -150,7 +156,20 @@ function enrichmentFailureMessage(kind: LookupFailure): string {
 
 
 
-export function ChemicalAILookup({ initialName = "", existingLibrary = [], country, onApply }: Props) {
+export type ChemicalSelectionMode =
+  | "none"
+  | "registered"
+  | "master"
+  | "existing"
+  | "manual";
+
+export function ChemicalAILookup({
+  initialName = "",
+  existingLibrary = [],
+  country,
+  onApply,
+  onSelectionChange,
+}: Props) {
   // Jurisdiction is the selected vineyard's country. There is no locale,
   // browser or IP fallback — when it is missing, lookup is blocked.
   const countryCode = vineyardCountryCode(country);
@@ -173,6 +192,17 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
   const [pendingCandidate, setPendingCandidate] = useState<SearchCandidate | null>(null);
   /** The single selected-product summary shown after a one-step selection. */
   const [selected, setSelected] = useState<SelectedProductSummary | null>(null);
+  // Selection mode is derived state — the source of truth stays `selected`.
+  const selectionMode: ChemicalSelectionMode =
+    selected == null
+      ? "none"
+      : selected.source === "pending"
+      ? "none"
+      : (selected.source as ChemicalSelectionMode);
+  const notifySelection = onSelectionChange;
+  useEffect(() => {
+    notifySelection?.(selectionMode);
+  }, [notifySelection, selectionMode]);
 
 
   // Informational only — saved chemicals never re-order or auto-select.

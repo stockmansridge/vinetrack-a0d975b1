@@ -22,6 +22,7 @@ import { toast } from "@/hooks/use-toast";
 import { MasterChemicalCard } from "@/components/chemicals/MasterChemicalCard";
 import { MasterEvidencePanel } from "@/components/chemicals/MasterEvidencePanel";
 import { ApvmaImportDialog } from "@/components/chemicals/ApvmaImportDialog";
+import { MasterCatalogueRefreshDialog } from "@/components/chemicals/MasterCatalogueRefreshDialog";
 import { MasterReviewPreviewDialog } from "@/components/chemicals/MasterReviewPreviewDialog";
 import { MasterReviewSummaryCard } from "@/components/chemicals/MasterReviewSummaryCard";
 import { masterReviewSummary, type ClassifiedConflict } from "@/lib/masterReview";
@@ -70,6 +71,9 @@ function CatalogueBody() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<MasterChemicalRow | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  // System Admin maintenance only — never a vineyard-user feature.
+  const [refreshOpen, setRefreshOpen] = useState(false);
+  const queryClient = useQueryClient();
 
   const q = useQuery({
     queryKey: [...QK, status],
@@ -111,6 +115,15 @@ function CatalogueBody() {
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <Download className="h-4 w-4 mr-1" /> Import from APVMA
           </Button>
+          {status === "candidate" && (
+            <Button
+              variant="outline"
+              onClick={() => setRefreshOpen(true)}
+              disabled={(q.data ?? []).length === 0}
+            >
+              <RefreshCw className="h-4 w-4 mr-1" /> Refresh Chemical Catalogue
+            </Button>
+          )}
         </div>
 
         <TabsContent value={status} className="mt-3">
@@ -129,6 +142,14 @@ function CatalogueBody() {
           )}
         </TabsContent>
       </Tabs>
+
+      <MasterCatalogueRefreshDialog
+        open={refreshOpen}
+        onOpenChange={setRefreshOpen}
+        ids={(q.data ?? []).map((r) => r.id)}
+        country={vineyardCountryCode("AU") ?? "AU"}
+        onFinished={() => queryClient.invalidateQueries({ queryKey: QK })}
+      />
 
       <ApvmaImportDialog
         open={importOpen}

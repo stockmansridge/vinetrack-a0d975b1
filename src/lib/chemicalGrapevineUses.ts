@@ -75,6 +75,48 @@ export function useSourceKind(
   return undefined;
 }
 
+/**
+ * PART 7 — the DIRECTION identity of a registered use, when the backend
+ * supplies one (`direction_id`). Two label directions for the same target are
+ * legitimately different legal directions and must never be merged.
+ */
+export function useDirectionId(use: WriteRegisteredUse): string | undefined {
+  const blobs = [use.extra, use.provenance].filter(Boolean) as Record<string, unknown>[];
+  for (const b of blobs) {
+    for (const key of ["direction_id", "directionId"]) {
+      const v = b[key];
+      if (typeof v === "string" && v.trim() !== "") return v.trim();
+      if (typeof v === "number") return String(v);
+    }
+  }
+  return undefined;
+}
+
+/** Rate identities on a use, when the backend supplies them. */
+export function useRateIds(use: WriteRegisteredUse): string[] {
+  return (use.rates ?? [])
+    .map((r) => {
+      const extra = (r.extra ?? {}) as Record<string, unknown>;
+      const v = extra.rate_id ?? extra.rateId;
+      return typeof v === "string" && v.trim() !== "" ? v.trim() : undefined;
+    })
+    .filter((v): v is string => !!v);
+}
+
+/**
+ * Grouping identity for normal display. A direction identity wins; only rows
+ * with NO direction identity fall back to crop + target, so the legacy
+ * rate-less duplicate suppression keeps working without ever collapsing two
+ * distinct legal directions into one.
+ */
+export function useGroupKey(use: WriteRegisteredUse): string {
+  const direction = useDirectionId(use);
+  if (direction) return `direction:${direction}`;
+  const rateIds = useRateIds(use);
+  if (rateIds.length) return `rates:${[...rateIds].sort().join("|")}`;
+  return `target:${normTarget(use)}`;
+}
+
 const normTarget = (u: WriteRegisteredUse): string =>
   (u.target_raw || u.crop || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
@@ -91,7 +133,7 @@ export function normalGrapevineUses(uses: WriteRegisteredUse[]): WriteRegistered
   const grapevine = partitionRegisteredUses(uses ?? []).grapevine;
   const groups = new Map<string, WriteRegisteredUse[]>();
   for (const u of grapevine) {
-    const key = normTarget(u);
+    const key = useGroupKey(u);
     groups.set(key, [...(groups.get(key) ?? []), u]);
   }
   const kept = new Set<WriteRegisteredUse>();
@@ -143,6 +185,10 @@ export interface GrapevineUseView {
   rates: UseRateLine[];
   hasUsableRate: boolean;
   conditions?: string;
+  /** Any rate on this direction the backend flagged as condition_ambiguous. */
+  conditionAmbiguous: boolean;
+  /** Stable render identity — direction first, never crop+target only. */
+  key: string;
   withholding: string;
   reEntry: string;
 }
@@ -154,6 +200,8 @@ export function grapevineUseView(use: WriteRegisteredUse): GrapevineUseView {
   const rates = useRateLines(use);
   return {
     target: use.target_raw?.trim() || use.crop?.trim() || NOT_STATED,
+    key: useGroupKey(use),
+    conditionAmbiguous: (use.rates ?? []).some((r) => r.condition_ambiguous === true),
     rates,
     hasUsableRate: rates.some((r) => !r.referenceOnly),
     conditions: use.restrictions?.trim() || undefined,
