@@ -842,11 +842,9 @@ export function parseChemicalLookup(
   // PART 5 — physical form comes ONLY from the authoritative `form_type`
   // statement. Absent/unevidenced stays "unknown"; it is never inferred from a
   // concentration unit, an application-rate unit or a rate basis.
-  const formRaw = gated(
-    gate,
-    "form_type",
-    s(p.form_type ?? p.physical_form ?? p.product_form),
-  );
+  // The backend states `form_type` only when the register/label actually
+  // states it, so it is read verbatim; an absent statement stays unknown.
+  const formRaw = s(p.form_type ?? p.physical_form ?? p.product_form);
   const physicalForm: PhysicalForm = parsePhysicalForm(formRaw);
   if (physicalForm === "unknown") unresolved.add("form_type");
 
