@@ -113,9 +113,12 @@ describe("saved chemical identity is registration-number only", () => {
     invoke.mockResolvedValue(searchOk([NAME_ONLY]));
     renderLookup([{ id: "s1", name: "Hortitrol Winter Oil", registration_number: null }]);
     await typeAndSearch("hortitrol winter oil");
+    // Same-name saved chemical: the operator confirms the update check first.
+    fireEvent.click(await screen.findByRole("button", { name: /check for updates/i }));
     await screen.findByText("Hortitrol Winter Oil");
     expect(screen.queryByText("Already in your Chemical Store")).toBeNull();
   });
+
 });
 
 describe("candidate presentation", () => {
