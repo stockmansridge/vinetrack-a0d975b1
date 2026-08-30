@@ -31,12 +31,15 @@ import {
 } from "@/components/ui/collapsible";
 import { GrapevineUsesCard } from "@/components/chemicals/GrapevineUsesCard";
 import {
+  DEFAULT_RATE_NO_LONGER_ON_LABEL_MESSAGE,
   NO_GRAPEVINE_REGISTRATION_MESSAGE,
   RATE_CONFIRMATION_REQUIRED_MESSAGE,
+  defaultRateStillSupported,
   grapevineOnlyDraft,
   hasConfirmedRate,
   hasGrapevineRegistration,
 } from "@/lib/chemicalVineyardScope";
+
 import { DefaultRatesCard } from "@/components/chemicals/DefaultRatesCard";
 import type {
   CanonicalDefaultRateOption,
@@ -647,6 +650,15 @@ export function ChemicalEditor({
     () => matchDefaultRateSlots(defaultRates, canonicalRateOptions),
     [defaultRates, canonicalRateOptions],
   );
+  /**
+   * A saved default only survives a label change while every rate identity it
+   * cites is still on the label. When one disappears the operator must confirm
+   * a replacement (or clear the slot) before the chemical can be saved — the
+   * portal never silently re-points a default at a different rate.
+   */
+  const staleDefaultRate =
+    structuredUses && !defaultRateStillSupported(defaultRates, intel.registeredUses);
+
 
   /** Operator click: copy the backend option and stamp provenance. */
   const handleSelectDefaultRate = (
@@ -1138,6 +1150,14 @@ export function ChemicalEditor({
                       {PRODUCT_CHANGED_MESSAGE}
                     </p>
                   )}
+                  {staleDefaultRate && (
+                    <p
+                      className="mb-2 rounded-md border border-destructive/50 bg-destructive/10 p-2 text-[11px]"
+                      role="alert"
+                    >
+                      {DEFAULT_RATE_NO_LONGER_ON_LABEL_MESSAGE}
+                    </p>
+                  )}
                   {hasGrapevineRegistration(intel.registeredUses) &&
                     !hasConfirmedRate(defaultRates) && (
                       <p className="mb-2 rounded-md border border-border/60 bg-muted/40 p-2 text-[11px]">
@@ -1292,7 +1312,10 @@ export function ChemicalEditor({
         <DialogFooter className="shrink-0 border-t px-5 py-3 gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           {editorUnlocked && (
-            <Button disabled={saveMut.isPending} onClick={() => saveMut.mutate()}>
+            <Button
+              disabled={saveMut.isPending || staleDefaultRate}
+              onClick={() => saveMut.mutate()}
+            >
               {saveMut.isPending ? "Saving…" : "Save chemical"}
             </Button>
           )}
