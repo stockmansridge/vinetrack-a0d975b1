@@ -395,8 +395,13 @@ export function ChemicalEditor({
       // Vineyard scope: only grapevine registered uses are ever persisted.
       // Other-crop directions are dropped whole, never merged or rewritten.
       const encoded = encodeChemicalIntelligenceForWrite(grapevineOnlyDraft(reconciled));
+      // Category: the RAW shared key is the stored authority; `use` carries the
+      // display label as a compatibility projection only.
+      const categoryKey = matchProductCategoryKey(form.product_category);
       const payload: SavedChemicalInput = {
         ...form,
+        product_category: categoryKey,
+        use: categoryKey ? productCategoryLabel(categoryKey) : (form.use ?? ""),
         intelligence: encoded,
         master_chemical_id: masterLink?.id ?? null,
         master_source_revision: masterLink?.revision ?? null,
@@ -533,7 +538,13 @@ export function ChemicalEditor({
       setForm((p) => ({
         ...p,
         name: r.fields.name ?? s.name ?? p.name ?? "",
-        use: r.fields.category ?? p.use ?? "",
+        product_category:
+          matchProductCategoryKey(r.fields.category) ?? p.product_category ?? "",
+        use:
+          productCategoryLabel(matchProductCategoryKey(r.fields.category)) ??
+          r.fields.category ??
+          p.use ??
+          "",
         manufacturer: r.fields.registrant ?? p.manufacturer ?? "",
         active_ingredient: r.fields.activeIngredientText ?? p.active_ingredient ?? "",
         chemical_group: r.fields.chemicalGroupText ?? p.chemical_group ?? "",
@@ -603,7 +614,12 @@ export function ChemicalEditor({
       ...p,
       name: s.name ?? p.name ?? "",
       active_ingredient: s.active_ingredient ?? p.active_ingredient ?? "",
-      use: s.category ?? p.use ?? "",
+      product_category: matchProductCategoryKey(s.category) ?? p.product_category ?? "",
+      use:
+        productCategoryLabel(matchProductCategoryKey(s.category)) ??
+        s.category ??
+        p.use ??
+        "",
       chemical_group: s.chemical_group ?? p.chemical_group ?? "",
       manufacturer: s.manufacturer ?? p.manufacturer ?? "",
       problem: s.target ?? p.problem ?? "",
