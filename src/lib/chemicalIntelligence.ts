@@ -175,7 +175,12 @@ export interface ChemicalIntelligence {
     activeIngredient: string | null;
     chemicalGroup: string | null;
     modeOfAction: string | null;
+    /** Persisted product/use type ("Fungicide", "Herbicide", …). */
+    productType: string | null;
+    /** Product-level restriction free text as stored. Never paraphrased. */
+    restrictions: string | null;
   };
+
   schemaVersion: number | null;
 }
 
