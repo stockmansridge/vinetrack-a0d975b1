@@ -629,7 +629,10 @@ export function toChemicalIntelligence(row: Record<string, any>): ChemicalIntell
       activeIngredient: str(row.active_ingredient),
       chemicalGroup: str(row.chemical_group),
       modeOfAction: str(row.mode_of_action),
+      productType: str(row.use),
+      restrictions: str(row.restrictions),
     },
+
     schemaVersion: numOrNull(row.intelligence_schema_version),
   };
 }
