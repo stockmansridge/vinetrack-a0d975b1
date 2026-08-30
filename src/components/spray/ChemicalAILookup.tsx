@@ -220,7 +220,7 @@ export function ChemicalAILookup({
    * `chemical-info-lookup` function. The portal does not pre-empt it with a
    * Master match or a saved-chemical match, and never re-orders the result.
    */
-  async function runLookup() {
+  async function runLookup(opts?: { skipDuplicateCheck?: boolean }) {
     const q = name.trim();
     if (!q) {
       setError("Enter a product name to look up.");
@@ -233,6 +233,16 @@ export function ChemicalAILookup({
       setErrorAction(null);
       return;
     }
+    // Already saved in THIS vineyard: ask first. Declining does no network
+    // work and writes nothing.
+    if (!opts?.skipDuplicateCheck) {
+      const dupe = findSavedChemicalByName(existingLibrary, q);
+      if (dupe) {
+        setDuplicate({ id: dupe.id, name: dupe.name ?? q });
+        return;
+      }
+    }
+    setDuplicate(null);
     setError(null);
     setErrorAction(null);
     setSearch(null);
