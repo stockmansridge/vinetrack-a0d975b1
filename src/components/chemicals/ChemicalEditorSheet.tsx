@@ -1154,10 +1154,33 @@ export function ChemicalEditor({
                     normal add flow and are never shown here. */}
                 {structuredUses ? (
                   <>
-                    {!hasGrapevineRegistration(intel.registeredUses) && (
-                      <p className="mb-2 rounded-md border border-warning/50 bg-warning/10 p-2 text-[11px]">
-                        {NO_GRAPEVINE_REGISTRATION_MESSAGE}
-                      </p>
+                    {!grapevineRegistered && (
+                      <div
+                        className="mb-2 space-y-2 rounded-md border border-warning/50 bg-warning/10 p-2 text-[11px]"
+                        role="alert"
+                      >
+                        <p>{NO_GRAPEVINE_REGISTRATION_MESSAGE}</p>
+                        {noGrapevineRegistration && (
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleSelectionChange("none")}
+                            >
+                              Change product
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => onOpenChange(false)}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                     )}
                     <GrapevineUsesCard uses={intel.registeredUses} />
                   </>
