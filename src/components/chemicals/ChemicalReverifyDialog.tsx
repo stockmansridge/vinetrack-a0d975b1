@@ -150,7 +150,10 @@ export function ChemicalReverifyDialog({
         </div>
 
         <DialogFooter className="gap-2">
-          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
+          {/* Keeping what you have is a pure close: nothing is written. */}
+          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+            {result ? "Keep what I have" : "Close"}
+          </Button>
           <Button type="button" variant="outline" disabled={!identity || running || !vineyardCountry} onClick={run}>
             {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
             {result ? "Run again" : "Re-verify"}
