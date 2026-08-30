@@ -489,6 +489,27 @@ export default function PinsPage() {
               <RefreshCw className={`h-3.5 w-3.5 mr-1 ${isLoading ? "animate-spin" : ""}`} />
               Refresh
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!selectedVineyardId || exporting}
+              onClick={async () => {
+                if (!selectedVineyardId) return;
+                setExporting(true);
+                try {
+                  const n = await downloadPinsCsv(selectedVineyardId, vineyardName);
+                  toast.success(`Exported ${n} pin${n === 1 ? "" : "s"}`);
+                } catch (e) {
+                  toast.error((e as Error).message || "Export failed");
+                } finally {
+                  setExporting(false);
+                }
+              }}
+            >
+              <Download className="h-3.5 w-3.5 mr-1" />
+              Export CSV
+            </Button>
+
             <Input
               placeholder="Filter…"
               value={filter}
