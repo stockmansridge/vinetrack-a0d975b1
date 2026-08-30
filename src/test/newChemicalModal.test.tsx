@@ -117,8 +117,8 @@ describe("grapevine projection", () => {
 });
 
 describe("GrapevineUsesCard", () => {
-  it("shows grapevine uses and collapses other crops", () => {
-    render(<GrapevineUsesCard uses={[grapeUse, peachUse]} />);
+  it("shows grapevine uses and collapses other crops in a full-label review", () => {
+    render(<GrapevineUsesCard uses={[grapeUse, peachUse]} showOtherCrops />);
     expect(screen.getByText("European Red Mite")).toBeTruthy();
     expect(screen.queryByText("Peach")).toBeNull();
     fireEvent.click(screen.getByText(/Other crops on this label \(1\)/));
