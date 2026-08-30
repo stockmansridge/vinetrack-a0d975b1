@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { Plus, RefreshCw, TriangleAlert, X } from "lucide-react";
+import { Download, Plus, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { useVineyard } from "@/context/VineyardContext";
@@ -36,6 +36,8 @@ import { buildPinsDiagnostics, pinDisplayTitle } from "@/lib/pinsDiagnostics";
 import { parsePolygonPoints } from "@/lib/paddockGeometry";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { fetchPinsRawCounts } from "@/lib/pinsRawCounts";
+import { downloadPinsCsv } from "@/lib/pinsExport";
+import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import UnifiedPinDialog from "@/components/pins/UnifiedPinDialog";
 
@@ -75,6 +77,7 @@ export default function PinsPage() {
   const [filter, setFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<PinStatusFilter>("active");
   const [categoryFilter, setCategoryFilter] = useState<PinCategoryId | "all">("all");
+  const [exporting, setExporting] = useState(false);
   const [locationFilter, setLocationFilter] = useState<"all" | "assigned" | "unassigned">("all");
   const catColours = usePinCategoryColours();
   const [selectedId, setSelectedId] = useState<string | null>(null);
