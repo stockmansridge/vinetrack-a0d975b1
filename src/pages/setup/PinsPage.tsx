@@ -75,6 +75,7 @@ export default function PinsPage() {
   const [filter, setFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<PinStatusFilter>("active");
   const [categoryFilter, setCategoryFilter] = useState<PinCategoryId | "all">("all");
+  const [locationFilter, setLocationFilter] = useState<"all" | "assigned" | "unassigned">("all");
   const catColours = usePinCategoryColours();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { resolve } = useTeamLookup(selectedVineyardId);
@@ -277,7 +278,6 @@ export default function PinsPage() {
     2 /* created, createdBy */ +
     (hasAnyCompleted ? 2 : 0);
 
-  const { placements } = usePinPlacements(useMemo(() => pins.map((p) => p.id), [pins]));
   const selected = pins.find((p) => p.id === selectedId) ?? null;
 
   const PIN_ALL_COLS = ["title","mode","paddock","row","status","priority","category","stage","created","createdBy","completed","completedBy"] as const;
