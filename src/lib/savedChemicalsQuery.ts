@@ -19,6 +19,11 @@ export interface SavedChemical {
   id: string;
   vineyard_id: string;
   name?: string | null;
+  /**
+   * Shared RAW product-category key ("fungicide", "growthRegulator", …).
+   * Authoritative; `use` is only a display projection of it.
+   */
+  product_category?: string | null;
   rate_per_ha?: number | null;
   unit?: string | null;
   chemical_group?: string | null;
