@@ -31,12 +31,15 @@ import {
 } from "@/components/ui/collapsible";
 import { GrapevineUsesCard } from "@/components/chemicals/GrapevineUsesCard";
 import {
+  DEFAULT_RATE_NO_LONGER_ON_LABEL_MESSAGE,
   NO_GRAPEVINE_REGISTRATION_MESSAGE,
   RATE_CONFIRMATION_REQUIRED_MESSAGE,
+  defaultRateStillSupported,
   grapevineOnlyDraft,
   hasConfirmedRate,
   hasGrapevineRegistration,
 } from "@/lib/chemicalVineyardScope";
+
 import { DefaultRatesCard } from "@/components/chemicals/DefaultRatesCard";
 import type {
   CanonicalDefaultRateOption,
