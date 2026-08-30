@@ -92,7 +92,7 @@ export function GrapevineUsesCard({
         </div>
       )}
 
-      {other.length > 0 && (
+      {showOtherCrops && other.length > 0 && (
         <div className="mt-2">
           <button
             type="button"
