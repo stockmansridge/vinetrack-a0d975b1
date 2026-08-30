@@ -1138,6 +1138,12 @@ export function ChemicalEditor({
                       {PRODUCT_CHANGED_MESSAGE}
                     </p>
                   )}
+                  {hasGrapevineRegistration(intel.registeredUses) &&
+                    !hasConfirmedRate(defaultRates) && (
+                      <p className="mb-2 rounded-md border border-border/60 bg-muted/40 p-2 text-[11px]">
+                        {RATE_CONFIRMATION_REQUIRED_MESSAGE}
+                      </p>
+                    )}
                   {/* Operator-owned shared default_rates contract. The legacy
                       numeric rate editor lives under Advanced (mobile
                       compatibility) and is never written from here. */}
