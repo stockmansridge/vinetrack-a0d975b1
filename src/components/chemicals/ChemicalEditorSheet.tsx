@@ -1312,7 +1312,10 @@ export function ChemicalEditor({
         <DialogFooter className="shrink-0 border-t px-5 py-3 gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           {editorUnlocked && (
-            <Button disabled={saveMut.isPending} onClick={() => saveMut.mutate()}>
+            <Button
+              disabled={saveMut.isPending || staleDefaultRate}
+              onClick={() => saveMut.mutate()}
+            >
               {saveMut.isPending ? "Saving…" : "Save chemical"}
             </Button>
           )}
