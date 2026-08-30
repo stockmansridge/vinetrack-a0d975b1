@@ -228,6 +228,8 @@ describe("a default rate whose identity disappeared", () => {
       /const staleDefaultRate =\s*\n?\s*structuredUses && !defaultRateStillSupported\(defaultRates, intel\.registeredUses\)/,
     );
     expect(editor).toContain("DEFAULT_RATE_NO_LONGER_ON_LABEL_MESSAGE");
-    expect(editor).toContain("disabled={saveMut.isPending || staleDefaultRate}");
+    // Save is blocked by the composite gate, which includes the stale default.
+    expect(editor).toContain("const saveBlocked = staleDefaultRate || firstAddBlocked;");
+    expect(editor).toContain("disabled={saveMut.isPending || saveBlocked}");
   });
 });
