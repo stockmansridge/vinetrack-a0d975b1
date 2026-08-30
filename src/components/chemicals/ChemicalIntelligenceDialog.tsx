@@ -1,18 +1,49 @@
-// Read-only Chemical Intelligence detail (SQL 194). Stage 2A: no write,
-// verify or resolve actions — those land in Stage 2B.
+// Read-only Chemical Detail (SQL 194 Chemical Intelligence).
+//
+// Content parity with the iOS/Android chemical detail screen: identity,
+// Active Ingredients, Registered Uses (with per-use rate, basis, conditions,
+// Withholding Period, Re-entry Interval and verbatim Restrictions),
+// Product Information and Sources / Documents.
+//
+// Safety rules are enforced by `chemicalSafetyDisplay` — a missing period is
+// never rendered as zero and a missing restriction is never "No restrictions".
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { AlertTriangle, ExternalLink } from "lucide-react";
+import { AlertTriangle, ExternalLink, FileText, Globe } from "lucide-react";
 import {
   formatActivityGroup, formatLabelRate, toChemicalIntelligence,
-  type ChemicalIntelligence,
+  type ChemicalIntelligence, type RegisteredUse,
 } from "@/lib/chemicalIntelligence";
+import {
+  NOT_RESOLVED_LABEL,
+  reEntryDisplayForUse,
+  restrictionsDisplayForUse,
+  withholdingDisplayForUse,
+} from "@/lib/chemicalSafetyDisplay";
 import { VerificationBadge, ActivityGroupSummary } from "./ChemicalIntelligenceBadges";
 
 const dash = (v: unknown) => (v == null || v === "" ? "—" : String(v));
+
+const isUrl = (v?: string | null): v is string => !!v && /^https?:\/\//i.test(v);
+
+/** Every label rate for a use, in label order. Ranges are never merged. */
+function useRateText(use: RegisteredUse): string {
+  const rates = use.rates.length
+    ? use.rates.map((r) => formatLabelRate(r)).filter(Boolean)
+    : [formatLabelRate(use.rate)].filter(Boolean);
+  if (rates.length) return rates.join(" · ");
+  return use.rateText ?? NOT_RESOLVED_LABEL;
+}
+
+function useConditionText(use: RegisteredUse): string | null {
+  const conditions = use.rates
+    .map((r) => r.condition)
+    .filter((c): c is string => !!c);
+  return conditions.length ? Array.from(new Set(conditions)).join(" · ") : null;
+}
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -31,6 +62,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     </section>
   );
 }
+
 
 export function ChemicalIntelligenceDetail({ chem }: { chem: ChemicalIntelligence }) {
   const { product, verification } = chem;
