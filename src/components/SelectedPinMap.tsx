@@ -9,14 +9,17 @@ import MapSourceBadge from "@/components/MapSourceBadge";
 import { pinDisplayCoords, pinDisplayStyle, pinDisplayTitle } from "@/lib/pinStyle";
 import { usePinCategoryColours } from "@/lib/pinCategoryColoursQuery";
 import type { PinRecord } from "@/components/PinDetailPanel";
+import { pinPlacementDisplay, type PinPlacementRow } from "@/lib/pinPlacement";
 
 interface Props {
   pin: PinRecord;
+  /** Canonical SQL 171 placement row (public.pin_placements). */
+  placement?: PinPlacementRow | null;
 }
 
 type Provider = "checking" | "apple" | "unavailable";
 
-export default function SelectedPinMap({ pin }: Props) {
+export default function SelectedPinMap({ pin, placement }: Props) {
   const coords = useMemo(() => pinDisplayCoords(pin as any), [pin]);
   const [provider, setProvider] = useState<Provider>("checking");
   const [externalMapResult, setExternalMapResult] = useState<ExternalMapOpenResult | null>(null);
@@ -45,8 +48,8 @@ export default function SelectedPinMap({ pin }: Props) {
   const openInGoogleMapsUrl = `https://www.google.com/maps?q=${coords.lat},${coords.lng}`;
   const coordinatesLabel = `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`;
 
-  const rowNumber = (pin as any).pin_row_number ?? (pin as any).row_number ?? (pin as any).driving_row_number;
-  const side = (pin as any).pin_side ?? (pin as any).side;
+  // Location wording comes from the canonical placement only.
+  const place = pinPlacementDisplay(placement);
   const category = (pin as any).category;
   const note = (pin as any).notes;
   const whatsappLines = [
@@ -54,8 +57,8 @@ export default function SelectedPinMap({ pin }: Props) {
     title,
     "",
     category ? `Category: ${category}` : null,
-    rowNumber != null ? `Row: ${rowNumber}` : null,
-    side ? `Side: ${side}` : null,
+    place.blockLabel && place.blockLabel !== "\u2014" ? `Block: ${place.blockLabel}` : null,
+    ...place.rowLines,
     note ? `Note: ${note}` : null,
     `Coordinates: ${coordinatesLabel}`,
     "",

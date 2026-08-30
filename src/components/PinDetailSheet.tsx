@@ -37,7 +37,7 @@ export default function PinDetailSheet({
         <div className="space-y-4 px-4 py-4">
           {pin ? (
             <>
-              <SelectedPinMap pin={pin} />
+              <SelectedPinMap pin={pin} placement={placement} />
               <PinDetailPanel
                 pin={pin}
                 paddockName={paddockName}

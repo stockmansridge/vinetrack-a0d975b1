@@ -49,8 +49,9 @@ import {
 } from "@/components/ui/table";
 import BlockMap from "@/components/BlockMap";
 import PinDetailSheet from "@/components/PinDetailSheet";
-import { useResolvedPinPlacement } from "@/lib/pinPlacementQuery";
+import { usePinPlacements, useResolvedPinPlacement } from "@/lib/pinPlacementQuery";
 import type { PinRecord } from "@/components/PinDetailPanel";
+import { pinPlacementDisplay } from "@/lib/pinPlacement";
 
 type DateRangeKey = "7d" | "30d" | "90d" | "season" | "all";
 
@@ -261,6 +262,10 @@ export default function BlockDetailPage() {
   // Map overlays follow the active tab so the map mirrors the panel scope.
   const mapTrips = panelTab === "trips" ? tripsInRange : [];
   const mapPins = panelTab === "pins" ? pinsForPanel : [];
+  // Canonical SQL 171 placements for the pin list (never base pin fields).
+  const { placements: panelPlacements } = usePinPlacements(
+    useMemo(() => pinsForPanel.map((p: any) => p.id), [pinsForPanel]),
+  );
 
   if (paddockQ.isLoading) {
     return (
@@ -556,10 +561,9 @@ export default function BlockDetailPage() {
                                   <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
                                     {p.category && <span>{p.category}</span>}
                                     {p.priority && <span>· {p.priority}</span>}
-                                    {p.row_number != null && (
-                                      <span>· Row {p.row_number}</span>
+                                    {pinPlacementDisplay(panelPlacements.get(p.id)).rowLines.map(
+                                      (line) => <span key={line}>· {line}</span>,
                                     )}
-                                    {p.side && <span>· {p.side}</span>}
                                     <span>· {fmtDay(p.created_at)}</span>
                                   </div>
                                 </div>

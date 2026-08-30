@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { Plus, RefreshCw, TriangleAlert, X } from "lucide-react";
+import { Download, Plus, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { useVineyard } from "@/context/VineyardContext";
@@ -36,6 +36,8 @@ import { buildPinsDiagnostics, pinDisplayTitle } from "@/lib/pinsDiagnostics";
 import { parsePolygonPoints } from "@/lib/paddockGeometry";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { fetchPinsRawCounts } from "@/lib/pinsRawCounts";
+import { downloadPinsCsv } from "@/lib/pinsExport";
+import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import UnifiedPinDialog from "@/components/pins/UnifiedPinDialog";
 
@@ -75,6 +77,8 @@ export default function PinsPage() {
   const [filter, setFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<PinStatusFilter>("active");
   const [categoryFilter, setCategoryFilter] = useState<PinCategoryId | "all">("all");
+  const [exporting, setExporting] = useState(false);
+  const [locationFilter, setLocationFilter] = useState<"all" | "assigned" | "unassigned">("all");
   const catColours = usePinCategoryColours();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { resolve } = useTeamLookup(selectedVineyardId);
@@ -181,6 +185,21 @@ export default function PinsPage() {
     [pins, statusFilter],
   );
 
+  // Canonical SQL 171 placements for every loaded pin. Assignment,
+  // block/row display, counts and filters all originate here — never from
+  // fields on the base `pins` row.
+  const { placements } = usePinPlacements(useMemo(() => pins.map((p) => p.id), [pins]));
+
+  const locationCounts = useMemo(() => {
+    let assigned = 0;
+    let unassigned = 0;
+    for (const p of statusFiltered) {
+      if (placements.get(p.id)?.is_location_assigned === true) assigned++;
+      else if (pinPlacementDisplay(placements.get(p.id)).showWarning) unassigned++;
+    }
+    return { assigned, unassigned, all: statusFiltered.length };
+  }, [statusFiltered, placements]);
+
   const [searchParams, setSearchParams] = useSearchParams();
   const paddockFilter = searchParams.get("paddock");
   const paddockFilterName = paddockFilter
@@ -206,8 +225,13 @@ export default function PinsPage() {
     if (categoryFilter !== "all") {
       list = list.filter((p: any) => normalisePinCategoryId(p) === categoryFilter);
     }
+    if (locationFilter === "assigned") {
+      list = list.filter((p: any) => placements.get(p.id)?.is_location_assigned === true);
+    } else if (locationFilter === "unassigned") {
+      list = list.filter((p: any) => pinPlacementDisplay(placements.get(p.id)).showWarning);
+    }
     if (paddockFilter) {
-      list = list.filter((p: any) => p.paddock_id === paddockFilter);
+      list = list.filter((p: any) => placements.get(p.id)?.paddock_id === paddockFilter);
     }
     if (!filter) return list;
     const f = filter.toLowerCase();
@@ -215,7 +239,7 @@ export default function PinsPage() {
       [p.title, (p as any).button_name, p.mode, p.category, p.priority, p.status, p.notes]
         .some((v) => String(v ?? "").toLowerCase().includes(f)),
     );
-  }, [statusFiltered, filter, paddockFilter, categoryFilter]);
+  }, [statusFiltered, filter, paddockFilter, categoryFilter, locationFilter, placements]);
 
   const PRIORITY_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1 };
   type PinSortKey =
@@ -226,11 +250,8 @@ export default function PinsPage() {
     accessors: {
       title: (p: any) => (p.title ?? p.button_name ?? "") as string,
       mode: (p: any) => (p.mode ?? "") as string,
-      paddock: (p: any) => (p.paddock_id ? paddockNameById.get(p.paddock_id) ?? "" : "") as string,
-      row: (p: any) => {
-        const v = p.pin_row_number ?? p.driving_row_number ?? p.row_number;
-        return v == null ? null : Number(v);
-      },
+      paddock: (p: any) => pinPlacementDisplay(placements.get(p.id)).blockLabel,
+      row: (p: any) => pinPlacementDisplay(placements.get(p.id)).rowLabel,
       status: (p: any) => (p.is_completed ? "Completed" : (p.status ?? "Open")),
       priority: (p: any) => (p.priority ? PRIORITY_ORDER[String(p.priority).toLowerCase()] ?? 0 : null),
       category: (p: any) => pinCategoryStyleById(normalisePinCategoryId(p)).label,
@@ -242,6 +263,7 @@ export default function PinsPage() {
     },
     initial: { key: "created", direction: "desc" },
   });
+
 
   // Hide optional columns when no pins have a value for them.
   const hasMode = pins.some((p: any) => p.mode);
@@ -259,7 +281,6 @@ export default function PinsPage() {
     2 /* created, createdBy */ +
     (hasAnyCompleted ? 2 : 0);
 
-  const { placements } = usePinPlacements(useMemo(() => pins.map((p) => p.id), [pins]));
   const selected = pins.find((p) => p.id === selectedId) ?? null;
 
   const PIN_ALL_COLS = ["title","mode","paddock","row","status","priority","category","stage","created","createdBy","completed","completedBy"] as const;
@@ -402,7 +423,25 @@ export default function PinsPage() {
             </Button>
           ))}
         </div>
+        <div className="inline-flex rounded-md border bg-background p-0.5" aria-label="Location filter">
+          {([
+            { key: "all", label: "All locations", count: locationCounts.all },
+            { key: "assigned", label: "Assigned", count: locationCounts.assigned },
+            { key: "unassigned", label: "Unassigned", count: locationCounts.unassigned },
+          ] as const).map((opt) => (
+            <Button
+              key={opt.key}
+              size="sm"
+              variant={locationFilter === opt.key ? "secondary" : "ghost"}
+              className="h-7 px-3 text-xs"
+              onClick={() => setLocationFilter(opt.key)}
+            >
+              {opt.label} ({opt.count})
+            </Button>
+          ))}
+        </div>
       </div>
+
 
       <div className="flex flex-wrap items-center gap-1.5" aria-label="Category legend and filter">
         <Button
@@ -453,6 +492,27 @@ export default function PinsPage() {
               <RefreshCw className={`h-3.5 w-3.5 mr-1 ${isLoading ? "animate-spin" : ""}`} />
               Refresh
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!selectedVineyardId || exporting}
+              onClick={async () => {
+                if (!selectedVineyardId) return;
+                setExporting(true);
+                try {
+                  const n = await downloadPinsCsv(selectedVineyardId, vineyardName);
+                  toast.success(`Exported ${n} pin${n === 1 ? "" : "s"}`);
+                } catch (e) {
+                  toast.error((e as Error).message || "Export failed");
+                } finally {
+                  setExporting(false);
+                }
+              }}
+            >
+              <Download className="h-3.5 w-3.5 mr-1" />
+              Export CSV
+            </Button>
+
             <Input
               placeholder="Filter…"
               value={filter}
