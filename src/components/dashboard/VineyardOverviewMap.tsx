@@ -997,6 +997,11 @@ function PinPanelBody({
         ) : (
           <Badge variant="outline" className="text-xs">Open</Badge>
         )}
+        {placement.showWarning && (
+          <Badge variant="outline" className="text-xs border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+            Unassigned location
+          </Badge>
+        )}
       </div>
       {photoUrl && (
         <img
