@@ -24,6 +24,14 @@ import {
   type SavedChemicalIdentity,
 } from "@/lib/chemicalSearchFlow";
 import { candidatePrompt } from "@/lib/chemicalSearchMessaging";
+import {
+  DUPLICATE_CHECK_LABEL,
+  DUPLICATE_KEEP_LABEL,
+  DUPLICATE_PROMPT_QUESTION,
+  DUPLICATE_PROMPT_TITLE,
+  LOOKUP_DURATION_NOTICE,
+  findSavedChemicalByName,
+} from "@/lib/chemicalVineyardScope";
 import { VERIFICATION_LABEL, type VerificationStatus } from "@/lib/chemicalIntelligence";
 import type { ProductCategory } from "@/lib/chemicalCategories";
 import {
@@ -182,6 +190,8 @@ export function ChemicalAILookup({
   const [phase, setPhase] = useState<"idle" | "searching" | "enriching">("idle");
   const loading = phase !== "idle";
   const [error, setError] = useState<string | null>(null);
+  /** Saved chemical with the same name — the operator decides before any call. */
+  const [duplicate, setDuplicate] = useState<{ id: string; name: string } | null>(null);
   /** Which recovery affordance the current error offers. */
   const [errorAction, setErrorAction] = useState<"retry_search" | "retry_label" | null>(null);
   /** Server-ordered candidate list. Never re-sorted by the portal. */
@@ -471,7 +481,7 @@ export function ChemicalAILookup({
             }
           }}
         />
-        <Button type="button" size="sm" onClick={runLookup} disabled={loading || !countryCode}>
+        <Button type="button" size="sm" onClick={() => runLookup()} disabled={loading || !countryCode}>
           {phase === "searching" ? (
             <>
               <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
@@ -490,9 +500,31 @@ export function ChemicalAILookup({
         </p>
       )}
       {phase === "enriching" && (
-        <p className="text-xs text-muted-foreground" role="status">
-          Loading product label details…
-        </p>
+        <div className="space-y-1" role="status">
+          <p className="text-xs text-muted-foreground">Loading product label details…</p>
+          <p className="text-[11px] text-muted-foreground">{LOOKUP_DURATION_NOTICE}</p>
+        </div>
+      )}
+
+      {duplicate && (
+        <div className="rounded-md border border-border/60 bg-background p-3 space-y-2">
+          <div className="text-xs font-medium">{DUPLICATE_PROMPT_TITLE}</div>
+          <p className="text-[11px] text-muted-foreground">
+            {duplicate.name} is already saved. {DUPLICATE_PROMPT_QUESTION}
+          </p>
+          <div className="flex gap-2">
+            <Button type="button" size="sm" variant="ghost" onClick={() => setDuplicate(null)}>
+              {DUPLICATE_KEEP_LABEL}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => runLookup({ skipDuplicateCheck: true })}
+            >
+              {DUPLICATE_CHECK_LABEL}
+            </Button>
+          </div>
+        </div>
       )}
 
       {error && (
@@ -503,7 +535,7 @@ export function ChemicalAILookup({
           </div>
           {errorAction === "retry_search" && (
             <div className="flex gap-2">
-              <Button type="button" size="sm" variant="outline" disabled={loading} onClick={runLookup}>
+              <Button type="button" size="sm" variant="outline" disabled={loading} onClick={() => runLookup()}>
                 Retry search
               </Button>
               <Button type="button" size="sm" variant="ghost" onClick={applyManual}>
