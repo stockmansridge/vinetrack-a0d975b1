@@ -14,7 +14,6 @@ import {
   confirmedDefaultRates,
   RATE_CONFIRMATION_REQUIRED_LABEL,
 } from "@/lib/chemicalDefaultRateHandoff";
-import { ALLOWED_FIELDS_FOR_TEST } from "@/lib/savedChemicalsQuery";
 
 const selection = (over: Record<string, unknown> = {}) => ({
   option_key: "default_option_v1_x",
@@ -49,7 +48,8 @@ describe("raw product category", () => {
   });
 
   it("is persisted by the saved-chemical write path", () => {
-    expect(ALLOWED_FIELDS_FOR_TEST).toContain("product_category");
+    const src = readFileSync("src/lib/savedChemicalsQuery.ts", "utf8");
+    expect(src).toContain('"product_category"');
   });
 });
 
