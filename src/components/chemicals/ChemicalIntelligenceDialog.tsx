@@ -142,63 +142,74 @@ export function ChemicalIntelligenceDetail({ chem }: { chem: ChemicalIntelligenc
 
       <Separator />
 
-      <Section title="Label rates">
-        {chem.labelRateBases.length || chem.registeredUses.some((u) => u.rate || u.rateText) ? (
-          <ul className="space-y-1 text-sm">
-            {chem.labelRateBases.map((b) => (
-              <li key={b} className="text-muted-foreground">Basis: {b}</li>
-            ))}
-            {chem.registeredUses.map((u, i) => {
-              const rate = formatLabelRate(u.rate) ?? u.rateText;
-              return rate ? (
-                <li key={`rate-${i}`}>
-                  {rate}
-                  {u.crop ? <span className="text-muted-foreground"> · {u.crop}</span> : null}
-                </li>
-              ) : null;
-            })}
-          </ul>
-        ) : (
-          <p className="text-sm text-muted-foreground">No structured label rates recorded.</p>
-        )}
-      </Section>
-
-      <Separator />
-
-      <Section title="Registered uses">
+      <Section title="Registered Uses">
         {chem.registeredUses.length ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-xs text-muted-foreground">
                 <tr>
-                  <th className="py-1 text-left">Crop</th>
-                  <th className="py-1 text-left">Target</th>
-                  <th className="py-1 text-left">Rate</th>
-                  <th className="py-1 text-left">WHP</th>
-                  <th className="py-1 text-left">Re-entry</th>
+                  <th className="py-1 pr-3 text-left">Crop / use</th>
+                  <th className="py-1 pr-3 text-left">Target</th>
+                  <th className="py-1 pr-3 text-left">Rate</th>
+                  <th className="py-1 pr-3 text-left">Withholding Period</th>
+                  <th className="py-1 text-left">Re-entry Interval</th>
                 </tr>
               </thead>
               <tbody>
-                {chem.registeredUses.map((u, i) => (
-                  <tr key={`use-${i}`} className="border-t">
-                    <td className="py-1">{dash(u.crop)}</td>
-                    <td className="py-1">{dash(u.target)}</td>
-                    <td className="py-1">{dash(formatLabelRate(u.rate) ?? u.rateText)}</td>
-                    <td className="py-1">{dash(u.withholdingPeriod)}</td>
-                    <td className="py-1">{dash(u.reEntryPeriod)}</td>
-                  </tr>
-                ))}
+                {chem.registeredUses.map((u, i) => {
+                  const conditions = useConditionText(u);
+                  const restrictions = restrictionsDisplayForUse(u);
+                  return (
+                    <tr key={`use-${i}`} className="border-t align-top">
+                      <td className="py-1.5 pr-3">{dash(u.crop)}</td>
+                      <td className="py-1.5 pr-3">{dash(u.target)}</td>
+                      <td className="py-1.5 pr-3">
+                        <div>{useRateText(u)}</div>
+                        {conditions && (
+                          <div className="text-xs text-muted-foreground">{conditions}</div>
+                        )}
+                        {restrictions && (
+                          <details className="text-xs text-muted-foreground">
+                            <summary className="cursor-pointer">Restrictions for this use</summary>
+                            <p className="whitespace-pre-wrap pt-1">{restrictions}</p>
+                          </details>
+                        )}
+                      </td>
+                      <td className="py-1.5 pr-3">{withholdingDisplayForUse(u)}</td>
+                      <td className="py-1.5">{reEntryDisplayForUse(u)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">No registered uses recorded.</p>
+          <p className="text-sm text-muted-foreground">
+            No registered uses recorded for this chemical.
+          </p>
+        )}
+        {chem.labelRateBases.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Label rate bases: {chem.labelRateBases.join(", ")}
+          </p>
         )}
       </Section>
 
       <Separator />
 
-      <Section title="Verification">
+      <Section title="Restrictions">
+        {chem.legacy.restrictions ? (
+          <p className="whitespace-pre-wrap text-sm">{chem.legacy.restrictions}</p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No product-level restrictions recorded. Always check the current product label.
+          </p>
+        )}
+      </Section>
+
+      <Separator />
+
+      <Section title="Sources / Documents">
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <VerificationBadge status={verification.status} />
           {verification.verifiedAt && (
@@ -207,30 +218,74 @@ export function ChemicalIntelligenceDetail({ chem }: { chem: ChemicalIntelligenc
             </span>
           )}
         </div>
-        {verification.sources.length > 0 && (
-          <ul className="space-y-1 text-sm">
-            {verification.sources.map((s, i) => (
-              <li key={`src-${i}`}>
-                {s.url ? (
-                  <a
-                    href={s.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-primary hover:underline"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                    {s.label ?? s.url}
-                  </a>
-                ) : (
-                  <span>{s.label}</span>
-                )}
-                {s.retrievedAt && (
-                  <span className="text-muted-foreground"> · {s.retrievedAt}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+        <ul className="space-y-1 text-sm">
+          {isUrl(product.labelUrl) && (
+            <li>
+              <a
+                href={product.labelUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-primary hover:underline"
+              >
+                <FileText className="h-3 w-3" />
+                Product label / SDS
+              </a>
+            </li>
+          )}
+          {isUrl(product.labelReference) && (
+            <li>
+              <a
+                href={product.labelReference}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-primary hover:underline"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Registered label reference
+              </a>
+            </li>
+          )}
+          {isUrl(product.productUrl) && (
+            <li>
+              <a
+                href={product.productUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary hover:underline"
+                title="Manufacturer / distributor product page — not the official label"
+              >
+                <Globe className="h-3 w-3" />
+                Manufacturer product page
+              </a>
+            </li>
+          )}
+          {verification.sources.map((s, i) => (
+            <li key={`src-${i}`}>
+              {s.url ? (
+                <a
+                  href={s.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-primary hover:underline"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  {s.label ?? s.url}
+                </a>
+              ) : (
+                <span>{s.label}</span>
+              )}
+              {s.retrievedAt && (
+                <span className="text-muted-foreground"> · {s.retrievedAt}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+        {!isUrl(product.labelUrl) &&
+          !isUrl(product.labelReference) &&
+          !isUrl(product.productUrl) &&
+          verification.sources.length === 0 && (
+            <p className="text-sm text-muted-foreground">No source documents recorded.</p>
+          )}
         {verification.conflicts.length > 0 && (
           <div className="text-sm">
             <div className="font-medium text-destructive">Conflicts</div>
@@ -246,6 +301,7 @@ export function ChemicalIntelligenceDetail({ chem }: { chem: ChemicalIntelligenc
           </div>
         )}
       </Section>
+
 
       <Separator />
 
