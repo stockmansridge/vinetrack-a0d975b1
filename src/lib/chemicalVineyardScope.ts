@@ -13,11 +13,11 @@
 //
 // No network calls, no writes, no product-specific logic.
 
-import {
-  partitionRegisteredUses,
-  type WriteRegisteredUse,
-} from "@/lib/chemicalGrapevineUses";
-import type { ChemicalIntelligenceDraft } from "@/lib/chemicalIntelligenceWrite";
+import { partitionRegisteredUses } from "@/lib/chemicalGrapevineUses";
+import type {
+  ChemicalIntelligenceDraft,
+  WriteRegisteredUse,
+} from "@/lib/chemicalIntelligenceWrite";
 import type {
   PersistedDefaultRates,
   PersistedDefaultRateSelection,
