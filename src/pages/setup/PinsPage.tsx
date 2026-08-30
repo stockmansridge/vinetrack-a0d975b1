@@ -181,6 +181,21 @@ export default function PinsPage() {
     [pins, statusFilter],
   );
 
+  // Canonical SQL 171 placements for every loaded pin. Assignment,
+  // block/row display, counts and filters all originate here — never from
+  // fields on the base `pins` row.
+  const { placements } = usePinPlacements(useMemo(() => pins.map((p) => p.id), [pins]));
+
+  const locationCounts = useMemo(() => {
+    let assigned = 0;
+    let unassigned = 0;
+    for (const p of statusFiltered) {
+      if (placements.get(p.id)?.is_location_assigned === true) assigned++;
+      else if (pinPlacementDisplay(placements.get(p.id)).showWarning) unassigned++;
+    }
+    return { assigned, unassigned, all: statusFiltered.length };
+  }, [statusFiltered, placements]);
+
   const [searchParams, setSearchParams] = useSearchParams();
   const paddockFilter = searchParams.get("paddock");
   const paddockFilterName = paddockFilter
@@ -206,8 +221,13 @@ export default function PinsPage() {
     if (categoryFilter !== "all") {
       list = list.filter((p: any) => normalisePinCategoryId(p) === categoryFilter);
     }
+    if (locationFilter === "assigned") {
+      list = list.filter((p: any) => placements.get(p.id)?.is_location_assigned === true);
+    } else if (locationFilter === "unassigned") {
+      list = list.filter((p: any) => pinPlacementDisplay(placements.get(p.id)).showWarning);
+    }
     if (paddockFilter) {
-      list = list.filter((p: any) => p.paddock_id === paddockFilter);
+      list = list.filter((p: any) => placements.get(p.id)?.paddock_id === paddockFilter);
     }
     if (!filter) return list;
     const f = filter.toLowerCase();
@@ -215,7 +235,7 @@ export default function PinsPage() {
       [p.title, (p as any).button_name, p.mode, p.category, p.priority, p.status, p.notes]
         .some((v) => String(v ?? "").toLowerCase().includes(f)),
     );
-  }, [statusFiltered, filter, paddockFilter, categoryFilter]);
+  }, [statusFiltered, filter, paddockFilter, categoryFilter, locationFilter, placements]);
 
   const PRIORITY_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1 };
   type PinSortKey =
@@ -226,11 +246,8 @@ export default function PinsPage() {
     accessors: {
       title: (p: any) => (p.title ?? p.button_name ?? "") as string,
       mode: (p: any) => (p.mode ?? "") as string,
-      paddock: (p: any) => (p.paddock_id ? paddockNameById.get(p.paddock_id) ?? "" : "") as string,
-      row: (p: any) => {
-        const v = p.pin_row_number ?? p.driving_row_number ?? p.row_number;
-        return v == null ? null : Number(v);
-      },
+      paddock: (p: any) => pinPlacementDisplay(placements.get(p.id)).blockLabel,
+      row: (p: any) => pinPlacementDisplay(placements.get(p.id)).rowLabel,
       status: (p: any) => (p.is_completed ? "Completed" : (p.status ?? "Open")),
       priority: (p: any) => (p.priority ? PRIORITY_ORDER[String(p.priority).toLowerCase()] ?? 0 : null),
       category: (p: any) => pinCategoryStyleById(normalisePinCategoryId(p)).label,
@@ -242,6 +259,7 @@ export default function PinsPage() {
     },
     initial: { key: "created", direction: "desc" },
   });
+
 
   // Hide optional columns when no pins have a value for them.
   const hasMode = pins.some((p: any) => p.mode);
