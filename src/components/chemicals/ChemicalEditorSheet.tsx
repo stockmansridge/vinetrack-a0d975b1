@@ -688,6 +688,17 @@ export function ChemicalEditor({
   const staleDefaultRate =
     structuredUses && !defaultRateStillSupported(defaultRates, intel.registeredUses);
 
+  // Release contract §3/§4 — a NEW looked-up chemical may only be saved with a
+  // registered grapevine use AND an explicitly confirmed operational rate.
+  // Existing (legacy) records are never stranded by this gate.
+  const grapevineRegistered = hasGrapevineRegistration(intel.registeredUses);
+  const noGrapevineRegistration = !initial && structuredUses && !grapevineRegistered;
+  const firstAddBlocked =
+    !initial &&
+    structuredUses &&
+    !(grapevineRegistered && hasConfirmedRate(defaultRates) && !staleDefaultRate);
+  const saveBlocked = staleDefaultRate || firstAddBlocked;
+
 
   /** Operator click: copy the backend option and stamp provenance. */
   const handleSelectDefaultRate = (
@@ -1355,7 +1366,7 @@ export function ChemicalEditor({
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           {editorUnlocked && (
             <Button
-              disabled={saveMut.isPending || staleDefaultRate}
+              disabled={saveMut.isPending || saveBlocked}
               onClick={() => saveMut.mutate()}
             >
               {saveMut.isPending ? "Saving…" : "Save chemical"}
