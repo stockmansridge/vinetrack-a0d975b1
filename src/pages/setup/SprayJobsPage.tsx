@@ -53,7 +53,6 @@ import {
   type SprayJob, type SprayJobChemicalLine, type SprayJobInput,
   type VineyardTeamMember, type LinkedSprayRecord,
 } from "@/lib/sprayJobsQuery";
-import { ChemicalPicker } from "@/components/spray/ChemicalPicker";
 import {
   GROWTH_STAGES, GROWTH_STAGE_LABEL,
   VSP_CANOPY_SIZES, VSP_DENSITIES,
