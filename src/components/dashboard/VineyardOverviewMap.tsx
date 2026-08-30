@@ -23,7 +23,9 @@ import {
   type LatLng,
 } from "@/lib/paddockGeometry";
 import { paddockColor } from "@/lib/paddockColor";
-import { pinDisplayStyle, formatAttachedRow, formatDrivingPath, formatLegacyRow, pinDisplayCoords, pinDisplayTitle } from "@/lib/pinStyle";
+import { pinDisplayStyle, pinDisplayCoords, pinDisplayTitle } from "@/lib/pinStyle";
+import { pinPlacementDisplay } from "@/lib/pinPlacement";
+import { useResolvedPinPlacement } from "@/lib/pinPlacementQuery";
 import { usePinCategoryColours } from "@/lib/pinCategoryColoursQuery";
 import { initMapKit } from "@/lib/mapkit";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
@@ -968,6 +970,9 @@ function PinPanelBody({
   const signed = usePinPhoto(photoPath ?? undefined);
   const photoUrl = directPhotoUrl ?? signed;
 
+  // Canonical SQL 171 placement — never derived from the base pins row.
+  const placement = pinPlacementDisplay(useResolvedPinPlacement(pin.id));
+
   const { resolve } = useTeamLookup(pin.vineyard_id);
   const resolveName = (raw?: string | null) => {
     const v = (raw ?? "").trim();
@@ -1006,15 +1011,14 @@ function PinPanelBody({
       )}
       <Row label="Type" value={pin.button_name ?? pin.title ?? pin.mode ?? pin.category ?? "—"} />
       <Row label="Status" value={pin.status ?? (pin.is_completed ? "Completed" : "Open")} />
-      <Row label={rf.blockLabel} value={paddockName ?? "—"} />
-      {formatAttachedRow(pin as any) && (
-        <Row label="On Row" value={formatAttachedRow(pin as any)} />
-      )}
-      {formatDrivingPath(pin as any, paddockRowDirection) && (
-        <Row label="Driving row" value={formatDrivingPath(pin as any, paddockRowDirection)} />
-      )}
-      {!formatAttachedRow(pin as any) && !formatDrivingPath(pin as any, paddockRowDirection) && (
-        <Row label="Row" value={formatLegacyRow(pin as any) ?? "—"} />
+      <Row label={rf.blockLabel} value={placement.blockLabel} />
+      {placement.rowLines.length > 0 ? (
+        placement.rowLines.map((line) => {
+          const [label, ...rest] = line.split(": ");
+          return <Row key={line} label={label} value={rest.length ? rest.join(": ") : label} />;
+        })
+      ) : (
+        <Row label="Row" value="—" />
       )}
       <Row label="Created by" value={resolveName(pin.created_by) ?? "—"} />
       <Row label="Created" value={fmtDateTime(pin.created_at)} />
