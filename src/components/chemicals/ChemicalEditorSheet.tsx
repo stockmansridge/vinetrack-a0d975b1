@@ -369,7 +369,9 @@ export function ChemicalEditor({
       // Re-resolve trust before encoding: a hand-edited critical value can no
       // longer lean on the evidence that certified the previous value.
       const reconciled = reconcileEditedDraft(intelBase, intel);
-      const encoded = encodeChemicalIntelligenceForWrite(reconciled);
+      // Vineyard scope: only grapevine registered uses are ever persisted.
+      // Other-crop directions are dropped whole, never merged or rewritten.
+      const encoded = encodeChemicalIntelligenceForWrite(grapevineOnlyDraft(reconciled));
       const payload: SavedChemicalInput = {
         ...form,
         intelligence: encoded,
