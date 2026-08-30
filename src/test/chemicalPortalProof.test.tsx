@@ -55,17 +55,15 @@ const sourceFiles = (dir: string): string[] =>
   });
 
 describe("other-crop label information is not customer-reachable", () => {
-  it("is never enabled from any application source file", () => {
+  it("is never enabled by any application consumer of the uses card", () => {
+    // The only file allowed to mention the flag is the card that defines it.
     const offenders = sourceFiles("src")
-      .filter((p) => !p.includes(`${"src"}/test/`))
-      .filter((p) => /showOtherCrops\s*(=\{?\s*true|\/>|\}|\s|$)/.test(
-        readFileSync(p, "utf8")
-          .split("\n")
-          .filter((l) => /showOtherCrops/.test(l) && !/showOtherCrops\?:|showOtherCrops = false|\* /.test(l))
-          .join("\n"),
-      ));
+      .filter((p) => !p.includes("src/test/"))
+      .filter((p) => !p.endsWith("GrapevineUsesCard.tsx"))
+      .filter((p) => readFileSync(p, "utf8").includes("showOtherCrops"));
     expect(offenders).toEqual([]);
   });
+
 
   it("defaults to grapevine-only when a consumer omits the flag", () => {
     const src = readFileSync("src/components/chemicals/GrapevineUsesCard.tsx", "utf8");
