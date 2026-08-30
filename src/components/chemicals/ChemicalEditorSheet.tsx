@@ -285,9 +285,16 @@ export function ChemicalEditor({
   useMemo(() => {
     if (open) {
       if (initial) {
-        const useVal = matchCategory(initial.use) ?? (initial.use ?? "");
+        // Category authority is the raw shared key; a legacy row falls back to
+        // its `use` wording only until the operator deliberately saves.
+        const categoryKey =
+          matchProductCategoryKey(initial.product_category) ??
+          matchProductCategoryKey(initial.use) ??
+          "";
+        const useVal = productCategoryLabel(categoryKey) ?? (initial.use ?? "");
         setForm({
           name: initial.name ?? "",
+          product_category: categoryKey,
           active_ingredient: initial.active_ingredient ?? "",
           chemical_group: initial.chemical_group ?? "",
           use: useVal,
@@ -955,10 +962,23 @@ export function ChemicalEditor({
                     />
                   </Field>
                   <Field label="Category">
-                    <Select value={form.use ?? ""} onValueChange={(v) => set("use", v)}>
+                    {/* The raw shared key is what is persisted; `use` is only
+                        the display projection written alongside it. */}
+                    <Select
+                      value={form.product_category ?? ""}
+                      onValueChange={(v) =>
+                        setForm((p) => ({
+                          ...p,
+                          product_category: v,
+                          use: productCategoryLabel(v) ?? p.use ?? "",
+                        }))
+                      }
+                    >
                       <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                       <SelectContent>
-                        {PRODUCT_CATEGORIES.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+                        {PRODUCT_CATEGORIES.map((c) => (
+                          <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </Field>
