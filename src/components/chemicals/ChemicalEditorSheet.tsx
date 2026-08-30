@@ -30,6 +30,13 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { GrapevineUsesCard } from "@/components/chemicals/GrapevineUsesCard";
+import {
+  NO_GRAPEVINE_REGISTRATION_MESSAGE,
+  RATE_CONFIRMATION_REQUIRED_MESSAGE,
+  grapevineOnlyDraft,
+  hasConfirmedRate,
+  hasGrapevineRegistration,
+} from "@/lib/chemicalVineyardScope";
 import { DefaultRatesCard } from "@/components/chemicals/DefaultRatesCard";
 import type {
   CanonicalDefaultRateOption,
@@ -369,7 +376,9 @@ export function ChemicalEditor({
       // Re-resolve trust before encoding: a hand-edited critical value can no
       // longer lean on the evidence that certified the previous value.
       const reconciled = reconcileEditedDraft(intelBase, intel);
-      const encoded = encodeChemicalIntelligenceForWrite(reconciled);
+      // Vineyard scope: only grapevine registered uses are ever persisted.
+      // Other-crop directions are dropped whole, never merged or rewritten.
+      const encoded = encodeChemicalIntelligenceForWrite(grapevineOnlyDraft(reconciled));
       const payload: SavedChemicalInput = {
         ...form,
         intelligence: encoded,
@@ -1076,8 +1085,17 @@ export function ChemicalEditor({
             {/* --------------------------------------- operational column */}
             <div className="space-y-4">
               <Section title="Grapevine uses & rates">
+                {/* Vineyard-first: other crops on the label are not part of the
+                    normal add flow and are never shown here. */}
                 {structuredUses ? (
-                  <GrapevineUsesCard uses={intel.registeredUses} />
+                  <>
+                    {!hasGrapevineRegistration(intel.registeredUses) && (
+                      <p className="mb-2 rounded-md border border-warning/50 bg-warning/10 p-2 text-[11px]">
+                        {NO_GRAPEVINE_REGISTRATION_MESSAGE}
+                      </p>
+                    )}
+                    <GrapevineUsesCard uses={intel.registeredUses} />
+                  </>
                 ) : (
                   legacyRateBlock
                 )}
@@ -1120,6 +1138,12 @@ export function ChemicalEditor({
                       {PRODUCT_CHANGED_MESSAGE}
                     </p>
                   )}
+                  {hasGrapevineRegistration(intel.registeredUses) &&
+                    !hasConfirmedRate(defaultRates) && (
+                      <p className="mb-2 rounded-md border border-border/60 bg-muted/40 p-2 text-[11px]">
+                        {RATE_CONFIRMATION_REQUIRED_MESSAGE}
+                      </p>
+                    )}
                   {/* Operator-owned shared default_rates contract. The legacy
                       numeric rate editor lives under Advanced (mobile
                       compatibility) and is never written from here. */}

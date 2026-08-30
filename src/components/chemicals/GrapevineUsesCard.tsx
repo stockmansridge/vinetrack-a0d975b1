@@ -60,15 +60,22 @@ function UseCard({ use }: { use: WriteRegisteredUse }) {
 export function GrapevineUsesCard({
   uses,
   className,
+  showOtherCrops = false,
 }: {
   uses: WriteRegisteredUse[];
   className?: string;
+  /**
+   * Vineyard-first default: other crops on the label are NOT part of the normal
+   * add / re-verify flow. Only an explicit full-label review opts in.
+   */
+  showOtherCrops?: boolean;
 }) {
   // Normal display: rate-less duplicate regulator rows are suppressed when an
   // authoritative rated row exists for the same target. Nothing is deleted.
   const grapevine = normalGrapevineUses(uses);
   const { other } = partitionRegisteredUses(uses);
   const [showOther, setShowOther] = useState(false);
+
 
 
   return (
@@ -85,7 +92,7 @@ export function GrapevineUsesCard({
         </div>
       )}
 
-      {other.length > 0 && (
+      {showOtherCrops && other.length > 0 && (
         <div className="mt-2">
           <button
             type="button"
