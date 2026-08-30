@@ -36,9 +36,11 @@ export function pinExportColumns(rows: Record<string, any>[]): string[] {
       extra.push(key);
     }
   }
-  const first = extra.filter((k) => k === "pin_id" || k === "id" || k === "title");
-  const rest = extra.filter((k) => !first.includes(k));
+  const lead = ["pin_id", "id", "title"];
+  const first = extra.filter((k) => lead.includes(k));
+  const rest = extra.filter((k) => !lead.includes(k));
   return [...first, ...PIN_EXPORT_PLACEMENT_COLUMNS, ...rest];
+
 }
 
 function cell(v: any): string {
