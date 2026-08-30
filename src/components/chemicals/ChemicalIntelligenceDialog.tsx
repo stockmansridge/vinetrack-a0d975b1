@@ -91,10 +91,24 @@ export function ChemicalIntelligenceDetail({ chem }: { chem: ChemicalIntelligenc
         </div>
       )}
 
-      <Section title="Product">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-base font-semibold">{dash(chem.name)}</span>
+        {chem.legacy.productType && (
+          <Badge variant="secondary">{chem.legacy.productType}</Badge>
+        )}
+        <VerificationBadge status={verification.status} />
+        {product.registrationNumber && (
+          <Badge variant="outline">
+            {(product.registrationScheme ?? "APVMA").toUpperCase()} {product.registrationNumber}
+          </Badge>
+        )}
+      </div>
+
+      <Section title="Product Information">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Name" value={dash(chem.name)} />
           <Field label="Registered product name" value={dash(product.registeredProductName)} />
+          <Field label="Product type" value={dash(chem.legacy.productType)} />
           <Field label="Country" value={dash(product.country)} />
           <Field
             label="Registration"
@@ -106,14 +120,17 @@ export function ChemicalIntelligenceDetail({ chem }: { chem: ChemicalIntelligenc
           />
           <Field label="Registrant" value={dash(product.registrant)} />
           <Field label="Manufacturer" value={dash(product.manufacturer)} />
-          {product.labelReference && <Field label="Label reference" value={product.labelReference} />}
+          {product.labelReference && !isUrl(product.labelReference) && (
+            <Field label="Label reference" value={product.labelReference} />
+          )}
           {product.labelVersion && <Field label="Label version" value={product.labelVersion} />}
         </div>
       </Section>
 
       <Separator />
 
-      <Section title="Active ingredients">
+      <Section title="Active Ingredients">
+
         {chem.actives.length ? (
           <ul className="space-y-1 text-sm">
             {chem.actives.map((a, i) => (
