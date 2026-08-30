@@ -7,13 +7,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { GEOMETRY_SOURCE_FRIENDLY, blockGeometrySummary, fmtHa, fmtNum } from "@/lib/sprayFormat";
+import {
+  GEOMETRY_SOURCE_FRIENDLY,
+  blockGeometrySummary,
+  fmtHa,
+  fmtLitres,
+  fmtNum,
+  fmtQuantity,
+} from "@/lib/sprayFormat";
 import type { StepProps } from "./types";
 
 const blockName = (p: any) => p?.name ?? p?.block_name ?? "Unnamed block";
 const blockVariety = (p: any) => p?.variety ?? p?.grape_variety ?? null;
+const blockAreaHa = (p: any): number | null => {
+  const v = Number(p?.area_ha ?? p?.hectares ?? NaN);
+  return Number.isFinite(v) && v > 0 ? v : null;
+};
 
-export function BlocksStep({ app, patch, geometry, lookups, canEdit }: StepProps) {
+export function BlocksStep({ app, patch, geometry, calc, lookups, canEdit }: StepProps) {
   const [showOverride, setShowOverride] = useState(
     !!(app.geometryOverride.grossAreaHa ||
       app.geometryOverride.rowSpacingMetres ||
