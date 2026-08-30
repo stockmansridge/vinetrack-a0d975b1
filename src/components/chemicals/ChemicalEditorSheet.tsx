@@ -76,7 +76,12 @@ import {
   hardDeleteUnusedSavedChemical, ChemicalInUseError,
   type SavedChemical, type SavedChemicalInput,
 } from "@/lib/savedChemicalsQuery";
-import { PRODUCT_CATEGORIES, matchCategory, parseRestrictions, composeRestrictions } from "@/lib/chemicalCategories";
+import { parseRestrictions, composeRestrictions } from "@/lib/chemicalCategories";
+import {
+  PRODUCT_CATEGORIES,
+  matchProductCategoryKey,
+  productCategoryLabel,
+} from "@/lib/chemicalProductCategory";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Plus, Pencil, Archive, RotateCcw, Check, ChevronsUpDown, ExternalLink, FileText, Globe, Trash2, Info } from "lucide-react";
 import { toChemicalIntelligence } from "@/lib/chemicalIntelligence";
@@ -160,7 +165,8 @@ function displayBaseUnit(unit?: string | null): string {
 }
 
 const EMPTY: SavedChemicalInput = {
-  name: "", active_ingredient: "", chemical_group: "", use: "",
+  name: "", product_category: "",
+  active_ingredient: "", chemical_group: "", use: "",
   manufacturer: "", crop: "", problem: "", rate_per_ha: null, unit: "",
   restrictions: "", notes: "", label_url: "", product_url: "",
 };
