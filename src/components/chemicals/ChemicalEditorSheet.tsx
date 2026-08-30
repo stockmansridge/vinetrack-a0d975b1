@@ -30,6 +30,13 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { GrapevineUsesCard } from "@/components/chemicals/GrapevineUsesCard";
+import {
+  NO_GRAPEVINE_REGISTRATION_MESSAGE,
+  RATE_CONFIRMATION_REQUIRED_MESSAGE,
+  grapevineOnlyDraft,
+  hasConfirmedRate,
+  hasGrapevineRegistration,
+} from "@/lib/chemicalVineyardScope";
 import { DefaultRatesCard } from "@/components/chemicals/DefaultRatesCard";
 import type {
   CanonicalDefaultRateOption,
