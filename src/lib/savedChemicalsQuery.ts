@@ -111,6 +111,8 @@ export async function fetchSavedChemicalsForVineyard(
 
 export interface SavedChemicalInput {
   name: string;
+  /** Shared RAW category key. Never a display label such as "Fungicide". */
+  product_category?: string | null;
   active_ingredient?: string | null;
   chemical_group?: string | null;
   use?: string | null;
@@ -156,7 +158,8 @@ export interface SavedChemicalInput {
 }
 
 const ALLOWED_FIELDS: (keyof SavedChemicalInput)[] = [
-  "name", "active_ingredient", "chemical_group", "use", "manufacturer",
+  "name", "product_category",
+  "active_ingredient", "chemical_group", "use", "manufacturer",
   "crop", "problem", "rate_per_ha", "unit", "restrictions", "notes",
   "label_url", "product_url", "purchase",
   "master_chemical_id", "master_source_revision",
