@@ -30,7 +30,12 @@ import {
   hardDeleteUnusedSavedChemical, ChemicalInUseError,
   type SavedChemical, type SavedChemicalInput,
 } from "@/lib/savedChemicalsQuery";
-import { PRODUCT_CATEGORIES, matchCategory, parseRestrictions, composeRestrictions } from "@/lib/chemicalCategories";
+import { parseRestrictions, composeRestrictions } from "@/lib/chemicalCategories";
+import { displayProductCategory } from "@/lib/chemicalProductCategory";
+import {
+  defaultRateDisplayText,
+  defaultRateSortValue,
+} from "@/lib/chemicalDefaultRateHandoff";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Plus, Pencil, Archive, RotateCcw, Check, ChevronsUpDown, ExternalLink, FileText, Globe, Trash2, Info } from "lucide-react";
 import { toChemicalIntelligence } from "@/lib/chemicalIntelligence";
@@ -224,8 +229,9 @@ export default function SavedChemicalsPage() {
       name: (c) => c.name ?? "",
       active_ingredient: (c) => c.active_ingredient ?? "",
       group: (c) => normaliseChemicalGroup(c.chemical_group),
-      use: (c) => c.use ?? "",
-      rate: (c) => (c.rate_per_ha == null ? null : Number(c.rate_per_ha)),
+      use: (c) => displayProductCategory(c) ?? "",
+      // Read precedence: the confirmed default_rates selection only.
+      rate: (c) => defaultRateSortValue(c),
       manufacturer: (c) => normaliseManufacturerName(c.manufacturer) || (c.manufacturer ?? ""),
       cost: (c) => purchaseCostPerUnit(c.purchase),
     },
@@ -249,7 +255,7 @@ export default function SavedChemicalsPage() {
   const { sorted: sortedArchived, getSortDirection: arcSortDir, toggleSort: arcToggle } = useSortableTable<typeof archivedRows[number], ArcSortKey>(archivedRows, {
     accessors: {
       name: (c) => c.name ?? "",
-      category: (c) => c.use ?? "",
+      category: (c) => displayProductCategory(c) ?? "",
       active_ingredient: (c) => c.active_ingredient ?? "",
       manufacturer: (c) => c.manufacturer ?? "",
       archived: (c) => (c.deleted_at ? new Date(c.deleted_at) : null),
@@ -338,8 +344,8 @@ export default function SavedChemicalsPage() {
       case "groups": return <TableCell key="groups"><ActivityGroupSummary chem={toChemicalIntelligence(c)} /></TableCell>;
       case "verification": return <TableCell key="verification"><VerificationBadge status={toChemicalIntelligence(c).verification.status} /></TableCell>;
       case "group": return <TableCell key="group">{c.chemical_group ? <Badge variant="secondary">{c.chemical_group}</Badge> : "—"}</TableCell>;
-      case "use": return <TableCell key="use">{fmt(c.use)}</TableCell>;
-      case "rate": return <TableCell key="rate">{c.rate_per_ha == null ? "—" : `${c.rate_per_ha}${c.unit ? ` ${displayUnitText(c.unit)}` : ""}`}</TableCell>;
+      case "use": return <TableCell key="use">{fmt(displayProductCategory(c))}</TableCell>;
+      case "rate": return <TableCell key="rate">{defaultRateDisplayText(c)}</TableCell>;
       case "manufacturer": return <TableCell key="manufacturer">{fmt(c.manufacturer)}</TableCell>;
       case "label": return (
         <TableCell key="label">
@@ -627,7 +633,7 @@ export default function SavedChemicalsPage() {
                 {sortedArchived.map((c) => (
                   <TableRow key={c.id}>
                     <TableCell className="font-medium">{fmt(c.name)}</TableCell>
-                    <TableCell>{fmt(c.use)}</TableCell>
+                    <TableCell>{fmt(displayProductCategory(c))}</TableCell>
                     <TableCell>{fmt(c.active_ingredient)}</TableCell>
                     <TableCell>{fmt(c.manufacturer)}</TableCell>
                     <TableCell className="text-muted-foreground">
