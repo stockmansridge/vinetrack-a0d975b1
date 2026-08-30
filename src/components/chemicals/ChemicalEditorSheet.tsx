@@ -650,6 +650,15 @@ export function ChemicalEditor({
     () => matchDefaultRateSlots(defaultRates, canonicalRateOptions),
     [defaultRates, canonicalRateOptions],
   );
+  /**
+   * A saved default only survives a label change while every rate identity it
+   * cites is still on the label. When one disappears the operator must confirm
+   * a replacement (or clear the slot) before the chemical can be saved — the
+   * portal never silently re-points a default at a different rate.
+   */
+  const staleDefaultRate =
+    structuredUses && !defaultRateStillSupported(defaultRates, intel.registeredUses);
+
 
   /** Operator click: copy the backend option and stamp provenance. */
   const handleSelectDefaultRate = (
