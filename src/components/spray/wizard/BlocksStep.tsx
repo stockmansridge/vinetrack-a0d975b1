@@ -85,6 +85,8 @@ export function BlocksStep({ app, patch, geometry, calc, lookups, canEdit }: Ste
                   )}
                 </span>
                 <span className="text-xs text-muted-foreground">
+                  {blockAreaHa(p) != null ? fmtHa(blockAreaHa(p)) : "Area unknown"}
+                  {" · "}
                   {Number.isFinite(spacing) && spacing > 0 ? `${fmtNum(spacing, 2)} m rows` : "Row spacing unknown"}
                 </span>
               </label>
@@ -92,6 +94,40 @@ export function BlocksStep({ app, patch, geometry, calc, lookups, canEdit }: Ste
           })}
         </div>
       </section>
+
+      {!app.isTemplate && app.blockIds.length > 0 && (
+        <section className="space-y-2">
+          <h3 className="text-sm font-semibold">Chemical requirement for the selected blocks</h3>
+          <div className="rounded-md border bg-muted/30 p-3">
+            <div className="grid gap-2 sm:grid-cols-4">
+              <Fact label="Blocks selected" value={String(app.blockIds.length)} />
+              <Fact label="Total gross area" value={fmtHa(geometry.grossAreaHa)} />
+              <Fact
+                label="Treated area"
+                value={app.mode === "banded" ? fmtHa(geometry.treatedAreaHa) : "Whole block"}
+              />
+              <Fact label="Spray water" value={fmtLitres(calc.carrier.totalCarrierLitres)} />
+            </div>
+            <div className="mt-3 space-y-1 border-t pt-2">
+              {calc.products.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Add products to see how much chemical this selection needs.
+                </p>
+              )}
+              {calc.products.map((p) => (
+                <div key={p.index} className="flex items-center justify-between text-sm">
+                  <span className="truncate">{p.productName ?? "Product"}</span>
+                  <span className="font-medium">
+                    {p.totalQuantity == null
+                      ? "Calculated once rate and geometry are complete"
+                      : fmtQuantity(p.totalQuantity, p.unit)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="space-y-2">
         <div className="flex items-center justify-between">
