@@ -420,7 +420,25 @@ export default function PinsPage() {
             </Button>
           ))}
         </div>
+        <div className="inline-flex rounded-md border bg-background p-0.5" aria-label="Location filter">
+          {([
+            { key: "all", label: "All locations", count: locationCounts.all },
+            { key: "assigned", label: "Assigned", count: locationCounts.assigned },
+            { key: "unassigned", label: "Unassigned", count: locationCounts.unassigned },
+          ] as const).map((opt) => (
+            <Button
+              key={opt.key}
+              size="sm"
+              variant={locationFilter === opt.key ? "secondary" : "ghost"}
+              className="h-7 px-3 text-xs"
+              onClick={() => setLocationFilter(opt.key)}
+            >
+              {opt.label} ({opt.count})
+            </Button>
+          ))}
+        </div>
       </div>
+
 
       <div className="flex flex-wrap items-center gap-1.5" aria-label="Category legend and filter">
         <Button
