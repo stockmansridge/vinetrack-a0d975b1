@@ -175,7 +175,12 @@ export interface ChemicalIntelligence {
     activeIngredient: string | null;
     chemicalGroup: string | null;
     modeOfAction: string | null;
+    /** Persisted product/use type ("Fungicide", "Herbicide", …). */
+    productType: string | null;
+    /** Product-level restriction free text as stored. Never paraphrased. */
+    restrictions: string | null;
   };
+
   schemaVersion: number | null;
 }
 
@@ -624,7 +629,10 @@ export function toChemicalIntelligence(row: Record<string, any>): ChemicalIntell
       activeIngredient: str(row.active_ingredient),
       chemicalGroup: str(row.chemical_group),
       modeOfAction: str(row.mode_of_action),
+      productType: str(row.use),
+      restrictions: str(row.restrictions),
     },
+
     schemaVersion: numOrNull(row.intelligence_schema_version),
   };
 }
