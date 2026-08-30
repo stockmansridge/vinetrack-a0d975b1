@@ -7,13 +7,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { GEOMETRY_SOURCE_FRIENDLY, blockGeometrySummary, fmtHa, fmtNum } from "@/lib/sprayFormat";
+import {
+  GEOMETRY_SOURCE_FRIENDLY,
+  blockGeometrySummary,
+  fmtHa,
+  fmtLitres,
+  fmtNum,
+  fmtQuantity,
+} from "@/lib/sprayFormat";
 import type { StepProps } from "./types";
 
 const blockName = (p: any) => p?.name ?? p?.block_name ?? "Unnamed block";
 const blockVariety = (p: any) => p?.variety ?? p?.grape_variety ?? null;
+const blockAreaHa = (p: any): number | null => {
+  const v = Number(p?.area_ha ?? p?.hectares ?? NaN);
+  return Number.isFinite(v) && v > 0 ? v : null;
+};
 
-export function BlocksStep({ app, patch, geometry, lookups, canEdit }: StepProps) {
+export function BlocksStep({ app, patch, geometry, calc, lookups, canEdit }: StepProps) {
   const [showOverride, setShowOverride] = useState(
     !!(app.geometryOverride.grossAreaHa ||
       app.geometryOverride.rowSpacingMetres ||
@@ -74,6 +85,8 @@ export function BlocksStep({ app, patch, geometry, lookups, canEdit }: StepProps
                   )}
                 </span>
                 <span className="text-xs text-muted-foreground">
+                  {blockAreaHa(p) != null ? fmtHa(blockAreaHa(p)) : "Area unknown"}
+                  {" · "}
                   {Number.isFinite(spacing) && spacing > 0 ? `${fmtNum(spacing, 2)} m rows` : "Row spacing unknown"}
                 </span>
               </label>
@@ -81,6 +94,40 @@ export function BlocksStep({ app, patch, geometry, lookups, canEdit }: StepProps
           })}
         </div>
       </section>
+
+      {!app.isTemplate && app.blockIds.length > 0 && (
+        <section className="space-y-2">
+          <h3 className="text-sm font-semibold">Chemical requirement for the selected blocks</h3>
+          <div className="rounded-md border bg-muted/30 p-3">
+            <div className="grid gap-2 sm:grid-cols-4">
+              <Fact label="Blocks selected" value={String(app.blockIds.length)} />
+              <Fact label="Total gross area" value={fmtHa(geometry.grossAreaHa)} />
+              <Fact
+                label="Treated area"
+                value={app.mode === "banded" ? fmtHa(geometry.treatedAreaHa) : "Whole block"}
+              />
+              <Fact label="Spray water" value={fmtLitres(calc.carrier.totalCarrierLitres)} />
+            </div>
+            <div className="mt-3 space-y-1 border-t pt-2">
+              {calc.products.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Add products to see how much chemical this selection needs.
+                </p>
+              )}
+              {calc.products.map((p) => (
+                <div key={p.index} className="flex items-center justify-between text-sm">
+                  <span className="truncate">{p.productName ?? "Product"}</span>
+                  <span className="font-medium">
+                    {p.totalQuantity == null
+                      ? "Calculated once rate and geometry are complete"
+                      : fmtQuantity(p.totalQuantity, p.unit)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="space-y-2">
         <div className="flex items-center justify-between">
