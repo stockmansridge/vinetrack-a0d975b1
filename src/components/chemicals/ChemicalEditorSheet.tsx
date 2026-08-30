@@ -1085,8 +1085,17 @@ export function ChemicalEditor({
             {/* --------------------------------------- operational column */}
             <div className="space-y-4">
               <Section title="Grapevine uses & rates">
+                {/* Vineyard-first: other crops on the label are not part of the
+                    normal add flow and are never shown here. */}
                 {structuredUses ? (
-                  <GrapevineUsesCard uses={intel.registeredUses} />
+                  <>
+                    {!hasGrapevineRegistration(intel.registeredUses) && (
+                      <p className="mb-2 rounded-md border border-warning/50 bg-warning/10 p-2 text-[11px]">
+                        {NO_GRAPEVINE_REGISTRATION_MESSAGE}
+                      </p>
+                    )}
+                    <GrapevineUsesCard uses={intel.registeredUses} />
+                  </>
                 ) : (
                   legacyRateBlock
                 )}
