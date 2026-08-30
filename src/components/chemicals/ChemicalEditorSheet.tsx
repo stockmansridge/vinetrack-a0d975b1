@@ -1150,6 +1150,14 @@ export function ChemicalEditor({
                       {PRODUCT_CHANGED_MESSAGE}
                     </p>
                   )}
+                  {staleDefaultRate && (
+                    <p
+                      className="mb-2 rounded-md border border-destructive/50 bg-destructive/10 p-2 text-[11px]"
+                      role="alert"
+                    >
+                      {DEFAULT_RATE_NO_LONGER_ON_LABEL_MESSAGE}
+                    </p>
+                  )}
                   {hasGrapevineRegistration(intel.registeredUses) &&
                     !hasConfirmedRate(defaultRates) && (
                       <p className="mb-2 rounded-md border border-border/60 bg-muted/40 p-2 text-[11px]">
