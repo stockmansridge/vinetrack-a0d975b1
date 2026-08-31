@@ -568,7 +568,7 @@ export default function PinsPage() {
               {!isLoading && !error && sorted.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={colCount} className="text-center text-muted-foreground py-8">
-                    {filter
+                    {hasActiveFilters
                       ? "No pins match the current filters."
                       : statusFilter === "active"
                         ? "No active pins found."
