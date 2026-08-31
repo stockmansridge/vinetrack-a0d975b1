@@ -9,7 +9,6 @@ import {
   useAdminSprayRecords,
   useAdminWorkTasks,
   useAdminTrips,
-  type AdminVineyard,
 } from "@/lib/adminApi";
 import { AdminGate, AdminPageHeader, AdminError, AdminEmpty, ArchivedBadge, formatDate } from "./_shared";
 
