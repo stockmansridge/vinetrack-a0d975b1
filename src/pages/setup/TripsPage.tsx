@@ -481,18 +481,6 @@ export default function TripsPage() {
                 : null;
               const cellMap: Record<TripsCol, React.ReactNode> = {
                 start: <TableCell>{fmtDate(t.start_time)}</TableCell>,
-                name: (
-                  <TableCell className="font-medium">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span>{tripDisplayName(t)}</span>
-                      {t.work_task_id && (
-                        <Badge variant="outline" className="font-normal">
-                          {linkedTaskLabel ? `Task: ${linkedTaskLabel}` : "Task linked"}
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                ),
                 function: <TableCell>{fnLabel ? <Badge variant="outline">{fnLabel}</Badge> : "—"}</TableCell>,
                 paddock: <TableCell>{fmt(padName)}</TableCell>,
                 pattern: <TableCell>{t.tracking_pattern ? <Badge variant="secondary">{formatTripPatternLabel(t.tracking_pattern)}</Badge> : "—"}</TableCell>,
