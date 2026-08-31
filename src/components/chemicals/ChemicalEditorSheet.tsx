@@ -5,6 +5,8 @@
 // contexts such as the Spray Program Step wizard. There is deliberately no
 // simplified variant: this is the one Add New Chemical experience.
 import React, { useMemo, useRef, useState } from "react";
+import { showMissingRateOptionsRecovery } from "@/lib/chemicalRateOptionsRecovery";
+import { MissingRateOptionsPanel } from "@/components/chemicals/MissingRateOptionsPanel";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
 import { Card } from "@/components/ui/card";
