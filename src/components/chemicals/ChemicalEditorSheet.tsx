@@ -688,14 +688,17 @@ export function ChemicalEditor({
   const staleDefaultRate =
     structuredUses && !defaultRateStillSupported(defaultRates, intel.registeredUses);
 
-  // Release contract §3/§4 — a NEW looked-up chemical may only be saved with a
-  // registered grapevine use AND an explicitly confirmed operational rate.
-  // Existing (legacy) records are never stranded by this gate.
+  // Release contract §4 — a NEW chemical selected through registered/master
+  // lookup may only be saved with a registered grapevine use AND an explicitly
+  // confirmed operational rate. The gate applies to the LOOKUP MODE, never to
+  // whether uses were extracted: a lookup returning zero uses is still gated.
+  // Manual entry stays exempt; existing records are never stranded.
+  const lookupSelected = selectionMode === "registered" || selectionMode === "master";
   const grapevineRegistered = hasGrapevineRegistration(intel.registeredUses);
-  const noGrapevineRegistration = !initial && structuredUses && !grapevineRegistered;
+  const noGrapevineRegistration = !initial && lookupSelected && !grapevineRegistered;
   const firstAddBlocked =
     !initial &&
-    structuredUses &&
+    lookupSelected &&
     !(grapevineRegistered && hasConfirmedRate(defaultRates) && !staleDefaultRate);
   const saveBlocked = staleDefaultRate || firstAddBlocked;
 
