@@ -216,6 +216,32 @@ export function useAdminVineyards() {
   });
 }
 
+/**
+ * Authoritative per-vineyard activity totals. ONE aggregate request for the
+ * whole list — never derived from the truncated admin_list_* record feeds.
+ */
+export function useAdminVineyardActivityCounts() {
+  return useQuery({
+    queryKey: ["admin", "vineyard-activity-counts"] as const,
+    staleTime: 60_000,
+    retry: false,
+    queryFn: async () => {
+      const rows = await rpc<AdminVineyardActivityCounts[]>("admin_vineyard_activity_counts");
+      const map = new Map<string, AdminVineyardActivityCounts>();
+      for (const r of rows ?? []) {
+        map.set(r.vineyard_id, {
+          vineyard_id: r.vineyard_id,
+          trip_count: Number(r.trip_count ?? 0),
+          pin_count: Number(r.pin_count ?? 0),
+          spray_record_count: Number(r.spray_record_count ?? 0),
+          work_task_count: Number(r.work_task_count ?? 0),
+        });
+      }
+      return map;
+    },
+  });
+}
+
 export function useAdminUserVineyards(userId: string | undefined) {
   return useQuery({
     queryKey: userId ? QK.userVineyards(userId) : ["admin", "user-vineyards", "none"],
@@ -226,6 +252,7 @@ export function useAdminUserVineyards(userId: string | undefined) {
       ),
   });
 }
+
 
 export function useAdminInvitations() {
   return useQuery({
