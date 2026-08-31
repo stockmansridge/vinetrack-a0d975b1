@@ -48,6 +48,30 @@ function ActivityMetric({
   );
 }
 
+function ActivityMetrics({ counts }: { counts: VineyardActivityCounts }) {
+  const items = [
+    { key: "trips", label: "trip", count: counts.trips },
+    { key: "pins", label: "pin", count: counts.pins },
+    { key: "spray", label: "spray", count: counts.sprayRecords },
+    { key: "tasks", label: "task", count: counts.workTasks },
+  ].filter((i) => i.count > 0);
+
+  if (items.length === 0) {
+    return <span className="text-xs text-muted-foreground italic">No activity</span>;
+  }
+
+  return (
+    <>
+      {items.map((item, index) => (
+        <span key={item.key} className="inline-flex items-center gap-1">
+          {index > 0 && <span className="text-muted-foreground/50">·</span>}
+          <ActivityMetric label={item.label} count={item.count} />
+        </span>
+      ))}
+    </>
+  );
+}
+
 export default function AdminVineyardsPage() {
   const [search, setSearch] = useState("");
   const { data = [], isLoading, error } = useAdminVineyards();
