@@ -127,8 +127,11 @@ export default function AdminVineyardsPage() {
                   {activity > 0 ? (
                     <>
                       <ActivityMetric label="trip" count={c?.trips ?? 0} />
+                      <span className="text-muted-foreground/50">·</span>
                       <ActivityMetric label="pin" count={c?.pins ?? 0} />
+                      <span className="text-muted-foreground/50">·</span>
                       <ActivityMetric label="spray" count={c?.sprayRecords ?? 0} />
+                      <span className="text-muted-foreground/50">·</span>
                       <ActivityMetric label="task" count={c?.workTasks ?? 0} />
                     </>
                   ) : (
