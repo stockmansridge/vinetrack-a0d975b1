@@ -689,14 +689,7 @@ export function ChemicalAILookup({
                     disabled={loading}
                     onClick={() => selectCandidate(c)}
                   >
-                    {phase === "enriching" && selectedIndex === c.index ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                        Loading product label details…
-                      </>
-                    ) : (
-                      "Select this product"
-                    )}
+                    Select this product
                   </Button>
                   {saved && (
                     <Button
