@@ -74,7 +74,9 @@ export default function PinsPage() {
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const [tab, setTab] = useState("table");
   const [addOpen, setAddOpen] = useState(false);
-  const [filter, setFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [rowFrom, setRowFrom] = useState("");
+  const [rowTo, setRowTo] = useState("");
   const [statusFilter, setStatusFilter] = useState<PinStatusFilter>("active");
   const [categoryFilter, setCategoryFilter] = useState<PinCategoryId | "all">("all");
   const [exporting, setExporting] = useState(false);
