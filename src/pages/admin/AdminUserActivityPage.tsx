@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { iosSupabase } from "@/integrations/ios-supabase/client";
 import { Card } from "@/components/ui/card";
