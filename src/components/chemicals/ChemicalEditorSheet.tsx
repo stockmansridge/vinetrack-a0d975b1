@@ -4,7 +4,7 @@
 // match, verification, Chemical Intelligence) can be reused inside nested
 // contexts such as the Spray Program Step wizard. There is deliberately no
 // simplified variant: this is the one Add New Chemical experience.
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
 import { Card } from "@/components/ui/card";
