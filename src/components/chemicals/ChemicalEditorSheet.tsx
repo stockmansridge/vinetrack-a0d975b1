@@ -1155,7 +1155,7 @@ export function ChemicalEditor({
               <Section title="Grapevine uses & rates">
                 {/* Vineyard-first: other crops on the label are not part of the
                     normal add flow and are never shown here. */}
-                {structuredUses ? (
+                {structuredUses || lookupSelected ? (
                   <>
                     {!grapevineRegistered && (
                       <div
