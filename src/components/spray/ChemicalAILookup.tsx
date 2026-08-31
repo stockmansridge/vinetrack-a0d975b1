@@ -183,6 +183,8 @@ export function ChemicalAILookup({
   country,
   onApply,
   onSelectionChange,
+  retryLabelRef,
+
 }: Props) {
   // Jurisdiction is the selected vineyard's country. There is no locale,
   // browser or IP fallback — when it is missing, lookup is blocked.
