@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import AdminVineyardsPage from "@/pages/admin/AdminVineyardsPage";
 import * as adminApi from "@/lib/adminApi";
-import type { AdminVineyard, AdminPin, AdminSprayRecord, AdminWorkTask, AdminTrip } from "@/lib/adminApi";
+import type { AdminVineyard, AdminVineyardActivityCounts } from "@/lib/adminApi";
 
 vi.mock("@/lib/adminApi", async (importOriginal) => {
   const mod = await importOriginal<typeof adminApi>();
@@ -26,111 +26,150 @@ function wrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
+const vineyard = (id: string, name: string): AdminVineyard => ({
+  id,
+  name,
+  owner_id: `owner-${id}`,
+  owner_email: `${id}@example.com`,
+  owner_full_name: null,
+  country: "AU",
+  created_at: "2024-01-01T00:00:00Z",
+  deleted_at: null,
+  member_count: 1,
+  pending_invites: 0,
+});
+
+const counts = (
+  id: string,
+  c: Partial<Omit<AdminVineyardActivityCounts, "vineyard_id">>,
+): AdminVineyardActivityCounts => ({
+  vineyard_id: id,
+  trip_count: 0,
+  pin_count: 0,
+  spray_record_count: 0,
+  work_task_count: 0,
+  ...c,
+});
+
+function mockVineyards(rows: AdminVineyard[]) {
+  vi.spyOn(adminApi, "useAdminVineyards").mockReturnValue({
+    data: rows,
+    isLoading: false,
+    error: null,
+  } as any);
+}
+
+function mockActivity(state: {
+  data?: Map<string, AdminVineyardActivityCounts>;
+  isLoading?: boolean;
+  error?: unknown;
+}) {
+  vi.spyOn(adminApi, "useAdminVineyardActivityCounts").mockReturnValue({
+    data: state.data,
+    isLoading: state.isLoading ?? false,
+    error: state.error ?? null,
+  } as any);
+}
+
 describe("AdminVineyardsPage activity counts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("renders activity counts per vineyard", () => {
-    const vineyards: AdminVineyard[] = [
-      {
-        id: "v1",
-        name: "Active Vineyard",
-        owner_id: "u1",
-        owner_email: "owner@example.com",
-        owner_full_name: "Owner Name",
-        country: "AU",
-        created_at: "2024-01-01T00:00:00Z",
-        deleted_at: null,
-        member_count: 3,
-        pending_invites: 1,
-      },
-      {
-        id: "v2",
-        name: "Quiet Vineyard",
-        owner_id: "u2",
-        owner_email: "quiet@example.com",
-        owner_full_name: null,
-        country: "NZ",
-        created_at: "2024-02-01T00:00:00Z",
-        deleted_at: null,
-        member_count: 1,
-        pending_invites: 0,
-      },
-    ];
-
-    const pins: AdminPin[] = [
-      { id: "p1", vineyard_id: "v1", vineyard_name: "Active Vineyard", title: "Pin 1", category: "observation", status: null, created_at: null, is_completed: false },
-      { id: "p2", vineyard_id: "v1", vineyard_name: "Active Vineyard", title: "Pin 2", category: "repair", status: null, created_at: null, is_completed: false },
-    ];
-
-    const spray: AdminSprayRecord[] = [
-      { id: "s1", vineyard_id: "v1", vineyard_name: "Active Vineyard", spray_reference: "S1", operation_type: null, date: null, created_at: null },
-    ];
-
-    const tasks: AdminWorkTask[] = [
-      { id: "w1", vineyard_id: "v2", vineyard_name: "Quiet Vineyard", task_type: "pruning", paddock_name: null, date: null, duration_hours: null, created_at: null },
-    ];
-
-    const trips: AdminTrip[] = [
-      { id: "t1", vineyard_id: "v1", vineyard_name: "Active Vineyard", trip_title: "Trip 1", trip_function: null, start_time: null, end_time: null, created_at: null },
-      { id: "t2", vineyard_id: "v1", vineyard_name: "Active Vineyard", trip_title: "Trip 2", trip_function: null, start_time: null, end_time: null, created_at: null },
-    ];
-
-    vi.spyOn(adminApi, "useAdminVineyards").mockReturnValue({
-      data: vineyards,
-      isLoading: false,
-      error: null,
-    } as any);
-    vi.spyOn(adminApi, "useAdminPins").mockReturnValue({ data: pins, isLoading: false, error: null } as any);
-    vi.spyOn(adminApi, "useAdminSprayRecords").mockReturnValue({ data: spray, isLoading: false, error: null } as any);
-    vi.spyOn(adminApi, "useAdminWorkTasks").mockReturnValue({ data: tasks, isLoading: false, error: null } as any);
-    vi.spyOn(adminApi, "useAdminTrips").mockReturnValue({ data: trips, isLoading: false, error: null } as any);
+  it("shows authoritative counts well beyond the old 500-row window", () => {
+    mockVineyards([vineyard("v1", "Busy Vineyard")]);
+    mockActivity({
+      data: new Map([
+        [
+          "v1",
+          counts("v1", {
+            trip_count: 1200,
+            pin_count: 640,
+            spray_record_count: 501,
+            work_task_count: 999,
+          }),
+        ],
+      ]),
+    });
 
     render(<AdminVineyardsPage />, { wrapper });
 
-    expect(screen.getByText("Active Vineyard")).toBeInTheDocument();
-    expect(screen.getByText("Quiet Vineyard")).toBeInTheDocument();
-
-    // Active vineyard should show 2 trips, 2 pins, 1 spray
-    const activeRow = screen.getByText("Active Vineyard").closest("a")!;
-    expect(activeRow).toHaveTextContent("2 trips");
-    expect(activeRow).toHaveTextContent("2 pins");
-    expect(activeRow).toHaveTextContent("1 spray");
-
-    // Quiet vineyard has 1 task but no trips/pins/sprays
-    const quietRow = screen.getByText("Quiet Vineyard").closest("a")!;
-    expect(quietRow).toHaveTextContent("1 task");
+    const row = screen.getByText("Busy Vineyard").closest("a")!;
+    expect(row).toHaveTextContent("1200 trips");
+    expect(row).toHaveTextContent("640 pins");
+    expect(row).toHaveTextContent("501 sprays");
+    expect(row).toHaveTextContent("999 tasks");
   });
 
-  it("shows 'No activity' for vineyards with zero records", () => {
-    const vineyards: AdminVineyard[] = [
-      {
-        id: "v1",
-        name: "Empty Vineyard",
-        owner_id: "u1",
-        owner_email: "empty@example.com",
-        owner_full_name: null,
-        country: "AU",
-        created_at: "2024-01-01T00:00:00Z",
-        deleted_at: null,
-        member_count: 1,
-        pending_invites: 0,
-      },
-    ];
+  it("counts old records for a vineyard whose activity is entirely outside the newest global records", () => {
+    // The aggregate is server-side, so an "old" vineyard still gets real
+    // numbers even though it would never appear in a newest-first feed.
+    mockVineyards([vineyard("newV", "Recent Vineyard"), vineyard("oldV", "Historic Vineyard")]);
+    mockActivity({
+      data: new Map([
+        ["newV", counts("newV", { trip_count: 500 })],
+        ["oldV", counts("oldV", { pin_count: 37, work_task_count: 4 })],
+      ]),
+    });
 
-    vi.spyOn(adminApi, "useAdminVineyards").mockReturnValue({
-      data: vineyards,
-      isLoading: false,
-      error: null,
-    } as any);
-    vi.spyOn(adminApi, "useAdminPins").mockReturnValue({ data: [], isLoading: false, error: null } as any);
-    vi.spyOn(adminApi, "useAdminSprayRecords").mockReturnValue({ data: [], isLoading: false, error: null } as any);
-    vi.spyOn(adminApi, "useAdminWorkTasks").mockReturnValue({ data: [], isLoading: false, error: null } as any);
-    vi.spyOn(adminApi, "useAdminTrips").mockReturnValue({ data: [], isLoading: false, error: null } as any);
+    render(<AdminVineyardsPage />, { wrapper });
+
+    const row = screen.getByText("Historic Vineyard").closest("a")!;
+    expect(row).toHaveTextContent("37 pins");
+    expect(row).toHaveTextContent("4 tasks");
+    expect(row).not.toHaveTextContent("No activity");
+  });
+
+  it("does not count deleted records (server excludes them; zeros render as No activity)", () => {
+    // The RPC filters deleted_at IS NULL, so a vineyard whose only records are
+    // soft-deleted comes back as authoritative zeros.
+    mockVineyards([vineyard("v1", "Archived Activity Vineyard")]);
+    mockActivity({ data: new Map([["v1", counts("v1", {})]]) });
 
     render(<AdminVineyardsPage />, { wrapper });
 
     expect(screen.getByText("No activity")).toBeInTheDocument();
+  });
+
+  it("shows 'No activity' for a genuine zero-activity vineyard", () => {
+    mockVineyards([vineyard("v1", "Empty Vineyard")]);
+    mockActivity({ data: new Map([["v1", counts("v1", {})]]) });
+
+    render(<AdminVineyardsPage />, { wrapper });
+
+    expect(screen.getByText("No activity")).toBeInTheDocument();
+  });
+
+  it("does not claim 'No activity' when the activity query fails", () => {
+    mockVineyards([vineyard("v1", "Unknown Activity Vineyard")]);
+    mockActivity({ data: undefined, error: new Error("permission denied") });
+
+    render(<AdminVineyardsPage />, { wrapper });
+
+    expect(screen.queryByText("No activity")).not.toBeInTheDocument();
+    expect(screen.getByText("Activity unavailable")).toBeInTheDocument();
+  });
+
+  it("keeps the vineyard list rendered when the activity query fails", () => {
+    mockVineyards([vineyard("v1", "Still Listed Vineyard")]);
+    mockActivity({ data: undefined, error: new Error("permission denied") });
+
+    render(<AdminVineyardsPage />, { wrapper });
+
+    expect(screen.getByText("Still Listed Vineyard")).toBeInTheDocument();
+    expect(screen.queryByText("permission denied")).not.toBeInTheDocument();
+  });
+
+  it("shows the page error only when the vineyard list itself fails", () => {
+    vi.spyOn(adminApi, "useAdminVineyards").mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: new Error("vineyards unavailable"),
+    } as any);
+    mockActivity({ data: new Map() });
+
+    render(<AdminVineyardsPage />, { wrapper });
+
+    expect(screen.getByText("vineyards unavailable")).toBeInTheDocument();
   });
 });
