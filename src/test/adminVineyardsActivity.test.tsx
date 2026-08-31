@@ -94,8 +94,8 @@ describe("AdminVineyardsPage activity counts", () => {
 
     // Active vineyard should show 2 trips, 2 pins, 1 spray
     const activeRow = screen.getByText("Active Vineyard").closest("a")!;
-    expect(activeRow).toHaveTextContent("2 trip");
-    expect(activeRow).toHaveTextContent("2 pin");
+    expect(activeRow).toHaveTextContent("2 trips");
+    expect(activeRow).toHaveTextContent("2 pins");
     expect(activeRow).toHaveTextContent("1 spray");
 
     // Quiet vineyard has 1 task but no trips/pins/sprays
