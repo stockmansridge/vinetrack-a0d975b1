@@ -157,3 +157,25 @@ export function defaultRateStillSupported(
     return ids.every((id) => available.has(id));
   });
 }
+
+/**
+ * Release contract §4 — the lookup-only save gate. It applies to the SELECTION
+ * MODE, not to whether any uses were extracted, so an authoritative lookup that
+ * returns zero registered uses is still gated. Manual entry is exempt, and
+ * existing (already saved) records are never stranded.
+ */
+export function lookupSaveBlocked(args: {
+  isExistingRecord: boolean;
+  selectionMode: string;
+  uses: WriteRegisteredUse[];
+  defaults: PersistedDefaultRates | null;
+  staleDefaultRate: boolean;
+}): boolean {
+  const lookup = args.selectionMode === "registered" || args.selectionMode === "master";
+  if (args.isExistingRecord || !lookup) return false;
+  return !(
+    hasGrapevineRegistration(args.uses) &&
+    hasConfirmedRate(args.defaults) &&
+    !args.staleDefaultRate
+  );
+}
