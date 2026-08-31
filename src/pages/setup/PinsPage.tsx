@@ -10,6 +10,15 @@ import { fetchList } from "@/lib/queries";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { matchesPinSearch, matchesRowRange, parseRowBound } from "@/lib/pinsFilter";
 import { Badge } from "@/components/ui/badge";
 import { PortalNotice } from "@/components/ui/PortalNotice";
 import {
@@ -74,7 +83,9 @@ export default function PinsPage() {
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const [tab, setTab] = useState("table");
   const [addOpen, setAddOpen] = useState(false);
-  const [filter, setFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [rowFrom, setRowFrom] = useState("");
+  const [rowTo, setRowTo] = useState("");
   const [statusFilter, setStatusFilter] = useState<PinStatusFilter>("active");
   const [categoryFilter, setCategoryFilter] = useState<PinCategoryId | "all">("all");
   const [exporting, setExporting] = useState(false);
@@ -205,11 +216,31 @@ export default function PinsPage() {
   const paddockFilterName = paddockFilter
     ? paddockNameById.get(paddockFilter) ?? null
     : null;
-  const clearPaddockFilter = () => {
+  const setPaddockFilter = (id: string | null) => {
     const next = new URLSearchParams(searchParams);
-    next.delete("paddock");
+    if (id) next.set("paddock", id);
+    else next.delete("paddock");
     setSearchParams(next, { replace: true });
   };
+  const clearPaddockFilter = () => setPaddockFilter(null);
+
+  const hasActiveFilters =
+    !!search.trim() ||
+    !!paddockFilter ||
+    !!rowFrom.trim() ||
+    !!rowTo.trim() ||
+    categoryFilter !== "all" ||
+    locationFilter !== "all";
+
+  const clearAllFilters = () => {
+    setSearch("");
+    setRowFrom("");
+    setRowTo("");
+    setCategoryFilter("all");
+    setLocationFilter("all");
+    setPaddockFilter(null);
+  };
+
 
   const categoryCounts = useMemo(() => {
     const m = new Map<PinCategoryId, number>();
@@ -219,6 +250,9 @@ export default function PinsPage() {
     }
     return m;
   }, [statusFiltered]);
+
+  const rowFromNum = parseRowBound(rowFrom);
+  const rowToNum = parseRowBound(rowTo);
 
   const filtered = useMemo(() => {
     let list = statusFiltered;
@@ -233,13 +267,16 @@ export default function PinsPage() {
     if (paddockFilter) {
       list = list.filter((p: any) => placements.get(p.id)?.paddock_id === paddockFilter);
     }
-    if (!filter) return list;
-    const f = filter.toLowerCase();
-    return list.filter((p) =>
-      [p.title, (p as any).button_name, p.mode, p.category, p.priority, p.status, p.notes]
-        .some((v) => String(v ?? "").toLowerCase().includes(f)),
-    );
-  }, [statusFiltered, filter, paddockFilter, categoryFilter, locationFilter, placements]);
+    if (rowFromNum != null || rowToNum != null) {
+      list = list.filter((p: any) => matchesRowRange(placements.get(p.id), rowFromNum, rowToNum));
+    }
+    if (!search.trim()) return list;
+    return list.filter((p: any) => {
+      const d = pinPlacementDisplay(placements.get(p.id));
+      return matchesPinSearch(p, d.blockLabel, d.rowLabel, search);
+    });
+  }, [statusFiltered, search, paddockFilter, categoryFilter, locationFilter, placements, rowFromNum, rowToNum]);
+
 
   const PRIORITY_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1 };
   type PinSortKey =
@@ -405,7 +442,95 @@ export default function PinsPage() {
       </div>
       )}
 
-      <div className="flex items-center gap-2">
+      <Card className="space-y-3 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Filters
+          </div>
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={clearAllFilters}>
+              <X className="mr-1 h-3 w-3" /> Clear filters
+            </Button>
+          )}
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Search title, notes, {rf.blockLabel.toLowerCase()}</Label>
+            <Input
+              placeholder={`e.g. broken post`}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-9"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">{rf.blockLabel}</Label>
+            <Select
+              value={paddockFilter ?? "all"}
+              onValueChange={(v) => setPaddockFilter(v === "all" ? null : v)}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder={`All ${rf.blockLabel.toLowerCase()}s`} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All {rf.blockLabel.toLowerCase()}s</SelectItem>
+                {paddocks.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name ?? p.id.slice(0, 8)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Row range</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                inputMode="decimal"
+                placeholder="From"
+                value={rowFrom}
+                onChange={(e) => setRowFrom(e.target.value)}
+                className="h-9"
+                aria-label="Row from"
+              />
+              <span className="text-xs text-muted-foreground">to</span>
+              <Input
+                inputMode="decimal"
+                placeholder="To"
+                value={rowTo}
+                onChange={(e) => setRowTo(e.target.value)}
+                className="h-9"
+                aria-label="Row to"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Category</Label>
+            <Select
+              value={categoryFilter}
+              onValueChange={(v) => setCategoryFilter(v as PinCategoryId | "all")}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="All categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {PIN_CATEGORY_ORDER.map((id) => {
+                  const cs = pinCategoryStyleById(id);
+                  const label = catColours.labelByCategory[id] ?? cs.label;
+                  return (
+                    <SelectItem key={id} value={id}>
+                      {label} ({categoryCounts.get(id) ?? 0})
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+      <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-md border bg-background p-0.5">
           {([
             { key: "active", label: "Active", count: statusCounts.active },
@@ -476,6 +601,8 @@ export default function PinsPage() {
           );
         })}
       </div>
+      </Card>
+
 
       <TabsContent value="table" className="mt-0 space-y-4">
         <div className="flex items-center justify-between gap-2">
@@ -513,12 +640,6 @@ export default function PinsPage() {
               Export CSV
             </Button>
 
-            <Input
-              placeholder="Filter…"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="w-64"
-            />
             <ColumnSettingsMenu onReset={pinReset} />
           </div>
         </div>
@@ -560,7 +681,7 @@ export default function PinsPage() {
               {!isLoading && !error && sorted.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={colCount} className="text-center text-muted-foreground py-8">
-                    {filter
+                    {hasActiveFilters
                       ? "No pins match the current filters."
                       : statusFilter === "active"
                         ? "No active pins found."
