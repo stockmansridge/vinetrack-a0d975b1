@@ -1101,7 +1101,7 @@ export function ChemicalEditor({
                   {labelLinks.manufacturerLabelUrl ? (
                     <Button asChild size="sm" variant="outline" className="gap-1">
                       <a href={labelLinks.manufacturerLabelUrl} target="_blank" rel="noopener noreferrer">
-                        <FileText className="h-3.5 w-3.5" /> Open manufacturer label
+                        <FileText className="h-3.5 w-3.5" /> {OPEN_MANUFACTURER_LABEL}
                       </a>
                     </Button>
                   ) : (
@@ -1112,14 +1112,21 @@ export function ChemicalEditor({
                   {labelLinks.regulatorLabelUrl && (
                     <Button asChild size="sm" variant="outline" className="gap-1">
                       <a href={labelLinks.regulatorLabelUrl} target="_blank" rel="noopener noreferrer">
-                        <FileText className="h-3.5 w-3.5" /> Open APVMA label
+                        <FileText className="h-3.5 w-3.5" /> {OPEN_REGULATOR_LABEL}
+                      </a>
+                    </Button>
+                  )}
+                  {labelLinks.registrationSourceUrl && (
+                    <Button asChild size="sm" variant="outline" className="gap-1">
+                      <a href={labelLinks.registrationSourceUrl} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-3.5 w-3.5" /> {OPEN_REGISTRATION_SOURCE}
                       </a>
                     </Button>
                   )}
                   {labelLinks.productUrl && (
                     <Button asChild size="sm" variant="outline" className="gap-1">
                       <a href={labelLinks.productUrl} target="_blank" rel="noopener noreferrer">
-                        <Globe className="h-3.5 w-3.5" /> Open product page
+                        <Globe className="h-3.5 w-3.5" /> {OPEN_PRODUCT_PAGE}
                       </a>
                     </Button>
                   )}

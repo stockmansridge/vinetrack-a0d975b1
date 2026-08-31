@@ -20,11 +20,23 @@ const httpUrl = (v: unknown): string | undefined => {
 
 export interface ChemicalLabelLinks {
   manufacturerLabelUrl?: string;
+  /** The ACTUAL regulator eLabel document (`label_url`). */
   regulatorLabelUrl?: string;
+  /**
+   * Registration / gazette evidence (`label_reference`, or an
+   * `official_register` source). This is NOT a product label and must never be
+   * offered as one.
+   */
+  registrationSourceUrl?: string;
   productUrl?: string;
   /** False when no manufacturer label URL was supplied by the backend. */
   manufacturerResolved: boolean;
 }
+
+export const OPEN_REGULATOR_LABEL = "Open APVMA label";
+export const OPEN_REGISTRATION_SOURCE = "Open APVMA registration source";
+export const OPEN_MANUFACTURER_LABEL = "Open manufacturer label";
+export const OPEN_PRODUCT_PAGE = "Open product page";
 
 export function resolveChemicalLabelLinks(input: {
   sources?: WriteDataSource[];
@@ -41,13 +53,18 @@ export function resolveChemicalLabelLinks(input: {
   const manufacturer =
     httpUrl(input.manufacturerLabelUrl) ??
     httpUrl(sources.find((s) => s.kind === "manufacturer_label")?.reference);
-  const regulator =
-    httpUrl(sources.find((s) => s.kind === "official_register")?.reference) ??
+  // Only the stored eLabel document counts as the regulator label. A register
+  // / gazette citation is evidence of registration, never a product label, and
+  // the portal never constructs a guessed eLabel URL.
+  const regulatorLabel = httpUrl(input.labelUrl);
+  const registrationSource =
     httpUrl(input.labelReference) ??
-    httpUrl(input.labelUrl);
+    httpUrl(sources.find((s) => s.kind === "official_register")?.reference);
   return {
     manufacturerLabelUrl: manufacturer,
-    regulatorLabelUrl: regulator,
+    regulatorLabelUrl: regulatorLabel,
+    registrationSourceUrl:
+      registrationSource && registrationSource !== regulatorLabel ? registrationSource : undefined,
     productUrl: httpUrl(input.productUrl),
     manufacturerResolved: !!manufacturer,
   };
