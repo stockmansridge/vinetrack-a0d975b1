@@ -127,7 +127,6 @@ export default function AdminVineyardsPage() {
         <div className="divide-y">
           {filtered.map((v) => {
             const c = countsByVineyard.get(v.id);
-            const activity = totalActivity(v);
             return (
               <Link
                 key={v.id}
