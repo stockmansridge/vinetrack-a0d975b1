@@ -466,15 +466,6 @@ export function ChemicalEditor({
   const set = <K extends keyof SavedChemicalInput>(k: K, v: SavedChemicalInput[K]) =>
     setForm((p) => ({ ...p, [k]: v }));
 
-  /** Registered-product identity of a draft, or null when not fully stated. */
-  const draftRateProductIdentity = (d: ChemicalIntelligenceDraft) =>
-    d.registration.number
-      ? {
-          country: d.registration.country ?? null,
-          scheme: d.registration.scheme ?? null,
-          number: d.registration.number ?? null,
-        }
-      : null;
 
 
   const applySuggestion = (s: AppliedSuggestion) => {
@@ -1424,4 +1415,19 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </div>
   );
+}
+
+/**
+ * Registered-product identity of a draft, or null when not fully stated.
+ * Module scope on purpose: it is used during the first render pass, so a
+ * component-scoped const would be read before initialisation.
+ */
+function draftRateProductIdentity(d: ChemicalIntelligenceDraft) {
+  return d.registration.number
+    ? {
+        country: d.registration.country ?? null,
+        scheme: d.registration.scheme ?? null,
+        number: d.registration.number ?? null,
+      }
+    : null;
 }
