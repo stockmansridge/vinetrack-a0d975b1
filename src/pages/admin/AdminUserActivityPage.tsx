@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { iosSupabase } from "@/integrations/ios-supabase/client";
 import { Card } from "@/components/ui/card";
@@ -260,14 +261,14 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
     label: "User",
     sortable: true,
     render: (r) => (
-      <div>
-        <div className="font-medium truncate max-w-[200px]">
+      <Link to={`/admin/users/${r.user_id}`} className="block group">
+        <div className="font-medium truncate max-w-[200px] text-primary group-hover:underline">
           {r.display_name || r.email || "—"}
         </div>
         <div className="text-[10px] text-muted-foreground font-mono truncate max-w-[200px]">
           {r.user_id}
         </div>
-      </div>
+      </Link>
     ),
   },
   {

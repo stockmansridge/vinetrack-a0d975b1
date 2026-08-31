@@ -6,6 +6,7 @@ import "leaflet/dist/leaflet.css";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAdminVineyards, useAdminVineyardPaddocks, type AdminPaddock } from "@/lib/adminApi";
+import { computeAdminVineyardStats, formatHa } from "@/lib/adminVineyardStats";
 import { AdminGate, AdminPageHeader, AdminError, AdminEmpty, ArchivedBadge, formatDate } from "./_shared";
 import MapSourceBadge from "@/components/MapSourceBadge";
 
@@ -67,6 +68,8 @@ export default function AdminVineyardDetailPage() {
   const vineyardsQ = useAdminVineyards();
   const paddocksQ = useAdminVineyardPaddocks(id);
   const v = vineyardsQ.data?.find((x) => x.id === id);
+  const stats = computeAdminVineyardStats(paddocksQ.data);
+
 
   return (
     <AdminGate>
@@ -88,10 +91,20 @@ export default function AdminVineyardDetailPage() {
               <div><div className="text-xs text-muted-foreground">Country</div>{v.country ?? "—"}</div>
               <div><div className="text-xs text-muted-foreground">Members</div>{v.member_count}</div>
               <div><div className="text-xs text-muted-foreground">Pending invites</div>{v.pending_invites}</div>
-              <div><div className="text-xs text-muted-foreground">Blocks</div>{(paddocksQ.data ?? []).filter((p) => !p.deleted_at).length}</div>
+              <div><div className="text-xs text-muted-foreground">Blocks</div>{stats.blockCount}</div>
+              <div><div className="text-xs text-muted-foreground">Total area</div>{formatHa(stats.totalAreaHa)}</div>
+              <div><div className="text-xs text-muted-foreground">Rows</div>{stats.rowCount || "—"}</div>
+              <div><div className="text-xs text-muted-foreground">Varieties</div>{stats.varieties.length || "—"}</div>
               <div><div className="text-xs text-muted-foreground">Created</div>{formatDate(v.created_at)}</div>
               <div><div className="text-xs text-muted-foreground">Status</div>{v.deleted_at ? <ArchivedBadge /> : "Active"}</div>
             </div>
+            {stats.varieties.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1">
+                {stats.varieties.map((name) => (
+                  <Badge key={name} variant="secondary" className="text-[10px]">{name}</Badge>
+                ))}
+              </div>
+            )}
             <div className="text-xs text-muted-foreground font-mono break-all mt-2">{v.id}</div>
           </Card>
 
