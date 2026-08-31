@@ -13,6 +13,7 @@ const QK = {
   pins: (limit: number) => ["admin", "pins", limit] as const,
   spray: (limit: number) => ["admin", "spray", limit] as const,
   workTasks: (limit: number) => ["admin", "work-tasks", limit] as const,
+  trips: (limit: number) => ["admin", "trips", limit] as const,
   paddocks: (vineyardId: string) => ["admin", "paddocks", vineyardId] as const,
   systemAdmins: ["admin", "system-admins"] as const,
 };
