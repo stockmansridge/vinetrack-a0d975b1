@@ -56,21 +56,21 @@ describe("AdminVineyardsPage activity counts", () => {
     ];
 
     const pins: AdminPin[] = [
-      { id: "p1", vineyard_id: "v1", title: "Pin 1", category: "observation", status: null, created_at: null, is_completed: false },
-      { id: "p2", vineyard_id: "v1", title: "Pin 2", category: "repair", status: null, created_at: null, is_completed: false },
+      { id: "p1", vineyard_id: "v1", vineyard_name: "Active Vineyard", title: "Pin 1", category: "observation", status: null, created_at: null, is_completed: false },
+      { id: "p2", vineyard_id: "v1", vineyard_name: "Active Vineyard", title: "Pin 2", category: "repair", status: null, created_at: null, is_completed: false },
     ];
 
     const spray: AdminSprayRecord[] = [
-      { id: "s1", vineyard_id: "v1", spray_reference: "S1", operation_type: null, date: null, created_at: null },
+      { id: "s1", vineyard_id: "v1", vineyard_name: "Active Vineyard", spray_reference: "S1", operation_type: null, date: null, created_at: null },
     ];
 
     const tasks: AdminWorkTask[] = [
-      { id: "w1", vineyard_id: "v2", task_type: "pruning", paddock_name: null, date: null, duration_hours: null, created_at: null },
+      { id: "w1", vineyard_id: "v2", vineyard_name: "Quiet Vineyard", task_type: "pruning", paddock_name: null, date: null, duration_hours: null, created_at: null },
     ];
 
     const trips: AdminTrip[] = [
-      { id: "t1", vineyard_id: "v1", trip_title: "Trip 1", trip_function: null, start_time: null, end_time: null, created_at: null },
-      { id: "t2", vineyard_id: "v1", trip_title: "Trip 2", trip_function: null, start_time: null, end_time: null, created_at: null },
+      { id: "t1", vineyard_id: "v1", vineyard_name: "Active Vineyard", trip_title: "Trip 1", trip_function: null, start_time: null, end_time: null, created_at: null },
+      { id: "t2", vineyard_id: "v1", vineyard_name: "Active Vineyard", trip_title: "Trip 2", trip_function: null, start_time: null, end_time: null, created_at: null },
     ];
 
     vi.spyOn(adminApi, "useAdminVineyards").mockReturnValue({
