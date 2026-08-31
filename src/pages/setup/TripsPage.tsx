@@ -250,7 +250,7 @@ export default function TripsPage() {
     return list;
   }, [trips, filter, from, to, paddockId, pattern, status, tripFn, workTaskLabelById]);
 
-  type TripSortKey = "start" | "name" | "function" | "paddock" | "pattern" | "person" | "duration" | "distance" | "status";
+  type TripSortKey = "start" | "function" | "paddock" | "pattern" | "person" | "duration" | "distance" | "status";
   const durationMs = (s?: string | null, e?: string | null) => {
     if (!s || !e) return null;
     const ms = new Date(e).getTime() - new Date(s).getTime();
@@ -259,7 +259,6 @@ export default function TripsPage() {
   const { sorted: rowsSorted, getSortDirection, toggleSort } = useSortableTable<typeof rows[number], TripSortKey>(rows, {
     accessors: {
       start: (t) => (t.start_time ? new Date(t.start_time) : null),
-      name: (t) => tripDisplayName(t),
       function: (t) => tripFunctionLabel(t.trip_function) ?? "",
       paddock: (t) => t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? "" : ""),
       pattern: (t) => t.tracking_pattern ?? "",
@@ -271,7 +270,7 @@ export default function TripsPage() {
     initial: { key: "start", direction: "desc" },
   });
 
-  const TRIPS_COLS = ["start","name","function","paddock","pattern","person","duration","distance","status"] as const;
+  const TRIPS_COLS = ["start","function","paddock","pattern","person","duration","distance","status"] as const;
   type TripsCol = (typeof TRIPS_COLS)[number];
   const { order: tripsOrder, moveColumn: tripsMove, reset: tripsReset } = useColumnOrder(
     "trips_table",
@@ -446,7 +445,7 @@ export default function TripsPage() {
             <TableRow>
               {(tripsOrder as TripsCol[]).map((id) => {
                 const labels: Record<TripsCol, string> = {
-                  start: "Start", name: "Name", function: "Function", paddock: "Block",
+                  start: "Start", function: "Function", paddock: "Block",
                   pattern: "Pattern", person: "Person", duration: "Duration", distance: "Distance", status: "Status",
                 };
                 const sk: any = id;
@@ -461,14 +460,14 @@ export default function TripsPage() {
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
             )}
             {error && (
-              <TableRow><TableCell colSpan={9} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
             )}
             {!isLoading && !error && rowsSorted.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                   No trips found for this vineyard.
                 </TableCell>
               </TableRow>
@@ -477,23 +476,8 @@ export default function TripsPage() {
               const padName = t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? null : null);
               const s = tripStatus(t);
               const fnLabel = tripFunctionLabel(t.trip_function);
-              const linkedTaskLabel = t.work_task_id
-                ? workTaskLabelById.get(t.work_task_id) ?? null
-                : null;
               const cellMap: Record<TripsCol, React.ReactNode> = {
                 start: <TableCell>{fmtDate(t.start_time)}</TableCell>,
-                name: (
-                  <TableCell className="font-medium">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span>{tripDisplayName(t)}</span>
-                      {t.work_task_id && (
-                        <Badge variant="outline" className="font-normal">
-                          {linkedTaskLabel ? `Task: ${linkedTaskLabel}` : "Task linked"}
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                ),
                 function: <TableCell>{fnLabel ? <Badge variant="outline">{fnLabel}</Badge> : "—"}</TableCell>,
                 paddock: <TableCell>{fmt(padName)}</TableCell>,
                 pattern: <TableCell>{t.tracking_pattern ? <Badge variant="secondary">{formatTripPatternLabel(t.tracking_pattern)}</Badge> : "—"}</TableCell>,
