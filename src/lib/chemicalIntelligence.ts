@@ -28,6 +28,11 @@ import { withholdingDisplay } from "@/lib/chemicalLabelRates";
 
 export type ActivityScheme = "FRAC" | "HRAC" | "IRAC" | "NA" | "UNKNOWN";
 
+import {
+  decodePersistedDefaultRates,
+  type PersistedDefaultRates,
+} from "@/lib/chemicalDefaultRatesContract";
+
 export interface ActivityGroup {
   scheme: ActivityScheme;
   /** Group code as published, e.g. "3", "11", "M05". Null for N/A. */
@@ -163,6 +168,12 @@ export interface ChemicalIntelligence {
   activityGroups: ActivityGroup[];
   verification: ChemicalVerification;
   labelRateBases: string[];
+  /**
+   * SQL 214 confirmed operator default rates. The ONLY authority for a
+   * structured chemical's operational rate — `commercial.preferredRatePerHa`
+   * stays a legacy compatibility projection.
+   */
+  defaultRates: PersistedDefaultRates | null;
   /**
    * SQL 210 — backend-owned resistance classification state. `null` means the
    * backend did not supply it (older row/deployment); it is never inferred.
@@ -611,6 +622,7 @@ export function toChemicalIntelligence(row: Record<string, any>): ChemicalIntell
       unresolvedFields: stringList(row.verification_unresolved_fields),
     },
     labelRateBases: stringList(row.label_rate_bases),
+    defaultRates: decodePersistedDefaultRates(row.default_rates),
     // SQL 210 — backend-owned. Absent stays null; never inferred from groups.
     resistanceClassificationState: normaliseResistanceClassificationState(
       row.resistance_classification_state ?? row.resistanceClassificationState,

@@ -36,7 +36,7 @@ export const DUPLICATE_KEEP_LABEL = "No, keep it as it is";
 export const DUPLICATE_CHECK_LABEL = "Yes, check for updates";
 
 export const NO_GRAPEVINE_REGISTRATION_MESSAGE =
-  "This product's label does not show a registered grapevine use. You can still save it for records, but VineTrack will not offer it as a ready-to-spray chemical.";
+  "This product does not have a registered grapevine use.";
 
 export const RATE_CONFIRMATION_REQUIRED_MESSAGE =
   "Confirm the rate you will use in your vineyard before saving. It can be a label rate, or your own amount inside the label range.";

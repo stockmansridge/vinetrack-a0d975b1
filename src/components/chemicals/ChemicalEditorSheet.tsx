@@ -76,7 +76,12 @@ import {
   hardDeleteUnusedSavedChemical, ChemicalInUseError,
   type SavedChemical, type SavedChemicalInput,
 } from "@/lib/savedChemicalsQuery";
-import { PRODUCT_CATEGORIES, matchCategory, parseRestrictions, composeRestrictions } from "@/lib/chemicalCategories";
+import { parseRestrictions, composeRestrictions } from "@/lib/chemicalCategories";
+import {
+  PRODUCT_CATEGORIES,
+  matchProductCategoryKey,
+  productCategoryLabel,
+} from "@/lib/chemicalProductCategory";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Plus, Pencil, Archive, RotateCcw, Check, ChevronsUpDown, ExternalLink, FileText, Globe, Trash2, Info } from "lucide-react";
 import { toChemicalIntelligence } from "@/lib/chemicalIntelligence";
@@ -160,7 +165,8 @@ function displayBaseUnit(unit?: string | null): string {
 }
 
 const EMPTY: SavedChemicalInput = {
-  name: "", active_ingredient: "", chemical_group: "", use: "",
+  name: "", product_category: "",
+  active_ingredient: "", chemical_group: "", use: "",
   manufacturer: "", crop: "", problem: "", rate_per_ha: null, unit: "",
   restrictions: "", notes: "", label_url: "", product_url: "",
 };
@@ -279,9 +285,16 @@ export function ChemicalEditor({
   useMemo(() => {
     if (open) {
       if (initial) {
-        const useVal = matchCategory(initial.use) ?? (initial.use ?? "");
+        // Category authority is the raw shared key; a legacy row falls back to
+        // its `use` wording only until the operator deliberately saves.
+        const categoryKey =
+          matchProductCategoryKey(initial.product_category) ??
+          matchProductCategoryKey(initial.use) ??
+          "";
+        const useVal = productCategoryLabel(categoryKey) ?? (initial.use ?? "");
         setForm({
           name: initial.name ?? "",
+          product_category: categoryKey,
           active_ingredient: initial.active_ingredient ?? "",
           chemical_group: initial.chemical_group ?? "",
           use: useVal,
@@ -382,8 +395,13 @@ export function ChemicalEditor({
       // Vineyard scope: only grapevine registered uses are ever persisted.
       // Other-crop directions are dropped whole, never merged or rewritten.
       const encoded = encodeChemicalIntelligenceForWrite(grapevineOnlyDraft(reconciled));
+      // Category: the RAW shared key is the stored authority; `use` carries the
+      // display label as a compatibility projection only.
+      const categoryKey = matchProductCategoryKey(form.product_category);
       const payload: SavedChemicalInput = {
         ...form,
+        product_category: categoryKey,
+        use: categoryKey ? productCategoryLabel(categoryKey) : (form.use ?? ""),
         intelligence: encoded,
         master_chemical_id: masterLink?.id ?? null,
         master_source_revision: masterLink?.revision ?? null,
@@ -520,7 +538,13 @@ export function ChemicalEditor({
       setForm((p) => ({
         ...p,
         name: r.fields.name ?? s.name ?? p.name ?? "",
-        use: r.fields.category ?? p.use ?? "",
+        product_category:
+          matchProductCategoryKey(r.fields.category) ?? p.product_category ?? "",
+        use:
+          productCategoryLabel(matchProductCategoryKey(r.fields.category)) ??
+          r.fields.category ??
+          p.use ??
+          "",
         manufacturer: r.fields.registrant ?? p.manufacturer ?? "",
         active_ingredient: r.fields.activeIngredientText ?? p.active_ingredient ?? "",
         chemical_group: r.fields.chemicalGroupText ?? p.chemical_group ?? "",
@@ -590,7 +614,12 @@ export function ChemicalEditor({
       ...p,
       name: s.name ?? p.name ?? "",
       active_ingredient: s.active_ingredient ?? p.active_ingredient ?? "",
-      use: s.category ?? p.use ?? "",
+      product_category: matchProductCategoryKey(s.category) ?? p.product_category ?? "",
+      use:
+        productCategoryLabel(matchProductCategoryKey(s.category)) ??
+        s.category ??
+        p.use ??
+        "",
       chemical_group: s.chemical_group ?? p.chemical_group ?? "",
       manufacturer: s.manufacturer ?? p.manufacturer ?? "",
       problem: s.target ?? p.problem ?? "",
@@ -658,6 +687,17 @@ export function ChemicalEditor({
    */
   const staleDefaultRate =
     structuredUses && !defaultRateStillSupported(defaultRates, intel.registeredUses);
+
+  // Release contract §3/§4 — a NEW looked-up chemical may only be saved with a
+  // registered grapevine use AND an explicitly confirmed operational rate.
+  // Existing (legacy) records are never stranded by this gate.
+  const grapevineRegistered = hasGrapevineRegistration(intel.registeredUses);
+  const noGrapevineRegistration = !initial && structuredUses && !grapevineRegistered;
+  const firstAddBlocked =
+    !initial &&
+    structuredUses &&
+    !(grapevineRegistered && hasConfirmedRate(defaultRates) && !staleDefaultRate);
+  const saveBlocked = staleDefaultRate || firstAddBlocked;
 
 
   /** Operator click: copy the backend option and stamp provenance. */
@@ -949,10 +989,23 @@ export function ChemicalEditor({
                     />
                   </Field>
                   <Field label="Category">
-                    <Select value={form.use ?? ""} onValueChange={(v) => set("use", v)}>
+                    {/* The raw shared key is what is persisted; `use` is only
+                        the display projection written alongside it. */}
+                    <Select
+                      value={form.product_category ?? ""}
+                      onValueChange={(v) =>
+                        setForm((p) => ({
+                          ...p,
+                          product_category: v,
+                          use: productCategoryLabel(v) ?? p.use ?? "",
+                        }))
+                      }
+                    >
                       <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                       <SelectContent>
-                        {PRODUCT_CATEGORIES.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+                        {PRODUCT_CATEGORIES.map((c) => (
+                          <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </Field>
@@ -1101,10 +1154,33 @@ export function ChemicalEditor({
                     normal add flow and are never shown here. */}
                 {structuredUses ? (
                   <>
-                    {!hasGrapevineRegistration(intel.registeredUses) && (
-                      <p className="mb-2 rounded-md border border-warning/50 bg-warning/10 p-2 text-[11px]">
-                        {NO_GRAPEVINE_REGISTRATION_MESSAGE}
-                      </p>
+                    {!grapevineRegistered && (
+                      <div
+                        className="mb-2 space-y-2 rounded-md border border-warning/50 bg-warning/10 p-2 text-[11px]"
+                        role="alert"
+                      >
+                        <p>{NO_GRAPEVINE_REGISTRATION_MESSAGE}</p>
+                        {noGrapevineRegistration && (
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleSelectionChange("none")}
+                            >
+                              Change product
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => onOpenChange(false)}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                     )}
                     <GrapevineUsesCard uses={intel.registeredUses} />
                   </>
@@ -1313,7 +1389,7 @@ export function ChemicalEditor({
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           {editorUnlocked && (
             <Button
-              disabled={saveMut.isPending || staleDefaultRate}
+              disabled={saveMut.isPending || saveBlocked}
               onClick={() => saveMut.mutate()}
             >
               {saveMut.isPending ? "Saving…" : "Save chemical"}
