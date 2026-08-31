@@ -65,7 +65,7 @@ describe("sql/194 canonical shape", () => {
   it("writes snake_case keys and stamps versions", () => {
     const out = encodeChemicalIntelligenceForWrite(verifiedDraft());
     expect(out.intelligence_schema_version).toBe(1);
-    expect(out.activity_group_table_version).toBe(1);
+    expect(out.activity_group_table_version).toBe(2);
     expect(out.registration_scheme).toBe("apvma");
     expect(out.registered_product_name).toBe("Amistar 250 SC");
     const keys = Object.keys((out.active_ingredients as any[])[0]);

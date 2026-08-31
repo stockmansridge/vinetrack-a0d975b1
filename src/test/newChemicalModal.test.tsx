@@ -119,6 +119,7 @@ describe("grapevine projection", () => {
 describe("GrapevineUsesCard", () => {
   it("shows grapevine uses and collapses other crops in a full-label review", () => {
     render(<GrapevineUsesCard uses={[grapeUse, peachUse]} showOtherCrops />);
+    fireEvent.click(screen.getByText("Show details"));
     expect(screen.getByText("European Red Mite")).toBeTruthy();
     expect(screen.queryByText("Peach")).toBeNull();
     fireEvent.click(screen.getByText(/Other crops on this label \(1\)/));
@@ -143,7 +144,9 @@ describe("label links", () => {
     });
     expect(links.manufacturerLabelUrl).toBeUndefined();
     expect(links.manufacturerResolved).toBe(false);
-    expect(links.regulatorLabelUrl).toBe("https://apvma.gov.au/33182");
+    // A register citation is registration evidence, never the product label.
+    expect(links.regulatorLabelUrl).toBeUndefined();
+    expect(links.registrationSourceUrl).toBe("https://apvma.gov.au/33182");
     expect(MANUFACTURER_LABEL_UNRESOLVED).toBe("Manufacturer label not resolved");
   });
 
@@ -156,7 +159,8 @@ describe("label links", () => {
       productUrl: "https://vicchem.com/product",
     });
     expect(links.manufacturerLabelUrl).toBe("https://vicchem.com/label.pdf");
-    expect(links.regulatorLabelUrl).toBe("https://apvma.gov.au/33182");
+    expect(links.regulatorLabelUrl).toBeUndefined();
+    expect(links.registrationSourceUrl).toBe("https://apvma.gov.au/33182");
     expect(links.productUrl).toBe("https://vicchem.com/product");
   });
 });

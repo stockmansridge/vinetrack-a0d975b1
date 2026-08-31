@@ -110,6 +110,7 @@ describe("duplicate product prompt", () => {
 describe("grapevine-only presentation", () => {
   it("does not show other crops in the normal add flow", () => {
     render(<GrapevineUsesCard uses={[grapeUse, citrusUse]} />);
+    fireEvent.click(screen.getByText("Show details"));
     expect(screen.getByText("Powdery mildew")).toBeTruthy();
     expect(screen.queryByText(/Other crops on this label/)).toBeNull();
   });
