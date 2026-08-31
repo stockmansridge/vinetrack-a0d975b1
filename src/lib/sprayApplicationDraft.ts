@@ -69,10 +69,7 @@ export function applyOperationType(app: SprayApplication, op: OperationType | nu
 
 /* ----------------------------------------------------------- product lines */
 
-import {
-  soleConfirmedDefault,
-  productRateBasisFor,
-} from "@/lib/chemicalDefaultRateHandoff";
+import { confirmedSprayPrefill } from "@/lib/chemicalDefaultRateHandoff";
 
 export function productLineFromChemical(args: {
   savedChemicalId: string | null;
@@ -90,20 +87,16 @@ export function productLineFromChemical(args: {
         : g.scheme.toLowerCase()) as WriteActivityGroup["scheme"],
       code: g.code as string,
     }));
-  // Rate prefill (release contract): ONLY a confirmed persisted default may
-  // pre-fill, and only when a single canonical basis is confirmed. No unit
-  // conversion, no label-rate fallback, no first-rate guessing. When nothing
-  // qualifies the operator still chooses deliberately.
-  const sole = soleConfirmedDefault(intel?.defaultRates ?? null);
-  const prefillRate = sole ? sole.value ?? sole.min_value ?? null : null;
-  const prefillBasis =
-    sole && prefillRate != null ? productRateBasisFor(sole.basis) : null;
+  // Rate prefill (release contract §1/§2): ONLY a single confirmed basis with an
+  // explicit scalar amount may prefill, paired with the CONFIRMED label-rate
+  // unit. Ranges, label rates, rate_per_ha and inventory units never prefill.
+  const prefill = confirmedSprayPrefill(intel?.defaultRates ?? null);
   return {
     savedChemicalId: args.savedChemicalId,
     productName: args.productName,
-    rate: prefillBasis ? prefillRate : null,
-    unit: args.unit,
-    rateBasis: prefillBasis,
+    rate: prefill ? prefill.rate : null,
+    unit: prefill ? prefill.unit : args.unit,
+    rateBasis: prefill ? prefill.rateBasis : null,
     labelMinRate: null,
     labelMaxRate: null,
     labelRateUnit: null,
