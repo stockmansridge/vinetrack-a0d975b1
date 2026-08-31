@@ -248,7 +248,11 @@ export function ChemicalEditor({
     newDefaultRateLifecycle(),
   );
   const { defaultRates, canonicalOptions: canonicalRateOptions } = rateLife;
+  // Enrichment-only retry handle published by the lookup component. Reusing the
+  // already-selected registration — never a new search.
+  const retryLabelRef = useRef<(() => void) | null>(null);
   const showIntelEditor = !initial || upgraded || hasStructuredIntelligence(intel);
+
 
 
 
