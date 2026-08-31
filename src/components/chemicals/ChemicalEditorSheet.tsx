@@ -1190,6 +1190,16 @@ export function ChemicalEditor({
             <div className="space-y-4">
               {structuredUses && (
                 <Section title="Default rate">
+                  {showRateRecovery && (
+                    <MissingRateOptionsPanel
+                      labelUrl={labelLinks.regulatorUrl ?? form.label_url ?? null}
+                      canRetry={!!retryLabelRef.current}
+                      onRetry={() => retryLabelRef.current?.()}
+                      onManual={handleManualFromRecovery}
+                      onChangeProduct={() => handleSelectionChange("none")}
+                    />
+                  )}
+
                   {rateLife.productChangedNotice && (
                     <p className="mb-2 rounded-md border border-warning/50 bg-warning/10 p-2 text-[11px]">
                       {PRODUCT_CHANGED_MESSAGE}
