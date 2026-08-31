@@ -216,11 +216,31 @@ export default function PinsPage() {
   const paddockFilterName = paddockFilter
     ? paddockNameById.get(paddockFilter) ?? null
     : null;
-  const clearPaddockFilter = () => {
+  const setPaddockFilter = (id: string | null) => {
     const next = new URLSearchParams(searchParams);
-    next.delete("paddock");
+    if (id) next.set("paddock", id);
+    else next.delete("paddock");
     setSearchParams(next, { replace: true });
   };
+  const clearPaddockFilter = () => setPaddockFilter(null);
+
+  const hasActiveFilters =
+    !!search.trim() ||
+    !!paddockFilter ||
+    !!rowFrom.trim() ||
+    !!rowTo.trim() ||
+    categoryFilter !== "all" ||
+    locationFilter !== "all";
+
+  const clearAllFilters = () => {
+    setSearch("");
+    setRowFrom("");
+    setRowTo("");
+    setCategoryFilter("all");
+    setLocationFilter("all");
+    setPaddockFilter(null);
+  };
+
 
   const categoryCounts = useMemo(() => {
     const m = new Map<PinCategoryId, number>();
