@@ -4,7 +4,9 @@
 // match, verification, Chemical Intelligence) can be reused inside nested
 // contexts such as the Spray Program Step wizard. There is deliberately no
 // simplified variant: this is the one Add New Chemical experience.
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
+import { showMissingRateOptionsRecovery } from "@/lib/chemicalRateOptionsRecovery";
+import { MissingRateOptionsPanel } from "@/components/chemicals/MissingRateOptionsPanel";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
 import { Card } from "@/components/ui/card";
@@ -248,7 +250,11 @@ export function ChemicalEditor({
     newDefaultRateLifecycle(),
   );
   const { defaultRates, canonicalOptions: canonicalRateOptions } = rateLife;
+  // Enrichment-only retry handle published by the lookup component. Reusing the
+  // already-selected registration — never a new search.
+  const retryLabelRef = useRef<(() => void) | null>(null);
   const showIntelEditor = !initial || upgraded || hasStructuredIntelligence(intel);
+
 
 
 
@@ -701,6 +707,28 @@ export function ChemicalEditor({
   });
   const saveBlocked = staleDefaultRate || firstAddBlocked;
 
+  /**
+   * Rate-gate safeguard: a new registered lookup with a grapevine registration
+   * but NO usable backend options would otherwise leave Save disabled with no
+   * way forward. The recovery block never mints an option/rate/direction id and
+   * never relaxes the structured save gate.
+   */
+  const showRateRecovery = showMissingRateOptionsRecovery({
+    isExistingRecord: !!initial,
+    selectionMode,
+    grapevineRegistered,
+    options: canonicalRateOptions,
+  });
+
+  /** Manual entry from the recovery block — an explicitly unverified record. */
+  const handleManualFromRecovery = () => {
+    setIntel((p) => ({ ...p, claimedStatus: "unverified" }));
+    setUpgraded(true);
+    handleSelectionChange("manual");
+  };
+
+
+
 
   /** Operator click: copy the backend option and stamp provenance. */
   const handleSelectDefaultRate = (
@@ -795,6 +823,8 @@ export function ChemicalEditor({
           }))}
         onApply={applySuggestion}
         onSelectionChange={handleSelectionChange}
+        retryLabelRef={retryLabelRef}
+
       />
       {/* Jurisdiction suitability is computed, never stored. Chemistry is
           kept; only label authority changes. */}
@@ -1160,6 +1190,21 @@ export function ChemicalEditor({
             <div className="space-y-4">
               {structuredUses && (
                 <Section title="Default rate">
+                  {showRateRecovery && (
+                    <MissingRateOptionsPanel
+                      labelUrl={
+                        labelLinks.regulatorLabelUrl ??
+                        labelLinks.manufacturerLabelUrl ??
+                        form.label_url ??
+                        null
+                      }
+                      canRetry={!!retryLabelRef.current}
+                      onRetry={() => retryLabelRef.current?.()}
+                      onManual={handleManualFromRecovery}
+                      onChangeProduct={() => handleSelectionChange("none")}
+                    />
+                  )}
+
                   {rateLife.productChangedNotice && (
                     <p className="mb-2 rounded-md border border-warning/50 bg-warning/10 p-2 text-[11px]">
                       {PRODUCT_CHANGED_MESSAGE}

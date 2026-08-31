@@ -105,7 +105,13 @@ interface Props {
    * "none" is emitted again by "Change product".
    */
   onSelectionChange?: (mode: ChemicalSelectionMode) => void;
+  /**
+   * Rate-gate safeguard: the host editor may re-run ONLY the label enrichment
+   * for the already-selected registration. Never a new search.
+   */
+  retryLabelRef?: { current: (() => void) | null };
 }
+
 
 /**
  * Classify a resolver failure. The shared VineTrack research service can be
@@ -177,6 +183,8 @@ export function ChemicalAILookup({
   country,
   onApply,
   onSelectionChange,
+  retryLabelRef,
+
 }: Props) {
   // Jurisdiction is the selected vineyard's country. There is no locale,
   // browser or IP fallback — when it is missing, lookup is blocked.
@@ -372,6 +380,10 @@ export function ChemicalAILookup({
     if (!pendingCandidate) return;
     void selectCandidate(pendingCandidate, correlationId ?? undefined);
   }
+
+  // Expose the enrichment-only retry to the host editor's rate-gate recovery.
+  if (retryLabelRef) retryLabelRef.current = pendingCandidate ? retryLabelDetails : null;
+
 
 
   function applyMaster(row: MasterChemicalRow) {
