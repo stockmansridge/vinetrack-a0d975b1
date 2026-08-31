@@ -1192,7 +1192,12 @@ export function ChemicalEditor({
                 <Section title="Default rate">
                   {showRateRecovery && (
                     <MissingRateOptionsPanel
-                      labelUrl={labelLinks.regulatorUrl ?? form.label_url ?? null}
+                      labelUrl={
+                        labelLinks.regulatorLabelUrl ??
+                        labelLinks.manufacturerLabelUrl ??
+                        form.label_url ??
+                        null
+                      }
                       canRetry={!!retryLabelRef.current}
                       onRetry={() => retryLabelRef.current?.()}
                       onManual={handleManualFromRecovery}
