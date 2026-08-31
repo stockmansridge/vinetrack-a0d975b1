@@ -153,3 +153,30 @@ describe("label links", () => {
     expect(links.registrationSourceUrl).toBe("https://portal.apvma.gov.au/pubcris?number=33182");
   });
 });
+
+describe("static source proofs", () => {
+  const read = (p: string) => require("node:fs").readFileSync(p, "utf8");
+
+  it("places the Default rate section before Grapevine uses in the editor", () => {
+    const src = read("src/components/chemicals/ChemicalEditorSheet.tsx");
+    expect(src.indexOf('<Section title="Default rate">')).toBeLessThan(
+      src.indexOf('<Section title="Grapevine uses & rates">'),
+    );
+  });
+
+  it("shows exactly one enrichment loading message and no manual entry while enriching", () => {
+    const src = read("src/components/spray/ChemicalAILookup.tsx");
+    expect(src).toContain("Reading the official product label");
+    expect(src.match(/Loading product label details/g)).toBeNull();
+    expect(src).toContain('{phase !== "enriching" && !selected && search');
+  });
+
+  it("drops the legacy Group column and sources Category from product_category", () => {
+    const src = read("src/pages/setup/SavedChemicalsPage.tsx");
+    expect(src).not.toContain('case "group": return');
+    expect(src).toContain("Resistance group");
+    expect(src).toContain("Official data");
+    expect(src).toContain('onDropColumn={moveChemColumn}>Category<');
+    expect(read("src/lib/chemicalProductCategory.ts")).toContain("product_category");
+  });
+});
