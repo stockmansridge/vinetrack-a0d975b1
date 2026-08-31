@@ -105,7 +105,13 @@ interface Props {
    * "none" is emitted again by "Change product".
    */
   onSelectionChange?: (mode: ChemicalSelectionMode) => void;
+  /**
+   * Rate-gate safeguard: the host editor may re-run ONLY the label enrichment
+   * for the already-selected registration. Never a new search.
+   */
+  retryLabelRef?: { current: (() => void) | null };
 }
+
 
 /**
  * Classify a resolver failure. The shared VineTrack research service can be
