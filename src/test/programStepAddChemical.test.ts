@@ -23,14 +23,24 @@ function unresolvedRow() {
 }
 
 describe("Program Step add chemical binding", () => {
-  it("binds by persisted id and keeps rate / unit / basis", () => {
+  it("binds by persisted id and adopts the new product's own safe prefill", () => {
     const intel = toChemicalIntelligence(savedRow);
     const bound = bindChemicalToLine(unresolvedRow(), intel, intel.id);
     expect(bound.savedChemicalId).toBe("chem-uuid-1");
+    // The row was previously unbound, so it is a different product: the old
+    // amount / basis may not survive, and this product has no confirmed default.
+    expect(bound.rate).toBeNull();
+    expect(bound.rateBasis).toBeNull();
+    expect(bound.productName).toBe("Spray Seal");
+  });
+
+  it("preserves an operator-edited rate when the same product is rebound", () => {
+    const intel = toChemicalIntelligence(savedRow);
+    const line = { ...unresolvedRow(), savedChemicalId: "chem-uuid-1" };
+    const bound = bindChemicalToLine(line, intel, intel.id);
     expect(bound.rate).toBe(150);
     expect(bound.unit).toBe("mL");
     expect(bound.rateBasis).toBe("whole_block_area");
-    expect(bound.productName).toBe("Spray Seal");
   });
 
   it("never binds on a name match alone", () => {
