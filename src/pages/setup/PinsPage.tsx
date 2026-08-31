@@ -521,12 +521,6 @@ export default function PinsPage() {
               Export CSV
             </Button>
 
-            <Input
-              placeholder="Filter…"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="w-64"
-            />
             <ColumnSettingsMenu onReset={pinReset} />
           </div>
         </div>
