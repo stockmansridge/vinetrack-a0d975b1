@@ -795,6 +795,8 @@ export function ChemicalEditor({
           }))}
         onApply={applySuggestion}
         onSelectionChange={handleSelectionChange}
+        retryLabelRef={retryLabelRef}
+
       />
       {/* Jurisdiction suitability is computed, never stored. Chemistry is
           kept; only label authority changes. */}
