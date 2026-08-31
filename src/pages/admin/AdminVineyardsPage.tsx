@@ -39,10 +39,11 @@ function ActivityMetric({
   count: number;
 }) {
   if (count === 0) return null;
+  const suffix = `${label}${count === 1 ? "" : "s"}`;
   return (
     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
       <span className="font-medium text-foreground">{count}</span>
-      {label}
+      <span>{suffix}</span>
     </span>
   );
 }
