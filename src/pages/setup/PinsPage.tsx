@@ -413,7 +413,95 @@ export default function PinsPage() {
       </div>
       )}
 
-      <div className="flex items-center gap-2">
+      <Card className="space-y-3 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Filters
+          </div>
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={clearAllFilters}>
+              <X className="mr-1 h-3 w-3" /> Clear filters
+            </Button>
+          )}
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Search title, notes, {rf.blockLabel.toLowerCase()}</Label>
+            <Input
+              placeholder={`e.g. broken post`}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-9"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">{rf.blockLabel}</Label>
+            <Select
+              value={paddockFilter ?? "all"}
+              onValueChange={(v) => setPaddockFilter(v === "all" ? null : v)}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder={`All ${rf.blockLabel.toLowerCase()}s`} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All {rf.blockLabel.toLowerCase()}s</SelectItem>
+                {paddocks.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name ?? p.id.slice(0, 8)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Row range</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                inputMode="decimal"
+                placeholder="From"
+                value={rowFrom}
+                onChange={(e) => setRowFrom(e.target.value)}
+                className="h-9"
+                aria-label="Row from"
+              />
+              <span className="text-xs text-muted-foreground">to</span>
+              <Input
+                inputMode="decimal"
+                placeholder="To"
+                value={rowTo}
+                onChange={(e) => setRowTo(e.target.value)}
+                className="h-9"
+                aria-label="Row to"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Category</Label>
+            <Select
+              value={categoryFilter}
+              onValueChange={(v) => setCategoryFilter(v as PinCategoryId | "all")}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="All categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {PIN_CATEGORY_ORDER.map((id) => {
+                  const cs = pinCategoryStyleById(id);
+                  const label = catColours.labelByCategory[id] ?? cs.label;
+                  return (
+                    <SelectItem key={id} value={id}>
+                      {label} ({categoryCounts.get(id) ?? 0})
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+      <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-md border bg-background p-0.5">
           {([
             { key: "active", label: "Active", count: statusCounts.active },
