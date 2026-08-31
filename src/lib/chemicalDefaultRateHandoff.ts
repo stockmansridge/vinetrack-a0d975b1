@@ -84,3 +84,40 @@ export function defaultRateSortValue(row: { default_rates?: unknown }): number |
   if (!sel) return null;
   return sel.value ?? sel.min_value ?? null;
 }
+
+/* ------------------------------------------------- spray line prefill (§1/§2) */
+
+const SPRAY_UNITS: Record<string, "L" | "mL" | "kg" | "g"> = {
+  l: "L",
+  ml: "mL",
+  kg: "kg",
+  g: "g",
+};
+
+/**
+ * The ONLY safe spray-line prefill: exactly one confirmed basis carrying an
+ * explicit scalar amount, with the label-rate unit from the confirmed default
+ * itself (never the inventory/commercial unit). A stored range never prefills —
+ * neither its minimum, maximum nor a midpoint — and no unit is converted.
+ */
+export function confirmedSprayPrefill(
+  defaults: PersistedDefaultRates | null,
+): {
+  rate: number;
+  unit: "L" | "mL" | "kg" | "g";
+  rateBasis: "whole_block_area" | "per_100_litres";
+} | null {
+  const sole = soleConfirmedDefault(defaults);
+  if (
+    !sole ||
+    sole.value == null ||
+    sole.min_value != null ||
+    sole.max_value != null ||
+    !Number.isFinite(sole.value)
+  ) {
+    return null;
+  }
+  const unit = SPRAY_UNITS[(sole.unit ?? "").trim().toLowerCase()];
+  if (!unit) return null;
+  return { rate: sole.value, unit, rateBasis: productRateBasisFor(sole.basis) };
+}
