@@ -10,8 +10,8 @@
 // Reference name must match the cross-platform DataSource name so portal rows
 // are byte-compatible with iOS/Android:
 export const ACTIVITY_GROUP_REFERENCE_NAME =
-  "VineTrack activity group reference v1 (FRAC/HRAC/IRAC)";
-export const ACTIVITY_GROUP_TABLE_VERSION = 1;
+  "VineTrack activity group reference v2 (FRAC/HRAC/IRAC)";
+export const ACTIVITY_GROUP_TABLE_VERSION = 2;
 
 export interface ReferenceGroup {
   scheme: "frac" | "hrac" | "irac";
@@ -61,6 +61,7 @@ const TABLE: Record<string, ReferenceGroup> = {
   "glufosinate-ammonium": { scheme: "hrac", code: "10" },
   paraquat: { scheme: "hrac", code: "22", common_name: "PSI electron diverter" },
   oxyfluorfen: { scheme: "hrac", code: "14", common_name: "PPO inhibitor" },
+  flumioxazin: { scheme: "hrac", code: "14", common_name: "PPO inhibitor" },
   simazine: { scheme: "hrac", code: "5", common_name: "PSII inhibitor" },
   "2,4-d": { scheme: "hrac", code: "4", common_name: "Synthetic auxin" },
   haloxyfop: { scheme: "hrac", code: "1", common_name: "ACCase inhibitor" },
@@ -92,4 +93,48 @@ export function lookupActivityGroup(name: string | null | undefined): ReferenceG
     if (k.startsWith(`${candidate} `) || k.startsWith(`${candidate}-`)) return TABLE[candidate];
   }
   return null;
+}
+
+
+/* ------------------------------------------------------------ equivalence */
+// Table version 2 — shared with the Rork clients.
+//
+// Historic HRAC letter codes and the older Australian letter codes name the
+// SAME mode of action as the current numeric code. A stored legacy value is
+// therefore EQUIVALENT, not a conflict. The original value is retained as
+// evidence; only the DISPLAY uses the canonical code.
+const EQUIVALENCE: Record<string, Record<string, string>> = {
+  hrac: {
+    // PPO inhibitors: global legacy "E", Australian legacy "G", current "14".
+    E: "14",
+    G: "14",
+    "14": "14",
+  },
+};
+
+const normCode = (code: string | null | undefined): string =>
+  String(code ?? "").trim().toUpperCase().replace(/^0+(?=\d)/, "");
+
+/**
+ * Canonical (current) code for a scheme + code pair. Unknown codes are
+ * returned unchanged — nothing is invented.
+ */
+export function canonicalActivityGroupCode(
+  scheme: string | null | undefined,
+  code: string | null | undefined,
+): string {
+  const s = String(scheme ?? "").trim().toLowerCase();
+  const c = normCode(code);
+  return EQUIVALENCE[s]?.[c] ?? c;
+}
+
+/** True when two codes in the same scheme name the same mode of action. */
+export function activityGroupCodesEquivalent(
+  scheme: string | null | undefined,
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean {
+  const ca = canonicalActivityGroupCode(scheme, a);
+  const cb = canonicalActivityGroupCode(scheme, b);
+  return !!ca && ca === cb;
 }
