@@ -182,6 +182,7 @@ const account: NavItem[] = [
 const systemAdmin: NavItem[] = [
   { title: "Admin Dashboard", url: "/admin/dashboard", icon: AdminDashIcon },
   { title: "User Activity", url: "/admin/user-activity", icon: Activity },
+  { title: "Vineyards", url: "/admin/vineyards", icon: Grape },
   { title: "Integrations", url: "/admin/integrations", icon: Plug },
   { title: "Master Catalogue", url: "/admin/master-catalogue", icon: FlaskConical },
   { title: "Block Troubleshooter", url: "/admin/block-troubleshooter", icon: ShieldCheck },
