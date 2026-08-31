@@ -705,6 +705,28 @@ export function ChemicalEditor({
   });
   const saveBlocked = staleDefaultRate || firstAddBlocked;
 
+  /**
+   * Rate-gate safeguard: a new registered lookup with a grapevine registration
+   * but NO usable backend options would otherwise leave Save disabled with no
+   * way forward. The recovery block never mints an option/rate/direction id and
+   * never relaxes the structured save gate.
+   */
+  const showRateRecovery = showMissingRateOptionsRecovery({
+    isExistingRecord: !!initial,
+    selectionMode,
+    grapevineRegistered,
+    options: canonicalRateOptions,
+  });
+
+  /** Manual entry from the recovery block — an explicitly unverified record. */
+  const handleManualFromRecovery = () => {
+    setIntel((p) => ({ ...p, claimedStatus: "unverified" }));
+    setUpgraded(true);
+    handleSelectionChange("manual");
+  };
+
+
+
 
   /** Operator click: copy the backend option and stamp provenance. */
   const handleSelectDefaultRate = (
