@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import {
   VERIFICATION_LABEL,
   VERIFICATION_TONE,
+  VERIFICATION_TOOLTIP,
   groupDisplay,
   type ChemicalIntelligence,
   type VerificationStatus,
@@ -27,13 +28,7 @@ export function VerificationBadge({
   return (
     <Badge
       className={cn(TONE_CLASS[VERIFICATION_TONE[status]], className)}
-      title={
-        status === "conflict"
-          ? "Sources disagree about this product's registration details."
-          : status === "needs_match"
-            ? "This product has not been matched to a registered label."
-            : undefined
-      }
+      title={VERIFICATION_TOOLTIP[status]}
     >
       {VERIFICATION_LABEL[status]}
     </Badge>
