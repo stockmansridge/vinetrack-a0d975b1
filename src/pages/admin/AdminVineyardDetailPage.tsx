@@ -6,6 +6,7 @@ import "leaflet/dist/leaflet.css";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAdminVineyards, useAdminVineyardPaddocks, type AdminPaddock } from "@/lib/adminApi";
+import { computeAdminVineyardStats, formatHa } from "@/lib/adminVineyardStats";
 import { AdminGate, AdminPageHeader, AdminError, AdminEmpty, ArchivedBadge, formatDate } from "./_shared";
 import MapSourceBadge from "@/components/MapSourceBadge";
 
