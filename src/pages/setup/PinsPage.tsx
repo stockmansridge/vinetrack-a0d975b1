@@ -572,6 +572,8 @@ export default function PinsPage() {
           );
         })}
       </div>
+      </Card>
+
 
       <TabsContent value="table" className="mt-0 space-y-4">
         <div className="flex items-center justify-between gap-2">
