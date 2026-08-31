@@ -696,10 +696,13 @@ export function ChemicalEditor({
   const lookupSelected = selectionMode === "registered" || selectionMode === "master";
   const grapevineRegistered = hasGrapevineRegistration(intel.registeredUses);
   const noGrapevineRegistration = !initial && lookupSelected && !grapevineRegistered;
-  const firstAddBlocked =
-    !initial &&
-    lookupSelected &&
-    !(grapevineRegistered && hasConfirmedRate(defaultRates) && !staleDefaultRate);
+  const firstAddBlocked = lookupSaveBlocked({
+    isExistingRecord: !!initial,
+    selectionMode,
+    uses: intel.registeredUses,
+    defaults: defaultRates,
+    staleDefaultRate,
+  });
   const saveBlocked = staleDefaultRate || firstAddBlocked;
 
 
