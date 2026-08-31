@@ -117,6 +117,8 @@ export interface AdminPaddock {
   vineyard_id: string;
   name: string;
   polygon_points: Array<{ latitude: number; longitude: number }> | null;
+  /** Present when the shared RPC exposes variety allocations; best-effort. */
+  variety_allocations?: unknown;
   rows: unknown[] | null;
   row_count: number | null;
   row_direction: string | null;
