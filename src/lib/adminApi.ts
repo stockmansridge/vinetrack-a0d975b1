@@ -250,9 +250,17 @@ export function useAdminWorkTasks(limit = 500) {
 export function useAdminTrips(limit = 500) {
   return useQuery({
     queryKey: QK.trips(limit),
-    queryFn: () =>
-      rpc<AdminTrip[]>("admin_list_trips", { p_limit: limit }).then((d) => d ?? []),
-    retry: false,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await (iosSupabase as any)
+        .from("trips")
+        .select("id, vineyard_id, trip_title, trip_function, start_time, end_time, created_at")
+        .is("deleted_at", null")
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return (data ?? []) as AdminTrip[];
+    },
   });
 }
 
