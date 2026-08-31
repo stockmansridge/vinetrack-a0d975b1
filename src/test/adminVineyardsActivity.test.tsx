@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import AdminVineyardsPage from "@/pages/admin/AdminVineyardsPage";
 import * as adminApi from "@/lib/adminApi";
-import * as systemAdmin from "@/lib/systemAdmin";
 import type { AdminVineyard, AdminPin, AdminSprayRecord, AdminWorkTask, AdminTrip } from "@/lib/adminApi";
 
 vi.mock("@/lib/adminApi", async (importOriginal) => {
