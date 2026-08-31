@@ -111,11 +111,6 @@ export default function AdminVineyardsPage() {
   const anyLoading = isLoading || pinsQ.isLoading || sprayQ.isLoading || workTasksQ.isLoading || tripsQ.isLoading;
   const anyError = error ?? pinsQ.error ?? sprayQ.error ?? workTasksQ.error ?? tripsQ.error;
 
-  const totalActivity = (v: AdminVineyard) => {
-    const c = countsByVineyard.get(v.id);
-    return c ? c.pins + c.sprayRecords + c.workTasks + c.trips : 0;
-  };
-
   return (
     <AdminGate>
       <AdminPageHeader title="Vineyards" subtitle={`${filtered.length} of ${data.length}`} />
