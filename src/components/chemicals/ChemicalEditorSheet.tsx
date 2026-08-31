@@ -1147,6 +1147,40 @@ export function ChemicalEditor({
 
             {/* --------------------------------------- operational column */}
             <div className="space-y-4">
+              {structuredUses && (
+                <Section title="Default rate">
+                  {rateLife.productChangedNotice && (
+                    <p className="mb-2 rounded-md border border-warning/50 bg-warning/10 p-2 text-[11px]">
+                      {PRODUCT_CHANGED_MESSAGE}
+                    </p>
+                  )}
+                  {staleDefaultRate && (
+                    <p
+                      className="mb-2 rounded-md border border-destructive/50 bg-destructive/10 p-2 text-[11px]"
+                      role="alert"
+                    >
+                      {DEFAULT_RATE_NO_LONGER_ON_LABEL_MESSAGE}
+                    </p>
+                  )}
+                  {hasGrapevineRegistration(intel.registeredUses) &&
+                    !hasConfirmedRate(defaultRates) && (
+                      <p className="mb-2 rounded-md border border-border/60 bg-muted/40 p-2 text-[11px]">
+                        {RATE_CONFIRMATION_REQUIRED_MESSAGE}
+                      </p>
+                    )}
+                  {/* Operator-owned shared default_rates contract. The legacy
+                      numeric rate editor lives under Advanced (mobile
+                      compatibility) and is never written from here. */}
+                  <DefaultRatesCard
+                    options={canonicalRateOptions}
+                    slots={defaultRateSlots}
+                    onSelect={handleSelectDefaultRate}
+                    onSelectDose={handleSelectVineyardDose}
+                    onClear={handleClearDefaultRate}
+                  />
+                </Section>
+              )}
+
               <Section title="Grapevine uses & rates">
                 {/* Vineyard-first: other crops on the label are not part of the
                     normal add flow and are never shown here. */}
@@ -1188,7 +1222,7 @@ export function ChemicalEditor({
               </Section>
 
               {(whpLegalText || rei || unresolvedItems.length > 0) && (
-                <Section title="Withholding, re-entry & verification">
+                <Section title="Withholding & re-entry">
                   {/* PART 8 — legal wording wins over any numeric projection. */}
                   <div className="text-xs">
                     <span className="text-muted-foreground">Withholding period: </span>
@@ -1210,48 +1244,11 @@ export function ChemicalEditor({
                   </div>
                   {unresolvedItems.length > 0 && (
                     <p className="text-[11px] text-muted-foreground">
-                      Everything else was resolved from the registered label. Still unresolved:{" "}
-                      {unresolvedItems.join(", ")}.
+                      {UNRESOLVED_FIELDS_CUSTOMER_MESSAGE}
                     </p>
                   )}
                 </Section>
               )}
-
-              {structuredUses && (
-                <Section title="Default rate">
-                  {rateLife.productChangedNotice && (
-                    <p className="mb-2 rounded-md border border-warning/50 bg-warning/10 p-2 text-[11px]">
-                      {PRODUCT_CHANGED_MESSAGE}
-                    </p>
-                  )}
-                  {staleDefaultRate && (
-                    <p
-                      className="mb-2 rounded-md border border-destructive/50 bg-destructive/10 p-2 text-[11px]"
-                      role="alert"
-                    >
-                      {DEFAULT_RATE_NO_LONGER_ON_LABEL_MESSAGE}
-                    </p>
-                  )}
-                  {hasGrapevineRegistration(intel.registeredUses) &&
-                    !hasConfirmedRate(defaultRates) && (
-                      <p className="mb-2 rounded-md border border-border/60 bg-muted/40 p-2 text-[11px]">
-                        {RATE_CONFIRMATION_REQUIRED_MESSAGE}
-                      </p>
-                    )}
-                  {/* Operator-owned shared default_rates contract. The legacy
-                      numeric rate editor lives under Advanced (mobile
-                      compatibility) and is never written from here. */}
-                  <DefaultRatesCard
-                    options={canonicalRateOptions}
-                    slots={defaultRateSlots}
-                    onSelect={handleSelectDefaultRate}
-                    onSelectDose={handleSelectVineyardDose}
-                    onClear={handleClearDefaultRate}
-                  />
-                </Section>
-              )}
-
-
 
               {canSeeCosts && (
                 <Collapsible defaultOpen>
