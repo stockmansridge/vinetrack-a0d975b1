@@ -86,10 +86,14 @@ import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { formatDate } from "@/lib/dateFormat";
 import { ChemicalEditor } from "@/components/chemicals/ChemicalEditorSheet";
 
-type ChemColId = "name" | "active_ingredient" | "groups" | "verification" | "group" | "use" | "rate" | "manufacturer" | "label" | "cost";
+// The legacy free-text `chemical_group` column is no longer displayed — the
+// structured resistance group is the single visible authority. The value is
+// still persisted and still used by filters/search.
+type ChemColId = "name" | "active_ingredient" | "groups" | "verification" | "use" | "rate" | "manufacturer" | "label" | "cost";
 const CHEM_DEFAULT_COLUMNS: ChemColId[] = [
-  "name", "active_ingredient", "groups", "verification", "group", "use", "rate", "manufacturer", "label", "cost",
+  "name", "active_ingredient", "groups", "verification", "use", "rate", "manufacturer", "label", "cost",
 ];
+const RETIRED_CHEM_COLUMNS = new Set(["group"]);
 
 const ANY = "__any__";
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
@@ -223,12 +227,11 @@ export default function SavedChemicalsPage() {
     return list;
   }, [chemicals, filter, group, use, activeIngredient, manufacturer]);
 
-  type ChemSortKey = "name" | "active_ingredient" | "group" | "use" | "rate" | "manufacturer" | "cost";
+  type ChemSortKey = "name" | "active_ingredient" | "use" | "rate" | "manufacturer" | "cost";
   const { sorted: sortedRows, getSortDirection: chemSortDir, toggleSort: chemToggle } = useSortableTable<typeof rows[number], ChemSortKey>(rows, {
     accessors: {
       name: (c) => c.name ?? "",
       active_ingredient: (c) => c.active_ingredient ?? "",
-      group: (c) => normaliseChemicalGroup(c.chemical_group),
       use: (c) => displayProductCategory(c) ?? "",
       // Read precedence: the confirmed default_rates selection only.
       rate: (c) => defaultRateSortValue(c),
@@ -318,7 +321,10 @@ export default function SavedChemicalsPage() {
     useColumnOrder("chemicals_table", CHEM_DEFAULT_COLUMNS, { vineyardId: selectedVineyardId });
   // Filter out cost column when user can't see costs (still allowed in saved order, just skipped on render).
   const visibleChemColumns = useMemo<ChemColId[]>(
-    () => (chemColumnOrder as ChemColId[]).filter((id) => id !== "cost" || canSeeCosts),
+    () =>
+      (chemColumnOrder as ChemColId[])
+        .filter((id) => !RETIRED_CHEM_COLUMNS.has(id))
+        .filter((id) => id !== "cost" || canSeeCosts),
     [chemColumnOrder, canSeeCosts],
   );
 
@@ -326,10 +332,9 @@ export default function SavedChemicalsPage() {
     switch (id) {
       case "name": return <SortableTableHead active={chemSortDir("name")} onSort={() => chemToggle("name")}><DraggableHeaderCell columnId="name" onDropColumn={moveChemColumn}>Name</DraggableHeaderCell></SortableTableHead>;
       case "active_ingredient": return <SortableTableHead active={chemSortDir("active_ingredient")} onSort={() => chemToggle("active_ingredient")}><DraggableHeaderCell columnId="active_ingredient" onDropColumn={moveChemColumn}>Active ingredient</DraggableHeaderCell></SortableTableHead>;
-      case "groups": return <TableHead><DraggableHeaderCell columnId="groups" onDropColumn={moveChemColumn}>Activity groups</DraggableHeaderCell></TableHead>;
-      case "verification": return <TableHead><DraggableHeaderCell columnId="verification" onDropColumn={moveChemColumn}>Verification</DraggableHeaderCell></TableHead>;
-      case "group": return <SortableTableHead active={chemSortDir("group")} onSort={() => chemToggle("group")}><DraggableHeaderCell columnId="group" onDropColumn={moveChemColumn}>Group</DraggableHeaderCell></SortableTableHead>;
-      case "use": return <SortableTableHead active={chemSortDir("use")} onSort={() => chemToggle("use")}><DraggableHeaderCell columnId="use" onDropColumn={moveChemColumn}>Use</DraggableHeaderCell></SortableTableHead>;
+      case "groups": return <TableHead><DraggableHeaderCell columnId="groups" onDropColumn={moveChemColumn}>Resistance group</DraggableHeaderCell></TableHead>;
+      case "verification": return <TableHead><DraggableHeaderCell columnId="verification" onDropColumn={moveChemColumn}>Official data</DraggableHeaderCell></TableHead>;
+      case "use": return <SortableTableHead active={chemSortDir("use")} onSort={() => chemToggle("use")}><DraggableHeaderCell columnId="use" onDropColumn={moveChemColumn}>Category</DraggableHeaderCell></SortableTableHead>;
       case "rate": return <SortableTableHead active={chemSortDir("rate")} onSort={() => chemToggle("rate")}><DraggableHeaderCell columnId="rate" onDropColumn={moveChemColumn}>Default rate</DraggableHeaderCell></SortableTableHead>;
       case "manufacturer": return <SortableTableHead active={chemSortDir("manufacturer")} onSort={() => chemToggle("manufacturer")}><DraggableHeaderCell columnId="manufacturer" onDropColumn={moveChemColumn}>Manufacturer</DraggableHeaderCell></SortableTableHead>;
       case "label": return <TableHead className="w-20"><DraggableHeaderCell columnId="label" onDropColumn={moveChemColumn}>Label</DraggableHeaderCell></TableHead>;
@@ -343,7 +348,6 @@ export default function SavedChemicalsPage() {
       case "active_ingredient": return <TableCell key="active_ingredient">{fmt(c.active_ingredient)}</TableCell>;
       case "groups": return <TableCell key="groups"><ActivityGroupSummary chem={toChemicalIntelligence(c)} /></TableCell>;
       case "verification": return <TableCell key="verification"><VerificationBadge status={toChemicalIntelligence(c).verification.status} /></TableCell>;
-      case "group": return <TableCell key="group">{c.chemical_group ? <Badge variant="secondary">{c.chemical_group}</Badge> : "—"}</TableCell>;
       case "use": return <TableCell key="use">{fmt(displayProductCategory(c))}</TableCell>;
       case "rate": return <TableCell key="rate">{defaultRateDisplayText(c)}</TableCell>;
       case "manufacturer": return <TableCell key="manufacturer">{fmt(c.manufacturer)}</TableCell>;
