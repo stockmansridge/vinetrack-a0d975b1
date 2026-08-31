@@ -65,6 +65,10 @@ import {
 
 import {
   MANUFACTURER_LABEL_UNRESOLVED,
+  OPEN_MANUFACTURER_LABEL,
+  OPEN_PRODUCT_PAGE,
+  OPEN_REGISTRATION_SOURCE,
+  OPEN_REGULATOR_LABEL,
   resolveChemicalLabelLinks,
 } from "@/lib/chemicalLabelLinks";
 import {
