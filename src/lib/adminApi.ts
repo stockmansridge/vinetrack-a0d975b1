@@ -112,6 +112,17 @@ export interface AdminWorkTask {
   created_at: string | null;
 }
 
+export interface AdminTrip {
+  id: string;
+  vineyard_id: string | null;
+  vineyard_name: string | null;
+  trip_title: string | null;
+  trip_function: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  created_at: string | null;
+}
+
 export interface AdminPaddock {
   id: string;
   vineyard_id: string;
