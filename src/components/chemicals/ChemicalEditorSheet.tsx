@@ -38,6 +38,7 @@ import {
   grapevineOnlyDraft,
   hasConfirmedRate,
   hasGrapevineRegistration,
+  lookupSaveBlocked,
 } from "@/lib/chemicalVineyardScope";
 
 import { DefaultRatesCard } from "@/components/chemicals/DefaultRatesCard";
