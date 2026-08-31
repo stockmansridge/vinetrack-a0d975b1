@@ -13,6 +13,7 @@ const QK = {
   pins: (limit: number) => ["admin", "pins", limit] as const,
   spray: (limit: number) => ["admin", "spray", limit] as const,
   workTasks: (limit: number) => ["admin", "work-tasks", limit] as const,
+  trips: (limit: number) => ["admin", "trips", limit] as const,
   paddocks: (vineyardId: string) => ["admin", "paddocks", vineyardId] as const,
   systemAdmins: ["admin", "system-admins"] as const,
 };
@@ -109,6 +110,17 @@ export interface AdminWorkTask {
   paddock_name: string | null;
   date: string | null;
   duration_hours: number | null;
+  created_at: string | null;
+}
+
+export interface AdminTrip {
+  id: string;
+  vineyard_id: string | null;
+  vineyard_name: string | null;
+  trip_title: string | null;
+  trip_function: string | null;
+  start_time: string | null;
+  end_time: string | null;
   created_at: string | null;
 }
 
@@ -232,6 +244,23 @@ export function useAdminWorkTasks(limit = 500) {
     queryKey: QK.workTasks(limit),
     queryFn: () =>
       rpc<AdminWorkTask[]>("admin_list_work_tasks", { p_limit: limit }).then((d) => d ?? []),
+  });
+}
+
+export function useAdminTrips(limit = 500) {
+  return useQuery({
+    queryKey: QK.trips(limit),
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await (iosSupabase as any)
+        .from("trips")
+        .select("id, vineyard_id, trip_title, trip_function, start_time, end_time, created_at")
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return (data ?? []) as AdminTrip[];
+    },
   });
 }
 
