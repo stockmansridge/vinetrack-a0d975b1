@@ -93,11 +93,13 @@ describe("AdminVineyardsPage activity counts", () => {
     expect(screen.getByText("Quiet Vineyard")).toBeInTheDocument();
 
     // Active vineyard should show 2 trips, 2 pins, 1 spray
-    expect(screen.getByText("2")).toBeInTheDocument();
-    expect(screen.getByText(/trip/)).toBeInTheDocument();
+    const activeRow = screen.getByText("Active Vineyard").closest("a")!;
+    expect(activeRow).toHaveTextContent("2 trip");
+    expect(activeRow).toHaveTextContent("2 pin");
+    expect(activeRow).toHaveTextContent("1 spray");
 
     // Quiet vineyard has 1 task but no trips/pins/sprays
-    const quietRow = screen.getByText("Quiet Vineyard").closest("a");
+    const quietRow = screen.getByText("Quiet Vineyard").closest("a")!;
     expect(quietRow).toHaveTextContent("1 task");
   });
 
