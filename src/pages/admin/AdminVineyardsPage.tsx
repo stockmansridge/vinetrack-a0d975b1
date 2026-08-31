@@ -148,19 +148,7 @@ export default function AdminVineyardsPage() {
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                  {activity > 0 ? (
-                    <>
-                      <ActivityMetric label="trip" count={c?.trips ?? 0} />
-                      <span className="text-muted-foreground/50">·</span>
-                      <ActivityMetric label="pin" count={c?.pins ?? 0} />
-                      <span className="text-muted-foreground/50">·</span>
-                      <ActivityMetric label="spray" count={c?.sprayRecords ?? 0} />
-                      <span className="text-muted-foreground/50">·</span>
-                      <ActivityMetric label="task" count={c?.workTasks ?? 0} />
-                    </>
-                  ) : (
-                    <span className="text-xs text-muted-foreground italic">No activity</span>
-                  )}
+                  <ActivityMetrics counts={c ?? { pins: 0, sprayRecords: 0, workTasks: 0, trips: 0 }} />
                 </div>
                 <div className="flex items-center gap-2 sm:justify-end min-w-[8rem]">
                   <div className="text-xs text-muted-foreground hidden sm:block">
