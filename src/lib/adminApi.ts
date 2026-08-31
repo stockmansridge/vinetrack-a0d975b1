@@ -247,6 +247,15 @@ export function useAdminWorkTasks(limit = 500) {
   });
 }
 
+export function useAdminTrips(limit = 500) {
+  return useQuery({
+    queryKey: QK.trips(limit),
+    queryFn: () =>
+      rpc<AdminTrip[]>("admin_list_trips", { p_limit: limit }).then((d) => d ?? []),
+    retry: false,
+  });
+}
+
 export function useAdminVineyardPaddocks(vineyardId: string | undefined) {
   return useQuery({
     queryKey: vineyardId ? QK.paddocks(vineyardId) : ["admin", "paddocks", "none"],
