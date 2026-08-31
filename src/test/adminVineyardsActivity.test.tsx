@@ -4,12 +4,17 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import AdminVineyardsPage from "@/pages/admin/AdminVineyardsPage";
 import * as adminApi from "@/lib/adminApi";
+import * as systemAdmin from "@/lib/systemAdmin";
 import type { AdminVineyard, AdminPin, AdminSprayRecord, AdminWorkTask, AdminTrip } from "@/lib/adminApi";
 
 vi.mock("@/lib/adminApi", async (importOriginal) => {
   const mod = await importOriginal<typeof adminApi>();
   return { ...mod };
 });
+
+vi.mock("@/lib/systemAdmin", () => ({
+  useIsSystemAdmin: () => ({ isAdmin: true, loading: false }),
+}));
 
 function wrapper({ children }: { children: React.ReactNode }) {
   const client = new QueryClient({
