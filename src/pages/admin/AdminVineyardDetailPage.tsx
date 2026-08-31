@@ -67,6 +67,8 @@ export default function AdminVineyardDetailPage() {
   const vineyardsQ = useAdminVineyards();
   const paddocksQ = useAdminVineyardPaddocks(id);
   const v = vineyardsQ.data?.find((x) => x.id === id);
+  const stats = computeAdminVineyardStats(paddocksQ.data);
+
 
   return (
     <AdminGate>
