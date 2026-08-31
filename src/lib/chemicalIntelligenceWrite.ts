@@ -16,6 +16,7 @@ import {
   ACTIVITY_GROUP_REFERENCE_NAME,
   ACTIVITY_GROUP_TABLE_VERSION,
   lookupActivityGroup,
+  activityGroupCodesEquivalent,
 } from "@/lib/activityGroupReference";
 
 export const INTELLIGENCE_SCHEMA_VERSION = 1;
@@ -437,7 +438,14 @@ export function detectActivityGroupConflicts(
     if (!isResistanceRelevant(g)) continue;
     const ref = lookupActivityGroup(a.name);
     if (!ref) continue;
-    if (ref.scheme === g!.scheme && normaliseGroupCode(ref.code) === g!.code) continue;
+    // Table version 2 — a legacy letter code that names the same mode of
+    // action (e.g. HRAC "E"/"G" vs current "14") is EQUIVALENT, not a conflict.
+    if (
+      ref.scheme === g!.scheme &&
+      activityGroupCodesEquivalent(ref.scheme, ref.code, g!.code)
+    ) {
+      continue;
+    }
     conflicts.push({
       field: "activity_group",
       active_ingredient_name: a.name,
