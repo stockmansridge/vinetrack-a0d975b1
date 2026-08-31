@@ -85,7 +85,7 @@ import {
 } from "@/lib/chemicalProductCategory";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Plus, Pencil, Archive, RotateCcw, Check, ChevronsUpDown, ExternalLink, FileText, Globe, Trash2, Info } from "lucide-react";
-import { toChemicalIntelligence } from "@/lib/chemicalIntelligence";
+import { toChemicalIntelligence, UNRESOLVED_FIELDS_CUSTOMER_MESSAGE } from "@/lib/chemicalIntelligence";
 import { VerificationBadge, ActivityGroupSummary } from "@/components/chemicals/ChemicalIntelligenceBadges";
 import { ChemicalIntelligenceDialog } from "@/components/chemicals/ChemicalIntelligenceDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -1360,6 +1360,13 @@ export function ChemicalEditor({
                     <p className="text-muted-foreground">
                       Generated from the structured chemistry and kept for mobile compatibility.
                     </p>
+                  </div>
+                )}
+
+                {unresolvedItems.length > 0 && (
+                  <div className="rounded-md border border-border/60 bg-muted/30 p-3 space-y-1 text-[11px]">
+                    <div className="font-medium text-xs">Label details not resolved</div>
+                    <div className="text-muted-foreground">{unresolvedItems.join(", ")}</div>
                   </div>
                 )}
 
