@@ -220,6 +220,9 @@ export default function PinsPage() {
     return m;
   }, [statusFiltered]);
 
+  const rowFromNum = parseRowBound(rowFrom);
+  const rowToNum = parseRowBound(rowTo);
+
   const filtered = useMemo(() => {
     let list = statusFiltered;
     if (categoryFilter !== "all") {
@@ -233,13 +236,16 @@ export default function PinsPage() {
     if (paddockFilter) {
       list = list.filter((p: any) => placements.get(p.id)?.paddock_id === paddockFilter);
     }
-    if (!filter) return list;
-    const f = filter.toLowerCase();
-    return list.filter((p) =>
-      [p.title, (p as any).button_name, p.mode, p.category, p.priority, p.status, p.notes]
-        .some((v) => String(v ?? "").toLowerCase().includes(f)),
-    );
-  }, [statusFiltered, filter, paddockFilter, categoryFilter, locationFilter, placements]);
+    if (rowFromNum != null || rowToNum != null) {
+      list = list.filter((p: any) => matchesRowRange(placements.get(p.id), rowFromNum, rowToNum));
+    }
+    if (!search.trim()) return list;
+    return list.filter((p: any) => {
+      const d = pinPlacementDisplay(placements.get(p.id));
+      return matchesPinSearch(p, d.blockLabel, d.rowLabel, search);
+    });
+  }, [statusFiltered, search, paddockFilter, categoryFilter, locationFilter, placements, rowFromNum, rowToNum]);
+
 
   const PRIORITY_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1 };
   type PinSortKey =
