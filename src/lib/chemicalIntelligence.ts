@@ -24,6 +24,7 @@
 // value such as "3 + 11" is never parsed into structured activity groups —
 // legacy-only means "structured intelligence unavailable".
 import { withholdingDisplay } from "@/lib/chemicalLabelRates";
+import { canonicalActivityGroupCode } from "@/lib/activityGroupReference";
 
 
 export type ActivityScheme = "FRAC" | "HRAC" | "IRAC" | "NA" | "UNKNOWN";
@@ -300,7 +301,18 @@ export function parseActivityGroup(
 export function formatActivityGroup(group: ActivityGroup): string {
   if (group.scheme === "NA") return "Not applicable";
   if (group.scheme === "UNKNOWN") return group.code ?? "—";
-  return `${group.scheme} ${group.code ?? ""}`.trim();
+  return `${group.scheme} ${displayGroupCode(group)}`.trim();
+}
+
+/**
+ * Display code for a structured group. Table-version-2 equivalences map a
+ * legacy letter code onto the current code (HRAC "E"/"G" → "14"). The stored
+ * value is never rewritten — this is presentation only.
+ */
+export function displayGroupCode(group: ActivityGroup): string {
+  if (!group.code) return "";
+  if (group.scheme === "NA" || group.scheme === "UNKNOWN") return group.code;
+  return canonicalActivityGroupCode(group.scheme, group.code);
 }
 
 /**
@@ -323,7 +335,7 @@ export function activityGroupSummary(chem: ChemicalIntelligence): string | null 
       order.push(g.scheme);
     }
     const codes = bySchema.get(g.scheme)!;
-    const code = g.scheme === "NA" ? "Not applicable" : (g.code ?? "").trim();
+    const code = g.scheme === "NA" ? "Not applicable" : displayGroupCode(g).trim();
     if (code && !codes.includes(code)) codes.push(code);
   }
   const parts: string[] = [];
@@ -358,13 +370,28 @@ export function normaliseVerificationStatus(value: unknown): VerificationStatus 
   }
 }
 
+/**
+ * Customer-facing wording. The stored `saved_chemicals.verification_status`
+ * values are unchanged — only the display text differs.
+ */
 export const VERIFICATION_LABEL: Record<VerificationStatus, string> = {
-  verified: "Verified",
-  partially_verified: "Partially verified",
-  needs_match: "Needs match",
-  conflict: "Conflict",
-  unverified: "Unverified",
+  verified: "Official label checked",
+  partially_verified: "Label checked — details unavailable",
+  needs_match: "Not checked",
+  conflict: "Review required",
+  unverified: "Not checked",
 };
+
+export const VERIFICATION_TOOLTIP: Partial<Record<VerificationStatus, string>> = {
+  partially_verified:
+    "VineTrack checked official product information, but some label details were unavailable.",
+  conflict: "Sources disagree about this product's registration details.",
+  needs_match: "This product has not been matched to a registered label.",
+};
+
+/** Plain-language note shown when the label could not be read in full. */
+export const UNRESOLVED_FIELDS_CUSTOMER_MESSAGE =
+  "Some label details could not be read. Check the official label before spraying.";
 
 export type VerificationTone = "success" | "warning" | "danger" | "neutral";
 
