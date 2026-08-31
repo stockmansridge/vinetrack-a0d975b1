@@ -46,8 +46,12 @@ const UNITS = ["L", "mL", "kg", "g"];
 
 /**
  * The single authoritative binding path: a product line is linked to a Chemical
- * Store product by its persisted id, never by a name match. Rate, basis and
- * notes already entered on the line are always preserved.
+ * Store product by its persisted id, never by a name match.
+ *
+ * Release contract §3 — binding a DIFFERENT product always adopts that
+ * product's own safe confirmed prefill; product A's amount, unit and basis may
+ * never survive onto product B. Rebinding the SAME product preserves whatever
+ * the operator already edited. Notes always survive.
  */
 export function bindChemicalToLine(
   line: SprayProductLine,
@@ -57,14 +61,21 @@ export function bindChemicalToLine(
   if (!id) {
     return { ...line, savedChemicalId: null, productName: null, intelligence: null };
   }
+  const sameProduct = line.savedChemicalId === id;
   const fresh = productLineFromChemical({
     savedChemicalId: id,
     productName: chem?.name ?? null,
-    unit: chem?.commercial.unit ?? line.unit,
+    unit: chem?.commercial.unit ?? null,
     intelligence: chem,
     costPerUnit: chem?.commercial.costPerUnit ?? null,
   });
-  return { ...fresh, rate: line.rate, rateBasis: line.rateBasis, notes: line.notes };
+  return {
+    ...fresh,
+    rate: sameProduct ? line.rate : fresh.rate,
+    unit: sameProduct ? line.unit : fresh.unit,
+    rateBasis: sameProduct ? line.rateBasis : fresh.rateBasis,
+    notes: line.notes,
+  };
 }
 
 export function ProductsStep({ app, patch, calc, intelligenceById, canEdit, vineyardId }: StepProps) {
