@@ -250,7 +250,7 @@ export default function TripsPage() {
     return list;
   }, [trips, filter, from, to, paddockId, pattern, status, tripFn, workTaskLabelById]);
 
-  type TripSortKey = "start" | "name" | "function" | "paddock" | "pattern" | "person" | "duration" | "distance" | "status";
+  type TripSortKey = "start" | "function" | "paddock" | "pattern" | "person" | "duration" | "distance" | "status";
   const durationMs = (s?: string | null, e?: string | null) => {
     if (!s || !e) return null;
     const ms = new Date(e).getTime() - new Date(s).getTime();
@@ -259,7 +259,6 @@ export default function TripsPage() {
   const { sorted: rowsSorted, getSortDirection, toggleSort } = useSortableTable<typeof rows[number], TripSortKey>(rows, {
     accessors: {
       start: (t) => (t.start_time ? new Date(t.start_time) : null),
-      name: (t) => tripDisplayName(t),
       function: (t) => tripFunctionLabel(t.trip_function) ?? "",
       paddock: (t) => t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? "" : ""),
       pattern: (t) => t.tracking_pattern ?? "",
