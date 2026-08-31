@@ -1416,3 +1416,18 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
+
+/**
+ * Registered-product identity of a draft, or null when not fully stated.
+ * Module scope on purpose: it is used during the first render pass, so a
+ * component-scoped const would be read before initialisation.
+ */
+function draftRateProductIdentity(d: ChemicalIntelligenceDraft) {
+  return d.registration.number
+    ? {
+        country: d.registration.country ?? null,
+        scheme: d.registration.scheme ?? null,
+        number: d.registration.number ?? null,
+      }
+    : null;
+}
