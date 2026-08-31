@@ -381,6 +381,10 @@ export function ChemicalAILookup({
     void selectCandidate(pendingCandidate, correlationId ?? undefined);
   }
 
+  // Expose the enrichment-only retry to the host editor's rate-gate recovery.
+  if (retryLabelRef) retryLabelRef.current = pendingCandidate ? retryLabelDetails : null;
+
+
 
   function applyMaster(row: MasterChemicalRow) {
     const finalName = row.registered_product_name?.trim() || name.trim();
