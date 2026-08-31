@@ -128,7 +128,7 @@ describe("chemical search backend ownership", () => {
   it("separates the search and label-enrichment wait messages", () => {
     const file = src("src/components/spray/ChemicalAILookup.tsx");
     expect(file).toContain("Searching registered products\u2026");
-    expect(file).toContain("Loading product label details\u2026");
+    expect(file).toContain("Reading the official product label");
     // A shortlist must never be described as a multi-minute operation.
     expect(file).not.toContain("CHEMICAL_LOOKUP_WAIT_MESSAGE");
     expect(file).not.toMatch(/can take a few minutes/i);

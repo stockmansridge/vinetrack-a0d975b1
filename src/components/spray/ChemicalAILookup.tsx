@@ -499,9 +499,10 @@ export function ChemicalAILookup({
           Searching registered products…
         </p>
       )}
+      {/* Exactly ONE enrichment message. No second progress control. */}
       {phase === "enriching" && (
         <div className="space-y-1" role="status">
-          <p className="text-xs text-muted-foreground">Loading product label details…</p>
+          <p className="text-xs font-medium">Reading the official product label</p>
           <p className="text-[11px] text-muted-foreground">{LOOKUP_DURATION_NOTICE}</p>
         </div>
       )}
@@ -538,9 +539,11 @@ export function ChemicalAILookup({
               <Button type="button" size="sm" variant="outline" disabled={loading} onClick={() => runLookup()}>
                 Retry search
               </Button>
-              <Button type="button" size="sm" variant="ghost" onClick={applyManual}>
-                Enter manually
-              </Button>
+              {phase !== "enriching" && (
+                <Button type="button" size="sm" variant="ghost" onClick={applyManual}>
+                  Enter manually
+                </Button>
+              )}
             </div>
           )}
           {errorAction === "retry_label" && (
@@ -609,7 +612,7 @@ export function ChemicalAILookup({
         </div>
       )}
 
-      {!selected && search && search.candidates.length > 0 && prompt && (
+      {phase !== "enriching" && !selected && search && search.candidates.length > 0 && prompt && (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-2">
             <div className="text-xs font-medium">
@@ -686,14 +689,7 @@ export function ChemicalAILookup({
                     disabled={loading}
                     onClick={() => selectCandidate(c)}
                   >
-                    {phase === "enriching" && selectedIndex === c.index ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                        Loading product label details…
-                      </>
-                    ) : (
-                      "Select this product"
-                    )}
+                    Select this product
                   </Button>
                   {saved && (
                     <Button
@@ -716,9 +712,11 @@ export function ChemicalAILookup({
         </div>
       )}
 
-      <p className="text-[11px] text-muted-foreground leading-snug">
-        Always confirm rates, withholding periods, re-entry intervals, and permitted uses against the current product label for your country.
-      </p>
+      {phase !== "enriching" && (
+        <p className="text-[11px] text-muted-foreground leading-snug">
+          Always confirm rates, withholding periods, re-entry intervals, and permitted uses against the current product label for your country.
+        </p>
+      )}
     </div>
   );
 }

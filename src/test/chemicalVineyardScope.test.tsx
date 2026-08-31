@@ -1,7 +1,7 @@
 // Vineyard-first Chemical Lookup scope — save projection, spray readiness,
 // duplicate handling and grapevine-only presentation.
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import {
   DEFAULT_RATE_NO_LONGER_ON_LABEL_MESSAGE,
   LOOKUP_DURATION_NOTICE,
@@ -110,6 +110,7 @@ describe("duplicate product prompt", () => {
 describe("grapevine-only presentation", () => {
   it("does not show other crops in the normal add flow", () => {
     render(<GrapevineUsesCard uses={[grapeUse, citrusUse]} />);
+    fireEvent.click(screen.getByText("Show details"));
     expect(screen.getByText("Powdery mildew")).toBeTruthy();
     expect(screen.queryByText(/Other crops on this label/)).toBeNull();
   });

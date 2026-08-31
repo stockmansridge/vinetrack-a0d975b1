@@ -65,6 +65,10 @@ import {
 
 import {
   MANUFACTURER_LABEL_UNRESOLVED,
+  OPEN_MANUFACTURER_LABEL,
+  OPEN_PRODUCT_PAGE,
+  OPEN_REGISTRATION_SOURCE,
+  OPEN_REGULATOR_LABEL,
   resolveChemicalLabelLinks,
 } from "@/lib/chemicalLabelLinks";
 import {
@@ -85,7 +89,7 @@ import {
 } from "@/lib/chemicalProductCategory";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Plus, Pencil, Archive, RotateCcw, Check, ChevronsUpDown, ExternalLink, FileText, Globe, Trash2, Info } from "lucide-react";
-import { toChemicalIntelligence } from "@/lib/chemicalIntelligence";
+import { toChemicalIntelligence, UNRESOLVED_FIELDS_CUSTOMER_MESSAGE } from "@/lib/chemicalIntelligence";
 import { VerificationBadge, ActivityGroupSummary } from "@/components/chemicals/ChemicalIntelligenceBadges";
 import { ChemicalIntelligenceDialog } from "@/components/chemicals/ChemicalIntelligenceDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -1101,7 +1105,7 @@ export function ChemicalEditor({
                   {labelLinks.manufacturerLabelUrl ? (
                     <Button asChild size="sm" variant="outline" className="gap-1">
                       <a href={labelLinks.manufacturerLabelUrl} target="_blank" rel="noopener noreferrer">
-                        <FileText className="h-3.5 w-3.5" /> Open manufacturer label
+                        <FileText className="h-3.5 w-3.5" /> {OPEN_MANUFACTURER_LABEL}
                       </a>
                     </Button>
                   ) : (
@@ -1112,14 +1116,21 @@ export function ChemicalEditor({
                   {labelLinks.regulatorLabelUrl && (
                     <Button asChild size="sm" variant="outline" className="gap-1">
                       <a href={labelLinks.regulatorLabelUrl} target="_blank" rel="noopener noreferrer">
-                        <FileText className="h-3.5 w-3.5" /> Open APVMA label
+                        <FileText className="h-3.5 w-3.5" /> {OPEN_REGULATOR_LABEL}
+                      </a>
+                    </Button>
+                  )}
+                  {labelLinks.registrationSourceUrl && (
+                    <Button asChild size="sm" variant="outline" className="gap-1">
+                      <a href={labelLinks.registrationSourceUrl} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-3.5 w-3.5" /> {OPEN_REGISTRATION_SOURCE}
                       </a>
                     </Button>
                   )}
                   {labelLinks.productUrl && (
                     <Button asChild size="sm" variant="outline" className="gap-1">
                       <a href={labelLinks.productUrl} target="_blank" rel="noopener noreferrer">
-                        <Globe className="h-3.5 w-3.5" /> Open product page
+                        <Globe className="h-3.5 w-3.5" /> {OPEN_PRODUCT_PAGE}
                       </a>
                     </Button>
                   )}
@@ -1147,6 +1158,40 @@ export function ChemicalEditor({
 
             {/* --------------------------------------- operational column */}
             <div className="space-y-4">
+              {structuredUses && (
+                <Section title="Default rate">
+                  {rateLife.productChangedNotice && (
+                    <p className="mb-2 rounded-md border border-warning/50 bg-warning/10 p-2 text-[11px]">
+                      {PRODUCT_CHANGED_MESSAGE}
+                    </p>
+                  )}
+                  {staleDefaultRate && (
+                    <p
+                      className="mb-2 rounded-md border border-destructive/50 bg-destructive/10 p-2 text-[11px]"
+                      role="alert"
+                    >
+                      {DEFAULT_RATE_NO_LONGER_ON_LABEL_MESSAGE}
+                    </p>
+                  )}
+                  {hasGrapevineRegistration(intel.registeredUses) &&
+                    !hasConfirmedRate(defaultRates) && (
+                      <p className="mb-2 rounded-md border border-border/60 bg-muted/40 p-2 text-[11px]">
+                        {RATE_CONFIRMATION_REQUIRED_MESSAGE}
+                      </p>
+                    )}
+                  {/* Operator-owned shared default_rates contract. The legacy
+                      numeric rate editor lives under Advanced (mobile
+                      compatibility) and is never written from here. */}
+                  <DefaultRatesCard
+                    options={canonicalRateOptions}
+                    slots={defaultRateSlots}
+                    onSelect={handleSelectDefaultRate}
+                    onSelectDose={handleSelectVineyardDose}
+                    onClear={handleClearDefaultRate}
+                  />
+                </Section>
+              )}
+
               <Section title="Grapevine uses & rates">
                 {/* Vineyard-first: other crops on the label are not part of the
                     normal add flow and are never shown here. */}
@@ -1188,7 +1233,7 @@ export function ChemicalEditor({
               </Section>
 
               {(whpLegalText || rei || unresolvedItems.length > 0) && (
-                <Section title="Withholding, re-entry & verification">
+                <Section title="Withholding & re-entry">
                   {/* PART 8 — legal wording wins over any numeric projection. */}
                   <div className="text-xs">
                     <span className="text-muted-foreground">Withholding period: </span>
@@ -1210,48 +1255,11 @@ export function ChemicalEditor({
                   </div>
                   {unresolvedItems.length > 0 && (
                     <p className="text-[11px] text-muted-foreground">
-                      Everything else was resolved from the registered label. Still unresolved:{" "}
-                      {unresolvedItems.join(", ")}.
+                      {UNRESOLVED_FIELDS_CUSTOMER_MESSAGE}
                     </p>
                   )}
                 </Section>
               )}
-
-              {structuredUses && (
-                <Section title="Default rate">
-                  {rateLife.productChangedNotice && (
-                    <p className="mb-2 rounded-md border border-warning/50 bg-warning/10 p-2 text-[11px]">
-                      {PRODUCT_CHANGED_MESSAGE}
-                    </p>
-                  )}
-                  {staleDefaultRate && (
-                    <p
-                      className="mb-2 rounded-md border border-destructive/50 bg-destructive/10 p-2 text-[11px]"
-                      role="alert"
-                    >
-                      {DEFAULT_RATE_NO_LONGER_ON_LABEL_MESSAGE}
-                    </p>
-                  )}
-                  {hasGrapevineRegistration(intel.registeredUses) &&
-                    !hasConfirmedRate(defaultRates) && (
-                      <p className="mb-2 rounded-md border border-border/60 bg-muted/40 p-2 text-[11px]">
-                        {RATE_CONFIRMATION_REQUIRED_MESSAGE}
-                      </p>
-                    )}
-                  {/* Operator-owned shared default_rates contract. The legacy
-                      numeric rate editor lives under Advanced (mobile
-                      compatibility) and is never written from here. */}
-                  <DefaultRatesCard
-                    options={canonicalRateOptions}
-                    slots={defaultRateSlots}
-                    onSelect={handleSelectDefaultRate}
-                    onSelectDose={handleSelectVineyardDose}
-                    onClear={handleClearDefaultRate}
-                  />
-                </Section>
-              )}
-
-
 
               {canSeeCosts && (
                 <Collapsible defaultOpen>
@@ -1363,6 +1371,13 @@ export function ChemicalEditor({
                     <p className="text-muted-foreground">
                       Generated from the structured chemistry and kept for mobile compatibility.
                     </p>
+                  </div>
+                )}
+
+                {unresolvedItems.length > 0 && (
+                  <div className="rounded-md border border-border/60 bg-muted/30 p-3 space-y-1 text-[11px]">
+                    <div className="font-medium text-xs">Label details not resolved</div>
+                    <div className="text-muted-foreground">{unresolvedItems.join(", ")}</div>
                   </div>
                 )}
 
