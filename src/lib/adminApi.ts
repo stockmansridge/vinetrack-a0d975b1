@@ -255,7 +255,7 @@ export function useAdminTrips(limit = 500) {
       const { data, error } = await (iosSupabase as any)
         .from("trips")
         .select("id, vineyard_id, trip_title, trip_function, start_time, end_time, created_at")
-        .is("deleted_at", null")
+        .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(limit);
       if (error) throw error;
