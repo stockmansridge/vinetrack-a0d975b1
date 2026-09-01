@@ -114,6 +114,8 @@ export interface RowCompletionState {
   skipped: Set<number>;
   /** ISO timestamp of the most recently completed quarter; null if none. */
   completedAt: string | null;
+  /** Per-quarter completion timestamps (segment number -> ISO timestamp). */
+  segmentCompletedAt: Map<number, string>;
 }
 
 export function buildRowCompletion(
