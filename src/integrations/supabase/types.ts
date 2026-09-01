@@ -878,6 +878,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_vineyard_activity_counts: {
+        Args: never
+        Returns: {
+          block_count: number
+          pin_count: number
+          spray_record_count: number
+          trip_count: number
+          vineyard_id: string
+          work_task_count: number
+        }[]
+      }
       claim_refresh_job: {
         Args: {
           p_job_type: string
