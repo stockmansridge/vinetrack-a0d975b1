@@ -136,6 +136,7 @@ export default function YieldReportsPage() {
   >("overview");
   const [selected, setSelected] = useState<AnyRow | null>(null);
   const [recordOpen, setRecordOpen] = useState(false);
+  const allocationPanelRef = useRef<GrapeAllocationPanelRef>(null);
   const qc = useQueryClient();
 
   const blocksQ = useQuery({
