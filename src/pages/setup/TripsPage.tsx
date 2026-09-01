@@ -493,6 +493,18 @@ export default function TripsPage() {
               const s = tripStatus(t);
               const fnLabel = tripFunctionLabel(t.trip_function);
               const cellMap: Record<TripsCol, React.ReactNode> = {
+                name: (
+                  <TableCell>
+                    <div className="flex flex-col gap-1">
+                      <span className="font-medium">{tripDisplayName(t)}</span>
+                      {t.work_task_id && (
+                        <Badge variant="outline" className="w-fit text-[10px] font-normal">
+                          {workTaskLabelById.get(t.work_task_id) ?? "Task linked"}
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                ),
                 start: <TableCell>{fmtDate(t.start_time)}</TableCell>,
                 function: <TableCell>{fnLabel ? <Badge variant="outline">{fnLabel}</Badge> : "—"}</TableCell>,
                 paddock: <TableCell>{fmt(padName)}</TableCell>,
