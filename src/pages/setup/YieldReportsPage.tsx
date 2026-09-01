@@ -717,7 +717,10 @@ export default function YieldReportsPage() {
           />
         </TabsContent>
 
-        <TabsContent value="allocation" className="mt-4">
+        {/* forceMount keeps the panel (and its dialog) alive so the header
+            "Grape Allocation" button can open the dialog from any tab;
+            Radix hides inactive force-mounted content via the hidden attr. */}
+        <TabsContent value="allocation" className="mt-4" forceMount>
           <GrapeAllocationPanel
             ref={allocationPanelRef}
             vineyardId={selectedVineyardId}
