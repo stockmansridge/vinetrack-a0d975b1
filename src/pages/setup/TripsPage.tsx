@@ -959,7 +959,30 @@ function TripSheet({
             </Section>
           </div>
         )}
+        <AlertDialog open={confirmDelete} onOpenChange={(o) => !deleting && setConfirmDelete(o)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this trip?</AlertDialogTitle>
+              <AlertDialogDescription>
+                The trip will be removed from the portal and the mobile app. It is a
+                recoverable delete — the underlying record is retained and can be
+                restored by VineTrack support if needed.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => { e.preventDefault(); void handleDeleteTrip(); }}
+                disabled={deleting}
+              >
+                {deleting && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                Delete trip
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SheetContent>
+
     </Sheet>
   );
 }
