@@ -267,7 +267,7 @@ describe("buildRowCompletion completedAt", () => {
 
   const identity = (n: number) => ({
     paddockRowId: `row-${n}`, rowNumber: n, rowLabel: String(n),
-    order: n - 1, lengthM: 100, estimatedVines: 80,
+    order: n - 1, lengthM: 100, estimatedVines: 80, effectiveVines: 80,
   });
 
   it("returns null completedAt when no segments are completed", () => {
