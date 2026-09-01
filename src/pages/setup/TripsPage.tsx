@@ -264,7 +264,7 @@ export default function TripsPage() {
     return list;
   }, [trips, filter, from, to, paddockId, pattern, status, tripFn, workTaskLabelById]);
 
-  type TripSortKey = "start" | "function" | "paddock" | "pattern" | "person" | "duration" | "distance" | "status";
+  type TripSortKey = "name" | "start" | "function" | "paddock" | "pattern" | "person" | "duration" | "distance" | "status";
   const durationMs = (s?: string | null, e?: string | null) => {
     if (!s || !e) return null;
     const ms = new Date(e).getTime() - new Date(s).getTime();
@@ -272,6 +272,7 @@ export default function TripsPage() {
   };
   const { sorted: rowsSorted, getSortDirection, toggleSort } = useSortableTable<typeof rows[number], TripSortKey>(rows, {
     accessors: {
+      name: (t) => tripDisplayName(t),
       start: (t) => (t.start_time ? new Date(t.start_time) : null),
       function: (t) => tripFunctionLabel(t.trip_function) ?? "",
       paddock: (t) => t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? "" : ""),
@@ -284,8 +285,9 @@ export default function TripsPage() {
     initial: { key: "start", direction: "desc" },
   });
 
-  const TRIPS_COLS = ["start","function","paddock","pattern","person","duration","distance","status"] as const;
+  const TRIPS_COLS = ["name","start","function","paddock","pattern","person","duration","distance","status"] as const;
   type TripsCol = (typeof TRIPS_COLS)[number];
+
   const { order: tripsOrder, moveColumn: tripsMove, reset: tripsReset } = useColumnOrder(
     "trips_table",
     TRIPS_COLS as unknown as string[],
