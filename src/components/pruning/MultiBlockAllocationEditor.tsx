@@ -104,9 +104,14 @@ export default function MultiBlockAllocationEditor({
     () => (active ? buildRowIdentities(parseRows(active.rows), active, null) : []),
     [active],
   );
+  // Portal UX: rows render low-to-high (e.g. 45 at the top, 51 at the bottom).
+  const sortedIdentities = useMemo(
+    () => [...identities].sort((a, b) => a.rowNumber - b.rowNumber),
+    [identities],
+  );
   const completion = useMemo(
-    () => buildRowCompletion(identities, (segmentsQ.data ?? []) as any),
-    [identities, segmentsQ.data],
+    () => buildRowCompletion(sortedIdentities, (segmentsQ.data ?? []) as any),
+    [sortedIdentities, segmentsQ.data],
   );
 
   const owned = (activeId && ownedByActivity?.[activeId]) || new Set<string>();
