@@ -201,7 +201,10 @@ export function buildRowCompletion(
     const completedAt = id.paddockRowId
       ? (completedAtById.get(id.paddockRowId) ?? completedAtByNumber.get(id.rowNumber) ?? null)
       : (completedAtByNumber.get(id.rowNumber) ?? null);
-    return { identity: id, completed, skipped, completedAt: completedAt ?? null };
+    const segId = id.paddockRowId ? segDateById.get(id.paddockRowId) : null;
+    const segNum = segDateByNumber.get(id.rowNumber);
+    const segmentCompletedAt = new Map<number, string>([...(segNum ?? []), ...(segId ?? [])]);
+    return { identity: id, completed, skipped, completedAt: completedAt ?? null, segmentCompletedAt };
   });
 
 }
