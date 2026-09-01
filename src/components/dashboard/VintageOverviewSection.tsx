@@ -180,6 +180,38 @@ export default function VintageOverviewSection() {
           }
           to="/work-tasks"
         />
+        <MetricCard
+          label="Grape allocation"
+          icon={Grape}
+          tone="primary"
+          value={
+            allocationQ.isLoading
+              ? "…"
+              : allocationQ.error
+                ? "—"
+                : (
+                  <div className="grid grid-cols-2 gap-3 mt-0.5">
+                    <div>
+                      <div className="text-[22px] font-semibold leading-tight tracking-tight text-foreground tabular-nums">
+                        {fmtT(allocationQ.data?.ownUse ?? 0)}
+                      </div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                        Own Use
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[22px] font-semibold leading-tight tracking-tight text-foreground tabular-nums">
+                        {fmtT(allocationQ.data?.external ?? 0)}
+                      </div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                        External
+                      </div>
+                    </div>
+                  </div>
+                )
+          }
+          to="/yield"
+        />
       </div>
     </section>
   );
