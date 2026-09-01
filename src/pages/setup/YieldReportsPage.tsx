@@ -76,7 +76,7 @@ import {
   type PlantingGroup,
 } from "@/lib/yieldAllocations";
 import { useVintage } from "@/lib/useVintage";
-import GrapeAllocationPanel from "@/components/yield/GrapeAllocationPanel";
+import GrapeAllocationPanel, { type GrapeAllocationPanelRef } from "@/components/yield/GrapeAllocationPanel";
 import { varietyKeyOf } from "@/lib/grapeAllocationModel";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 import { buildVarietyMap, resolvePaddockAllocations, useGrapeVarieties } from "@/lib/varietyResolver";
