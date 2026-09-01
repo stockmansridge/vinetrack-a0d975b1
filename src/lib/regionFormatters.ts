@@ -226,6 +226,26 @@ export function createRegionFormatters(
         return `${s.currency_code} ${round(x, dp)}`;
       }
     },
+    rainfall: (v, dp) => {
+      const x = n(v);
+      if (x == null) return "";
+      // mm in → mm, or inches at 2dp for useful readings.
+      const out = distImperial ? x / MM_PER_INCH : x;
+      const digits = dp ?? (distImperial ? 2 : 1);
+      return `${round(out, digits)} ${rainfallUnitLabel}`;
+    },
+    temperature: (v, dp = 1) => {
+      const x = n(v);
+      if (x == null) return "";
+      const out = distImperial ? x * 9 / 5 + 32 : x;
+      return `${round(out, dp)}${temperatureUnitLabel}`;
+    },
+    wind: (v, dp = 0) => {
+      const x = n(v);
+      if (x == null) return "";
+      const out = distImperial ? x / KM_PER_MI : x;
+      return `${round(out, dp)} ${windUnitLabel}`;
+    },
     date: fmtDate,
     dateShort: fmtDateShort,
     dateTime: fmtDateTime,
