@@ -133,6 +133,8 @@ export function buildRowCompletion(
   const skipByNumber = new Map<number, Set<number>>();
   const completedAtById = new Map<string, string>();
   const completedAtByNumber = new Map<number, string>();
+  const segDateById = new Map<string, Map<number, string>>();
+  const segDateByNumber = new Map<number, Map<number, string>>();
   for (const s of segments) {
     // Shared contract with iOS/Android: a quarter is done iff completed === true.
     // Do NOT also require pruning_entry_id — cross-platform records (and some
