@@ -59,6 +59,7 @@ export interface RegionFormatters {
   sprayRate: (lPerHa: unknown, dp?: number) => string;    // L/ha in → L/ha or gal/ac
   currency: (amount: unknown, dp?: number) => string;     // raw number
   date: (value: Date | string | number | null | undefined) => string;
+  dateShort: (value: Date | string | number | null | undefined) => string;
   dateTime: (value: Date | string | number | null | undefined) => string;
 }
 
@@ -123,6 +124,15 @@ export function createRegionFormatters(
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     }
     return d.toLocaleDateString(dateLocale);
+  };
+
+  const fmtDateShort = (value: Date | string | number | null | undefined): string => {
+    const d = toDate(value === undefined ? new Date() : value);
+    if (!d) return "";
+    if (s.date_format === "YYYY-MM-DD") {
+      return `${String(d.getFullYear()).slice(2)}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
+    return d.toLocaleDateString(dateLocale, { day: "2-digit", month: "2-digit", year: "2-digit" });
   };
 
   const fmtDateTime = (value: Date | string | number | null | undefined): string => {
@@ -198,6 +208,7 @@ export function createRegionFormatters(
       }
     },
     date: fmtDate,
+    dateShort: fmtDateShort,
     dateTime: fmtDateTime,
   };
 }

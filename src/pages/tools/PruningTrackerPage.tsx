@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Scissors, ArrowLeft, CheckCircle2, AlertTriangle, Clock, Grape, CalendarDays, User, ExternalLink, LucideIcon } from "lucide-react";
+import { Scissors, ArrowLeft, CheckCircle2, Check, AlertTriangle, Clock, Grape, CalendarDays, User, ExternalLink, LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   usePruningSeasons,
@@ -46,6 +46,7 @@ import { usePruningActivity } from "@/lib/pruningActivityQuery";
 import { calculateSeasonPruningSummary } from "@/lib/pruningSummaryCalc";
 import { parseRows, parseVarietyAllocations } from "@/lib/paddockGeometry";
 import { formatDate } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import NewPruningActivityButton from "@/components/pruning/NewPruningActivityButton";
 
 import ActivityHistory from "@/components/pruning/ActivityHistory";
@@ -774,6 +775,7 @@ function BlockDetail({
   isSystemAdmin,
   onBack,
 }: DetailProps) {
+  const fmt = useRegionFormatters();
   const local = block.progress;
   const reDone = rpcBlock?.completed_row_equivalents ?? local.rowEquivalentsCompleted ?? 0;
   const reTotal = rpcBlock?.total_row_equivalents ?? local.totalRows ?? 0;
@@ -893,29 +895,45 @@ function BlockDetail({
                 if (aF && !bF) return -1;
                 if (!aF && bF) return 1;
                 return String(a.identity.rowLabel).localeCompare(String(b.identity.rowLabel), undefined, { numeric: true });
-              }).map((r) => (
-                <div key={r.identity.paddockRowId ?? r.identity.rowNumber} className="mb-1.5 break-inside-avoid flex items-center gap-2 rounded border p-2">
-                  <div className="w-10 text-sm font-medium tabular-nums text-muted-foreground">
-                    {r.identity.rowLabel}
+              }).map((r) => {
+                const isComplete = r.completed.size === 4;
+                return (
+                  <div key={r.identity.paddockRowId ?? r.identity.rowNumber} className="mb-1.5 break-inside-avoid rounded border p-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-10 text-sm font-medium tabular-nums text-muted-foreground">
+                        {r.identity.rowLabel}
+                      </div>
+                      {isComplete ? (
+                        <div className="flex-1 flex flex-col items-center justify-center">
+                          <Check className="h-5 w-5 text-emerald-500" aria-label={`Row ${r.identity.rowLabel} complete`} />
+                          {r.completedAt && (
+                            <span className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
+                              {fmt.dateShort(r.completedAt)}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex gap-1 flex-1">
+                          {[1, 2, 3, 4].map((q) => {
+                            const done = r.completed.has(q);
+                            const skipped = r.skipped.has(q);
+                            return (
+                              <div
+                                key={q}
+                                className={`h-6 flex-1 rounded ${skipped ? "bg-amber-500" : done ? "bg-emerald-500" : "bg-muted"}`}
+                                title={`Q${q}${skipped ? " · skipped" : done ? " · done" : ""}`}
+                              />
+                            );
+                          })}
+                        </div>
+                      )}
+                      <div className="text-xs text-muted-foreground tabular-nums w-10 text-right">
+                        {r.completed.size}/4
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex gap-1 flex-1">
-                    {[1, 2, 3, 4].map((q) => {
-                      const done = r.completed.has(q);
-                      const skipped = r.skipped.has(q);
-                      return (
-                        <div
-                          key={q}
-                          className={`h-6 flex-1 rounded ${skipped ? "bg-amber-500" : done ? "bg-emerald-500" : "bg-muted"}`}
-                          title={`Q${q}${skipped ? " · skipped" : done ? " · done" : ""}`}
-                        />
-                      );
-                    })}
-                  </div>
-                  <div className="text-xs text-muted-foreground tabular-nums w-10 text-right">
-                    {r.completed.size}/4
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
