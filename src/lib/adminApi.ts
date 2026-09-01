@@ -157,13 +157,14 @@ export interface AdminPlatformScale {
   average_hectares_per_vineyard: number;
 }
 
-/** One authoritative row per vineyard, aggregated server-side (SQL 210). */
+/** One authoritative row per vineyard, aggregated server-side (SQL 210 + 211). */
 export interface AdminVineyardActivityCounts {
   vineyard_id: string;
   trip_count: number;
   pin_count: number;
   spray_record_count: number;
   work_task_count: number;
+  block_count: number;
 }
 
 
@@ -229,13 +230,14 @@ export function useAdminVineyardActivityCounts() {
       const rows = await rpc<AdminVineyardActivityCounts[]>("admin_vineyard_activity_counts");
       const map = new Map<string, AdminVineyardActivityCounts>();
       for (const r of rows ?? []) {
-        map.set(r.vineyard_id, {
-          vineyard_id: r.vineyard_id,
-          trip_count: Number(r.trip_count ?? 0),
-          pin_count: Number(r.pin_count ?? 0),
-          spray_record_count: Number(r.spray_record_count ?? 0),
-          work_task_count: Number(r.work_task_count ?? 0),
-        });
+      map.set(r.vineyard_id, {
+        vineyard_id: r.vineyard_id,
+        trip_count: Number(r.trip_count ?? 0),
+        pin_count: Number(r.pin_count ?? 0),
+        spray_record_count: Number(r.spray_record_count ?? 0),
+        work_task_count: Number(r.work_task_count ?? 0),
+        block_count: Number(r.block_count ?? 0),
+      });
       }
       return map;
     },
