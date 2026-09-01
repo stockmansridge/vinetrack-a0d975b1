@@ -84,6 +84,25 @@ export default function VintageOverviewSection() {
 
   const pruningQ = usePruningVineyardSummary(selectedVineyardId, pruningSeasonYear);
 
+  const allocationQ = useQuery({
+    queryKey: ["vintage-grape-allocation", selectedVineyardId, vintage],
+    enabled: !!selectedVineyardId && vintage != null,
+    queryFn: async () => {
+      const all = await fetchGrapeAllocations(selectedVineyardId!, vintage!);
+      let ownUse = 0;
+      let external = 0;
+      for (const a of all) {
+        const t = typeof a.quantity_tonnes === "number" && Number.isFinite(a.quantity_tonnes)
+          ? a.quantity_tonnes
+          : 0;
+        if (a.allocation_type === "own_use") ownUse += t;
+        else external += t;
+      }
+      return { ownUse, external };
+    },
+    staleTime: 60_000,
+  });
+
   const rangeHint = `${startISO} → ${endISO}`;
   const hemLabel = hemisphereLabel(hemisphere);
 
@@ -106,7 +125,7 @@ export default function VintageOverviewSection() {
           {rangeHint}
         </span>
       </div>
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
         <MetricCard
           label="Sprays complete"
           icon={Droplet}
