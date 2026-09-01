@@ -76,6 +76,8 @@ import {
   type PlantingGroup,
 } from "@/lib/yieldAllocations";
 import { useVintage } from "@/lib/useVintage";
+import GrapeAllocationPanel from "@/components/yield/GrapeAllocationPanel";
+import { varietyKeyOf } from "@/lib/grapeAllocationModel";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 import { buildVarietyMap, resolvePaddockAllocations, useGrapeVarieties } from "@/lib/varietyResolver";
 import { summariseYieldSession, type SessionBlockInfo } from "@/lib/yieldSessionSummary";
@@ -129,7 +131,9 @@ export default function YieldReportsPage() {
   // `null` means "not chosen yet" and resolves to the vineyard's current vintage.
   const [vintageFilter, setVintageFilter] = useState<string | null>(null);
   const [completion, setCompletion] = useState<string>(ANY);
-  const [tab, setTab] = useState<"overview" | "sessions" | "historical" | "picking">("overview");
+  const [tab, setTab] = useState<
+    "overview" | "sessions" | "historical" | "picking" | "allocation"
+  >("overview");
   const [selected, setSelected] = useState<AnyRow | null>(null);
   const [recordOpen, setRecordOpen] = useState(false);
   const qc = useQueryClient();
@@ -462,6 +466,26 @@ export default function YieldReportsPage() {
     pickingPlantingTotalsQ.data,
   ]);
 
+  /** Estimated tonnes per variety for the vintage — reuses the Overview
+   *  numbers so Grape Allocation never re-calculates an estimate. */
+  const estimatedByVariety = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const card of overviewCards) {
+      for (const v of card.varieties) {
+        if (v.estimatedTonnes == null) continue;
+        const key = varietyKeyOf(v.variety);
+        m.set(key, (m.get(key) ?? 0) + v.estimatedTonnes);
+      }
+    }
+    return m;
+  }, [overviewCards]);
+
+  const allocationBlocks = useMemo(
+    () => (blocksQ.data ?? []).map((b) => ({ id: b.id, name: b.name ?? "Unnamed block" })),
+    [blocksQ.data],
+  );
+
+
 
 
 
@@ -527,6 +551,7 @@ export default function YieldReportsPage() {
           >
             Picking Log
           </TabsTrigger>
+          <TabsTrigger value="allocation">Grape Allocation</TabsTrigger>
         </TabsList>
 
         <div className="flex flex-wrap items-end gap-2 mt-4">
@@ -583,6 +608,16 @@ export default function YieldReportsPage() {
             vineyardId={selectedVineyardId}
             vintage={activeVintage === ANY ? null : Number(activeVintage)}
             canDelete={canManageYields}
+          />
+        </TabsContent>
+
+        <TabsContent value="allocation" className="mt-4">
+          <GrapeAllocationPanel
+            vineyardId={selectedVineyardId}
+            vintage={activeVintage === ANY ? null : Number(activeVintage)}
+            role={currentRole}
+            estimatedByVariety={estimatedByVariety}
+            blocks={allocationBlocks}
           />
         </TabsContent>
 
