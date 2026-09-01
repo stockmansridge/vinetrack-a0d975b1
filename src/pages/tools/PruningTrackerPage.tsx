@@ -895,29 +895,45 @@ function BlockDetail({
                 if (aF && !bF) return -1;
                 if (!aF && bF) return 1;
                 return String(a.identity.rowLabel).localeCompare(String(b.identity.rowLabel), undefined, { numeric: true });
-              }).map((r) => (
-                <div key={r.identity.paddockRowId ?? r.identity.rowNumber} className="mb-1.5 break-inside-avoid flex items-center gap-2 rounded border p-2">
-                  <div className="w-10 text-sm font-medium tabular-nums text-muted-foreground">
-                    {r.identity.rowLabel}
+              }).map((r) => {
+                const isComplete = r.completed.size === 4;
+                return (
+                  <div key={r.identity.paddockRowId ?? r.identity.rowNumber} className="mb-1.5 break-inside-avoid rounded border p-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-10 text-sm font-medium tabular-nums text-muted-foreground">
+                        {r.identity.rowLabel}
+                      </div>
+                      {isComplete ? (
+                        <div className="flex-1 flex flex-col items-center justify-center">
+                          <Check className="h-5 w-5 text-emerald-500" aria-label={`Row ${r.identity.rowLabel} complete`} />
+                          {r.completedAt && (
+                            <span className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
+                              {fmt.dateShort(r.completedAt)}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex gap-1 flex-1">
+                          {[1, 2, 3, 4].map((q) => {
+                            const done = r.completed.has(q);
+                            const skipped = r.skipped.has(q);
+                            return (
+                              <div
+                                key={q}
+                                className={`h-6 flex-1 rounded ${skipped ? "bg-amber-500" : done ? "bg-emerald-500" : "bg-muted"}`}
+                                title={`Q${q}${skipped ? " · skipped" : done ? " · done" : ""}`}
+                              />
+                            );
+                          })}
+                        </div>
+                      )}
+                      <div className="text-xs text-muted-foreground tabular-nums w-10 text-right">
+                        {r.completed.size}/4
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex gap-1 flex-1">
-                    {[1, 2, 3, 4].map((q) => {
-                      const done = r.completed.has(q);
-                      const skipped = r.skipped.has(q);
-                      return (
-                        <div
-                          key={q}
-                          className={`h-6 flex-1 rounded ${skipped ? "bg-amber-500" : done ? "bg-emerald-500" : "bg-muted"}`}
-                          title={`Q${q}${skipped ? " · skipped" : done ? " · done" : ""}`}
-                        />
-                      );
-                    })}
-                  </div>
-                  <div className="text-xs text-muted-foreground tabular-nums w-10 text-right">
-                    {r.completed.size}/4
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
