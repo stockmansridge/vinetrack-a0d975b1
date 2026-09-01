@@ -26,7 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CheckCircle2, XCircle, RefreshCw, KeyRound } from "lucide-react";
+import { CheckCircle2, XCircle, RefreshCw, KeyRound, ExternalLink } from "lucide-react";
 import { AdminGate, AdminPageHeader } from "./_shared";
 import {
   runDiagnosticSend,
@@ -263,6 +263,25 @@ interface RecoveryResult {
   message: string;
   redirectTo?: string;
   errorCode?: string;
+}
+
+function ResendLinkCard() {
+  return (
+    <Card className="p-4 border-primary/20 bg-primary/5">
+      <a
+        href="https://resend.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+      >
+        <ExternalLink className="h-4 w-4" />
+        Open Resend dashboard
+      </a>
+      <p className="text-xs text-muted-foreground mt-1">
+        Fast access to the Resend console for delivery logs, domains, and API keys.
+      </p>
+    </Card>
+  );
 }
 
 function PasswordRecoveryCard() {
@@ -609,6 +628,7 @@ export default function EmailDiagnosticsPage() {
         subtitle="Test the unified VineTrack email pipeline and inspect delivery history."
       />
       <div className="space-y-4">
+        <ResendLinkCard />
         <PasswordRecoveryCard />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {CARDS.map((spec) => <DiagnosticCard key={spec.key} spec={spec} />)}
