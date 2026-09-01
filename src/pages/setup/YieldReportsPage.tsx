@@ -462,6 +462,26 @@ export default function YieldReportsPage() {
     pickingPlantingTotalsQ.data,
   ]);
 
+  /** Estimated tonnes per variety for the vintage — reuses the Overview
+   *  numbers so Grape Allocation never re-calculates an estimate. */
+  const estimatedByVariety = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const card of overviewCards) {
+      for (const v of card.varieties) {
+        if (v.estimatedTonnes == null) continue;
+        const key = varietyKeyOf(v.variety);
+        m.set(key, (m.get(key) ?? 0) + v.estimatedTonnes);
+      }
+    }
+    return m;
+  }, [overviewCards]);
+
+  const allocationBlocks = useMemo(
+    () => (blocksQ.data ?? []).map((b) => ({ id: b.id, name: b.name ?? "Unnamed block" })),
+    [blocksQ.data],
+  );
+
+
 
 
 
