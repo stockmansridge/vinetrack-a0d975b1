@@ -254,3 +254,48 @@ describe("skipped quarters in progress and statistics", () => {
     expect(withSkip.skippedQuarters).toBe(4);
   });
 });
+
+describe("buildRowCompletion completedAt", () => {
+  const segment = (
+    row: number, seg: number, completedAt: string | null,
+  ): PruningRowSegment => ({
+    id: `${row}-${seg}`, pruning_entry_id: "e1", pruning_season_id: "s1",
+    vineyard_id: "v1", paddock_id: "p1", paddock_row_id: `row-${row}`,
+    row_number: row, segment_number: seg, row_label: String(row),
+    completed: true, completed_at: completedAt, completed_by: null, created_at: "",
+  });
+
+  const identity = (n: number) => ({
+    paddockRowId: `row-${n}`, rowNumber: n, rowLabel: String(n),
+    order: n - 1, lengthM: 100, estimatedVines: 80,
+  });
+
+  it("returns null completedAt when no segments are completed", () => {
+    const completion = buildRowCompletion(
+      [identity(1)],
+      [{ ...segment(1, 1, "2026-08-01T00:00:00Z"), completed: false }],
+    );
+    expect(completion[0].completedAt).toBeNull();
+  });
+
+  it("captures the latest completed_at timestamp for a row", () => {
+    const completion = buildRowCompletion(
+      [identity(1)],
+      [
+        segment(1, 1, "2026-08-01T00:00:00Z"),
+        segment(1, 2, "2026-08-03T00:00:00Z"),
+        segment(1, 3, "2026-08-02T00:00:00Z"),
+      ],
+    );
+    expect(completion[0].completedAt).toBe("2026-08-03T00:00:00Z");
+  });
+
+  it("falls back to row_number indexing when paddock_row_id is absent", () => {
+    const s = segment(2, 1, "2026-08-05T00:00:00Z");
+    const completion = buildRowCompletion(
+      [{ ...identity(2), paddockRowId: null }],
+      [{ ...s, paddock_row_id: null }],
+    );
+    expect(completion[0].completedAt).toBe("2026-08-05T00:00:00Z");
+  });
+});
