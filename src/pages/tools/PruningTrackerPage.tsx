@@ -146,6 +146,7 @@ export default function PruningTrackerPage() {
   // and Android group rows the same way; using useVintage() here caused
   // the portal to query an empty year. See SQL 116/118 contract notes.
   const pruningSeasonYear = new Date().getFullYear();
+  const fmt = useRegionFormatters();
 
   const seasonsQ = usePruningSeasons(selectedVineyardId);
   const paddocksQ = usePaddocks(selectedVineyardId);
