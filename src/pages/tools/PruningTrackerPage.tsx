@@ -903,17 +903,8 @@ function BlockDetail({
                       <div className="w-10 text-sm font-medium tabular-nums text-muted-foreground">
                         {r.identity.rowLabel}
                       </div>
-                      {isComplete ? (
-                        <div className="flex-1 flex flex-col items-center justify-center">
-                          <Check className="h-5 w-5 text-emerald-500" aria-label={`Row ${r.identity.rowLabel} complete`} />
-                          {r.completedAt && (
-                            <span className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
-                              {fmt.dateShort(r.completedAt)}
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="flex gap-1 flex-1">
+                      <div className="flex-1">
+                        <div className="flex gap-1">
                           {[1, 2, 3, 4].map((q) => {
                             const done = r.completed.has(q);
                             const skipped = r.skipped.has(q);
@@ -926,7 +917,15 @@ function BlockDetail({
                             );
                           })}
                         </div>
-                      )}
+                        {isComplete && (
+                          <div className="flex items-center justify-center gap-1 mt-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                            <Check className="h-3 w-3" aria-label={`Row ${r.identity.rowLabel} complete`} />
+                            {r.completedAt && (
+                              <span className="tabular-nums">{fmt.dateShort(r.completedAt)}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                       <div className="text-xs text-muted-foreground tabular-nums w-10 text-right">
                         {r.completed.size}/4
                       </div>
