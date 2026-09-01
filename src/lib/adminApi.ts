@@ -157,13 +157,14 @@ export interface AdminPlatformScale {
   average_hectares_per_vineyard: number;
 }
 
-/** One authoritative row per vineyard, aggregated server-side (SQL 210). */
+/** One authoritative row per vineyard, aggregated server-side (SQL 210 + 211). */
 export interface AdminVineyardActivityCounts {
   vineyard_id: string;
   trip_count: number;
   pin_count: number;
   spray_record_count: number;
   work_task_count: number;
+  block_count: number;
 }
 
 
