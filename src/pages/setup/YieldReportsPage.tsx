@@ -622,6 +622,7 @@ export default function YieldReportsPage() {
 
         <TabsContent value="allocation" className="mt-4">
           <GrapeAllocationPanel
+            ref={allocationPanelRef}
             vineyardId={selectedVineyardId}
             vintage={activeVintage === ANY ? null : Number(activeVintage)}
             role={currentRole}
