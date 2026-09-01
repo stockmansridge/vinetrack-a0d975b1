@@ -26,7 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CheckCircle2, XCircle, RefreshCw, KeyRound } from "lucide-react";
+import { CheckCircle2, XCircle, RefreshCw, KeyRound, ExternalLink } from "lucide-react";
 import { AdminGate, AdminPageHeader } from "./_shared";
 import {
   runDiagnosticSend,
