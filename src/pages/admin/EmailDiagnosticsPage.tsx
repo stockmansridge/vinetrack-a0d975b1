@@ -265,6 +265,25 @@ interface RecoveryResult {
   errorCode?: string;
 }
 
+function ResendLinkCard() {
+  return (
+    <Card className="p-4 border-primary/20 bg-primary/5">
+      <a
+        href="https://resend.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+      >
+        <ExternalLink className="h-4 w-4" />
+        Open Resend dashboard
+      </a>
+      <p className="text-xs text-muted-foreground mt-1">
+        Fast access to the Resend console for delivery logs, domains, and API keys.
+      </p>
+    </Card>
+  );
+}
+
 function PasswordRecoveryCard() {
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
