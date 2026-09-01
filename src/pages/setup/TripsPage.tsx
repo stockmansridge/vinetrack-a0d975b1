@@ -553,6 +553,40 @@ function TripSheet({
   const { data: vineyardLogoUrl } = useVineyardLogo();
   const formatters = useRegionFormatters();
   const canSeeCosts = useCanSeeCosts();
+  // Deletion is restricted to owners, managers and supervisors.
+  const { currentRole } = useVineyard();
+  const canDeleteTrip =
+    currentRole === "owner" || currentRole === "manager" || currentRole === "supervisor";
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteTrip = async () => {
+    if (!trip) return;
+    setDeleting(true);
+    try {
+      await softDeleteTrip({
+        tripId: trip.id,
+        currentSyncVersion: (trip as any).sync_version ?? null,
+        userId: user?.id ?? null,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["trips"] });
+      toast({ title: "Trip deleted", description: "The trip has been removed from your records." });
+      setConfirmDelete(false);
+      onOpenChange(false);
+    } catch (err) {
+      toast({
+        title: "Could not delete trip",
+        description: describeTripDeleteError(err),
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const padName = trip?.paddock_name ?? (trip?.paddock_id ? paddockNameById.get(trip.paddock_id) ?? null : null);
   const points = arrayLen(trip?.path_points);
   const completed = arrayLen(trip?.completed_paths);
