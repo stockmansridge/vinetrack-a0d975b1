@@ -208,6 +208,7 @@ export function createRegionFormatters(
       }
     },
     date: fmtDate,
+    dateShort: fmtDateShort,
     dateTime: fmtDateTime,
   };
 }
