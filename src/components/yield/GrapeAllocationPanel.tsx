@@ -364,4 +364,6 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
       </AlertDialog>
     </div>
   );
-}
+});
+
+export default GrapeAllocationPanel;
