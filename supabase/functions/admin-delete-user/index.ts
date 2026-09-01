@@ -124,16 +124,22 @@ Deno.serve(async (req: Request) => {
   const ANON = Deno.env.get("VINETRACK_ANON_KEY");
   if (!URL_ || !SERVICE || !ANON) return jsonError(503, "VineTrack backend is not configured.");
 
+  // Prefer the explicit VineTrack token header: the Cloud gateway owns the
+  // standard Authorization header and may carry a Cloud-project token there.
+  const vinetrackToken = (req.headers.get("x-vinetrack-token") ?? "").trim();
   const authHeader = req.headers.get("Authorization") ?? "";
-  if (!authHeader.startsWith("Bearer ")) return jsonError(401, "Unauthorized");
+  const bearer = vinetrackToken ||
+    (authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "");
+  if (!bearer) return jsonError(401, "Unauthorized");
 
   const userClient = createClient(URL_, ANON, {
-    global: { headers: { Authorization: authHeader } },
+    global: { headers: { Authorization: `Bearer ${bearer}` } },
     auth: { persistSession: false },
   });
-  const { data: userData, error: userErr } = await userClient.auth.getUser();
+  const { data: userData, error: userErr } = await userClient.auth.getUser(bearer);
   if (userErr || !userData?.user) return jsonError(401, "Unauthorized");
   const caller = userData.user;
+
 
   const { data: isAdmin, error: adminErr } = await userClient.rpc("is_system_admin");
   if (adminErr) return jsonError(403, "Could not verify system admin access.");
