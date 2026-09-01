@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Scissors, ArrowLeft, CheckCircle2, AlertTriangle, Clock, Grape, CalendarDays, User, ExternalLink, LucideIcon } from "lucide-react";
+import { Scissors, ArrowLeft, CheckCircle2, Check, AlertTriangle, Clock, Grape, CalendarDays, User, ExternalLink, LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   usePruningSeasons,
@@ -46,6 +46,7 @@ import { usePruningActivity } from "@/lib/pruningActivityQuery";
 import { calculateSeasonPruningSummary } from "@/lib/pruningSummaryCalc";
 import { parseRows, parseVarietyAllocations } from "@/lib/paddockGeometry";
 import { formatDate } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import NewPruningActivityButton from "@/components/pruning/NewPruningActivityButton";
 
 import ActivityHistory from "@/components/pruning/ActivityHistory";
