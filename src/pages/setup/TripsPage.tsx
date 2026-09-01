@@ -747,7 +747,17 @@ function TripSheet({
         </SheetHeader>
         {trip && (
           <div className="mt-4 space-y-4 text-sm">
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              {canDeleteTrip && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                  Delete Trip
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="outline"
