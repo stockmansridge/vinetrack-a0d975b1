@@ -51,6 +51,10 @@ export interface GrapeAllocationPanelProps {
   blocks: { id: string; name: string }[];
 }
 
+export interface GrapeAllocationPanelRef {
+  openNewAllocation: () => void;
+}
+
 const t = (v: number | null | undefined, dp = 2) =>
   v == null ? "—" : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: dp })} t`;
 
