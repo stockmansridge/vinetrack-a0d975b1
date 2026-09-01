@@ -47,6 +47,12 @@ export interface RegionFormatters {
   sprayRateUnitLabel: string;     // "L/ha" | "gal/ac"
   currencySymbol: string;
 
+  // Weather display units — driven by distance_unit (metric/imperial).
+  // Storage stays canonical (mm, °C, km/h); these convert for display only.
+  rainfallUnitLabel: string;      // "mm" | "in"
+  temperatureUnitLabel: string;   // "°C" | "°F"
+  windUnitLabel: string;          // "km/h" | "mph"
+
   blockLabel: string;             // "Block" | "Block" | "Block"
   blocksLabel: string;
 
@@ -58,6 +64,9 @@ export interface RegionFormatters {
   speed: (kmh: unknown, dp?: number) => string;           // km/h in → km/h or mph
   sprayRate: (lPerHa: unknown, dp?: number) => string;    // L/ha in → L/ha or gal/ac
   currency: (amount: unknown, dp?: number) => string;     // raw number
+  rainfall: (mm: unknown, dp?: number) => string;         // mm in → mm or in (2dp)
+  temperature: (celsius: unknown, dp?: number) => string; // °C in → °C or °F
+  wind: (kmh: unknown, dp?: number) => string;            // km/h in → km/h or mph
   date: (value: Date | string | number | null | undefined) => string;
   dateShort: (value: Date | string | number | null | undefined) => string;
   dateTime: (value: Date | string | number | null | undefined) => string;
