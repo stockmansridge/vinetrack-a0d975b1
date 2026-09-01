@@ -270,7 +270,7 @@ export default function AllocationDialog({
               {sectionTitle("Allocation")}
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="space-y-1.5">
-                  <Label>Allocation type</Label>
+                  <Label className="flex h-5 items-center">Allocation type</Label>
                   <Select value={type} onValueChange={(v) => setType(v as AllocationType)}>
                     <SelectTrigger aria-label="Allocation type">
                       <SelectValue />
@@ -283,12 +283,12 @@ export default function AllocationDialog({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>Vintage</Label>
+                  <Label className="flex h-5 items-center">Vintage</Label>
                   <Input value={vintage} readOnly disabled />
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="flex items-center gap-1.5">
+                  <Label className="flex h-5 items-center gap-1.5">
                     Variety
                     <Help text="Each allocation covers one variety. Create another allocation if the purchaser has committed to a different variety." />
                   </Label>
@@ -312,7 +312,7 @@ export default function AllocationDialog({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="alloc-tonnes" className="flex items-center gap-1.5">
+                  <Label htmlFor="alloc-tonnes" className="flex h-5 items-center gap-1.5">
                     Quantity (tonnes)
                     <Help text="Total tonnes required or committed under this allocation." />
                   </Label>
