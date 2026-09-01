@@ -156,20 +156,20 @@ export default function RainfallReportsPage() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <SummaryCard label="Total rainfall" value={`${summary.totalMm} mm`} />
+        <SummaryCard label="Total rainfall" value={rf.rainfall(summary.totalMm)} />
         <SummaryCard label="Rain days" value={String(summary.rainDays)} />
         <SummaryCard
           label="Wettest day"
           value={
             summary.wettest
-              ? `${summary.wettest.mm} mm`
+              ? rf.rainfall(summary.wettest.mm)
               : "—"
           }
           sub={summary.wettest ? rf.date(new Date(summary.wettest.date)) : undefined}
         />
         <SummaryCard
           label="Avg / rain day"
-          value={summary.avgPerRainDay != null ? `${summary.avgPerRainDay} mm` : "—"}
+          value={summary.avgPerRainDay != null ? rf.rainfall(summary.avgPerRainDay) : "—"}
         />
         <SummaryCard label="Source" value={summary.sourceLabel} />
       </div>
@@ -276,7 +276,7 @@ function RainfallTable({ rows }: { rows: any[] }) {
   type Col = (typeof COLS)[number];
   const COLUMN_DEFS: ColumnDef<Col>[] = [
     { key: "date", label: "Date" },
-    { key: "rainfall", label: "Rainfall (mm)", align: "right" },
+    { key: "rainfall", label: `Rainfall (${rf.rainfallUnitLabel})`, align: "right" },
     { key: "source", label: "Source" },
     { key: "station", label: "Station" },
     { key: "notes", label: "Notes" },
@@ -294,7 +294,7 @@ function RainfallTable({ rows }: { rows: any[] }) {
 
   const headerMap: Record<Col, React.ReactNode> = {
     date: <ReorderableHead columnId="date" onDropColumn={moveColumn} sort={{ active: getSortDirection("date"), onSort: () => toggleSort("date") }}>Date</ReorderableHead>,
-    rainfall: <ReorderableHead columnId="rainfall" onDropColumn={moveColumn} align="right" sort={{ active: getSortDirection("rainfall"), onSort: () => toggleSort("rainfall") }}>Rainfall (mm)</ReorderableHead>,
+    rainfall: <ReorderableHead columnId="rainfall" onDropColumn={moveColumn} align="right" sort={{ active: getSortDirection("rainfall"), onSort: () => toggleSort("rainfall") }}>Rainfall ({rf.rainfallUnitLabel})</ReorderableHead>,
     source: <ReorderableHead columnId="source" onDropColumn={moveColumn} sort={{ active: getSortDirection("source"), onSort: () => toggleSort("source") }}>Source</ReorderableHead>,
     station: <ReorderableHead columnId="station" onDropColumn={moveColumn} sort={{ active: getSortDirection("station"), onSort: () => toggleSort("station") }}>Station</ReorderableHead>,
     notes: <ReorderableHead columnId="notes" onDropColumn={moveColumn} sort={{ active: getSortDirection("notes"), onSort: () => toggleSort("notes") }}>Notes</ReorderableHead>,
@@ -308,7 +308,7 @@ function RainfallTable({ rows }: { rows: any[] }) {
       case "rainfall":
         return (
           <TableCell className="text-right tabular-nums">
-            {r.rainfall_mm == null ? <span className="text-muted-foreground">—</span> : r.rainfall_mm.toFixed(1)}
+            {r.rainfall_mm == null ? <span className="text-muted-foreground">—</span> : rf.rainfall(r.rainfall_mm)}
           </TableCell>
         );
       case "source":
