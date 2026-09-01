@@ -1,15 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
-import { Droplet, CalendarDays, Scissors, Wrench, ClipboardList } from "lucide-react";
+import { Droplet, CalendarDays, Scissors, Wrench, ClipboardList, Grape } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
 import { useVintage } from "@/lib/useVintage";
 import { hemisphereLabel } from "@/lib/hemisphere";
 
 import { usePruningVineyardSummary } from "@/lib/pruningSummaryQuery";
+import { fetchGrapeAllocations } from "@/lib/grapeAllocationsQuery";
 import { MetricCard } from "@/components/ui/metric-card";
 
 const fmt = (n: number) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—";
+
+const fmtT = (n: number) =>
+  Number.isFinite(n)
+    ? `${n.toLocaleString(undefined, { maximumFractionDigits: 1 })} t`
+    : "—";
 
 const fmtPercent = (n: number | null | undefined) => {
   if (n == null || !Number.isFinite(n)) return "—";
