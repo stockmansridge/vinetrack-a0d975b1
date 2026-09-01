@@ -114,6 +114,8 @@ export interface RowCompletionState {
   skipped: Set<number>;
   /** ISO timestamp of the most recently completed quarter; null if none. */
   completedAt: string | null;
+  /** Per-quarter completion timestamps (segment number -> ISO timestamp). */
+  segmentCompletedAt: Map<number, string>;
 }
 
 export function buildRowCompletion(
@@ -131,6 +133,8 @@ export function buildRowCompletion(
   const skipByNumber = new Map<number, Set<number>>();
   const completedAtById = new Map<string, string>();
   const completedAtByNumber = new Map<number, string>();
+  const segDateById = new Map<string, Map<number, string>>();
+  const segDateByNumber = new Map<number, Map<number, string>>();
   for (const s of segments) {
     // Shared contract with iOS/Android: a quarter is done iff completed === true.
     // Do NOT also require pruning_entry_id — cross-platform records (and some
@@ -150,6 +154,10 @@ export function buildRowCompletion(
       if (s.completed_at) {
         const existing = completedAtById.get(s.paddock_row_id);
         if (!existing || s.completed_at > existing) completedAtById.set(s.paddock_row_id, s.completed_at);
+        const segMap = segDateById.get(s.paddock_row_id) ?? new Map<number, string>();
+        const segExisting = segMap.get(s.segment_number);
+        if (!segExisting || s.completed_at > segExisting) segMap.set(s.segment_number, s.completed_at);
+        segDateById.set(s.paddock_row_id, segMap);
       }
       if (isSkipped) {
         const sk = skipById.get(s.paddock_row_id) ?? new Set<number>();
@@ -164,6 +172,10 @@ export function buildRowCompletion(
       if (s.completed_at) {
         const existing = completedAtByNumber.get(s.row_number);
         if (!existing || s.completed_at > existing) completedAtByNumber.set(s.row_number, s.completed_at);
+        const segMap = segDateByNumber.get(s.row_number) ?? new Map<number, string>();
+        const segExisting = segMap.get(s.segment_number);
+        if (!segExisting || s.completed_at > segExisting) segMap.set(s.segment_number, s.completed_at);
+        segDateByNumber.set(s.row_number, segMap);
       }
       if (isSkipped) {
         const sk = skipByNumber.get(s.row_number) ?? new Set<number>();
@@ -189,7 +201,10 @@ export function buildRowCompletion(
     const completedAt = id.paddockRowId
       ? (completedAtById.get(id.paddockRowId) ?? completedAtByNumber.get(id.rowNumber) ?? null)
       : (completedAtByNumber.get(id.rowNumber) ?? null);
-    return { identity: id, completed, skipped, completedAt: completedAt ?? null };
+    const segId = id.paddockRowId ? segDateById.get(id.paddockRowId) : null;
+    const segNum = segDateByNumber.get(id.rowNumber);
+    const segmentCompletedAt = new Map<number, string>([...(segNum ?? []), ...(segId ?? [])]);
+    return { identity: id, completed, skipped, completedAt: completedAt ?? null, segmentCompletedAt };
   });
 
 }
