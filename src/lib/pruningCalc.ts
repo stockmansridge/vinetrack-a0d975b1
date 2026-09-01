@@ -112,6 +112,8 @@ export interface RowCompletionState {
   completed: Set<number>; // segment numbers 1..4
   /** SQL 168: subset of `completed` whose quarters were marked skipped. */
   skipped: Set<number>;
+  /** ISO timestamp of the most recently completed quarter; null if none. */
+  completedAt: string | null;
 }
 
 export function buildRowCompletion(
@@ -127,6 +129,8 @@ export function buildRowCompletion(
   const byNumber = new Map<number, Set<number>>();
   const skipById = new Map<string, Set<number>>();
   const skipByNumber = new Map<number, Set<number>>();
+  const completedAtById = new Map<string, string>();
+  const completedAtByNumber = new Map<number, string>();
   for (const s of segments) {
     // Shared contract with iOS/Android: a quarter is done iff completed === true.
     // Do NOT also require pruning_entry_id — cross-platform records (and some
@@ -143,6 +147,10 @@ export function buildRowCompletion(
       const set = byId.get(s.paddock_row_id) ?? new Set<number>();
       set.add(s.segment_number);
       byId.set(s.paddock_row_id, set);
+      if (s.completed_at) {
+        const existing = completedAtById.get(s.paddock_row_id);
+        if (!existing || s.completed_at > existing) completedAtById.set(s.paddock_row_id, s.completed_at);
+      }
       if (isSkipped) {
         const sk = skipById.get(s.paddock_row_id) ?? new Set<number>();
         sk.add(s.segment_number);
@@ -153,6 +161,10 @@ export function buildRowCompletion(
       const set = byNumber.get(s.row_number) ?? new Set<number>();
       set.add(s.segment_number);
       byNumber.set(s.row_number, set);
+      if (s.completed_at) {
+        const existing = completedAtByNumber.get(s.row_number);
+        if (!existing || s.completed_at > existing) completedAtByNumber.set(s.row_number, s.completed_at);
+      }
       if (isSkipped) {
         const sk = skipByNumber.get(s.row_number) ?? new Set<number>();
         sk.add(s.segment_number);
@@ -172,7 +184,12 @@ export function buildRowCompletion(
     const skipIdMatch = id.paddockRowId ? skipById.get(id.paddockRowId) : null;
     const skipNumMatch = skipByNumber.get(id.rowNumber);
     const skipped = new Set<number>([...(skipIdMatch ?? []), ...(skipNumMatch ?? [])]);
-    return { identity: id, completed, skipped };
+    // Use the latest completed_at from either indexing path. If both paths
+    // exist, prefer the paddock_row_id timestamp as the more stable identity.
+    const completedAt = id.paddockRowId
+      ? (completedAtById.get(id.paddockRowId) ?? completedAtByNumber.get(id.rowNumber) ?? null)
+      : (completedAtByNumber.get(id.rowNumber) ?? null);
+    return { identity: id, completed, skipped, completedAt: completedAt ?? null };
   });
 
 }
