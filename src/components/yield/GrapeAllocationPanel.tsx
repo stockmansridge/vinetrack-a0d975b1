@@ -165,21 +165,10 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          Allocate the {vintage ?? "selected"} vintage estimate to your own use and to
-          external commitments, and track what is still available.
-        </p>
-        <Button
-          onClick={() => {
-            setEditing(null);
-            setOpen(true);
-          }}
-          disabled={!vineyardId || vintage == null}
-        >
-          <Plus className="h-4 w-4 mr-1.5" /> Add allocation
-        </Button>
-      </div>
+      <p className="text-sm text-muted-foreground">
+        Allocate the {vintage ?? "selected"} vintage estimate to your own use and to
+        external commitments, and track what is still available.
+      </p>
 
       {vintage == null && (
         <PortalNotice
