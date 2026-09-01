@@ -32,6 +32,8 @@ import {
   forecastUnavailableReason,
   type RainForecastDay,
 } from "@/lib/rainForecastQuery";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import type { RegionFormatters } from "@/lib/regionFormatters";
 
 const SOURCE_LABELS: Record<string, string> = {
   davis_weatherlink: "Davis WeatherLink",
@@ -69,7 +71,7 @@ function fmt(n: number | null | undefined, digits = 0): string {
 
 const WEEKDAY = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-function forecastBadgeLabel(days: RainForecastDay[]): string {
+function forecastBadgeLabel(days: RainForecastDay[], rf: RegionFormatters): string {
   const s = summarizeForecast(days);
   if (!s.firstRainDay || s.totalMm < 1) {
     return "No significant rain in next 7 days";
@@ -77,7 +79,7 @@ function forecastBadgeLabel(days: RainForecastDay[]): string {
   const d = new Date(s.firstRainDay.date);
   const day = isNaN(d.getTime()) ? s.firstRainDay.date : WEEKDAY[d.getDay()];
   const mm = Math.round((s.firstRainDay.rainfall_mm ?? 0) * 10) / 10;
-  return `Forecast rain: ${mm} mm ${day}`;
+  return `Forecast rain: ${rf.rainfall(mm)} ${day}`;
 }
 
 interface MetricProps {
@@ -109,6 +111,7 @@ interface Props {
 }
 
 export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: Props) {
+  const rf = useRegionFormatters();
   const weatherQ = useQuery({
     queryKey: ["live-weather", vineyardId],
     enabled: !!vineyardId,
@@ -146,7 +149,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
         title: forecastUnavailableReason(forecast.reason, forecast.message),
       };
     }
-    return { label: forecastBadgeLabel(forecast.days), title: undefined };
+    return { label: forecastBadgeLabel(forecast.days, rf), title: undefined };
   })();
 
   const forecastSourceLabel = (() => {
@@ -307,7 +310,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
             <Metric
               Icon={Thermometer}
               label="Temperature"
-              value={reading.temperature_c != null ? `${fmt(reading.temperature_c, 1)}°C` : "—"}
+              value={reading.temperature_c != null ? rf.temperature(reading.temperature_c, 1) : "—"}
             />
             <Metric
               Icon={Droplets}
@@ -317,7 +320,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
             <Metric
               Icon={Wind}
               label="Current wind"
-              value={wind != null ? `${fmt(wind, 1)} km/h` : "—"}
+              value={wind != null ? rf.wind(wind, 1) : "—"}
               hint={dir}
             />
             <Metric
@@ -325,21 +328,21 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
               label="Current gust"
               value={
                 reading.wind_gust_kmh != null
-                  ? `${fmt(reading.wind_gust_kmh, 1)} km/h`
+                  ? rf.wind(reading.wind_gust_kmh, 1)
                   : "—"
               }
             />
             <Metric
               Icon={CloudRain}
               label="Rain recorded today"
-              value={reading.rain_today_mm != null ? `${fmt(reading.rain_today_mm, 1)} mm` : "—"}
+              value={reading.rain_today_mm != null ? rf.rainfall(reading.rain_today_mm, 1) : "—"}
             />
             <Metric
               Icon={CloudRain}
               label="Current rain rate"
               value={
                 reading.rain_rate_mm_per_hr != null
-                  ? `${fmt(reading.rain_rate_mm_per_hr, 1)} mm/h`
+                  ? `${rf.rainfall(reading.rain_rate_mm_per_hr)}/h`
                   : "—"
               }
             />
@@ -380,6 +383,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
           days={forecastOk ? forecast!.days : null}
           loading={forecastQ.isLoading}
           unavailableLabel={forecastBadge.title ?? forecastBadge.label}
+          rf={rf}
         />
 
         {forecastIsWilly && (
@@ -408,10 +412,12 @@ function ForecastStrip({
   days,
   loading,
   unavailableLabel,
+  rf,
 }: {
   days: RainForecastDay[] | null;
   loading: boolean;
   unavailableLabel?: string;
+  rf: RegionFormatters;
 }) {
   if (loading) {
     return (
@@ -446,15 +452,15 @@ function ForecastStrip({
             <div className="flex items-center justify-center gap-1 text-xs">
               <Thermometer className="h-3 w-3 text-muted-foreground" />
               <span>
-                {d.temp_max_c != null ? `${fmt(d.temp_max_c, 0)}°` : "—"}
+                {d.temp_max_c != null ? rf.temperature(d.temp_max_c, 0) : "—"}
                 {d.temp_min_c != null ? (
-                  <span className="text-muted-foreground">/{fmt(d.temp_min_c, 0)}°</span>
+                  <span className="text-muted-foreground">/{rf.temperature(d.temp_min_c, 0)}</span>
                 ) : null}
               </span>
             </div>
             <div className="flex items-center justify-center gap-1 text-xs mt-0.5">
               <Wind className="h-3 w-3 text-muted-foreground" />
-              <span>{d.wind_max_kmh != null ? `${fmt(d.wind_max_kmh, 0)} km/h` : "—"}</span>
+              <span>{d.wind_max_kmh != null ? rf.wind(d.wind_max_kmh, 0) : "—"}</span>
             </div>
             {(() => {
               const rain = d.rainfall_mm ?? 0;
@@ -464,12 +470,12 @@ function ForecastStrip({
                   {hasRain ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white">
                       <CloudRain className="h-3 w-3 text-white" />
-                      {`${fmt(rain, 1)} mm`}
+                      {rf.rainfall(rain)}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-muted-foreground">
                       <CloudRain className="h-3 w-3 text-muted-foreground" />
-                      {d.rainfall_mm != null ? `${fmt(d.rainfall_mm, 1)} mm` : "—"}
+                      {d.rainfall_mm != null ? rf.rainfall(d.rainfall_mm) : "—"}
                     </span>
                   )}
                 </div>

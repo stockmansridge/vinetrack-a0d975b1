@@ -47,6 +47,12 @@ export interface RegionFormatters {
   sprayRateUnitLabel: string;     // "L/ha" | "gal/ac"
   currencySymbol: string;
 
+  // Weather display units — driven by distance_unit (metric/imperial).
+  // Storage stays canonical (mm, °C, km/h); these convert for display only.
+  rainfallUnitLabel: string;      // "mm" | "in"
+  temperatureUnitLabel: string;   // "°C" | "°F"
+  windUnitLabel: string;          // "km/h" | "mph"
+
   blockLabel: string;             // "Block" | "Block" | "Block"
   blocksLabel: string;
 
@@ -58,6 +64,9 @@ export interface RegionFormatters {
   speed: (kmh: unknown, dp?: number) => string;           // km/h in → km/h or mph
   sprayRate: (lPerHa: unknown, dp?: number) => string;    // L/ha in → L/ha or gal/ac
   currency: (amount: unknown, dp?: number) => string;     // raw number
+  rainfall: (mm: unknown, dp?: number) => string;         // mm in → mm or in (2dp)
+  temperature: (celsius: unknown, dp?: number) => string; // °C in → °C or °F
+  wind: (kmh: unknown, dp?: number) => string;            // km/h in → km/h or mph
   date: (value: Date | string | number | null | undefined) => string;
   dateShort: (value: Date | string | number | null | undefined) => string;
   dateTime: (value: Date | string | number | null | undefined) => string;
@@ -108,6 +117,13 @@ export function createRegionFormatters(
   const speedUnitLabel = distImperial ? "mph" : "km/h";
   const sprayRateUnitLabel = `${volumeUnitLabel}/${rateImperial ? "ac" : "ha"}`;
 
+  // Weather display units follow the shared metric/imperial system selector
+  // (distance_unit). Storage stays canonical: mm, °C, km/h.
+  const MM_PER_INCH = 25.4;
+  const rainfallUnitLabel = distImperial ? "in" : "mm";
+  const temperatureUnitLabel = distImperial ? "°F" : "°C";
+  const windUnitLabel = speedUnitLabel;
+
   // Customer-facing terminology is standardised on "Block" across all regions.
   // The `terminology_region` setting is preserved in storage but no longer
   // varies the UI label — see docs in stage 5I terminology cleanup.
@@ -150,6 +166,9 @@ export function createRegionFormatters(
     speedUnitLabel,
     sprayRateUnitLabel,
     currencySymbol: currencySymbolFor(s.currency_code),
+    rainfallUnitLabel,
+    temperatureUnitLabel,
+    windUnitLabel,
     blockLabel,
     blocksLabel,
 
@@ -206,6 +225,26 @@ export function createRegionFormatters(
       } catch {
         return `${s.currency_code} ${round(x, dp)}`;
       }
+    },
+    rainfall: (v, dp) => {
+      const x = n(v);
+      if (x == null) return "";
+      // mm in → mm, or inches at 2dp for useful readings.
+      const out = distImperial ? x / MM_PER_INCH : x;
+      const digits = dp ?? (distImperial ? 2 : 1);
+      return `${round(out, digits)} ${rainfallUnitLabel}`;
+    },
+    temperature: (v, dp = 1) => {
+      const x = n(v);
+      if (x == null) return "";
+      const out = distImperial ? x * 9 / 5 + 32 : x;
+      return `${round(out, dp)}${temperatureUnitLabel}`;
+    },
+    wind: (v, dp = 0) => {
+      const x = n(v);
+      if (x == null) return "";
+      const out = distImperial ? x / KM_PER_MI : x;
+      return `${round(out, dp)} ${windUnitLabel}`;
     },
     date: fmtDate,
     dateShort: fmtDateShort,

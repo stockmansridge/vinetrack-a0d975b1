@@ -19,7 +19,13 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { fetchDailyRainfall, sourceLabel, type RainfallDay } from "@/lib/rainfallQuery";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { cn } from "@/lib/utils";
+
+/** Canonical mm → bare display number (unit lives in labels/tooltips). */
+function makeRainCell(imperial: boolean) {
+  return (mm: number) => (imperial ? (mm / 25.4).toFixed(2) : mm.toFixed(1));
+}
 
 interface Props {
   vineyardId: string;
@@ -108,6 +114,8 @@ function YearMatrixView({
   const from = useMemo(() => startOfYear(new Date(year, 0, 1)), [year]);
   const to = useMemo(() => endOfYear(new Date(year, 0, 1)), [year]);
   const isCurrent = year === new Date().getFullYear();
+  const rf = useRegionFormatters();
+  const rainCell = makeRainCell(rf.settings.distance_unit === "imperial");
 
   const { data, isLoading } = useQuery({
     queryKey: ["rain-year-matrix", vineyardId, year],
@@ -180,7 +188,7 @@ function YearMatrixView({
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-xs text-muted-foreground">
-          {year} · Year total {yearSummary.total} mm · {yearSummary.rainDays} rain days
+          {year} · Year total {rf.rainfall(yearSummary.total)} · {yearSummary.rainDays} rain days
           {isLoading ? " · loading…" : ""}
         </p>
         <div className="flex items-center gap-1">
@@ -248,11 +256,7 @@ function YearMatrixView({
                               hasData && (mm as number) > 0 && "font-medium dark:text-[#0F1410]",
                             )}
                           >
-                            {!hasData
-                              ? "—"
-                              : (mm as number) === 0
-                                ? "0.0"
-                                : (mm as number).toFixed(1)}
+                            {!hasData ? "—" : rainCell(mm as number)}
                           </button>
                         </DayPopover>
                       </td>
@@ -264,15 +268,15 @@ function YearMatrixView({
           </tbody>
           {/* Monthly summary footer */}
           <tfoot className="bg-muted/30">
-            <SummaryRow label="Total (mm)" values={monthly.map((m) => (m.recordedDays ? m.total.toFixed(1) : "—"))} bold />
+            <SummaryRow label={`Total (${rf.rainfallUnitLabel})`} values={monthly.map((m) => (m.recordedDays ? rainCell(m.total) : "—"))} bold />
             <SummaryRow label="Rain days" values={monthly.map((m) => (m.recordedDays ? String(m.rainDays) : "—"))} />
             <SummaryRow
               label="Wettest day"
-              values={monthly.map((m) => (m.highest ? `${m.highest.mm.toFixed(1)}` : "—"))}
+              values={monthly.map((m) => (m.highest ? rainCell(m.highest.mm) : "—"))}
             />
             <SummaryRow
               label="Avg / day"
-              values={monthly.map((m) => (m.avg != null ? m.avg.toFixed(1) : "—"))}
+              values={monthly.map((m) => (m.avg != null ? rainCell(m.avg) : "—"))}
             />
           </tfoot>
         </table>
@@ -280,24 +284,24 @@ function YearMatrixView({
 
       {/* Year summary */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-        <YearStat label="Year total" value={`${yearSummary.total} mm`} />
+        <YearStat label="Year total" value={rf.rainfall(yearSummary.total)} />
         <YearStat label="Rain days" value={String(yearSummary.rainDays)} />
         <YearStat
           label="Wettest month"
-          value={yearSummary.wettestMonth ? `${MONTH_LABELS[yearSummary.wettestMonth.month]} (${yearSummary.wettestMonth.total} mm)` : "—"}
+          value={yearSummary.wettestMonth ? `${MONTH_LABELS[yearSummary.wettestMonth.month]} (${rf.rainfall(yearSummary.wettestMonth.total)})` : "—"}
         />
         <YearStat
           label="Driest month"
-          value={yearSummary.driestMonth ? `${MONTH_LABELS[yearSummary.driestMonth.month]} (${yearSummary.driestMonth.total} mm)` : "—"}
+          value={yearSummary.driestMonth ? `${MONTH_LABELS[yearSummary.driestMonth.month]} (${rf.rainfall(yearSummary.driestMonth.total)})` : "—"}
         />
         <YearStat
           label="Wettest day"
-          value={yearSummary.wettestDay ? `${yearSummary.wettestDay.mm.toFixed(1)} mm` : "—"}
+          value={yearSummary.wettestDay ? rf.rainfall(yearSummary.wettestDay.mm) : "—"}
           sub={yearSummary.wettestDay ? format(new Date(yearSummary.wettestDay.date), "PP") : undefined}
         />
         <YearStat
           label="Avg / month"
-          value={yearSummary.avgPerMonth != null ? `${yearSummary.avgPerMonth} mm` : "—"}
+          value={yearSummary.avgPerMonth != null ? rf.rainfall(yearSummary.avgPerMonth) : "—"}
         />
       </div>
     </div>
@@ -346,6 +350,7 @@ function DayPopover({
   row?: RainfallDay;
   children: React.ReactNode;
 }) {
+  const rf = useRegionFormatters();
   return (
     <Popover>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
@@ -356,7 +361,7 @@ function DayPopover({
           {row?.rainfall_mm == null ? (
             <span className="text-muted-foreground">No reading</span>
           ) : (
-            <span className="font-medium">{row.rainfall_mm.toFixed(1)} mm</span>
+            <span className="font-medium">{rf.rainfall(row.rainfall_mm)}</span>
           )}
         </div>
         <div className="text-xs text-muted-foreground">
@@ -393,6 +398,7 @@ function MonthView({
 }) {
   const from = useMemo(() => startOfMonth(cursor), [cursor]);
   const to = useMemo(() => endOfMonth(cursor), [cursor]);
+  const rf = useRegionFormatters();
 
   const { data, isLoading } = useQuery({
     queryKey: ["rain-calendar", vineyardId, from.toISOString()],
@@ -434,7 +440,7 @@ function MonthView({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
-          {format(cursor, "MMMM yyyy")} · Total {total} mm
+          {format(cursor, "MMMM yyyy")} · Total {rf.rainfall(total)}
         </p>
         <div className="flex items-center gap-1">
           <Button size="sm" variant="outline" onClick={() => setCursor(addMonths(cursor, -1))}>
@@ -502,9 +508,7 @@ function MonthView({
                     ? isLoading
                       ? "…"
                       : "—"
-                    : (mm as number) === 0
-                      ? "0 mm"
-                      : `${(mm as number).toFixed(1)} mm`}
+                    : rf.rainfall(mm as number)}
                 </div>
               </button>
             </DayPopover>
@@ -530,7 +534,7 @@ function SourceLegend() {
           {label}
         </span>
       ))}
-      <span className="ml-auto">— = no data, 0 mm = recorded dry day</span>
+      <span className="ml-auto">— = no data, 0 = recorded dry day</span>
     </div>
   );
 }

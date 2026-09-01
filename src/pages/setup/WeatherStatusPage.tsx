@@ -76,6 +76,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { WillyWeatherAttribution } from "@/components/weather/WillyWeatherAttribution";
 import { formatDateTime } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import {
   backfillWuRainfall,
   findNearbyWuStations,
@@ -747,6 +748,7 @@ function LiveWeatherCard({
   vineyardId: string;
   anyConfigured: boolean;
 }) {
+  const rf = useRegionFormatters();
   const { data, isLoading, refetch, isFetching } = useQuery<LiveWeatherResult>({
     queryKey: ["live_weather", vineyardId],
     enabled: !!vineyardId,
@@ -797,7 +799,7 @@ function LiveWeatherCard({
             </div>
           )}
           <div className="grid gap-2 sm:grid-cols-3 text-sm">
-            <Reading icon={<Thermometer className="h-3.5 w-3.5" />} label="Temperature" value={fmtNum(data.reading.temperature_c, 1, " °C")} />
+            <Reading icon={<Thermometer className="h-3.5 w-3.5" />} label="Temperature" value={data.reading.temperature_c != null ? rf.temperature(data.reading.temperature_c, 1) : "—"} />
             <Reading icon={<Droplets className="h-3.5 w-3.5" />} label="Humidity" value={fmtNum(data.reading.humidity_pct, 0, " %")} />
             <Reading
               icon={<Wind className="h-3.5 w-3.5" />}
@@ -805,15 +807,15 @@ function LiveWeatherCard({
               value={
                 data.reading.wind_speed_kmh == null
                   ? "—"
-                  : `${fmtNum(data.reading.wind_speed_kmh, 1, " km/h")}${
+                  : `${rf.wind(data.reading.wind_speed_kmh, 1)}${
                       data.reading.wind_direction_deg != null
                         ? ` ${compassFrom(data.reading.wind_direction_deg)}`
                         : ""
                     }`
               }
             />
-            <Reading icon={<CloudRain className="h-3.5 w-3.5" />} label="Rain today" value={fmtNum(data.reading.rain_today_mm, 1, " mm")} />
-            <Reading icon={<CloudRain className="h-3.5 w-3.5" />} label="Rain rate" value={fmtNum(data.reading.rain_rate_mm_per_hr, 2, " mm/h")} />
+            <Reading icon={<CloudRain className="h-3.5 w-3.5" />} label="Rain today" value={data.reading.rain_today_mm != null ? rf.rainfall(data.reading.rain_today_mm, 1) : "—"} />
+            <Reading icon={<CloudRain className="h-3.5 w-3.5" />} label="Rain rate" value={data.reading.rain_rate_mm_per_hr != null ? `${rf.rainfall(data.reading.rain_rate_mm_per_hr)}/h` : "—"} />
             <Reading icon={<Cloud className="h-3.5 w-3.5" />} label="Station" value={data.reading.station_name ?? "—"} />
           </div>
           <div className="text-xs text-muted-foreground border-t pt-2 flex flex-wrap gap-x-4 gap-y-1">
