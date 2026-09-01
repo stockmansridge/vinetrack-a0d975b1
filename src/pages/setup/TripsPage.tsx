@@ -476,14 +476,14 @@ export default function TripsPage() {
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
             )}
             {error && (
-              <TableRow><TableCell colSpan={8} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
             )}
             {!isLoading && !error && rowsSorted.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                   No trips found for this vineyard.
                 </TableCell>
               </TableRow>
