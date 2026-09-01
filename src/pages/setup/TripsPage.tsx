@@ -777,6 +777,16 @@ function TripSheet({
         {trip && (
           <div className="mt-4 space-y-4 text-sm">
             <div className="flex justify-end gap-2">
+              {canDeleteTrip && isCompletable && (
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => setConfirmComplete(true)}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                  Complete Trip
+                </Button>
+              )}
               {canDeleteTrip && (
                 <Button
                   size="sm"
@@ -988,6 +998,28 @@ function TripSheet({
             </Section>
           </div>
         )}
+        <AlertDialog open={confirmComplete} onOpenChange={(o) => !completing && setConfirmComplete(o)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Complete this trip?</AlertDialogTitle>
+              <AlertDialogDescription>
+                The trip will be marked as completed. The finish time will be set
+                to now (unless one is already recorded), and the trip will no
+                longer appear as paused or active.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={completing}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => { e.preventDefault(); void handleCompleteTrip(); }}
+                disabled={completing}
+              >
+                {completing && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                Complete trip
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <AlertDialog open={confirmDelete} onOpenChange={(o) => !deleting && setConfirmDelete(o)}>
           <AlertDialogContent>
             <AlertDialogHeader>
