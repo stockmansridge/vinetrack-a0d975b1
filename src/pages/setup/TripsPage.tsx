@@ -31,7 +31,21 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
+import { fetchTripsForVineyard, softDeleteTrip, describeTripDeleteError, type Trip } from "@/lib/tripsQuery";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
+import { Trash2, Loader2 } from "lucide-react";
 import { fetchWorkTasksForVineyard, workTaskShortLabel } from "@/lib/workTasksQuery";
 import { Button } from "@/components/ui/button";
 import TripRouteAppleMap from "@/components/TripRouteAppleMap";
@@ -539,6 +553,40 @@ function TripSheet({
   const { data: vineyardLogoUrl } = useVineyardLogo();
   const formatters = useRegionFormatters();
   const canSeeCosts = useCanSeeCosts();
+  // Deletion is restricted to owners, managers and supervisors.
+  const { currentRole } = useVineyard();
+  const canDeleteTrip =
+    currentRole === "owner" || currentRole === "manager" || currentRole === "supervisor";
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteTrip = async () => {
+    if (!trip) return;
+    setDeleting(true);
+    try {
+      await softDeleteTrip({
+        tripId: trip.id,
+        currentSyncVersion: (trip as any).sync_version ?? null,
+        userId: user?.id ?? null,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["trips"] });
+      toast({ title: "Trip deleted", description: "The trip has been removed from your records." });
+      setConfirmDelete(false);
+      onOpenChange(false);
+    } catch (err) {
+      toast({
+        title: "Could not delete trip",
+        description: describeTripDeleteError(err),
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const padName = trip?.paddock_name ?? (trip?.paddock_id ? paddockNameById.get(trip.paddock_id) ?? null : null);
   const points = arrayLen(trip?.path_points);
   const completed = arrayLen(trip?.completed_paths);
@@ -699,7 +747,17 @@ function TripSheet({
         </SheetHeader>
         {trip && (
           <div className="mt-4 space-y-4 text-sm">
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              {canDeleteTrip && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                  Delete Trip
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="outline"
@@ -901,7 +959,30 @@ function TripSheet({
             </Section>
           </div>
         )}
+        <AlertDialog open={confirmDelete} onOpenChange={(o) => !deleting && setConfirmDelete(o)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this trip?</AlertDialogTitle>
+              <AlertDialogDescription>
+                The trip will be removed from the portal and the mobile app. It is a
+                recoverable delete — the underlying record is retained and can be
+                restored by VineTrack support if needed.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => { e.preventDefault(); void handleDeleteTrip(); }}
+                disabled={deleting}
+              >
+                {deleting && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                Delete trip
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SheetContent>
+
     </Sheet>
   );
 }

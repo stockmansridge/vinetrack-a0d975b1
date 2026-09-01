@@ -183,6 +183,41 @@ export async function setTripWorkTaskId(params: {
   if (error) throw error;
 }
 
+// ------------------- Soft delete -------------------
+//
+// Trips have no archive flag — only `deleted_at`. This helper performs a
+// recoverable soft delete: the row stays in the database but is excluded by
+// every read path above (all of which filter `deleted_at IS NULL`).
+
+export async function softDeleteTrip(params: {
+  tripId: string;
+  currentSyncVersion?: number | null;
+  userId?: string | null;
+}): Promise<void> {
+  const { tripId, currentSyncVersion, userId } = params;
+  const ts = tripsNowIso();
+  const { error } = await supabase
+    .from("trips")
+    .update({
+      deleted_at: ts,
+      updated_by: userId ?? null,
+      client_updated_at: ts,
+      sync_version: (currentSyncVersion ?? 0) + 1,
+    })
+    .eq("id", tripId)
+    .is("deleted_at", null);
+  if (error) throw error;
+}
+
+export function describeTripDeleteError(err: unknown): string {
+  const e = err as { message?: string } | null;
+  const msg = e?.message ?? String(err ?? "");
+  if (/row-level security|permission denied|RLS|42501/i.test(msg)) {
+    return "You don't have permission to delete this trip. Only owners, managers, or supervisors can delete trips.";
+  }
+  return msg || "Something went wrong. Please try again.";
+}
+
 export function describeTripLinkError(err: unknown): string {
   const e = err as { message?: string } | null;
   const msg = e?.message ?? String(err ?? "");
@@ -191,3 +226,4 @@ export function describeTripLinkError(err: unknown): string {
   }
   return msg || "Something went wrong. Please try again.";
 }
+
