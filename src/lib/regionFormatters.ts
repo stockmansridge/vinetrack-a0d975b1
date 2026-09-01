@@ -117,6 +117,13 @@ export function createRegionFormatters(
   const speedUnitLabel = distImperial ? "mph" : "km/h";
   const sprayRateUnitLabel = `${volumeUnitLabel}/${rateImperial ? "ac" : "ha"}`;
 
+  // Weather display units follow the shared metric/imperial system selector
+  // (distance_unit). Storage stays canonical: mm, °C, km/h.
+  const MM_PER_INCH = 25.4;
+  const rainfallUnitLabel = distImperial ? "in" : "mm";
+  const temperatureUnitLabel = distImperial ? "°F" : "°C";
+  const windUnitLabel = speedUnitLabel;
+
   // Customer-facing terminology is standardised on "Block" across all regions.
   // The `terminology_region` setting is preserved in storage but no longer
   // varies the UI label — see docs in stage 5I terminology cleanup.
