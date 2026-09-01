@@ -166,6 +166,9 @@ export function createRegionFormatters(
     speedUnitLabel,
     sprayRateUnitLabel,
     currencySymbol: currencySymbolFor(s.currency_code),
+    rainfallUnitLabel,
+    temperatureUnitLabel,
+    windUnitLabel,
     blockLabel,
     blocksLabel,
 
