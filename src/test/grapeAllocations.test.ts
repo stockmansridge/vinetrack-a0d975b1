@@ -11,6 +11,7 @@ const alloc = (over: Partial<GrapeAllocation>): GrapeAllocation => ({
   variety_key: null,
   variety_name: "Pinot Noir",
   allocation_type: "external",
+  purchaser_id: null,
   purchaser_name: null,
   destination_name: null,
   contact_name: null,

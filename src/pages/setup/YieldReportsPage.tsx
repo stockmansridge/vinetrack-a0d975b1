@@ -559,8 +559,28 @@ export default function YieldReportsPage() {
   }, [overviewCards]);
 
   const allocationBlocks = useMemo(
-    () => (blocksQ.data ?? []).map((b) => ({ id: b.id, name: b.name ?? "Unnamed block" })),
-    [blocksQ.data],
+    () =>
+      (blocksQ.data ?? []).map((b) => ({
+        id: b.id,
+        name: b.name ?? "Unnamed block",
+        varieties: resolvePaddockAllocations(b.varietyAllocations, varietyMap)
+          .map((a) => a.name)
+          .filter((n): n is string => !!n),
+      })),
+    [blocksQ.data, varietyMap],
+  );
+
+  // Canonical vineyard varieties drive the allocation variety picker.
+  const allocationVarieties = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (grapeVarieties ?? [])
+            .map((v: any) => (v?.name ?? v?.variety_name ?? "").trim())
+            .filter((n: string) => n.length),
+        ),
+      ).sort((a, b) => a.localeCompare(b)),
+    [grapeVarieties],
   );
 
 
@@ -705,6 +725,7 @@ export default function YieldReportsPage() {
             role={currentRole}
             estimatedByVariety={estimatedByVariety}
             blocks={allocationBlocks}
+            varieties={allocationVarieties}
           />
         </TabsContent>
 

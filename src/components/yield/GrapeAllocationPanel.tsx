@@ -48,7 +48,9 @@ export interface GrapeAllocationPanelProps {
   role: string | null;
   /** Authoritative estimated tonnes for the vintage, keyed by variety key. */
   estimatedByVariety: Map<string, number>;
-  blocks: { id: string; name: string }[];
+  blocks: { id: string; name: string; varieties?: string[] }[];
+  /** Canonical vineyard varieties for the allocation picker. */
+  varieties?: string[];
 }
 
 export interface GrapeAllocationPanelRef {
@@ -65,6 +67,7 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
     role,
     estimatedByVariety,
     blocks,
+    varieties: canonicalVarieties,
   }: GrapeAllocationPanelProps,
   ref,
 ) {
@@ -105,12 +108,12 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
   const totals = useMemo(() => totalsFromRows(rows), [rows]);
 
   const varieties = useMemo(() => {
-    const s = new Set<string>();
+    const s = new Set<string>(canonicalVarieties ?? []);
     rows.forEach((r) => {
       if (r.variety && r.variety !== "Unspecified variety") s.add(r.variety);
     });
     return Array.from(s).sort();
-  }, [rows]);
+  }, [rows, canonicalVarieties]);
 
   const save = useMutation({
     mutationFn: (input: SaveAllocationInput) => saveGrapeAllocation(input),

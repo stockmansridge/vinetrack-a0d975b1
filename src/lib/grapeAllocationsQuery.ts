@@ -37,6 +37,8 @@ export interface GrapeAllocation {
   variety_key: string | null;
   variety_name: string | null;
   allocation_type: AllocationType;
+  /** SQL 219 — optional link to the reusable purchaser record. */
+  purchaser_id: string | null;
   purchaser_name: string | null;
   destination_name: string | null;
   contact_name: string | null;
@@ -81,6 +83,7 @@ export async function fetchGrapeAllocations(
     variety_key: r.variety_key ?? null,
     variety_name: r.variety_name ?? null,
     allocation_type: (r.allocation_type === "own_use" ? "own_use" : "external") as AllocationType,
+    purchaser_id: r.purchaser_id ?? null,
     purchaser_name: r.purchaser_name ?? null,
     destination_name: r.destination_name ?? null,
     contact_name: r.contact_name ?? null,
@@ -134,7 +137,9 @@ export interface SaveAllocationInput {
   quantityTonnes: number;
   /** Own Use only — the internal destination (e.g. "Estate wine"). */
   destinationName?: string | null;
-  /** External only. */
+  /** External only — reusable purchaser link (SQL 219). */
+  purchaserId?: string | null;
+  /** External only — historical snapshot of the purchaser name. */
   purchaserName?: string | null;
   contactName?: string | null;
   contactEmail?: string | null;
@@ -172,6 +177,7 @@ export function buildAllocationRow(input: SaveAllocationInput, userId: string | 
     client_updated_at: now,
   };
   if (!own) {
+    row.purchaser_id = input.purchaserId ?? null;
     row.purchaser_name = clean(input.purchaserName);
     row.contact_name = clean(input.contactName);
     row.contact_email = clean(input.contactEmail);
@@ -181,6 +187,7 @@ export function buildAllocationRow(input: SaveAllocationInput, userId: string | 
     // into grape_allocation_financials and nulls it on this row.
     if (input.pricePerTonne != null) row.price_per_tonne = input.pricePerTonne;
   } else {
+    row.purchaser_id = null;
     row.purchaser_name = null;
     row.contact_name = null;
     row.contact_email = null;
