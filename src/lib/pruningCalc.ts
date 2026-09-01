@@ -154,6 +154,10 @@ export function buildRowCompletion(
       if (s.completed_at) {
         const existing = completedAtById.get(s.paddock_row_id);
         if (!existing || s.completed_at > existing) completedAtById.set(s.paddock_row_id, s.completed_at);
+        const segMap = segDateById.get(s.paddock_row_id) ?? new Map<number, string>();
+        const segExisting = segMap.get(s.segment_number);
+        if (!segExisting || s.completed_at > segExisting) segMap.set(s.segment_number, s.completed_at);
+        segDateById.set(s.paddock_row_id, segMap);
       }
       if (isSkipped) {
         const sk = skipById.get(s.paddock_row_id) ?? new Set<number>();
@@ -168,6 +172,10 @@ export function buildRowCompletion(
       if (s.completed_at) {
         const existing = completedAtByNumber.get(s.row_number);
         if (!existing || s.completed_at > existing) completedAtByNumber.set(s.row_number, s.completed_at);
+        const segMap = segDateByNumber.get(s.row_number) ?? new Map<number, string>();
+        const segExisting = segMap.get(s.segment_number);
+        if (!segExisting || s.completed_at > segExisting) segMap.set(s.segment_number, s.completed_at);
+        segDateByNumber.set(s.row_number, segMap);
       }
       if (isSkipped) {
         const sk = skipByNumber.get(s.row_number) ?? new Set<number>();
