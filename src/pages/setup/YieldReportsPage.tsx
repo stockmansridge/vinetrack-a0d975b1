@@ -112,7 +112,21 @@ const mkYieldPerArea = (rf: RegionFormatters) => (tPerHa?: number | null, dp = 2
   return `${fmtNum(v, dp)} t/${rf.areaUnitLabel}`;
 };
 
-type AnyRow = (YieldEstimationSession | HistoricalYieldRecord) & { __kind: "session" | "historical" };
+/** Actual yield produced by the detailed Picking Log (sql/180 + sql/184).
+ *  Read-only in this list — picks are managed on the Picking Log tab. */
+export interface PickedYieldRow {
+  id: string;
+  blockName: string;
+  variety: string | null;
+  vintage: number | null;
+  tonnes: number | null;
+  lastPickedAt: string | null;
+  pickCount: number | null;
+}
+
+type AnyRow =
+  | ((YieldEstimationSession | HistoricalYieldRecord) & { __kind: "session" | "historical" })
+  | (PickedYieldRow & { __kind: "picked" });
 
 export default function YieldReportsPage() {
   const { selectedVineyardId, currentRole } = useVineyard();
@@ -167,7 +181,9 @@ export default function YieldReportsPage() {
 
   const del = useMutation({
     mutationFn: async (row: AnyRow) =>
-      row.__kind === "session"
+      row.__kind === "picked"
+        ? Promise.reject(new Error("Picking Log records are managed on the Picking Log tab"))
+        : row.__kind === "session"
         ? softDeleteYieldEstimationSession(row.id)
         : softDeleteHistoricalYieldRecord(row.id),
     onSuccess: () => {
@@ -197,16 +213,57 @@ export default function YieldReportsPage() {
   const sessions = data?.sessions ?? [];
   const historical = data?.historical ?? [];
 
+  /** Actual yields that exist only as Picking Log records. The Actual Yields
+   *  list must show them too — otherwise a vineyard that harvests through the
+   *  Picking Log sees actual tonnes on the Overview and an empty list here. */
+  const pickedRows = useMemo<PickedYieldRow[]>(() => {
+    const totals = pickingPlantingTotalsQ.data ?? [];
+    if (totals.length) {
+      return totals
+        .filter((t) => (t.actual_yield_tonnes ?? 0) > 0)
+        .map((t, i) => ({
+          id: [t.paddock_id, t.planting_group_key ?? t.variety_name ?? "", t.vintage ?? ""].join("|") || `picked-${i}`,
+          blockName: t.paddock_name ?? "—",
+          variety: t.variety_name ?? null,
+          vintage: t.vintage ?? null,
+          tonnes: t.actual_yield_tonnes ?? null,
+          lastPickedAt: t.last_picked_at ?? null,
+          pickCount: t.pick_count ?? null,
+        }));
+    }
+    // Fallback while the aggregation view is warming: aggregate the records.
+    const map = new Map<string, PickedYieldRow>();
+    for (const r of pickingRecordsQ.data ?? []) {
+      const k = [r.paddock_id, (r.variety_name ?? "").toLowerCase(), r.vintage ?? ""].join("|");
+      const cur = map.get(k) ?? {
+        id: k,
+        blockName: r.paddock_name ?? "—",
+        variety: r.variety_name ?? null,
+        vintage: r.vintage ?? null,
+        tonnes: 0,
+        lastPickedAt: null,
+        pickCount: 0,
+      };
+      cur.tonnes = (cur.tonnes ?? 0) + (Number(r.weight_kg) || 0) / 1000;
+      cur.pickCount = (cur.pickCount ?? 0) + 1;
+      if (!cur.lastPickedAt || (r.picked_at ?? "") > cur.lastPickedAt) cur.lastPickedAt = r.picked_at ?? null;
+      map.set(k, cur);
+    }
+    return Array.from(map.values()).filter((r) => (r.tonnes ?? 0) > 0);
+  }, [pickingPlantingTotalsQ.data, pickingRecordsQ.data]);
+
   const allRows = useMemo<AnyRow[]>(() => {
     const a = sessions.map((s) => ({ ...s, __kind: "session" as const }));
     const b = historical.map((h) => ({ ...h, __kind: "historical" as const }));
-    return [...a, ...b];
-  }, [sessions, historical]);
+    const c = pickedRows.map((p) => ({ ...p, __kind: "picked" as const }));
+    return [...a, ...b, ...c];
+  }, [sessions, historical, pickedRows]);
 
   /** Harvest vintage of a row: stored year for historical records, derived from
    *  the session date via the shared season contract for estimations. */
   const rowVintage = useMemo(() => {
     return (r: AnyRow): number | null => {
+      if (r.__kind === "picked") return (r as PickedYieldRow).vintage ?? null;
       if (r.__kind === "historical") {
         const h = r as HistoricalYieldRecord;
         if (h.year != null) return Number(h.year);
@@ -235,7 +292,7 @@ export default function YieldReportsPage() {
 
   const rows = useMemo(() => {
     let list: AnyRow[] = tab === "historical"
-      ? allRows.filter((r) => r.__kind === "historical")
+      ? allRows.filter((r) => r.__kind === "historical" || r.__kind === "picked")
       : tab === "sessions"
       ? allRows.filter((r) => r.__kind === "session")
       : allRows;
@@ -266,6 +323,11 @@ export default function YieldReportsPage() {
     if (filter.trim()) {
       const f = filter.toLowerCase();
       list = list.filter((r) => {
+        if (r.__kind === "picked") {
+          const p = r as PickedYieldRow;
+          return [p.blockName, p.variety, p.vintage]
+            .some((v) => String(v ?? "").toLowerCase().includes(f));
+        }
         if (r.__kind === "historical") {
           const h = r as HistoricalYieldRecord;
           return [h.season, h.year, h.notes, JSON.stringify(h.block_results ?? {})]
@@ -321,11 +383,15 @@ export default function YieldReportsPage() {
 
 
   const rowTonnes = (r: AnyRow): number | null =>
-    r.__kind === "historical"
+    r.__kind === "picked"
+      ? (r as PickedYieldRow).tonnes ?? null
+      : r.__kind === "historical"
       ? (r as HistoricalYieldRecord).total_yield_tonnes ?? null
       : sessionSummaries.get(r.id)?.totalEstTonnes ?? null;
   const rowAreaHa = (r: AnyRow): number | null =>
-    r.__kind === "historical"
+    r.__kind === "picked"
+      ? null
+      : r.__kind === "historical"
       ? (r as HistoricalYieldRecord).total_area_hectares ?? null
       : sessionSummaries.get(r.id)?.totalAreaHa ?? null;
 
@@ -334,6 +400,10 @@ export default function YieldReportsPage() {
   const rowBlockVariety = (r: AnyRow): { block: string; variety: string } => {
     const names = new Set<string>();
     const varieties = new Set<string>();
+    if (r.__kind === "picked") {
+      const p = r as PickedYieldRow;
+      return { block: p.blockName || "—", variety: p.variety || "—" };
+    }
     if (r.__kind === "historical") {
       const results = Array.isArray((r as HistoricalYieldRecord).block_results)
         ? ((r as HistoricalYieldRecord).block_results as any[])
@@ -359,13 +429,20 @@ export default function YieldReportsPage() {
   const { sorted: rowsSorted, getSortDirection: yDir, toggleSort: yToggle } = useSortableTable<AnyRow, YieldCol>(rows, {
     accessors: {
       date: (r) => sortDate(r) ?? null,
-      type: (r) => (r.__kind === "historical" ? "Actual yield" : "Estimation"),
+      type: (r) => (r.__kind === "session" ? "Estimation" : "Actual yield"),
       vintage: (r) => rowVintage(r),
       block: (r) => rowBlockVariety(r).block,
       variety: (r) => rowBlockVariety(r).variety,
       yield: (r) => rowTonnes(r),
       area: (r) => rowAreaHa(r),
-      status: (r) => r.__kind === "historical" ? "Archived" : ((r as YieldEstimationSession).is_completed ? "Completed" : "Open"),
+      status: (r) =>
+        r.__kind === "picked"
+          ? "Picking Log"
+          : r.__kind === "historical"
+          ? "Archived"
+          : (r as YieldEstimationSession).is_completed
+          ? "Completed"
+          : "Open",
     },
   });
 
@@ -553,7 +630,7 @@ export default function YieldReportsPage() {
           <TabsTrigger
             value="historical"
           >
-            Actual Yields ({historical.length})
+            Actual Yields ({historical.length + pickedRows.length})
           </TabsTrigger>
           <TabsTrigger
             value="picking"
@@ -694,14 +771,15 @@ export default function YieldReportsPage() {
                 )}
                 {rowsSorted.map((r) => {
                   const isHist = r.__kind === "historical";
+                  const isPicked = r.__kind === "picked";
                   const s = r as YieldEstimationSession;
                   const bv = rowBlockVariety(r);
                   const cellMap: Record<YieldCol, React.ReactNode> = {
                     date: <TableCell>{fmtDate(sortDate(r))}</TableCell>,
                     type: (
                       <TableCell>
-                        <Badge variant={isHist ? "secondary" : "outline"}>
-                          {isHist ? "Actual yield" : "Estimation"}
+                        <Badge variant={isHist || isPicked ? "secondary" : "outline"}>
+                          {isHist || isPicked ? "Actual yield" : "Estimation"}
                         </Badge>
                       </TableCell>
                     ),
@@ -713,13 +791,19 @@ export default function YieldReportsPage() {
                     status: (
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-1">
-                          {isHist
+                          {isPicked
+                            ? (
+                              <Badge variant="outline">
+                                {actualSourceLabel("detailed", (r as PickedYieldRow).pickCount)}
+                              </Badge>
+                            )
+                            : isHist
                             ? <Badge variant="secondary">Archived</Badge>
                             : s.is_completed
                             ? <Badge>Completed</Badge>
                             : <Badge variant="outline">Open</Badge>}
                           {/* sql/187: the trip currently providing an estimate. */}
-                          {!isHist && liveTripIds.has(r.id) && (
+                          {!isHist && !isPicked && liveTripIds.has(r.id) && (
                             <Badge variant="outline" className="border-primary text-primary">
                               Current estimate
                             </Badge>
@@ -730,7 +814,11 @@ export default function YieldReportsPage() {
 
                   };
                   return (
-                    <TableRow key={r.__kind + ":" + r.id} className="cursor-pointer" onClick={() => setSelected(r)}>
+                    <TableRow
+                      key={r.__kind + ":" + r.id}
+                      className={isPicked ? undefined : "cursor-pointer"}
+                      onClick={() => { if (!isPicked) setSelected(r); }}
+                    >
                       {(yOrder as YieldCol[]).map((id) => <Fragment key={id}>{cellMap[id]}</Fragment>)}
                     </TableRow>
                   );
@@ -944,6 +1032,7 @@ export function varianceLabel(estimated: number, actual: number): string {
 
 
 function sortDate(r: AnyRow): string | null | undefined {
+  if (r.__kind === "picked") return (r as PickedYieldRow).lastPickedAt ?? null;
   if (r.__kind === "historical") {
     const h = r as HistoricalYieldRecord;
     return h.archived_at ?? h.updated_at ?? h.created_at ?? null;
