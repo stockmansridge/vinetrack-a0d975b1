@@ -31,7 +31,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { fetchTripsForVineyard, softDeleteTrip, describeTripDeleteError, type Trip } from "@/lib/tripsQuery";
+import { fetchTripsForVineyard, softDeleteTrip, describeTripDeleteError, completeTrip, describeTripCompleteError, type Trip } from "@/lib/tripsQuery";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,7 +45,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
-import { Trash2, Loader2 } from "lucide-react";
+import { Trash2, Loader2, CheckCircle2 } from "lucide-react";
 import { fetchWorkTasksForVineyard, workTaskShortLabel } from "@/lib/workTasksQuery";
 import { Button } from "@/components/ui/button";
 import TripRouteAppleMap from "@/components/TripRouteAppleMap";
@@ -553,7 +553,7 @@ function TripSheet({
   const { data: vineyardLogoUrl } = useVineyardLogo();
   const formatters = useRegionFormatters();
   const canSeeCosts = useCanSeeCosts();
-  // Deletion is restricted to owners, managers and supervisors.
+  // Deletion/completion are restricted to owners, managers and supervisors.
   const { currentRole } = useVineyard();
   const canDeleteTrip =
     currentRole === "owner" || currentRole === "manager" || currentRole === "supervisor";
@@ -562,6 +562,35 @@ function TripSheet({
   const queryClient = useQueryClient();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmComplete, setConfirmComplete] = useState(false);
+  const [completing, setCompleting] = useState(false);
+
+  const isCompletable = !!trip && !trip.end_time && (trip.is_active || trip.is_paused);
+
+  const handleCompleteTrip = async () => {
+    if (!trip) return;
+    setCompleting(true);
+    try {
+      await completeTrip({
+        tripId: trip.id,
+        currentSyncVersion: (trip as any).sync_version ?? null,
+        userId: user?.id ?? null,
+        existingEndTime: trip.end_time ?? null,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["trips"] });
+      toast({ title: "Trip completed", description: "The trip has been marked as completed." });
+      setConfirmComplete(false);
+      onOpenChange(false);
+    } catch (err) {
+      toast({
+        title: "Could not complete trip",
+        description: describeTripCompleteError(err),
+        variant: "destructive",
+      });
+    } finally {
+      setCompleting(false);
+    }
+  };
 
   const handleDeleteTrip = async () => {
     if (!trip) return;
