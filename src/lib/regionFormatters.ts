@@ -59,6 +59,7 @@ export interface RegionFormatters {
   sprayRate: (lPerHa: unknown, dp?: number) => string;    // L/ha in → L/ha or gal/ac
   currency: (amount: unknown, dp?: number) => string;     // raw number
   date: (value: Date | string | number | null | undefined) => string;
+  dateShort: (value: Date | string | number | null | undefined) => string;
   dateTime: (value: Date | string | number | null | undefined) => string;
 }
 
