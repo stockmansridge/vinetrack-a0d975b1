@@ -514,9 +514,17 @@ export default function YieldReportsPage() {
             Record and review vineyard production results by block, variety and vintage. Capture harvested weight, area, yield per hectare and other production information for comparing performance over time.
           </p>
         </div>
-        <Button onClick={() => setRecordOpen(true)} disabled={!selectedVineyardId}>
-          <Plus className="h-4 w-4 mr-1.5" /> Record Actual Yield
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            onClick={() => allocationPanelRef.current?.openNewAllocation()}
+            disabled={!selectedVineyardId || activeVintage === ANY}
+          >
+            <Plus className="h-4 w-4 mr-1.5" /> Grape Allocation
+          </Button>
+          <Button onClick={() => setRecordOpen(true)} disabled={!selectedVineyardId}>
+            <Plus className="h-4 w-4 mr-1.5" /> Record Actual Yield
+          </Button>
+        </div>
       </div>
 
 
