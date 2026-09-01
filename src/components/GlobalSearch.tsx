@@ -189,12 +189,9 @@ export function GlobalSearch() {
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={handleKey}
-        placeholder="Search settings, pages, reports…  (⌘K)"
-        className="pl-9 pr-14 h-9 rounded-full bg-muted/60 border-transparent focus-visible:bg-card focus-visible:border-input"
+        placeholder="Search settings, pages, reports…"
+        className="pl-9 pr-4 h-9 rounded-full bg-background border border-input shadow-sm focus-visible:bg-card focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
       />
-      <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 hidden md:inline-flex h-5 items-center rounded border border-border bg-background px-1.5 text-[10px] font-medium text-muted-foreground">
-        ⌘K
-      </kbd>
       {open && query.trim() && (
         <div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-lg border border-border bg-popover text-popover-foreground shadow-lg overflow-hidden">
           {results.length === 0 ? (
