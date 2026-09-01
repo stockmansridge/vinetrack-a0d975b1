@@ -118,7 +118,7 @@ export default function AdminVineyardsPage() {
               </div>
               <div className="flex items-center gap-2 sm:justify-end min-w-[8rem]">
                 <div className="text-xs text-muted-foreground hidden sm:block">
-                  {v.member_count} members · {v.pending_invites} pending
+                  {activityQ.data?.get(v.id)?.block_count ?? 0} blocks · {v.member_count} members · {v.pending_invites} pending
                 </div>
                 <Badge variant="outline" className="text-xs">{formatDate(v.created_at)}</Badge>
               </div>

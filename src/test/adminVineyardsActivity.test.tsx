@@ -48,6 +48,7 @@ const counts = (
   pin_count: 0,
   spray_record_count: 0,
   work_task_count: 0,
+  block_count: 0,
   ...c,
 });
 
