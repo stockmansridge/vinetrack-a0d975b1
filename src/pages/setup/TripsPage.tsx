@@ -461,7 +461,7 @@ export default function TripsPage() {
             <TableRow>
               {(tripsOrder as TripsCol[]).map((id) => {
                 const labels: Record<TripsCol, string> = {
-                  start: "Start", function: "Function", paddock: "Block",
+                  name: "Name", start: "Start", function: "Function", paddock: "Block",
                   pattern: "Pattern", person: "Person", duration: "Duration", distance: "Distance", status: "Status",
                 };
                 const sk: any = id;
