@@ -570,17 +570,14 @@ export default function YieldReportsPage() {
     [blocksQ.data, varietyMap],
   );
 
-  // Canonical vineyard varieties drive the allocation variety picker.
+  // Varieties allocated to the vineyard (union across blocks) drive the
+  // allocation variety picker — not the global variety catalogue.
   const allocationVarieties = useMemo(
     () =>
-      Array.from(
-        new Set(
-          (grapeVarieties ?? [])
-            .map((v: any) => (v?.name ?? v?.variety_name ?? "").trim())
-            .filter((n: string) => n.length),
-        ),
-      ).sort((a, b) => a.localeCompare(b)),
-    [grapeVarieties],
+      Array.from(new Set(allocationBlocks.flatMap((b) => b.varieties ?? []))).sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [allocationBlocks],
   );
 
 
