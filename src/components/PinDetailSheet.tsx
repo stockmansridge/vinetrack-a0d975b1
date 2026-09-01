@@ -26,7 +26,7 @@ export default function PinDetailSheet({
 }: Props) {
   const contentClass =
     side === "right"
-      ? "w-full sm:max-w-[440px] h-full overflow-y-auto px-0 pb-0"
+      ? "w-screen sm:w-[95vw] md:w-[90vw] lg:w-[50vw] sm:max-w-[1000px] h-full overflow-y-auto px-0 pb-0"
       : "h-[88vh] overflow-y-auto rounded-t-lg px-0 pb-0";
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

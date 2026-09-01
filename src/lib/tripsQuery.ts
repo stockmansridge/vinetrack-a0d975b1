@@ -183,6 +183,44 @@ export async function setTripWorkTaskId(params: {
   if (error) throw error;
 }
 
+// ------------------- Complete trip -------------------
+//
+// Completing a paused/active trip clears the active/paused flags and stamps
+// `end_time` (only when missing — an existing end_time is never overwritten).
+// Tracking data, path points and costing fields are untouched.
+
+export async function completeTrip(params: {
+  tripId: string;
+  currentSyncVersion?: number | null;
+  userId?: string | null;
+  existingEndTime?: string | null;
+}): Promise<void> {
+  const { tripId, currentSyncVersion, userId, existingEndTime } = params;
+  const ts = tripsNowIso();
+  const { error } = await supabase
+    .from("trips")
+    .update({
+      is_active: false,
+      is_paused: false,
+      end_time: existingEndTime ?? ts,
+      updated_by: userId ?? null,
+      client_updated_at: ts,
+      sync_version: (currentSyncVersion ?? 0) + 1,
+    })
+    .eq("id", tripId)
+    .is("deleted_at", null);
+  if (error) throw error;
+}
+
+export function describeTripCompleteError(err: unknown): string {
+  const e = err as { message?: string } | null;
+  const msg = e?.message ?? String(err ?? "");
+  if (/row-level security|permission denied|RLS|42501/i.test(msg)) {
+    return "You don't have permission to complete this trip. Only owners, managers, or supervisors can complete trips.";
+  }
+  return msg || "Something went wrong. Please try again.";
+}
+
 // ------------------- Soft delete -------------------
 //
 // Trips have no archive flag — only `deleted_at`. This helper performs a

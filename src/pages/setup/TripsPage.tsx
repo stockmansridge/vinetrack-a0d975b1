@@ -31,7 +31,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { fetchTripsForVineyard, softDeleteTrip, describeTripDeleteError, type Trip } from "@/lib/tripsQuery";
+import { fetchTripsForVineyard, softDeleteTrip, describeTripDeleteError, completeTrip, describeTripCompleteError, type Trip } from "@/lib/tripsQuery";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,7 +45,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
-import { Trash2, Loader2 } from "lucide-react";
+import { Trash2, Loader2, CheckCircle2 } from "lucide-react";
 import { fetchWorkTasksForVineyard, workTaskShortLabel } from "@/lib/workTasksQuery";
 import { Button } from "@/components/ui/button";
 import TripRouteAppleMap from "@/components/TripRouteAppleMap";
@@ -553,7 +553,7 @@ function TripSheet({
   const { data: vineyardLogoUrl } = useVineyardLogo();
   const formatters = useRegionFormatters();
   const canSeeCosts = useCanSeeCosts();
-  // Deletion is restricted to owners, managers and supervisors.
+  // Deletion/completion are restricted to owners, managers and supervisors.
   const { currentRole } = useVineyard();
   const canDeleteTrip =
     currentRole === "owner" || currentRole === "manager" || currentRole === "supervisor";
@@ -562,6 +562,35 @@ function TripSheet({
   const queryClient = useQueryClient();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmComplete, setConfirmComplete] = useState(false);
+  const [completing, setCompleting] = useState(false);
+
+  const isCompletable = !!trip && !trip.end_time && (trip.is_active || trip.is_paused);
+
+  const handleCompleteTrip = async () => {
+    if (!trip) return;
+    setCompleting(true);
+    try {
+      await completeTrip({
+        tripId: trip.id,
+        currentSyncVersion: (trip as any).sync_version ?? null,
+        userId: user?.id ?? null,
+        existingEndTime: trip.end_time ?? null,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["trips"] });
+      toast({ title: "Trip completed", description: "The trip has been marked as completed." });
+      setConfirmComplete(false);
+      onOpenChange(false);
+    } catch (err) {
+      toast({
+        title: "Could not complete trip",
+        description: describeTripCompleteError(err),
+        variant: "destructive",
+      });
+    } finally {
+      setCompleting(false);
+    }
+  };
 
   const handleDeleteTrip = async () => {
     if (!trip) return;
@@ -732,7 +761,7 @@ function TripSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+      <SheetContent className="w-screen sm:w-[95vw] md:w-[90vw] lg:w-[50vw] sm:max-w-[1000px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{trip ? tripDisplayName(trip) : "Trip"} — {fmtDay(trip?.start_time)}</SheetTitle>
           {trip?.work_task_id && (
@@ -748,6 +777,16 @@ function TripSheet({
         {trip && (
           <div className="mt-4 space-y-4 text-sm">
             <div className="flex justify-end gap-2">
+              {canDeleteTrip && isCompletable && (
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => setConfirmComplete(true)}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                  Complete Trip
+                </Button>
+              )}
               {canDeleteTrip && (
                 <Button
                   size="sm"
@@ -959,6 +998,28 @@ function TripSheet({
             </Section>
           </div>
         )}
+        <AlertDialog open={confirmComplete} onOpenChange={(o) => !completing && setConfirmComplete(o)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Complete this trip?</AlertDialogTitle>
+              <AlertDialogDescription>
+                The trip will be marked as completed. The finish time will be set
+                to now (unless one is already recorded), and the trip will no
+                longer appear as paused or active.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={completing}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => { e.preventDefault(); void handleCompleteTrip(); }}
+                disabled={completing}
+              >
+                {completing && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                Complete trip
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <AlertDialog open={confirmDelete} onOpenChange={(o) => !deleting && setConfirmDelete(o)}>
           <AlertDialogContent>
             <AlertDialogHeader>
