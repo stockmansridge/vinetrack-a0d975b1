@@ -1,15 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
-import { Droplet, CalendarDays, Scissors, Wrench, ClipboardList } from "lucide-react";
+import { Droplet, CalendarDays, Scissors, Wrench, ClipboardList, Grape } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
 import { useVintage } from "@/lib/useVintage";
 import { hemisphereLabel } from "@/lib/hemisphere";
 
 import { usePruningVineyardSummary } from "@/lib/pruningSummaryQuery";
+import { fetchGrapeAllocations } from "@/lib/grapeAllocationsQuery";
 import { MetricCard } from "@/components/ui/metric-card";
 
 const fmt = (n: number) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—";
+
+const fmtT = (n: number) =>
+  Number.isFinite(n)
+    ? `${n.toLocaleString(undefined, { maximumFractionDigits: 1 })} t`
+    : "—";
 
 const fmtPercent = (n: number | null | undefined) => {
   if (n == null || !Number.isFinite(n)) return "—";
@@ -78,6 +84,25 @@ export default function VintageOverviewSection() {
 
   const pruningQ = usePruningVineyardSummary(selectedVineyardId, pruningSeasonYear);
 
+  const allocationQ = useQuery({
+    queryKey: ["vintage-grape-allocation", selectedVineyardId, vintage],
+    enabled: !!selectedVineyardId && vintage != null,
+    queryFn: async () => {
+      const all = await fetchGrapeAllocations(selectedVineyardId!, vintage!);
+      let ownUse = 0;
+      let external = 0;
+      for (const a of all) {
+        const t = typeof a.quantity_tonnes === "number" && Number.isFinite(a.quantity_tonnes)
+          ? a.quantity_tonnes
+          : 0;
+        if (a.allocation_type === "own_use") ownUse += t;
+        else external += t;
+      }
+      return { ownUse, external };
+    },
+    staleTime: 60_000,
+  });
+
   const rangeHint = `${startISO} → ${endISO}`;
   const hemLabel = hemisphereLabel(hemisphere);
 
@@ -100,7 +125,7 @@ export default function VintageOverviewSection() {
           {rangeHint}
         </span>
       </div>
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
         <MetricCard
           label="Sprays complete"
           icon={Droplet}
@@ -154,6 +179,38 @@ export default function VintageOverviewSection() {
                 : fmt(workTasksCountQ.data ?? 0)
           }
           to="/work-tasks"
+        />
+        <MetricCard
+          label="Grape allocation"
+          icon={Grape}
+          tone="primary"
+          value={
+            allocationQ.isLoading
+              ? "…"
+              : allocationQ.error
+                ? "—"
+                : (
+                  <div className="grid grid-cols-2 gap-3 mt-0.5">
+                    <div>
+                      <div className="text-[22px] font-semibold leading-tight tracking-tight text-foreground tabular-nums">
+                        {fmtT(allocationQ.data?.ownUse ?? 0)}
+                      </div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                        Own Use
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[22px] font-semibold leading-tight tracking-tight text-foreground tabular-nums">
+                        {fmtT(allocationQ.data?.external ?? 0)}
+                      </div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                        External
+                      </div>
+                    </div>
+                  </div>
+                )
+          }
+          to="/yield"
         />
       </div>
     </section>
