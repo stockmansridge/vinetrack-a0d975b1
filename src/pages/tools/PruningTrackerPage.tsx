@@ -775,6 +775,7 @@ function BlockDetail({
   isSystemAdmin,
   onBack,
 }: DetailProps) {
+  const fmt = useRegionFormatters();
   const local = block.progress;
   const reDone = rpcBlock?.completed_row_equivalents ?? local.rowEquivalentsCompleted ?? 0;
   const reTotal = rpcBlock?.total_row_equivalents ?? local.totalRows ?? 0;
