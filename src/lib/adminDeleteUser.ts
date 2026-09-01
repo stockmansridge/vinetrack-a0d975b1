@@ -30,10 +30,13 @@ async function invoke(userId: string, mode: "preview" | "delete") {
   const token = sessionData.session?.access_token;
   if (!token) throw new Error("Your session has expired — please sign in again.");
 
+  // The Cloud gateway validates the Authorization header against the Cloud
+  // project, so the VineTrack (iOS) session token travels in its own header.
   const { data, error } = await cloudSupabase.functions.invoke("admin-delete-user", {
     body: { user_id: userId, mode },
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { "x-vinetrack-token": token },
   });
+
   if (error) {
     // Surface the function's JSON error message when present.
     const ctx = (error as any).context;

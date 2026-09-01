@@ -9,9 +9,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-vinetrack-token",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
