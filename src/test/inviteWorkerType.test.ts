@@ -81,6 +81,8 @@ describe("Team invite dialog source contract", () => {
   it("does not reset the worker type when the role changes", () => {
     const roleChange = src.match(/onValueChange=\{\(v\) => setRole\(v as InvitationRole\)\}/);
     expect(roleChange).not.toBeNull();
-    expect(src).not.toMatch(/setRole\([^)]*\);\s*setCategoryId\(NONE\)/);
+    // The role Select's handler only sets the role — no worker-type clearing.
+    expect(src).not.toMatch(/setRole\(v as InvitationRole\)[^}]*setCategoryId/);
+
   });
 });
