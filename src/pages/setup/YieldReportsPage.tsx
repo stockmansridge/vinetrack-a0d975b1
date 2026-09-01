@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
 import { Card } from "@/components/ui/card";
@@ -76,7 +76,7 @@ import {
   type PlantingGroup,
 } from "@/lib/yieldAllocations";
 import { useVintage } from "@/lib/useVintage";
-import GrapeAllocationPanel from "@/components/yield/GrapeAllocationPanel";
+import GrapeAllocationPanel, { type GrapeAllocationPanelRef } from "@/components/yield/GrapeAllocationPanel";
 import { varietyKeyOf } from "@/lib/grapeAllocationModel";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 import { buildVarietyMap, resolvePaddockAllocations, useGrapeVarieties } from "@/lib/varietyResolver";
@@ -136,6 +136,7 @@ export default function YieldReportsPage() {
   >("overview");
   const [selected, setSelected] = useState<AnyRow | null>(null);
   const [recordOpen, setRecordOpen] = useState(false);
+  const allocationPanelRef = useRef<GrapeAllocationPanelRef>(null);
   const qc = useQueryClient();
 
   const blocksQ = useQuery({
@@ -513,9 +514,17 @@ export default function YieldReportsPage() {
             Record and review vineyard production results by block, variety and vintage. Capture harvested weight, area, yield per hectare and other production information for comparing performance over time.
           </p>
         </div>
-        <Button onClick={() => setRecordOpen(true)} disabled={!selectedVineyardId}>
-          <Plus className="h-4 w-4 mr-1.5" /> Record Actual Yield
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            onClick={() => allocationPanelRef.current?.openNewAllocation()}
+            disabled={!selectedVineyardId || activeVintage === ANY}
+          >
+            <Plus className="h-4 w-4 mr-1.5" /> Grape Allocation
+          </Button>
+          <Button onClick={() => setRecordOpen(true)} disabled={!selectedVineyardId}>
+            <Plus className="h-4 w-4 mr-1.5" /> Record Actual Yield
+          </Button>
+        </div>
       </div>
 
 
@@ -613,6 +622,7 @@ export default function YieldReportsPage() {
 
         <TabsContent value="allocation" className="mt-4">
           <GrapeAllocationPanel
+            ref={allocationPanelRef}
             vineyardId={selectedVineyardId}
             vintage={activeVintage === ANY ? null : Number(activeVintage)}
             role={currentRole}

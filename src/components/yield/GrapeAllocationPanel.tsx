@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { PortalNotice } from "@/components/ui/PortalNotice";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { canSeeCosts } from "@/lib/permissions";
@@ -51,21 +51,35 @@ export interface GrapeAllocationPanelProps {
   blocks: { id: string; name: string }[];
 }
 
+export interface GrapeAllocationPanelRef {
+  openNewAllocation: () => void;
+}
+
 const t = (v: number | null | undefined, dp = 2) =>
   v == null ? "—" : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: dp })} t`;
 
-export default function GrapeAllocationPanel({
-  vineyardId,
-  vintage,
-  role,
-  estimatedByVariety,
-  blocks,
-}: GrapeAllocationPanelProps) {
+const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocationPanelProps>(function GrapeAllocationPanel(
+  {
+    vineyardId,
+    vintage,
+    role,
+    estimatedByVariety,
+    blocks,
+  }: GrapeAllocationPanelProps,
+  ref,
+) {
   const rf = useRegionFormatters();
   const canSeeFinancials = canSeeCosts(role);
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<GrapeAllocation | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    openNewAllocation: () => {
+      setEditing(null);
+      setOpen(true);
+    },
+  }));
   const [deleting, setDeleting] = useState<GrapeAllocation | null>(null);
 
   const allocQ = useQuery({
@@ -151,21 +165,10 @@ export default function GrapeAllocationPanel({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          Allocate the {vintage ?? "selected"} vintage estimate to your own use and to
-          external commitments, and track what is still available.
-        </p>
-        <Button
-          onClick={() => {
-            setEditing(null);
-            setOpen(true);
-          }}
-          disabled={!vineyardId || vintage == null}
-        >
-          <Plus className="h-4 w-4 mr-1.5" /> Add allocation
-        </Button>
-      </div>
+      <p className="text-sm text-muted-foreground">
+        Allocate the {vintage ?? "selected"} vintage estimate to your own use and to
+        external commitments, and track what is still available.
+      </p>
 
       {vintage == null && (
         <PortalNotice
@@ -361,4 +364,6 @@ export default function GrapeAllocationPanel({
       </AlertDialog>
     </div>
   );
-}
+});
+
+export default GrapeAllocationPanel;
