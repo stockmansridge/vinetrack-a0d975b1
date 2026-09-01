@@ -181,6 +181,9 @@ export default function Login() {
           >
             Don't have an account? Create one
           </a>
+          <p className="text-white/80 text-xs text-center max-w-[16rem] leading-snug">
+            Invited to a vineyard? Create an account first using the same email address your invite was sent to.
+          </p>
         </div>
       </div>
     </div>
