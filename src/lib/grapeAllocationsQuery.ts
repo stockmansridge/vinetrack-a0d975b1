@@ -228,9 +228,12 @@ export async function saveGrapeAllocation(input: SaveAllocationInput): Promise<s
     if (error) throw error;
   }
   if (blocks.length) {
+    // grape_allocation_blocks carries a NOT NULL vineyard_id (denormalised
+    // from the parent allocation) — it must be set on every insert.
     const { error } = await (supabase as any).from("grape_allocation_blocks").insert(
       blocks.map((b) => ({
         allocation_id: allocationId,
+        vineyard_id: input.vineyardId,
         paddock_id: b.paddockId,
         quantity_tonnes: b.tonnes,
       })),
