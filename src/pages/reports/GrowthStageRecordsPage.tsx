@@ -266,7 +266,7 @@ export default function GrowthStageRecordsPage() {
             <SelectContent>
               <SelectItem value={ANY}>All stages</SelectItem>
               {stages.map((s) => (
-                <SelectItem key={s} value={s}>E-L {s}</SelectItem>
+                <SelectItem key={s} value={s}>{elStage(s)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
