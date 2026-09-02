@@ -1238,3 +1238,37 @@ export function formatFlow(value: number | null | undefined): string {
   if (value == null) return "—";
   return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })} L/h`;
 }
+
+// ---------------------------------------------------------------------------
+// Data-driven Vintage options
+// ---------------------------------------------------------------------------
+
+/**
+ * Vintages that actually have (non-reversed, non-deleted) irrigation sessions
+ * for a vineyard. Sessions carry the canonical `vintage_year`, so no date
+ * derivation is needed here.
+ */
+export async function fetchIrrigationVintages(vineyardId: string): Promise<number[]> {
+  const res = await call<{ sessions: IrrigationSession[]; total_count: number }>(
+    "list_irrigation_sessions",
+    {
+      p_vineyard_id: vineyardId,
+      p_vintage_year: null,
+      p_from_date: null,
+      p_to_date: null,
+      p_irrigation_system_id: null,
+      p_valve_id: null,
+      p_block_id: null,
+      p_status: null,
+      p_source_type: null,
+      p_include_reversed: false,
+      p_limit: 2000,
+      p_offset: 0,
+    },
+  );
+  const set = new Set<number>();
+  (res?.sessions ?? []).forEach((s) => {
+    if (Number.isFinite(s?.vintage_year)) set.add(Number(s.vintage_year));
+  });
+  return Array.from(set).sort((a, b) => b - a);
+}
