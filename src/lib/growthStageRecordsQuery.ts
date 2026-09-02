@@ -129,19 +129,38 @@ async function fetchFromView(
   return (data ?? []).map((r: any) => mapRow(r, paddockMap));
 }
 
+/** Growth-stage identification predicate. Grouped so OR precedence can never
+ *  widen the vineyard / soft-delete scopes applied around it. */
+export const GROWTH_PINS_OR_FILTER = "mode.eq.Growth,growth_stage_code.not.is.null";
+
+/**
+ * Apply the mandatory safety scopes to a pins query, in a testable shape:
+ * vineyard scope AND not soft-deleted AND (growth mode OR has an EL code).
+ * PostgREST ANDs successive filters, so both OR branches inherit both scopes.
+ */
+export function applyGrowthPinsFilters<T extends {
+  eq: (c: string, v: any) => T;
+  is: (c: string, v: any) => T;
+  or: (f: string) => T;
+}>(query: T, vineyardId: string): T {
+  return query
+    .eq("vineyard_id", vineyardId)
+    .is("deleted_at", null)
+    .or(GROWTH_PINS_OR_FILTER);
+}
+
 async function fetchFromPins(
   vineyardId: string,
   paddockMap: Map<string, PaddockLite>,
 ): Promise<GrowthStageRecord[]> {
-  const { data, error } = await supabase
-    .from("pins")
-    .select("*")
-    .eq("vineyard_id", vineyardId)
-    .is("deleted_at", null)
-    .or("mode.eq.Growth,growth_stage_code.not.is.null");
+  const { data, error } = await applyGrowthPinsFilters(
+    supabase.from("pins").select("*") as any,
+    vineyardId,
+  );
   if (error) throw error;
   return (data ?? []).map((r: any) => mapRow(r, paddockMap));
 }
+
 
 export async function fetchGrowthStageRecords(
   vineyardId: string,
