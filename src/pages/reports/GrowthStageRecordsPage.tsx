@@ -50,6 +50,12 @@ const ANY = "__any__";
 
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 
+// Stored codes may be "EL2", "E-L 2" or "2" — always display exactly "E-L 2".
+const elStage = (code?: string | null) => {
+  const n = String(code ?? "").trim().replace(/^E\s*-?\s*L\s*/i, "");
+  return n ? `E-L ${n}` : "—";
+};
+
 export default function GrowthStageRecordsPage() {
   const { selectedVineyardId } = useVineyard();
   const { resolve } = useTeamLookup(selectedVineyardId);
@@ -212,7 +218,7 @@ export default function GrowthStageRecordsPage() {
                   </div>
                 </div>
                 <Badge variant="secondary" className="shrink-0">
-                  E-L {s.latest_stage ?? "—"}
+                  {elStage(s.latest_stage)}
                 </Badge>
               </div>
             ))}
@@ -260,7 +266,7 @@ export default function GrowthStageRecordsPage() {
             <SelectContent>
               <SelectItem value={ANY}>All stages</SelectItem>
               {stages.map((s) => (
-                <SelectItem key={s} value={s}>E-L {s}</SelectItem>
+                <SelectItem key={s} value={s}>{elStage(s)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -330,7 +336,7 @@ export default function GrowthStageRecordsPage() {
                 date: <TableCell><ReportDateCell value={r.date} /></TableCell>,
                 block: <TableCell>{fmt(r.paddock_name)}</TableCell>,
                 variety: <TableCell>{fmt(r.variety)}</TableCell>,
-                stage: <TableCell>{r.growth_stage_code ? <Badge variant="secondary">E-L {r.growth_stage_code}</Badge> : "—"}</TableCell>,
+                stage: <TableCell>{r.growth_stage_code ? <Badge variant="secondary">{elStage(r.growth_stage_code)}</Badge> : "—"}</TableCell>,
                 notes: <TableCell className="max-w-[280px] truncate">{fmt(r.notes)}</TableCell>,
                 photo: <TableCell>{r.photo_path ? <ImageIcon className="h-4 w-4 text-muted-foreground" /> : "—"}</TableCell>,
                 operator: <TableCell>{resolve(r.created_by) ?? "—"}</TableCell>,
@@ -380,7 +386,7 @@ function DetailSheet({
               <Field label="Date" value={record.date ? rf.date(record.date) : "—"} />
               <Field label={rf.blockLabel} value={fmt(record.paddock_name)} />
               <Field label="Variety" value={fmt(record.variety)} />
-              <Field label="E-L stage" value={record.growth_stage_code ? `E-L ${record.growth_stage_code}` : "—"} />
+              <Field label="E-L stage" value={elStage(record.growth_stage_code)} />
               {record.growth_stage_label && (
                 <Field label="Stage label" value={record.growth_stage_label} />
               )}
