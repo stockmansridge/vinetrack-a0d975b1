@@ -13,6 +13,8 @@ import {
   YAxis,
 } from "recharts";
 import { useVineyard } from "@/context/VineyardContext";
+import { useQuery } from "@tanstack/react-query";
+import { fetchIrrigationVintages } from "@/lib/irrigationQuery";
 import { useVintage } from "@/lib/useVintage";
 import { PageHead } from "@/components/PageHead";
 import { Button } from "@/components/ui/button";
@@ -94,10 +96,13 @@ export default function IrrigationReportsPage() {
   const [trendCount, setTrendCount] = useState(5);
   const [drill, setDrill] = useState<DrillDown | null>(null);
 
-  const vintageOptions = useMemo(
-    () => [vintage + 1, vintage, vintage - 1, vintage - 2, vintage - 3, vintage - 4],
-    [vintage],
-  );
+  // Data-driven: only Vintages that actually contain irrigation sessions.
+  const availableVintages = useQuery({
+    queryKey: ["irrigation-vintages", selectedVineyardId],
+    queryFn: () => fetchIrrigationVintages(selectedVineyardId as string),
+    enabled: !!selectedVineyardId,
+  });
+  const vintageOptions = availableVintages.data ?? [];
 
   const vy = selectedVineyardId;
   const overview = useVintageOverview(vy, filters, tab === "overview");

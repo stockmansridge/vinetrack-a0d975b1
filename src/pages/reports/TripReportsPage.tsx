@@ -140,11 +140,11 @@ export default function TripReportsPage() {
   }, [paddocks]);
   const paddockIds = useMemo(() => paddocks.map((p) => p.id), [paddocks]);
 
-  const vintageFilter = useVintageFilter();
+  const vintageFilter = useVintageFilter({ table: "trips", dateColumn: "start_time" });
   const vintageScopeValue = vintageFilter.scope;
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["trip-reports", selectedVineyardId, paddockIds.length, vintageScopeValue.vintage],
+    queryKey: ["trip-reports", selectedVineyardId, paddockIds.length, vintageFilter.vintage ?? "all"],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchTripsForVineyard(selectedVineyardId!, paddockIds, vintageScopeValue),
   });

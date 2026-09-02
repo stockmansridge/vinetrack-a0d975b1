@@ -1,3 +1,4 @@
+import { VINTAGE_OPTIONS_KEY } from "@/lib/availableVintages";
 import { useMemo, useState, useEffect, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
@@ -155,11 +156,11 @@ export default function TripsPage() {
     return m;
   }, [paddocks]);
 
-  const vintageFilter = useVintageFilter();
+  const vintageFilter = useVintageFilter({ table: "trips", dateColumn: "start_time" });
   const vintageScopeValue = vintageFilter.scope;
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["trips", selectedVineyardId, paddockIds.length, vintageScopeValue.vintage],
+    queryKey: ["trips", selectedVineyardId, paddockIds.length, vintageFilter.vintage ?? "all"],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchTripsForVineyard(selectedVineyardId!, paddockIds, vintageScopeValue),
   });
@@ -602,6 +603,7 @@ function TripSheet({
         existingEndTime: trip.end_time ?? null,
       });
       await queryClient.invalidateQueries({ queryKey: ["trips"] });
+      queryClient.invalidateQueries({ queryKey: [VINTAGE_OPTIONS_KEY] });
       toast({ title: "Trip completed", description: "The trip has been marked as completed." });
       setConfirmComplete(false);
       onOpenChange(false);
@@ -626,6 +628,7 @@ function TripSheet({
         userId: user?.id ?? null,
       });
       await queryClient.invalidateQueries({ queryKey: ["trips"] });
+      queryClient.invalidateQueries({ queryKey: [VINTAGE_OPTIONS_KEY] });
       toast({ title: "Trip deleted", description: "The trip has been removed from your records." });
       setConfirmDelete(false);
       onOpenChange(false);

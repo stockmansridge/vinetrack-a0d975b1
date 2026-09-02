@@ -136,6 +136,7 @@ export function ReportFilterBar({ vineyardId, filters, onChange, vintageOptions 
                 <SelectValue placeholder="Vintage" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={ALL}>All vintages</SelectItem>
                 {vintageOptions.map((y) => (
                   <SelectItem key={y} value={String(y)}>
                     {y}

@@ -1,3 +1,4 @@
+import { VINTAGE_OPTIONS_KEY } from "@/lib/availableVintages";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
@@ -128,11 +129,11 @@ export default function FuelPurchasesPage({ embedded = false }: { embedded?: boo
     { vineyardId: selectedVineyardId },
   );
 
-  const vintageFilter = useVintageFilter();
+  const vintageFilter = useVintageFilter({ table: "fuel_purchases", dateColumn: "date" });
   const vintageScopeValue = vintageFilter.scope;
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["fuel_purchases", selectedVineyardId, vintageScopeValue.vintage],
+    queryKey: ["fuel_purchases", selectedVineyardId, vintageFilter.vintage ?? "all"],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchFuelPurchasesForVineyard(selectedVineyardId!, vintageScopeValue),
   });
@@ -435,6 +436,7 @@ function FuelSheet({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fuel_purchases"] });
+      qc.invalidateQueries({ queryKey: [VINTAGE_OPTIONS_KEY] });
       toast({ title: "Fuel purchase archived" });
       setConfirmDelete(false);
       onOpenChange(false);
@@ -610,6 +612,7 @@ function FuelEditor({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fuel_purchases"] });
+      qc.invalidateQueries({ queryKey: [VINTAGE_OPTIONS_KEY] });
       toast({ title: "Fuel purchase created" });
       onOpenChange(false);
     },
@@ -635,6 +638,7 @@ function FuelEditor({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fuel_purchases"] });
+      qc.invalidateQueries({ queryKey: [VINTAGE_OPTIONS_KEY] });
       toast({ title: "Fuel purchase updated" });
       onOpenChange(false);
     },

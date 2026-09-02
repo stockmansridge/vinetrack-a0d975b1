@@ -102,11 +102,11 @@ export default function SprayReportsPage() {
   }), [paddocks, tractors, equipment, members]);
 
   // ---- Records (individual export)
-  const vintageFilter = useVintageFilter();
+  const vintageFilter = useVintageFilter({ table: "spray_records", dateColumn: "date" });
   const vintageScopeValue = vintageFilter.scope;
 
   const { data: recordsResult, isLoading: recordsLoading } = useQuery({
-    queryKey: ["spray-records", selectedVineyardId, vintageScopeValue.vintage],
+    queryKey: ["spray-records", selectedVineyardId, vintageFilter.vintage ?? "all"],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchSprayRecordsForVineyard(selectedVineyardId!, vintageScopeValue),
   });

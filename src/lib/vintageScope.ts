@@ -5,16 +5,12 @@
 //    stored season start month/day). This module NEVER invents its own season
 //    logic — it only turns a vintage year into the canonical season window via
 //    `seasonRangeForVintage`.
-//  * Surfaces offer the current Vintage and the previous 15 (16 options).
 //  * Scoping is applied to the QUERY, not the heading: the underlying date
 //    column is bounded by the season window so records from other Vintages can
 //    never reach the client.
 //  * Rows with a NULL date column are excluded by a bounded query. That is
 //    intentional — an undated record cannot be attributed to a Vintage.
 import { seasonRangeForVintage } from "@/lib/vineyardSeasonSettingsQuery";
-
-/** Number of historical Vintages offered in addition to the current one. */
-export const VINTAGE_HISTORY_YEARS = 15;
 
 export interface VintageScope {
   vintage: number;
@@ -29,17 +25,6 @@ export interface VintageScope {
    * final day instead of being cut at midnight by an inclusive date bound.
    */
   endExclusiveISO: string;
-}
-
-/** Current Vintage first, then the previous `VINTAGE_HISTORY_YEARS`. */
-export function vintageOptions(
-  currentVintage: number,
-  history: number = VINTAGE_HISTORY_YEARS,
-): number[] {
-  if (!Number.isFinite(currentVintage)) return [];
-  const out: number[] = [];
-  for (let i = 0; i <= history; i += 1) out.push(currentVintage - i);
-  return out;
 }
 
 /** Build the canonical season window for a Vintage. */

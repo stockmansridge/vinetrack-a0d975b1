@@ -114,11 +114,11 @@ export default function PinsPage() {
 
   const paddockIds = useMemo(() => paddocks.map((p) => p.id), [paddocks]);
 
-  const vintageFilter = useVintageFilter();
+  const vintageFilter = useVintageFilter({ table: "pins", dateColumn: "created_at" });
   const vintageScopeValue = vintageFilter.scope;
 
   const { data: pinsResult, isLoading, error } = useQuery({
-    queryKey: ["pins", selectedVineyardId, paddockIds.length, vintageScopeValue.vintage],
+    queryKey: ["pins", selectedVineyardId, paddockIds.length, vintageFilter.vintage ?? "all"],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchPinsForVineyard(selectedVineyardId!, paddockIds, vintageScopeValue),
   });

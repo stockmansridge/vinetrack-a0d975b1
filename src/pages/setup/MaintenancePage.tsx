@@ -1,3 +1,4 @@
+import { VINTAGE_OPTIONS_KEY } from "@/lib/availableVintages";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -210,11 +211,11 @@ export default function MaintenancePage() {
     { vineyardId: selectedVineyardId },
   );
 
-  const vintageFilter = useVintageFilter();
+  const vintageFilter = useVintageFilter({ table: "maintenance_logs", dateColumn: "date" });
   const vintageScopeValue = vintageFilter.scope;
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["maintenance_logs", selectedVineyardId, vintageScopeValue.vintage],
+    queryKey: ["maintenance_logs", selectedVineyardId, vintageFilter.vintage ?? "all"],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchMaintenanceLogsForVineyard(selectedVineyardId!, vintageScopeValue),
   });
@@ -514,6 +515,7 @@ function MaintenanceSheet({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["maintenance_logs"] });
+      qc.invalidateQueries({ queryKey: [VINTAGE_OPTIONS_KEY] });
       toast({ title: "Maintenance log archived" });
       setConfirmDelete(false);
       onOpenChange(false);
@@ -742,6 +744,7 @@ function MaintenanceEditor({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["maintenance_logs"] });
+      qc.invalidateQueries({ queryKey: [VINTAGE_OPTIONS_KEY] });
       toast({ title: "Maintenance log created" });
       onOpenChange(false);
     },
@@ -776,6 +779,7 @@ function MaintenanceEditor({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["maintenance_logs"] });
+      qc.invalidateQueries({ queryKey: [VINTAGE_OPTIONS_KEY] });
       toast({ title: "Maintenance log updated" });
       onOpenChange(false);
     },

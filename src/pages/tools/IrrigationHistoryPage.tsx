@@ -72,6 +72,7 @@ import {
 } from "@/lib/irrigationQuery";
 
 import { useVintageFilter } from "@/hooks/useVintageFilter";
+import { fetchIrrigationVintages } from "@/lib/irrigationQuery";
 import { VintageSelect } from "@/components/VintageSelect";
 import {
   emitterBasisLabel,
@@ -335,7 +336,10 @@ const isImported = (s: IrrigationSession) =>
 
 export default function IrrigationHistoryPage() {
   const { selectedVineyardId } = useVineyard();
-  const vintageFilter = useVintageFilter();
+  const vintageFilter = useVintageFilter({
+    key: "irrigation_sessions",
+    loadVintages: fetchIrrigationVintages,
+  });
   const vintage = vintageFilter.vintage;
   const valves = useIrrigationValves(selectedVineyardId, true);
   const reverse = useReverseSession(selectedVineyardId);
@@ -382,7 +386,7 @@ export default function IrrigationHistoryPage() {
           </Button>
           <h1 className="text-2xl font-semibold tracking-tight">Irrigation history</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Vintage {vintage} · {total} session{total === 1 ? "" : "s"}
+            {vintage ? `Vintage ${vintage}` : "All vintages"} · {total} session{total === 1 ? "" : "s"}
           </p>
         </div>
         <Button asChild>

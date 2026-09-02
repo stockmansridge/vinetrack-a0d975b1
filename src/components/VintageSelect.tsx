@@ -7,10 +7,14 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
+const ALL = "__all__";
+
 interface Props {
-  vintage: number;
+  /** Selected Vintage, or null for "All vintages". */
+  vintage: number | null;
+  /** Vintages that actually contain records for this surface, newest first. */
   options: number[];
-  onChange: (vintage: number) => void;
+  onChange: (vintage: number | null) => void;
   /** Renders a "Vintage" label above the control. */
   label?: string | null;
   className?: string;
@@ -19,7 +23,7 @@ interface Props {
 
 /**
  * The single Vintage selector used by every dated list, report and export.
- * Offers the current vineyard Vintage plus the previous 15.
+ * "All vintages" first, then only the Vintages containing records.
  */
 export function VintageSelect({
   vintage,
@@ -35,14 +39,15 @@ export function VintageSelect({
         <Label className="mb-1 block text-xs text-muted-foreground">{label}</Label>
       )}
       <Select
-        value={String(vintage)}
-        onValueChange={(v) => onChange(Number(v))}
+        value={vintage == null ? ALL : String(vintage)}
+        onValueChange={(v) => onChange(v === ALL ? null : Number(v))}
         disabled={disabled}
       >
         <SelectTrigger className="h-9 w-full sm:w-[150px]" aria-label="Vintage">
           <SelectValue placeholder="Vintage" />
         </SelectTrigger>
         <SelectContent className="max-h-72">
+          <SelectItem value={ALL}>All vintages</SelectItem>
           {options.map((y) => (
             <SelectItem key={y} value={String(y)}>
               Vintage {y}
