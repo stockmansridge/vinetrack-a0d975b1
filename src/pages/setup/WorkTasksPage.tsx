@@ -467,12 +467,13 @@ export default function WorkTasksPage() {
   }, [labourLines]);
 
   const seasons = useMemo(() => {
-    const s = new Set<number>();
+    // Standard Vintage list: current + previous 15, plus any older Vintage
+    // that actually has tasks so historical rows stay reachable.
+    const s = new Set<number>(vintageOptions(currentVintageYear));
     tasks.forEach((t) => s.add(taskVintage(t, seasonStartMonth, seasonStartDay, currentVintageYear)));
-    const list = Array.from(s).sort((a, b) => b - a);
-    if (!list.includes(currentVintageYear)) list.unshift(currentVintageYear);
-    return list;
+    return Array.from(s).sort((a, b) => b - a);
   }, [tasks, seasonStartMonth, seasonStartDay, currentVintageYear]);
+
 
 
 
