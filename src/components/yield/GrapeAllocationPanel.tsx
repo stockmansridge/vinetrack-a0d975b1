@@ -334,6 +334,8 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
           </TableBody>
         </Table>
       </Card>
+      </>
+      )}
 
       {vineyardId && vintage != null && (
         <AllocationDialog
