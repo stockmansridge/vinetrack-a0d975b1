@@ -849,7 +849,13 @@ export default function YieldReportsPage() {
               const s = sessions.find((x) => x.id === id);
               if (s) setSelected({ ...s, __kind: "session" });
             }}
+            canDelete={canManageYields}
+            onDeleteTrip={(id) => {
+              const s = sessions.find((x) => x.id === id);
+              if (s) del.mutate({ ...s, __kind: "session" } as AnyRow);
+            }}
           />
+
         </TabsContent>
 
         {(["historical"] as const).map((t) => (
