@@ -24,6 +24,7 @@ import {
   EL_MAX,
   EL_MIN,
   RECENCY_HALF_LIFE_DAYS,
+  RECENCY_MAX_AGE_DAYS,
   ageLabel,
   buildHeatModel,
   daysBetween,
@@ -206,10 +207,13 @@ export default function RipenessHeatmap({
     return pts;
   }, [model]);
 
+  const staleIds = useMemo(() => new Set(model.stale.map((o) => o.id)), [model.stale]);
+
   const mapProps = {
     blocks: model.blocks,
     overlays,
     observations: model.qualifying,
+    staleIds,
     fitPoints,
     fitKey,
     showBoundaries,
@@ -232,12 +236,14 @@ export default function RipenessHeatmap({
 
   useEffect(() => {
     const stop = () => setPlaying(false);
-    document.addEventListener("visibilitychange", () => {
-      if (document.hidden) stop();
-    });
+    const onVisibility = () => { if (document.hidden) stop(); };
+    document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("blur", stop);
+    window.addEventListener("pagehide", stop);
     return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("blur", stop);
+      window.removeEventListener("pagehide", stop);
       setPlaying(false);
     };
   }, []);
@@ -257,6 +263,7 @@ export default function RipenessHeatmap({
 
   const noPolygonBlocks = model.blocks.filter((b) => b.mode === "no_polygon" && b.observations.length);
   const emptyBlocks = model.blocks.filter((b) => b.mode === "none");
+  const staleBlocks = model.blocks.filter((b) => b.mode === "stale");
 
   if (error) {
     return <Card className="p-6 text-sm text-destructive">Growth Stage data could not be loaded.</Card>;
@@ -346,10 +353,19 @@ export default function RipenessHeatmap({
           </div>
         </div>
 
-        <div className="text-sm">
-          <strong>{dateLabel}</strong> · {model.qualifying.length} observation
-          {model.qualifying.length === 1 ? "" : "s"} ·{" "}
-          {model.medianEl == null ? "No recorded stage" : `Typical recorded stage ${formatEl(model.medianEl)}`}
+        <div className="space-y-0.5 text-sm">
+          <div>
+            <strong>{dateLabel}</strong> · {model.qualifying.length} recorded observation
+            {model.qualifying.length === 1 ? "" : "s"} available ·{" "}
+            <span className="font-medium">{model.influencing.length}</span> influencing the heat surface
+          </div>
+          <div className="text-muted-foreground">
+            {model.medianEl == null
+              ? "No current recorded stage influencing the surface"
+              : `Typical current stage ${formatEl(model.medianEl)}`}
+            {model.stale.length > 0 &&
+              ` · ${model.stale.length} stale observation${model.stale.length === 1 ? "" : "s"} (older than ${RECENCY_MAX_AGE_DAYS} days) shown as faded, dashed pins`}
+          </div>
         </div>
 
         {isLoading ? (
@@ -422,7 +438,10 @@ export default function RipenessHeatmap({
           )}
         </div>
 
-        {(noPolygonBlocks.length > 0 || model.unassigned.length > 0 || emptyBlocks.length > 0) && (
+        {(noPolygonBlocks.length > 0 ||
+          model.unassigned.length > 0 ||
+          emptyBlocks.length > 0 ||
+          staleBlocks.length > 0) && (
           <div className="space-y-1 text-xs text-muted-foreground">
             {noPolygonBlocks.map((b) => (
               <div key={b.paddockId}>
@@ -432,6 +451,12 @@ export default function RipenessHeatmap({
             {emptyBlocks.length > 0 && (
               <div>{emptyBlocks.length} block(s) have no observations on or before this date.</div>
             )}
+            {staleBlocks.length > 0 && (
+              <div>
+                {staleBlocks.length} block(s) have only stale observations (older than {RECENCY_MAX_AGE_DAYS} days)
+                — no heat surface is drawn, the recorded pins remain for historical context.
+              </div>
+            )}
             {model.unassigned.length > 0 && (
               <div>
                 {model.unassigned.length} observation(s) have coordinates but no canonical block — shown as
@@ -439,8 +464,8 @@ export default function RipenessHeatmap({
               </div>
             )}
             <div>
-              Older observations fade with a {RECENCY_HALF_LIFE_DAYS}-day half-life so stale areas become more
-              transparent rather than misleadingly solid.
+              Older observations fade with a {RECENCY_HALF_LIFE_DAYS}-day half-life and reach zero influence at
+              {" "}{RECENCY_MAX_AGE_DAYS} days, so stale areas stop implying current coverage.
             </div>
           </div>
         )}
