@@ -6,6 +6,7 @@ import { vintageScope, type VintageScope } from "@/lib/vintageScope";
 import {
   VINTAGE_OPTIONS_KEY,
   fetchAvailableVintages,
+  sourceKey,
   type VintageSource,
 } from "@/lib/availableVintages";
 
@@ -55,7 +56,7 @@ export function useVintageFilter(
     queryKey: [
       VINTAGE_OPTIONS_KEY,
       selectedVineyardId,
-      list.map((s) => `${s.table}.${s.dateColumn}`).join("|"),
+      list.map(sourceKey).join("|"),
       seasonStartMonth,
       seasonStartDay,
     ],
