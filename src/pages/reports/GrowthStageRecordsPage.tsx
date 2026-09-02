@@ -5,6 +5,9 @@ import { useVineyard } from "@/context/VineyardContext";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { useGrowthStagePhoto } from "@/hooks/useGrowthStagePhoto";
 import { Card } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import RipenessHeatmap from "@/components/growth/RipenessHeatmap";
+
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -196,7 +199,15 @@ export default function GrowthStageRecordsPage() {
         </Button>
       </div>
 
+      <Tabs defaultValue="summary">
+      <TabsList>
+        <TabsTrigger value="summary">Summary</TabsTrigger>
+        <TabsTrigger value="heatmap">Ripeness Heatmap</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="summary" className="space-y-4 mt-4">
       {summary.length > 0 && (
+
         <Card className="p-4">
           <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
             Latest stage by {rf.blockLabel.toLowerCase()}
@@ -350,6 +361,14 @@ export default function GrowthStageRecordsPage() {
           </TableBody>
         </Table>
       </Card>
+      </TabsContent>
+
+      <TabsContent value="heatmap" className="mt-4">
+        <RipenessHeatmap records={all} isLoading={isLoading} error={error} />
+      </TabsContent>
+      </Tabs>
+
+
 
       <DetailSheet
         record={selected}
