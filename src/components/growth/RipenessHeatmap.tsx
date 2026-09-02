@@ -197,19 +197,29 @@ export default function RipenessHeatmap({
           bounds: [
             [b.gridBounds.minLat, b.gridBounds.minLng],
             [b.gridBounds.maxLat, b.gridBounds.maxLng],
-          ] as L.LatLngBoundsLiteral,
+          ] as [[number, number], [number, number]],
         }];
       }),
     [model],
   );
 
-  const bounds = useMemo<L.LatLngBoundsExpression | null>(() => {
+  const fitPoints = useMemo(() => {
     const pts: LatLng[] = [];
     model.blocks.forEach((b) => pts.push(...b.polygon));
     if (!pts.length) model.qualifying.forEach((o) => pts.push({ lat: o.lat, lng: o.lng }));
-    if (!pts.length) return null;
-    return pts.map((p) => [p.lat, p.lng]) as L.LatLngBoundsLiteral;
-  }, [model, fitKey]);
+    return pts;
+  }, [model]);
+
+  const mapProps = {
+    blocks: model.blocks,
+    overlays,
+    observations: model.qualifying,
+    fitPoints,
+    fitKey,
+    showBoundaries,
+    onSelect: setSelectedObs,
+  };
+
 
   // ---- playback -----------------------------------------------------------
   useEffect(() => {
