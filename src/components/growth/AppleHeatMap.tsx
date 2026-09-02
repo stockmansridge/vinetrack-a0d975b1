@@ -54,6 +54,11 @@ export default function AppleHeatMap({
   const imagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const [ready, setReady] = useState(false);
 
+  // Keep the latest callback without re-running the init effect (the parent
+  // passes an inline arrow, so its identity changes on every render).
+  const unavailableRef = useRef(onUnavailable);
+  unavailableRef.current = onUnavailable;
+
   // --- map init ------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
@@ -68,14 +73,15 @@ export default function AppleHeatMap({
         });
         setReady(true);
       })
-      .catch((e: Error) => !cancelled && onUnavailable(e?.message || "MapKit init failed"));
+      .catch((e: Error) => !cancelled && unavailableRef.current(e?.message || "MapKit init failed"));
     return () => {
       cancelled = true;
       try { mapRef.current?.destroy?.(); } catch { /* noop */ }
       mapRef.current = null;
       setReady(false);
     };
-  }, [onUnavailable]);
+  }, []);
+
 
   // --- heat canvas ---------------------------------------------------------
   const draw = () => {
@@ -103,8 +109,10 @@ export default function AppleHeatMap({
       try {
         const nw = map.convertCoordinateToPointOnPage(new mapkit.Coordinate(o.bounds[1][0], o.bounds[0][1]));
         const se = map.convertCoordinateToPointOnPage(new mapkit.Coordinate(o.bounds[0][0], o.bounds[1][1]));
-        const x = nw.x - rect.left;
-        const y = nw.y - rect.top;
+        // convertCoordinateToPointOnPage returns page coordinates (viewport + scroll).
+        const x = nw.x - (rect.left + window.scrollX);
+        const y = nw.y - (rect.top + window.scrollY);
+
         const w = se.x - nw.x;
         const h = se.y - nw.y;
         if (!Number.isFinite(x) || !Number.isFinite(y) || w <= 0 || h <= 0) continue;
