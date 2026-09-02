@@ -24,21 +24,25 @@ const fmtPercent = (n: number | null | undefined) => {
 
 export default function VintageOverviewSection() {
   const { selectedVineyardId } = useVineyard();
-  const { vintage, hemisphere, startISO, endISO } = useVintage();
+  const { vintage, hemisphere, startISO, endISO, seasonStartMonth, seasonStartDay } = useVintage();
   const pruningSeasonYear = new Date().getFullYear();
+  // Half-open season bound so timestamp columns keep the final day.
+  const scope = vintageScope(vintage, seasonStartMonth, seasonStartDay);
 
   const sprayCountQ = useQuery({
-    queryKey: ["vintage-spray-count", selectedVineyardId, startISO, endISO],
+    queryKey: ["vintage-spray-count", selectedVineyardId, scope.startISO, scope.endExclusiveISO],
     enabled: !!selectedVineyardId,
     queryFn: async () => {
-      const { count, error } = await supabase
-        .from("spray_records")
-        .select("*", { count: "exact", head: true })
-        .eq("vineyard_id", selectedVineyardId!)
-        .is("deleted_at", null)
-        .neq("is_template", true)
-        .gte("date", startISO)
-        .lte("date", endISO);
+      const { count, error } = await applyVintageScope(
+        supabase
+          .from("spray_records")
+          .select("*", { count: "exact", head: true })
+          .eq("vineyard_id", selectedVineyardId!)
+          .is("deleted_at", null)
+          .neq("is_template", true) as any,
+        "date",
+        scope,
+      );
       if (error) throw error;
       return count ?? 0;
     },
@@ -46,19 +50,21 @@ export default function VintageOverviewSection() {
   });
 
   const maintenanceTripsQ = useQuery({
-    queryKey: ["vintage-maintenance-trips", selectedVineyardId, startISO, endISO],
+    queryKey: ["vintage-maintenance-trips", selectedVineyardId, scope.startISO, scope.endExclusiveISO],
     enabled: !!selectedVineyardId,
     queryFn: async () => {
-      const { count, error } = await supabase
-        .from("trips")
-        .select("*", { count: "exact", head: true })
-        .eq("vineyard_id", selectedVineyardId!)
-        .is("deleted_at", null)
-        .not("trip_function", "is", null)
-        .neq("trip_function", "")
-        .neq("trip_function", "spraying")
-        .gte("start_time", startISO)
-        .lte("start_time", endISO);
+      const { count, error } = await applyVintageScope(
+        supabase
+          .from("trips")
+          .select("*", { count: "exact", head: true })
+          .eq("vineyard_id", selectedVineyardId!)
+          .is("deleted_at", null)
+          .not("trip_function", "is", null)
+          .neq("trip_function", "")
+          .neq("trip_function", "spraying") as any,
+        "start_time",
+        scope,
+      );
       if (error) throw error;
       return count ?? 0;
     },
@@ -66,21 +72,24 @@ export default function VintageOverviewSection() {
   });
 
   const workTasksCountQ = useQuery({
-    queryKey: ["vintage-work-tasks-count", selectedVineyardId, startISO, endISO],
+    queryKey: ["vintage-work-tasks-count", selectedVineyardId, scope.startISO, scope.endExclusiveISO],
     enabled: !!selectedVineyardId,
     queryFn: async () => {
-      const { count, error } = await supabase
-        .from("work_tasks")
-        .select("*", { count: "exact", head: true })
-        .eq("vineyard_id", selectedVineyardId!)
-        .is("deleted_at", null)
-        .gte("date", startISO)
-        .lte("date", endISO);
+      const { count, error } = await applyVintageScope(
+        supabase
+          .from("work_tasks")
+          .select("*", { count: "exact", head: true })
+          .eq("vineyard_id", selectedVineyardId!)
+          .is("deleted_at", null) as any,
+        "date",
+        scope,
+      );
       if (error) throw error;
       return count ?? 0;
     },
     staleTime: 60_000,
   });
+
 
   const pruningQ = usePruningVineyardSummary(selectedVineyardId, pruningSeasonYear);
 
