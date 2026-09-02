@@ -287,15 +287,20 @@ export function buildSeasonYieldEstimates(args: {
   };
 }
 
-/** Estimated tonnes per variety key for Grape Allocation availability.
- *  Incomplete varieties are OMITTED so the panel shows "—", never 0 t. */
+/** Estimated tonnes per variety for Grape Allocation availability.
+ *  Keys use the allocation model's variety key (display name, lowercased) so
+ *  availability lines up with stored allocations. Incomplete varieties are
+ *  OMITTED so the panel shows "—", never 0 t. */
 export function estimatedTonnesByVariety(
   model: SeasonYieldEstimateModel,
+  keyOf: (name: string | null) => string = (name) =>
+    (name ?? "").trim().toLowerCase(),
 ): Map<string, number> {
   const out = new Map<string, number>();
   for (const v of model.varieties) {
     if (v.tonnes == null) continue;
-    out.set(v.varietyKey, v.tonnes);
+    const k = keyOf(v.varietyName ?? v.varietyKey);
+    out.set(k, (out.get(k) ?? 0) + v.tonnes);
   }
   return out;
 }
