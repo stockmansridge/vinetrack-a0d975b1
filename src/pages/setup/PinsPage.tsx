@@ -460,6 +460,12 @@ export default function PinsPage() {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <VintageSelect
+            vintage={vintageFilter.vintage}
+            options={vintageFilter.options}
+            onChange={vintageFilter.setVintage}
+            className="space-y-1"
+          />
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Search title, notes, {rf.blockLabel.toLowerCase()}</Label>
             <Input

@@ -261,6 +261,17 @@ export default function SprayReportsPage() {
         </p>
       </div>
 
+      <Card className="p-4">
+        <VintageSelect
+          vintage={vintageFilter.vintage}
+          options={vintageFilter.options}
+          onChange={vintageFilter.setVintage}
+        />
+        <p className="mt-2 text-xs text-muted-foreground">
+          Reports and exports below include spray records from the selected Vintage only.
+        </p>
+      </Card>
+
       {/* Individual record */}
       <Card className="p-4 space-y-3">
         <div className="flex items-start gap-3">
