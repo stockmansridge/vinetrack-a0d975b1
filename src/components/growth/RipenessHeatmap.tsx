@@ -94,7 +94,7 @@ export default function RipenessHeatmap({
 
   const touchedDay = useRef(false);
 
-  const activeVintage = vintage ?? currentVintage;
+  const [selectedVintage, setSelectedVintage] = [vintage, setVintage];
   const season = useMemo(
     () => seasonRangeForVintage(seasonStartMonth, seasonStartDay, activeVintage),
     [seasonStartMonth, seasonStartDay, activeVintage],
