@@ -304,3 +304,34 @@ export function estimatedTonnesByVariety(
   }
   return out;
 }
+
+/**
+ * Split a block-level estimate across that block's plantings.
+ *
+ * Priority: the DB's own per-planting base estimates (proportional), then the
+ * canonical allocation percentages, then an equal split. Used when a Bunch
+ * Count Trip supersedes the base estimate for a block — the trip gives one
+ * block number, and it must still land on the DB's planting identities.
+ */
+export function splitBlockEstimateToGroups(
+  block: SeasonYieldBlockEstimate,
+  blockTonnes: number | null,
+): (number | null)[] {
+  const groups = block.groups;
+  if (!groups.length) return [];
+  if (blockTonnes == null) return groups.map(() => null);
+
+  const bases = groups.map((g) => g.baseTonnes);
+  const baseSum = bases.reduce<number>((a, b) => a + (b ?? 0), 0);
+  if (bases.every((b) => b != null) && baseSum > 0) {
+    return bases.map((b) => (blockTonnes * (b as number)) / baseSum);
+  }
+
+  const percents = groups.map((g) =>
+    g.allocationPercent != null && g.allocationPercent > 0 ? g.allocationPercent : 0,
+  );
+  const pctSum = percents.reduce((a, b) => a + b, 0);
+  if (pctSum > 0) return percents.map((p) => (blockTonnes * p) / pctSum);
+
+  return groups.map(() => blockTonnes / groups.length);
+}
