@@ -350,6 +350,14 @@ export default function GrowthStageRecordsPage() {
           </TableBody>
         </Table>
       </Card>
+      </TabsContent>
+
+      <TabsContent value="heatmap" className="mt-4">
+        <RipenessHeatmap records={all} isLoading={isLoading} error={error} />
+      </TabsContent>
+      </Tabs>
+
+
 
       <DetailSheet
         record={selected}
