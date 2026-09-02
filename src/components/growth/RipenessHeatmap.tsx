@@ -302,10 +302,28 @@ export default function RipenessHeatmap({
           <Button variant="outline" size="sm" onClick={() => setFitKey((k) => k + 1)}>
             <Maximize2 className="mr-2 h-4 w-4" /> Fit to {blockFilter === ALL ? "vineyard" : "block"}
           </Button>
-          <div className="ml-auto text-xs text-muted-foreground">
-            Season {season.startISO} → {season.endISO} · {hemisphere === "southern" ? "Southern" : "Northern"} hemisphere
+          <div className="flex items-center gap-2 pb-1">
+            <Switch
+              id="heatmap-boundaries"
+              checked={showBoundaries}
+              onCheckedChange={setShowBoundaries}
+            />
+            <Label htmlFor="heatmap-boundaries" className="text-xs">
+              Block boundaries &amp; names
+            </Label>
+          </div>
+          <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+            {mapProvider === "fallback" && (
+              <Badge variant="outline" className="text-xs" title={mapReason ?? undefined}>
+                Apple Maps unavailable — using fallback
+              </Badge>
+            )}
+            <span>
+              Season {season.startISO} → {season.endISO} · {hemisphere === "southern" ? "Southern" : "Northern"} hemisphere
+            </span>
           </div>
         </div>
+
 
         {/* Fixed EL legend — never rescaled to the current result set. */}
         <div className="flex flex-wrap items-center gap-3">
