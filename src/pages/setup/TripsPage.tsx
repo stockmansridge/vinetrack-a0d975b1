@@ -86,9 +86,9 @@ const SPRAY = "__spray__";
 const MAINT = "__maint__";
 
 import { TRIP_FUNCTION_LABELS, tripFunctionLabel } from "@/lib/tripFunctionLabels";
-import {
 import { useVintageFilter } from "@/hooks/useVintageFilter";
 import { VintageSelect } from "@/components/VintageSelect";
+import {
   formatTripPatternLabel,
   formatTripNameLabel,
   formatTripDurationLabel,

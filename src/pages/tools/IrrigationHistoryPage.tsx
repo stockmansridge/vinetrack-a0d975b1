@@ -71,9 +71,9 @@ import {
   type IrrigationSession,
 } from "@/lib/irrigationQuery";
 
-import {
 import { useVintageFilter } from "@/hooks/useVintageFilter";
 import { VintageSelect } from "@/components/VintageSelect";
+import {
   emitterBasisLabel,
   formatEstimate,
   formatRowRanges,
