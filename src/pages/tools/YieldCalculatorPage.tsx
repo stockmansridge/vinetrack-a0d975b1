@@ -27,6 +27,11 @@ import {
 } from "@/lib/pruningYieldSettingsQuery";
 import { buildBlockPrunedYieldTiles } from "@/lib/pruningYieldSummary";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import { useVintage } from "@/lib/useVintage";
+import {
+  refreshPruningYieldEstimates,
+  SEASON_YIELD_OVERVIEW_KEY,
+} from "@/lib/seasonYieldQuery";
 
 const HA_PER_AC = 0.40468564224;
 /** Retired portal-only global saved state (replaced by shared per-block settings). */
@@ -143,6 +148,9 @@ export default function YieldCalculatorPage() {
     `${fmt(rf.areaUnitLabel === "ac" ? tPerHa * HA_PER_AC : tPerHa)} t/${rf.areaUnitLabel}`;
 
   // Contract RLS: insert/update allowed for owner / manager / supervisor / operator.
+  // Only the current vintage is ever recalculated from the Portal.
+  const { vintage: currentVintage } = useVintage();
+
   const canEdit = ["owner", "manager", "supervisor", "operator"].includes(currentRole ?? "");
 
   const saveM = useMutation({
