@@ -413,6 +413,10 @@ export interface HeatModel {
   unassigned: HeatObservation[];
   /** All qualifying observations for the date (assigned + unassigned). */
   qualifying: HeatObservation[];
+  /** Qualifying observations still influencing a heat surface. */
+  influencing: HeatObservation[];
+  /** Qualifying observations too old to influence any heat surface. */
+  stale: HeatObservation[];
   medianEl: number | null;
 }
 
@@ -448,13 +452,20 @@ export function buildHeatModel(input: BuildHeatModelInput): HeatModel {
     }),
   );
 
+  // Unassigned observations are visible pins but never influence a surface.
+  const assignedQualifying = qualifying.filter((o) => o.assigned && o.paddockId);
+  const split = partitionByInfluence(assignedQualifying, atDateISO);
+
   return {
     blocks: heat,
     unassigned: filter ? [] : qualifying.filter((o) => !o.assigned || !o.paddockId),
     qualifying,
-    medianEl: medianStage(qualifying),
+    influencing: split.influencing,
+    stale: split.stale,
+    medianEl: medianStage(split.influencing),
   };
 }
+
 
 // ---------------------------------------------------------------- formatting
 
