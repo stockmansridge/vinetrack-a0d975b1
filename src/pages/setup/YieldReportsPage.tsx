@@ -56,7 +56,10 @@ import {
   splitBlockEstimateToGroups,
   setupWarningLabel,
   type SeasonYieldBlockEstimate,
+  type SeasonYieldEstimateModel,
 } from "@/lib/seasonYieldContract";
+import { Switch } from "@/components/ui/switch";
+import BlockEstimateInfo from "@/components/yield/BlockEstimateInfo";
 import { useSeasonYieldBaseOverview } from "@/lib/seasonYieldQuery";
 import { fetchDamageRecordsForVineyard } from "@/lib/damageRecordsQuery";
 import { aggregateDamageByPaddock } from "@/lib/damageImpact";
