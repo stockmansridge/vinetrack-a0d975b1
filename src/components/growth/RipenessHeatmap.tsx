@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { MapContainer, TileLayer, Polygon, ImageOverlay, CircleMarker, Tooltip, useMap } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Play, Pause, ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
+import AppleHeatMap from "@/components/growth/AppleHeatMap";
+import LeafletHeatMap from "@/components/growth/LeafletHeatMap";
+
 import { useVineyard } from "@/context/VineyardContext";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { useVintage } from "@/lib/useVintage";
