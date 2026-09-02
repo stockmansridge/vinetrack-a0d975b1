@@ -210,11 +210,11 @@ export default function MaintenancePage() {
     { vineyardId: selectedVineyardId },
   );
 
-  const vintageFilter = useVintageFilter();
+  const vintageFilter = useVintageFilter({ table: "maintenance_logs", dateColumn: "date" });
   const vintageScopeValue = vintageFilter.scope;
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["maintenance_logs", selectedVineyardId, vintageScopeValue.vintage],
+    queryKey: ["maintenance_logs", selectedVineyardId, vintageFilter.vintage ?? "all"],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchMaintenanceLogsForVineyard(selectedVineyardId!, vintageScopeValue),
   });

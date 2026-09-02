@@ -159,11 +159,11 @@ export default function DamageRecordsPage() {
     return m;
   }, [paddocks]);
 
-  const vintageFilter = useVintageFilter();
+  const vintageFilter = useVintageFilter({ table: "damage_records", dateColumn: "date_observed" });
   const vintageScopeValue = vintageFilter.scope;
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["damage_records", selectedVineyardId, vintageScopeValue.vintage],
+    queryKey: ["damage_records", selectedVineyardId, vintageFilter.vintage ?? "all"],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchDamageRecordsForVineyard(selectedVineyardId!, vintageScopeValue),
   });

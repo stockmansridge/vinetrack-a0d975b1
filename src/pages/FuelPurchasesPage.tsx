@@ -128,11 +128,11 @@ export default function FuelPurchasesPage({ embedded = false }: { embedded?: boo
     { vineyardId: selectedVineyardId },
   );
 
-  const vintageFilter = useVintageFilter();
+  const vintageFilter = useVintageFilter({ table: "fuel_purchases", dateColumn: "date" });
   const vintageScopeValue = vintageFilter.scope;
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["fuel_purchases", selectedVineyardId, vintageScopeValue.vintage],
+    queryKey: ["fuel_purchases", selectedVineyardId, vintageFilter.vintage ?? "all"],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchFuelPurchasesForVineyard(selectedVineyardId!, vintageScopeValue),
   });

@@ -81,11 +81,11 @@ export default function SprayRecordsPage() {
   const [opType, setOpType] = useState<string>(ANY);
   const [selected, setSelected] = useState<SprayRecord | null>(null);
 
-  const vintageFilter = useVintageFilter();
+  const vintageFilter = useVintageFilter({ table: "spray_records", dateColumn: "date" });
   const vintageScopeValue = vintageFilter.scope;
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["spray_records", selectedVineyardId, vintageScopeValue.vintage],
+    queryKey: ["spray_records", selectedVineyardId, vintageFilter.vintage ?? "all"],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchSprayRecordsForVineyard(selectedVineyardId!, vintageScopeValue),
   });

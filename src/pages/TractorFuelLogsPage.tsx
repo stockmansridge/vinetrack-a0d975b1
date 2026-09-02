@@ -127,11 +127,11 @@ export default function TractorFuelLogsPage({ embedded = false }: { embedded?: b
   const [fullFilter, setFullFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
 
-  const vintageFilter = useVintageFilter();
+  const vintageFilter = useVintageFilter({ table: "tractor_fuel_logs", dateColumn: "fill_datetime" });
   const vintageScopeValue = vintageFilter.scope;
 
   const { data: logs, isLoading, error } = useQuery({
-    queryKey: ["tractor_fuel_logs", selectedVineyardId, vintageScopeValue.vintage],
+    queryKey: ["tractor_fuel_logs", selectedVineyardId, vintageFilter.vintage ?? "all"],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchTractorFuelLogsForVineyard(selectedVineyardId!, vintageScopeValue),
   });
