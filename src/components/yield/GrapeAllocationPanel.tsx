@@ -51,6 +51,9 @@ export interface GrapeAllocationPanelProps {
   blocks: { id: string; name: string; varieties?: string[] }[];
   /** Canonical vineyard varieties for the allocation picker. */
   varieties?: string[];
+  /** When false, only the dialogs stay mounted — the summary cards, tables
+   *  and notices render only on the Grape Allocation tab. Defaults to true. */
+  active?: boolean;
 }
 
 export interface GrapeAllocationPanelRef {
@@ -68,6 +71,7 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
     estimatedByVariety,
     blocks,
     varieties: canonicalVarieties,
+    active = true,
   }: GrapeAllocationPanelProps,
   ref,
 ) {
@@ -168,6 +172,8 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
 
   return (
     <div className="space-y-4">
+      {active && (
+      <>
       <p className="text-sm text-muted-foreground">
         Allocate the {vintage ?? "selected"} vintage estimate to your own use and to
         external commitments, and track what is still available.
@@ -328,6 +334,8 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
           </TableBody>
         </Table>
       </Card>
+      </>
+      )}
 
       {vineyardId && vintage != null && (
         <AllocationDialog
