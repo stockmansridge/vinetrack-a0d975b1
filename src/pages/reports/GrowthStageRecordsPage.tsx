@@ -336,7 +336,7 @@ export default function GrowthStageRecordsPage() {
                 date: <TableCell><ReportDateCell value={r.date} /></TableCell>,
                 block: <TableCell>{fmt(r.paddock_name)}</TableCell>,
                 variety: <TableCell>{fmt(r.variety)}</TableCell>,
-                stage: <TableCell>{r.growth_stage_code ? <Badge variant="secondary">E-L {r.growth_stage_code}</Badge> : "—"}</TableCell>,
+                stage: <TableCell>{r.growth_stage_code ? <Badge variant="secondary">{elStage(r.growth_stage_code)}</Badge> : "—"}</TableCell>,
                 notes: <TableCell className="max-w-[280px] truncate">{fmt(r.notes)}</TableCell>,
                 photo: <TableCell>{r.photo_path ? <ImageIcon className="h-4 w-4 text-muted-foreground" /> : "—"}</TableCell>,
                 operator: <TableCell>{resolve(r.created_by) ?? "—"}</TableCell>,
