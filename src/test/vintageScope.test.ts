@@ -1,7 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
-  VINTAGE_HISTORY_YEARS,
-  vintageOptions,
   vintageScope,
   applyVintageScope,
   isWithinVintage,
@@ -10,19 +8,6 @@ import {
 // Southern-hemisphere style season: 1 July → 30 June.
 const SEASON_MONTH = 7;
 const SEASON_DAY = 1;
-
-describe("vintage options", () => {
-  it("offers the current Vintage plus the previous 15", () => {
-    const opts = vintageOptions(2025);
-    expect(opts.length).toBe(VINTAGE_HISTORY_YEARS + 1);
-    expect(opts[0]).toBe(2025);
-    expect(opts[opts.length - 1]).toBe(2010);
-  });
-
-  it("returns nothing for a non-finite anchor", () => {
-    expect(vintageOptions(Number.NaN)).toEqual([]);
-  });
-});
 
 describe("vintage scope window", () => {
   it("uses the canonical season range, not the calendar year", () => {

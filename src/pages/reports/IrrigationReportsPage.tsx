@@ -13,6 +13,7 @@ import {
   YAxis,
 } from "recharts";
 import { useVineyard } from "@/context/VineyardContext";
+import { useQuery } from "@tanstack/react-query";
 import { fetchIrrigationVintages } from "@/lib/irrigationQuery";
 import { useVintage } from "@/lib/useVintage";
 import { PageHead } from "@/components/PageHead";
