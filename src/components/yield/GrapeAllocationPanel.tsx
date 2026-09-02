@@ -71,6 +71,7 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
     estimatedByVariety,
     blocks,
     varieties: canonicalVarieties,
+    active = true,
   }: GrapeAllocationPanelProps,
   ref,
 ) {
