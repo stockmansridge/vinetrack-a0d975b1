@@ -247,15 +247,20 @@ export function polygonBounds(poly: LatLng[]) {
 
 // ---------------------------------------------------------------- block model
 
-export type BlockHeatMode = "none" | "halo" | "gradient" | "surface" | "no_polygon";
+export type BlockHeatMode = "none" | "stale" | "halo" | "gradient" | "surface" | "no_polygon";
 
 export interface BlockHeat {
   paddockId: string;
   paddockName: string;
   polygon: LatLng[];
+  /** Every qualifying observation on or before the date (incl. stale ones). */
   observations: HeatObservation[];
+  /** Subset still influencing the heat surface (age < RECENCY_MAX_AGE_DAYS). */
+  influencing: HeatObservation[];
+  /** Qualifying but too old to influence the surface — shown as stale pins. */
+  stale: HeatObservation[];
   mode: BlockHeatMode;
-  /** Median EL of this block's qualifying observations. */
+  /** Median EL of this block's influencing observations. */
   medianEl: number | null;
   /** Grid of interpolated EL values (null = outside polygon). */
   grid: (number | null)[][] | null;
@@ -264,9 +269,13 @@ export interface BlockHeat {
   gridBounds: { minLat: number; maxLat: number; minLng: number; maxLng: number } | null;
 }
 
-export function blockHeatMode(count: number, hasPolygon: boolean): BlockHeatMode {
+export function blockHeatMode(
+  count: number,
+  hasPolygon: boolean,
+  totalObservations = count,
+): BlockHeatMode {
   if (!hasPolygon) return "no_polygon";
-  if (count <= 0) return "none";
+  if (count <= 0) return totalObservations > 0 ? "stale" : "none";
   if (count === 1) return "halo";
   if (count === 2) return "gradient";
   return "surface";
@@ -292,19 +301,22 @@ export function buildBlockHeat(input: BuildBlockHeatInput): BlockHeat {
   const { paddockId, paddockName, polygon, observations, atDateISO } = input;
   const resolution = input.resolution ?? 48;
   const hasPolygon = polygon.length >= 3;
-  const mode = blockHeatMode(observations.length, hasPolygon);
+  const { influencing, stale } = partitionByInfluence(observations, atDateISO);
+  const mode = blockHeatMode(influencing.length, hasPolygon, observations.length);
   const base: BlockHeat = {
     paddockId,
     paddockName,
     polygon,
     observations,
+    influencing,
+    stale,
     mode,
-    medianEl: medianStage(observations),
+    medianEl: medianStage(influencing),
     grid: null,
     weightGrid: null,
     gridBounds: null,
   };
-  if (!hasPolygon || observations.length === 0) return base;
+  if (!hasPolygon || influencing.length === 0) return base;
 
   const b = polygonBounds(polygon);
   const grid: (number | null)[][] = [];
@@ -312,12 +324,13 @@ export function buildBlockHeat(input: BuildBlockHeatInput): BlockHeat {
   const latStep = (b.maxLat - b.minLat) / (resolution - 1);
   const lngStep = (b.maxLng - b.minLng) / (resolution - 1);
 
-  const pts = observations.map((o) => ({
+  const pts = influencing.map((o) => ({
     lat: o.lat,
     lng: o.lng,
     el: o.el,
     w: recencyWeight(daysBetween(o.dateISO, atDateISO)),
   }));
+
 
   // Sparse data must not fabricate coverage: a single observation renders a
   // localised halo, two observations a localised gradient between them.
