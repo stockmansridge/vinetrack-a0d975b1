@@ -42,6 +42,7 @@ export default function AppleHeatMap({
   blocks,
   overlays,
   observations,
+  staleIds,
   fitPoints,
   fitKey,
   showBoundaries,
@@ -193,7 +194,7 @@ export default function AppleHeatMap({
           strokeOpacity: 0.9,
           lineWidth: 2,
           fillColor: "#ffffff",
-          fillOpacity: b.mode === "none" ? 0.06 : 0,
+          fillOpacity: b.mode === "none" || b.mode === "stale" ? 0.06 : 0,
         });
         next.push(new mapkit.PolygonOverlay(coords, { style }));
       } catch { /* noop */ }
@@ -220,7 +221,7 @@ export default function AppleHeatMap({
       try {
         const ann = new mapkit.Annotation(
           new mapkit.Coordinate(o.lat, o.lng),
-          () => pinElement(elColourCss(o.el), !(o.assigned && o.paddockId)),
+          () => pinElement(elColourCss(o.el), !(o.assigned && o.paddockId), staleIds.has(o.id)),
           { title: "" },
         );
         ann.addEventListener?.("select", () => onSelect(o));
@@ -237,7 +238,9 @@ export default function AppleHeatMap({
           next.push(
             new mapkit.Annotation(
               new mapkit.Coordinate(lat, lng),
-              () => labelElement(`${b.paddockName}${b.mode === "none" ? " · No observations" : ""}`),
+              () => labelElement(
+                `${b.paddockName}${b.mode === "none" ? " · No observations" : b.mode === "stale" ? " · No current observations" : ""}`,
+              ),
               { collisionMode: mapkit.Annotation.CollisionMode.None },
             ),
           );
@@ -251,7 +254,7 @@ export default function AppleHeatMap({
     }
     draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [observations, blocks, showBoundaries, ready, onSelect]);
+  }, [observations, blocks, showBoundaries, ready, onSelect, staleIds]);
 
   // --- fit -----------------------------------------------------------------
   useEffect(() => {
