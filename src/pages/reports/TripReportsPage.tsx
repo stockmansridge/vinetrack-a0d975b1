@@ -59,6 +59,8 @@ const MAINT = "__maint__";
 // bucket covering every non-spray function.
 import { TRIP_FUNCTION_LABELS, tripFunctionLabel } from "@/lib/tripFunctionLabels";
 import { formatTripNameLabel, formatTripDurationLabel, formatTripPatternLabel } from "@/lib/tripDisplay";
+import { useVintageFilter } from "@/hooks/useVintageFilter";
+import { VintageSelect } from "@/components/VintageSelect";
 
 const tripDisplayName = (t: Trip): string =>
   formatTripNameLabel(
@@ -138,8 +140,11 @@ export default function TripReportsPage() {
   }, [paddocks]);
   const paddockIds = useMemo(() => paddocks.map((p) => p.id), [paddocks]);
 
+  const vintageFilter = useVintageFilter();
+  const vintageScopeValue = vintageFilter.scope;
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ["trip-reports", selectedVineyardId, paddockIds.length],
+    queryKey: ["trip-reports", selectedVineyardId, paddockIds.length, vintageScopeValue.vintage],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchTripsForVineyard(selectedVineyardId!, paddockIds, vintageScopeValue),
   });

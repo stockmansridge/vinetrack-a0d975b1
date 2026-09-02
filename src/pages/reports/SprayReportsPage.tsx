@@ -41,6 +41,8 @@ import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import { fetchSavedInputsForVineyard } from "@/lib/savedInputsQuery";
 import { fetchYieldReportsForVineyard } from "@/lib/yieldReportsQuery";
+import { useVintageFilter } from "@/hooks/useVintageFilter";
+import { VintageSelect } from "@/components/VintageSelect";
 
 function fmtRecordLabel(r: SprayRecord): string {
   const date = r.date ?? "Undated";
@@ -100,8 +102,11 @@ export default function SprayReportsPage() {
   }), [paddocks, tractors, equipment, members]);
 
   // ---- Records (individual export)
+  const vintageFilter = useVintageFilter();
+  const vintageScopeValue = vintageFilter.scope;
+
   const { data: recordsResult, isLoading: recordsLoading } = useQuery({
-    queryKey: ["spray-records", selectedVineyardId],
+    queryKey: ["spray-records", selectedVineyardId, vintageScopeValue.vintage],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchSprayRecordsForVineyard(selectedVineyardId!, vintageScopeValue),
   });
