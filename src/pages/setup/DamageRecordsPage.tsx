@@ -612,7 +612,7 @@ function DamageDetailSheet({
   );
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+      <SheetContent className="w-screen sm:w-[95vw] md:w-[90vw] lg:w-[50vw] sm:max-w-[1000px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{damageTypeLabel(record?.damage_type) === "—" ? "Damage record" : damageTypeLabel(record?.damage_type)}</SheetTitle>
           <SheetDescription>
@@ -913,9 +913,9 @@ function DamageEditSheet({
       toast({ title: "Save failed", description: e?.message ?? String(e), variant: "destructive" }),
   });
 
-  return (
+    return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+      <SheetContent className="w-screen sm:w-[95vw] md:w-[90vw] lg:w-[50vw] sm:max-w-[1000px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{record ? "Edit damage record" : "New damage record"}</SheetTitle>
           <SheetDescription>
