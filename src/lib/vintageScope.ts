@@ -18,10 +18,17 @@ export const VINTAGE_HISTORY_YEARS = 15;
 
 export interface VintageScope {
   vintage: number;
-  /** Inclusive ISO start of the season window. */
+  /** Inclusive ISO start of the season window (season start date). */
   startISO: string;
-  /** Inclusive ISO end of the season window. */
+  /** Inclusive ISO end DATE of the season window (display only). */
   endISO: string;
+  /**
+   * EXCLUSIVE upper bound: the next Vintage's season start date.
+   * All query filtering uses `>= startISO AND < endExclusiveISO` so that
+   * timestamp columns (created_at, start_time, fill_datetime) keep the whole
+   * final day instead of being cut at midnight by an inclusive date bound.
+   */
+  endExclusiveISO: string;
 }
 
 /** Current Vintage first, then the previous `VINTAGE_HISTORY_YEARS`. */
@@ -46,20 +53,28 @@ export function vintageScope(
     seasonStartDay,
     vintage,
   );
-  return { vintage, startISO, endISO };
+  // The next Vintage's start date is the canonical exclusive upper bound.
+  const { startISO: endExclusiveISO } = seasonRangeForVintage(
+    seasonStartMonth,
+    seasonStartDay,
+    vintage + 1,
+  );
+  return { vintage, startISO, endISO, endExclusiveISO };
 }
 
 /**
- * Apply a Vintage window to a PostgREST query on `column`.
+ * Apply a Vintage window to a PostgREST query on `column` as a half-open
+ * range: `>= season start` and `< next season start`. Safe for both DATE and
+ * TIMESTAMP columns.
  * A null/undefined scope means "all Vintages" and leaves the query untouched
  * (used by cross-vintage surfaces such as maps and multi-season analytics).
  */
 export function applyVintageScope<T extends {
   gte: (c: string, v: any) => T;
-  lte: (c: string, v: any) => T;
+  lt: (c: string, v: any) => T;
 }>(query: T, column: string, scope: VintageScope | null | undefined): T {
   if (!scope) return query;
-  return query.gte(column, scope.startISO).lte(column, scope.endISO);
+  return query.gte(column, scope.startISO).lt(column, scope.endExclusiveISO);
 }
 
 /** Client-side equivalent of `applyVintageScope`, for already-fetched rows. */
@@ -69,5 +84,6 @@ export function isWithinVintage(
 ): boolean {
   if (!scope) return true;
   if (!value) return false;
-  return value >= scope.startISO && value <= scope.endISO;
+  return value >= scope.startISO && value < scope.endExclusiveISO;
 }
+
