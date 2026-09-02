@@ -622,15 +622,7 @@ export default function YieldReportsPage() {
       </div>
 
 
-      <PortalNotice
-        variant="success"
-        compact
-        title="Actual yield records"
-        description="Actual yield records are used by Cost Reports to calculate cost per tonne. Make sure each block has an actual yield record for the relevant vintage."
-      />
 
-
-      <YieldDamageAdjustmentPanel vineyardId={selectedVineyardId} />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
         <TabsList>
@@ -714,12 +706,13 @@ export default function YieldReportsPage() {
           />
         </TabsContent>
 
-        {/* forceMount keeps the panel (and its dialog) alive so the header
-            "Grape Allocation" button can open the dialog from any tab;
-            Radix hides inactive force-mounted content via the hidden attr. */}
+        {/* The panel keeps its dialog mounted when inactive so the header
+            "Grape Allocation" button works from any tab, while the list,
+            summary cards and notices only render on this tab. */}
         <TabsContent value="allocation" className="mt-4" forceMount>
           <GrapeAllocationPanel
             ref={allocationPanelRef}
+            active={tab === "allocation"}
             vineyardId={selectedVineyardId}
             vintage={activeVintage === ANY ? null : Number(activeVintage)}
             role={currentRole}
@@ -749,8 +742,15 @@ export default function YieldReportsPage() {
         </TabsContent>
 
         {(["historical"] as const).map((t) => (
-        <TabsContent key={t} value={t} className="mt-4">
-          <div className="flex justify-end mb-2">
+        <TabsContent key={t} value={t} className="mt-4 space-y-3">
+          <PortalNotice
+            variant="success"
+            compact
+            title="Actual yield records"
+            description="Actual yield records are used by Cost Reports to calculate cost per tonne. Make sure each block has an actual yield record for the relevant vintage."
+          />
+          <YieldDamageAdjustmentPanel vineyardId={selectedVineyardId} />
+          <div className="flex justify-end">
             <ColumnSettingsMenu onReset={yReset} />
           </div>
           <Card>
