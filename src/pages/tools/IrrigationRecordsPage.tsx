@@ -77,7 +77,12 @@ export default function IrrigationRecordsPage() {
           </p>
         </div>
 
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-end">
+          <VintageSelect
+            vintage={vintageFilter.vintage}
+            options={vintageFilter.options}
+            onChange={vintageFilter.setVintage}
+          />
           {!capsLoading && capabilities.can_manage_irrigation_setup && (
             <Button asChild variant="ghost" className="w-full sm:w-auto">
               <Link to="/irrigation/setup">
