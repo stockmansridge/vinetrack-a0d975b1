@@ -15,6 +15,7 @@
 // No soft-delete RPC for maintenance_logs is deployed on the iOS project,
 // so soft-delete writes `deleted_at` directly.
 import { supabase } from "@/integrations/ios-supabase/client";
+import { applyVintageScope, type VintageScope } from "@/lib/vintageScope";
 
 export type MaintenanceEquipmentSource =
   | "vineyard_machine"
@@ -61,14 +62,21 @@ export interface MaintenanceLogsQueryResult {
   missingItemName: number;
 }
 
+export const MAINTENANCE_DATE_COLUMN = "date";
+
 export async function fetchMaintenanceLogsForVineyard(
   vineyardId: string,
+  scope?: VintageScope | null,
 ): Promise<MaintenanceLogsQueryResult> {
-  const res = await supabase
-    .from("maintenance_logs")
-    .select("*")
-    .eq("vineyard_id", vineyardId)
-    .is("deleted_at", null);
+  const res = await applyVintageScope(
+    supabase
+      .from("maintenance_logs")
+      .select("*")
+      .eq("vineyard_id", vineyardId)
+      .is("deleted_at", null) as any,
+    MAINTENANCE_DATE_COLUMN,
+    scope,
+  );
   if (res.error) throw res.error;
 
   const all = (res.data ?? []) as MaintenanceLog[];

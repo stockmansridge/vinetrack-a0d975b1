@@ -9,6 +9,7 @@
 // No soft_delete_fuel_purchase RPC is deployed — soft-delete writes
 // `deleted_at` directly via update.
 import { supabase } from "@/integrations/ios-supabase/client";
+import { applyVintageScope, type VintageScope } from "@/lib/vintageScope";
 
 export interface FuelPurchase {
   id: string;
@@ -25,14 +26,21 @@ export interface FuelPurchase {
   sync_version?: number | null;
 }
 
+export const FUEL_PURCHASE_DATE_COLUMN = "date";
+
 export async function fetchFuelPurchasesForVineyard(
   vineyardId: string,
+  scope?: VintageScope | null,
 ): Promise<FuelPurchase[]> {
-  const { data, error } = await supabase
-    .from("fuel_purchases")
-    .select("*")
-    .eq("vineyard_id", vineyardId)
-    .is("deleted_at", null);
+  const { data, error } = await applyVintageScope(
+    supabase
+      .from("fuel_purchases")
+      .select("*")
+      .eq("vineyard_id", vineyardId)
+      .is("deleted_at", null) as any,
+    FUEL_PURCHASE_DATE_COLUMN,
+    scope,
+  );
   if (error) throw error;
   return (data ?? []) as FuelPurchase[];
 }

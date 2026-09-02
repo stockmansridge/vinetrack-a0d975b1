@@ -7,6 +7,7 @@
 //   We do NOT fall back through trips — that would require a join the client
 //   can't perform safely, and the canonical link is vineyard_id.
 import { supabase } from "@/integrations/ios-supabase/client";
+import { applyVintageScope, type VintageScope } from "@/lib/vintageScope";
 
 export interface SprayRecord {
   id: string;
@@ -47,14 +48,21 @@ export interface SprayRecordsQueryResult {
   missingTractor: number;
 }
 
+export const SPRAY_DATE_COLUMN = "date";
+
 export async function fetchSprayRecordsForVineyard(
   vineyardId: string,
+  scope?: VintageScope | null,
 ): Promise<SprayRecordsQueryResult> {
-  const { data, error } = await supabase
-    .from("spray_records")
-    .select("*")
-    .eq("vineyard_id", vineyardId)
-    .is("deleted_at", null);
+  const { data, error } = await applyVintageScope(
+    supabase
+      .from("spray_records")
+      .select("*")
+      .eq("vineyard_id", vineyardId)
+      .is("deleted_at", null) as any,
+    SPRAY_DATE_COLUMN,
+    scope,
+  );
   if (error) throw error;
 
   const all = (data ?? []) as SprayRecord[];

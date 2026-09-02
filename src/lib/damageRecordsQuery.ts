@@ -3,6 +3,7 @@
 // truth. Managers/owners (per vineyard_members.role) can create, update and
 // soft-delete via RLS policies installed by Rork (see docs/ios-damage-records.md).
 import { supabase } from "@/integrations/ios-supabase/client";
+import { applyVintageScope, type VintageScope } from "@/lib/vintageScope";
 
 // iOS canonical snake_case codes for damage_type. The iOS sync engine and
 // the suggested validation trigger (docs/ios-damage-records.md §2) both
@@ -81,14 +82,21 @@ export interface DamageRecordsResult {
   vineyardCount: number;
 }
 
+export const DAMAGE_DATE_COLUMN = "date_observed";
+
 export async function fetchDamageRecordsForVineyard(
   vineyardId: string,
+  scope?: VintageScope | null,
 ): Promise<DamageRecordsResult> {
-  const res = await supabase
-    .from("damage_records")
-    .select("*")
-    .eq("vineyard_id", vineyardId)
-    .is("deleted_at", null);
+  const res = await applyVintageScope(
+    supabase
+      .from("damage_records")
+      .select("*")
+      .eq("vineyard_id", vineyardId)
+      .is("deleted_at", null) as any,
+    DAMAGE_DATE_COLUMN,
+    scope,
+  );
   if (res.error) throw res.error;
   const records = (res.data ?? []) as DamageRecord[];
   return { records, vineyardCount: records.length };
