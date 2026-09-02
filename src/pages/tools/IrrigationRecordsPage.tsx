@@ -35,12 +35,15 @@ import {
 } from "@/lib/irrigationQuery";
 import { SetupStatusPanel } from "@/components/irrigation/SetupStatusPanel";
 import { formatDate } from "@/lib/dateFormat";
+import { useVintageFilter } from "@/hooks/useVintageFilter";
+import { VintageSelect } from "@/components/VintageSelect";
 
 
 export default function IrrigationRecordsPage() {
   const { selectedVineyardId } = useVineyard();
   const { capabilities, loading: capsLoading } = useIrrigationCapabilities(selectedVineyardId);
-  const { vintage } = useVintage();
+  const vintageFilter = useVintageFilter();
+  const vintage = vintageFilter.vintage;
 
   const status = useSetupStatus(selectedVineyardId);
   const summary = useVintageSummary(selectedVineyardId, vintage);

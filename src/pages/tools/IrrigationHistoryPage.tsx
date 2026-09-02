@@ -72,6 +72,8 @@ import {
 } from "@/lib/irrigationQuery";
 
 import {
+import { useVintageFilter } from "@/hooks/useVintageFilter";
+import { VintageSelect } from "@/components/VintageSelect";
   emitterBasisLabel,
   formatEstimate,
   formatRowRanges,
@@ -333,7 +335,8 @@ const isImported = (s: IrrigationSession) =>
 
 export default function IrrigationHistoryPage() {
   const { selectedVineyardId } = useVineyard();
-  const { vintage } = useVintage();
+  const vintageFilter = useVintageFilter();
+  const vintage = vintageFilter.vintage;
   const valves = useIrrigationValves(selectedVineyardId, true);
   const reverse = useReverseSession(selectedVineyardId);
   const { capabilities, loading: capsLoading } = useIrrigationCapabilities(selectedVineyardId);
@@ -392,9 +395,17 @@ export default function IrrigationHistoryPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Filters</CardTitle>
-          <CardDescription>Narrow the list by valve or date range.</CardDescription>
+          <CardDescription>Narrow the list by Vintage, valve or date range.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <VintageSelect
+            vintage={vintageFilter.vintage}
+            options={vintageFilter.options}
+            onChange={(v) => {
+              setPage(0);
+              vintageFilter.setVintage(v);
+            }}
+          />
           <div>
             <Label>Valve</Label>
             <Select
