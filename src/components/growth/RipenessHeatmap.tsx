@@ -53,16 +53,6 @@ function addDays(iso: string, n: number): string {
   return new Date(t).toISOString().slice(0, 10);
 }
 
-function FitTo({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
-  const map = useMap();
-  useEffect(() => {
-    if (!bounds) return;
-    try {
-      map.fitBounds(L.latLngBounds(bounds as L.LatLngBoundsLiteral).pad(0.15), { padding: [16, 16] });
-    } catch { /* noop */ }
-  }, [bounds, map]);
-  return null;
-}
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
