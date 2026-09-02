@@ -50,6 +50,12 @@ const ANY = "__any__";
 
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 
+// Stored codes may be "EL2", "E-L 2" or "2" — always display exactly "E-L 2".
+const elStage = (code?: string | null) => {
+  const n = String(code ?? "").trim().replace(/^E\s*-?\s*L\s*/i, "");
+  return n ? `E-L ${n}` : "—";
+};
+
 export default function GrowthStageRecordsPage() {
   const { selectedVineyardId } = useVineyard();
   const { resolve } = useTeamLookup(selectedVineyardId);
