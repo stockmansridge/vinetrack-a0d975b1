@@ -159,6 +159,9 @@ export default function YieldReportsPage() {
   >("overview");
   const [selected, setSelected] = useState<AnyRow | null>(null);
   const [recordOpen, setRecordOpen] = useState(false);
+  // Damage adjustment is OFF by default: the headline estimate is the
+  // canonical database base estimate until the user opts in.
+  const [applyDamage, setApplyDamage] = useState(false);
   const allocationPanelRef = useRef<GrapeAllocationPanelRef>(null);
   const qc = useQueryClient();
 
