@@ -816,8 +816,22 @@ export default function YieldReportsPage() {
           />
         </TabsContent>
 
-        <TabsContent value="overview" className="mt-4">
-          <YieldOverviewGrid cards={overviewCards} vintage={activeVintage === ANY ? null : activeVintage} />
+        <TabsContent value="overview" className="mt-4 space-y-3">
+          <SeasonEstimateHeader
+            model={seasonModel}
+            loading={seasonOverviewQ.isLoading}
+            error={seasonOverviewQ.error as Error | null}
+            applyDamage={applyDamage}
+            onApplyDamage={setApplyDamage}
+            vintage={activeVintage === ANY ? null : activeVintage}
+          />
+          <YieldOverviewGrid
+            cards={overviewCards}
+            vintage={activeVintage === ANY ? null : activeVintage}
+            estimateInfo={seasonEstimates.infoByBlock}
+            bunchCountBlocks={currentEstimates}
+          />
+
         </TabsContent>
 
         <TabsContent value="sessions" className="mt-4 space-y-3">
