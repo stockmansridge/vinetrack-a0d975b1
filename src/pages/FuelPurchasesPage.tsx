@@ -1,3 +1,4 @@
+import { VINTAGE_OPTIONS_KEY } from "@/lib/availableVintages";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
@@ -435,7 +436,7 @@ function FuelSheet({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fuel_purchases"] });
-      vintageFilter.refresh();
+      qc.invalidateQueries({ queryKey: [VINTAGE_OPTIONS_KEY] });
       toast({ title: "Fuel purchase archived" });
       setConfirmDelete(false);
       onOpenChange(false);
@@ -611,7 +612,7 @@ function FuelEditor({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fuel_purchases"] });
-      vintageFilter.refresh();
+      qc.invalidateQueries({ queryKey: [VINTAGE_OPTIONS_KEY] });
       toast({ title: "Fuel purchase created" });
       onOpenChange(false);
     },
@@ -637,7 +638,7 @@ function FuelEditor({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fuel_purchases"] });
-      vintageFilter.refresh();
+      qc.invalidateQueries({ queryKey: [VINTAGE_OPTIONS_KEY] });
       toast({ title: "Fuel purchase updated" });
       onOpenChange(false);
     },
