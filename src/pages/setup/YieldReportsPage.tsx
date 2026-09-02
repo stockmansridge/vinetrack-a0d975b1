@@ -52,6 +52,18 @@ import {
 } from "@/lib/yieldReportsQuery";
 import { buildYieldOverview, type OverviewBlockCard } from "@/lib/yieldOverview";
 import {
+  buildSeasonYieldEstimates,
+  splitBlockEstimateToGroups,
+  setupWarningLabel,
+  type SeasonYieldBlockEstimate,
+  type SeasonYieldEstimateModel,
+} from "@/lib/seasonYieldContract";
+import { Switch } from "@/components/ui/switch";
+import BlockEstimateInfo from "@/components/yield/BlockEstimateInfo";
+import { useSeasonYieldBaseOverview } from "@/lib/seasonYieldQuery";
+import { fetchDamageRecordsForVineyard } from "@/lib/damageRecordsQuery";
+import { aggregateDamageByPaddock } from "@/lib/damageImpact";
+import {
   buildBunchCountTrips,
   currentEstimatesByBlock,
   currentTripIds,
@@ -150,6 +162,9 @@ export default function YieldReportsPage() {
   >("overview");
   const [selected, setSelected] = useState<AnyRow | null>(null);
   const [recordOpen, setRecordOpen] = useState(false);
+  // Damage adjustment is OFF by default: the headline estimate is the
+  // canonical database base estimate until the user opts in.
+  const [applyDamage, setApplyDamage] = useState(false);
   const allocationPanelRef = useRef<GrapeAllocationPanelRef>(null);
   const qc = useQueryClient();
 
@@ -446,14 +461,49 @@ export default function YieldReportsPage() {
     },
   });
 
-  // ---- Overview (quick view) for the selected vintage -----------------------
-  const overviewCards = useMemo(() => {
-    // Allocation units per block — each planting (variety + clone + rootstock)
-    // is its own production unit so yield is never repeated across rows.
+  // ---- Canonical seasonal base estimate (SQL 221) ---------------------------
+  // The database owns the base estimate for the selected vintage; the Portal
+  // only applies its existing damage engine on top of it.
+  const seasonVintage = activeVintage === ANY ? null : Number(activeVintage);
+  const seasonOverviewQ = useSeasonYieldBaseOverview(selectedVineyardId, seasonVintage);
+
+  const damageQ = useQuery({
+    queryKey: ["damage_records", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchDamageRecordsForVineyard(selectedVineyardId!),
+  });
+
+  /** Damage per block for THIS vintage only — never mixed across vintages. */
+  const damageByBlock = useMemo(() => {
+    if (seasonVintage == null) return new Map<string, { lossPct: number; recordCount: number }>();
+    const areas = new Map<string, number>();
+    for (const b of blocksQ.data ?? []) areas.set(b.id, b.areaHa ?? 0);
+    const records = (damageQ.data?.records ?? []).filter(
+      (r: any) => Number(r.vintage) === seasonVintage && !r.deleted_at,
+    );
+    const agg = aggregateDamageByPaddock(records as any, areas);
+    const out = new Map<string, { lossPct: number; recordCount: number }>();
+    for (const [paddockId, v] of agg) {
+      out.set(paddockId, { lossPct: v.lossPct, recordCount: v.recordCount });
+    }
+    return out;
+  }, [damageQ.data, blocksQ.data, seasonVintage]);
+
+  const seasonModel = useMemo(
+    () =>
+      buildSeasonYieldEstimates({
+        overview: seasonOverviewQ.data ?? null,
+        damageByBlock,
+        applyDamage,
+      }),
+    [seasonOverviewQ.data, damageByBlock, applyDamage],
+  );
+
+  // Planting units per block — each planting (variety + clone + rootstock) is
+  // its own production unit so yield is never repeated across rows.
+  const plantingUnits = useMemo(() => {
     const unitsByBlock = new Map<string, PlantingGroup[]>();
     const blocks = (blocksQ.data ?? []).map((b) => {
-      // Production reporting unit = planting GROUP (variety + clone +
-      // rootstock), with member sections' hectares summed.
       const units = buildPlantingGroups(
         buildAllocationUnits({
           blockId: b.id,
@@ -478,19 +528,71 @@ export default function YieldReportsPage() {
         })),
       };
     });
+    return { unitsByBlock, blocks };
+  }, [blocksQ.data, varietyMap]);
+
+  /**
+   * Estimated tonnes for the vintage.
+   *
+   * A completed Bunch Count Trip (sql/187) supersedes the base estimate for
+   * the blocks it sampled; every other block uses the canonical DB base
+   * estimate with the Portal damage adjustment applied. Unknown stays unknown.
+   */
+  const seasonEstimates = useMemo(() => {
+    const estimatedByBlock = new Map<string, number>();
+    const estimatedByAllocation = new Map<string, number>();
+    const infoByBlock = new Map<string, SeasonYieldBlockEstimate>();
+    const varietyTonnes = new Map<string, { name: string | null; tonnes: number; complete: boolean }>();
+
+    const bunchByBlock = new Map<string, number>();
+    for (const [key, est] of currentEstimates) {
+      if (est.tonnes == null) continue;
+      bunchByBlock.set(key, est.tonnes);
+      estimatedByBlock.set(key, est.tonnes);
+    }
+
+    for (const block of seasonModel.blocks) {
+      infoByBlock.set(block.paddockId.toLowerCase(), block);
+      const bk = block.paddockId.toLowerCase();
+      const blockTonnes = bunchByBlock.get(bk) ?? block.tonnes;
+      if (blockTonnes != null) estimatedByBlock.set(bk, blockTonnes);
+
+      const shares = splitBlockEstimateToGroups(block, blockTonnes);
+      const units = plantingUnits.unitsByBlock.get(bk) ?? [];
+      block.groups.forEach((g, i) => {
+        const tonnes = shares[i] ?? null;
+        const match = matchAllocation(units, g.varietyName, g.clone, {
+          plantingGroupKey: g.plantingGroupKey,
+          allocationIds: g.allocationIds,
+          rootstock: g.rootstock,
+        });
+        if (tonnes != null && match.key) estimatedByAllocation.set(match.key, tonnes);
+
+        const vk = varietyKeyOf(g.varietyName);
+        const row = varietyTonnes.get(vk) ?? { name: g.varietyName, tonnes: 0, complete: true };
+        if (tonnes == null) row.complete = false;
+        else row.tonnes += tonnes;
+        varietyTonnes.set(vk, row);
+      });
+    }
+
+    // Grape Allocation availability: only varieties whose every planting has a
+    // known estimate. Anything else stays "—" rather than a misleading 0 t.
+    const estimatedByVariety = new Map<string, number>();
+    for (const [k, v] of varietyTonnes) if (v.complete) estimatedByVariety.set(k, v.tonnes);
+
+    return { estimatedByBlock, estimatedByAllocation, estimatedByVariety, infoByBlock };
+  }, [seasonModel, currentEstimates, plantingUnits]);
+
+  // ---- Overview (quick view) for the selected vintage -----------------------
+  const overviewCards = useMemo(() => {
+    const { blocks, unitsByBlock } = plantingUnits;
 
     const vintageRows = allRows.filter(
       (r) => activeVintage === ANY || String(rowVintage(r) ?? "") === activeVintage,
     );
 
-    // sql/187: the CURRENT estimate for a block is the LATEST COMPLETED Bunch
-    // Count Trip that sampled it — never the sum of every trip, and never a
-    // draft. Older completed trips remain visible as history only.
-    const estimatedByBlock = new Map<string, number>();
-    for (const [key, est] of currentEstimates) {
-      if (est.tonnes == null) continue;
-      estimatedByBlock.set(key, est.tonnes);
-    }
+    const estimatedByBlock = seasonEstimates.estimatedByBlock;
 
     // Basic actual yield (historical_yield_records).
     const basic: ActualYieldEntry[] = extractHistoricalBlockRows(
@@ -530,33 +632,28 @@ export default function YieldReportsPage() {
       };
     });
 
-    return buildYieldOverview({ blocks, estimatedByBlock, actuals });
+    return buildYieldOverview({
+      blocks,
+      estimatedByBlock,
+      actuals,
+      estimatedByAllocation: seasonEstimates.estimatedByAllocation,
+    });
   }, [
-    blocksQ.data,
-    varietyMap,
+    plantingUnits,
     allRows,
     activeVintage,
     rowVintage,
-    sessionSummaries,
-    currentEstimates,
-
+    seasonEstimates,
     pickingRecordsQ.data,
     pickingPlantingTotalsQ.data,
   ]);
 
-  /** Estimated tonnes per variety for the vintage — reuses the Overview
-   *  numbers so Grape Allocation never re-calculates an estimate. */
-  const estimatedByVariety = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const card of overviewCards) {
-      for (const v of card.varieties) {
-        if (v.estimatedTonnes == null) continue;
-        const key = varietyKeyOf(v.variety);
-        m.set(key, (m.get(key) ?? 0) + v.estimatedTonnes);
-      }
-    }
-    return m;
-  }, [overviewCards]);
+  /** Estimated tonnes per variety for the vintage — the canonical DB estimate
+   *  (damage-adjusted when the toggle is on). Grape Allocation never
+   *  re-calculates an estimate of its own. */
+  const estimatedByVariety = seasonEstimates.estimatedByVariety;
+
+
 
   const allocationBlocks = useMemo(
     () =>
@@ -722,8 +819,22 @@ export default function YieldReportsPage() {
           />
         </TabsContent>
 
-        <TabsContent value="overview" className="mt-4">
-          <YieldOverviewGrid cards={overviewCards} vintage={activeVintage === ANY ? null : activeVintage} />
+        <TabsContent value="overview" className="mt-4 space-y-3">
+          <SeasonEstimateHeader
+            model={seasonModel}
+            loading={seasonOverviewQ.isLoading}
+            error={seasonOverviewQ.error as Error | null}
+            applyDamage={applyDamage}
+            onApplyDamage={setApplyDamage}
+            vintage={activeVintage === ANY ? null : activeVintage}
+          />
+          <YieldOverviewGrid
+            cards={overviewCards}
+            vintage={activeVintage === ANY ? null : activeVintage}
+            estimateInfo={seasonEstimates.infoByBlock}
+            bunchCountBlocks={currentEstimates}
+          />
+
         </TabsContent>
 
         <TabsContent value="sessions" className="mt-4 space-y-3">
@@ -886,12 +997,72 @@ export function actualSourceLabel(
   return "";
 }
 
+function SeasonEstimateHeader({
+  model,
+  loading,
+  error,
+  applyDamage,
+  onApplyDamage,
+  vintage,
+}: {
+  model: SeasonYieldEstimateModel;
+  loading: boolean;
+  error: Error | null;
+  applyDamage: boolean;
+  onApplyDamage: (v: boolean) => void;
+  vintage: string | null;
+}) {
+  if (vintage == null) return null;
+  return (
+    <Card className="p-4 space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Estimated yield — Vintage {vintage}
+          </div>
+          <div className="text-2xl font-bold leading-tight tabular-nums">
+            {loading
+              ? "…"
+              : model.totalTonnes == null
+              ? "—"
+              : `${fmtNum(model.totalTonnes)} t`}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {error
+              ? "Estimate unavailable"
+              : model.totalTonnes == null
+              ? `${model.blocksMissing} of ${model.blocksTotal} block${
+                  model.blocksTotal === 1 ? "" : "s"
+                } missing an estimate — ${fmtNum(model.knownTonnes)} t known so far`
+              : `${model.blocksAvailable} block${model.blocksAvailable === 1 ? "" : "s"} estimated`}
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-sm">
+          <Switch checked={applyDamage} onCheckedChange={onApplyDamage} />
+          <span>Apply damage</span>
+        </label>
+      </div>
+      {model.warnings.length > 0 && (
+        <ul className="space-y-1 text-xs text-muted-foreground">
+          {model.warnings.slice(0, 4).map((w) => (
+            <li key={w}>• {setupWarningLabel(w)}</li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 function YieldOverviewGrid({
   cards,
   vintage,
+  estimateInfo,
+  bunchCountBlocks,
 }: {
   cards: OverviewBlockCard[];
   vintage: string | null;
+  estimateInfo?: Map<string, SeasonYieldBlockEstimate>;
+  bunchCountBlocks?: Map<string, unknown>;
 }) {
   const rf = useRegionFormatters();
   if (!cards.length) {
@@ -910,14 +1081,35 @@ function YieldOverviewGrid({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((c) => {
           const head = headline(c.estimatedTonnes, c.actualTonnes);
+          const info = estimateInfo?.get(c.blockId.toLowerCase());
           return (
             <Card key={c.blockId} className="p-4 space-y-2.5">
               <div className="flex items-baseline justify-between gap-2">
                 <div className="font-medium leading-tight">{c.blockName}</div>
-                {c.areaHa != null && (
-                  <span className="text-xs text-muted-foreground">{rf.area(c.areaHa, 2)}</span>
-                )}
+                <div className="flex items-center gap-1">
+                  {c.areaHa != null && (
+                    <span className="text-xs text-muted-foreground">{rf.area(c.areaHa, 2)}</span>
+                  )}
+                  {info && (
+                    <BlockEstimateInfo
+                      block={info}
+                      supersededByBunchCount={!!bunchCountBlocks?.has(c.blockId.toLowerCase())}
+                    />
+                  )}
+                </div>
               </div>
+
+              {!head && (
+                <div className="space-y-0.5">
+                  <div className="text-[26px] font-bold leading-none text-muted-foreground">—</div>
+                  <div className="text-xs text-muted-foreground">
+                    {info?.warnings.length
+                      ? setupWarningLabel(info.warnings[0])
+                      : "No estimate calculated yet"}
+                  </div>
+                </div>
+              )}
+
 
               {head && (
                 <div className="space-y-0.5">
