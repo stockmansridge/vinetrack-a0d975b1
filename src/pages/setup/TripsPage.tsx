@@ -389,6 +389,11 @@ export default function TripsPage() {
 
 
       <div className="rounded-2xl border border-border bg-card p-4 flex flex-wrap items-end gap-3">
+        <VintageSelect
+          vintage={vintageFilter.vintage}
+          options={vintageFilter.options}
+          onChange={vintageFilter.setVintage}
+        />
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground">From</div>
           <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />

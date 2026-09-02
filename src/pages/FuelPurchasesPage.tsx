@@ -263,6 +263,11 @@ export default function FuelPurchasesPage({ embedded = false }: { embedded?: boo
 
 
       <div className="flex flex-wrap items-end gap-2">
+        <VintageSelect
+          vintage={vintageFilter.vintage}
+          options={vintageFilter.options}
+          onChange={vintageFilter.setVintage}
+        />
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground">From</div>
           <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />

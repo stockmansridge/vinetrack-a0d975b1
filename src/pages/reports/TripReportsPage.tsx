@@ -370,6 +370,11 @@ export default function TripReportsPage() {
 
       <Card className="p-4 space-y-3">
         <div className="flex flex-wrap items-end gap-2">
+        <VintageSelect
+            vintage={vintageFilter.vintage}
+            options={vintageFilter.options}
+            onChange={vintageFilter.setVintage}
+          />
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">Period</div>
             <Select value={period} onValueChange={applyPeriod}>
