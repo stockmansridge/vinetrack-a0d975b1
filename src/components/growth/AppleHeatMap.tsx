@@ -109,8 +109,10 @@ export default function AppleHeatMap({
       try {
         const nw = map.convertCoordinateToPointOnPage(new mapkit.Coordinate(o.bounds[1][0], o.bounds[0][1]));
         const se = map.convertCoordinateToPointOnPage(new mapkit.Coordinate(o.bounds[0][0], o.bounds[1][1]));
-        const x = nw.x - rect.left;
-        const y = nw.y - rect.top;
+        // convertCoordinateToPointOnPage returns page coordinates (viewport + scroll).
+        const x = nw.x - (rect.left + window.scrollX);
+        const y = nw.y - (rect.top + window.scrollY);
+
         const w = se.x - nw.x;
         const h = se.y - nw.y;
         if (!Number.isFinite(x) || !Number.isFinite(y) || w <= 0 || h <= 0) continue;
