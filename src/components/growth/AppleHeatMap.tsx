@@ -54,6 +54,11 @@ export default function AppleHeatMap({
   const imagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const [ready, setReady] = useState(false);
 
+  // Keep the latest callback without re-running the init effect (the parent
+  // passes an inline arrow, so its identity changes on every render).
+  const unavailableRef = useRef(onUnavailable);
+  unavailableRef.current = onUnavailable;
+
   // --- map init ------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
@@ -68,14 +73,15 @@ export default function AppleHeatMap({
         });
         setReady(true);
       })
-      .catch((e: Error) => !cancelled && onUnavailable(e?.message || "MapKit init failed"));
+      .catch((e: Error) => !cancelled && unavailableRef.current(e?.message || "MapKit init failed"));
     return () => {
       cancelled = true;
       try { mapRef.current?.destroy?.(); } catch { /* noop */ }
       mapRef.current = null;
       setReady(false);
     };
-  }, [onUnavailable]);
+  }, []);
+
 
   // --- heat canvas ---------------------------------------------------------
   const draw = () => {
