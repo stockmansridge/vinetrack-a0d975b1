@@ -196,7 +196,15 @@ export default function GrowthStageRecordsPage() {
         </Button>
       </div>
 
+      <Tabs defaultValue="summary">
+      <TabsList>
+        <TabsTrigger value="summary">Summary</TabsTrigger>
+        <TabsTrigger value="heatmap">Ripeness Heatmap</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="summary" className="space-y-4 mt-4">
       {summary.length > 0 && (
+
         <Card className="p-4">
           <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
             Latest stage by {rf.blockLabel.toLowerCase()}
