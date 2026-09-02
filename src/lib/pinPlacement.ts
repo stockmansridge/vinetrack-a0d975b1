@@ -113,9 +113,12 @@ export function pinPlacementDisplay(
     const attached = numeric(row?.pin_row_number);
     const driving = numeric(row?.driving_row_number);
     const side = formatSideWording(row?.pin_side ?? null);
+    const facing = formatFacingFromBearing(rowDirectionDeg ?? null);
     if (attached != null) rowLines.push(`On Row: Row ${attached}`);
     if (driving != null) rowLines.push(`Driving row: ${driving}`);
-    if (side && (attached != null || driving != null)) rowLines.push(`Side: ${side}`);
+    if (side && (attached != null || driving != null)) {
+      rowLines.push(`Side: ${facing ? `${side} ${facing}` : side}`);
+    }
   }
 
   return {
