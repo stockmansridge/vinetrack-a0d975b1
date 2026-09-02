@@ -313,11 +313,13 @@ export function buildBlockHeat(input: BuildBlockHeatInput): BlockHeat {
       let num = 0;
       let den = 0;
       let wNum = 0;
+      let nearest = Infinity;
       let exact: { el: number; w: number } | null = null;
       for (const p of pts) {
         const dLat = lat - p.lat;
         const dLng = (lng - p.lng) * Math.cos((lat * Math.PI) / 180);
         const d2 = dLat * dLat + dLng * dLng;
+        nearest = Math.min(nearest, Math.sqrt(d2));
         if (d2 < 1e-14) {
           exact = { el: p.el, w: p.w };
           break;
@@ -328,16 +330,24 @@ export function buildBlockHeat(input: BuildBlockHeatInput): BlockHeat {
         den += w;
         wNum += p.w * wDist;
       }
-      if (exact) {
+      if (!exact && nearest > maxInfluence) {
+        rowVals.push(null);
+        rowW.push(null);
+      } else if (exact) {
         rowVals.push(exact.el);
         rowW.push(exact.w);
       } else if (den > 0) {
         rowVals.push(num / den);
-        rowW.push(clamp(wNum / (den || 1), 0, 1));
+        // Fade with distance inside a sparse halo/gradient so edges soften.
+        const falloff = Number.isFinite(maxInfluence)
+          ? clamp(1 - nearest / maxInfluence, 0, 1)
+          : 1;
+        rowW.push(clamp((wNum / (den || 1)) * falloff, 0, 1));
       } else {
         rowVals.push(null);
         rowW.push(null);
       }
+
     }
     grid.push(rowVals);
     weightGrid.push(rowW);
