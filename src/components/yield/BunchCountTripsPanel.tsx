@@ -16,7 +16,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import type { BunchCountTrip, CurrentBlockEstimate } from "@/lib/bunchCountTrips";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
