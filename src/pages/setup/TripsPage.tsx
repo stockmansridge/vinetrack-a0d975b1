@@ -86,6 +86,8 @@ const SPRAY = "__spray__";
 const MAINT = "__maint__";
 
 import { TRIP_FUNCTION_LABELS, tripFunctionLabel } from "@/lib/tripFunctionLabels";
+import { useVintageFilter } from "@/hooks/useVintageFilter";
+import { VintageSelect } from "@/components/VintageSelect";
 import {
   formatTripPatternLabel,
   formatTripNameLabel,
@@ -153,10 +155,13 @@ export default function TripsPage() {
     return m;
   }, [paddocks]);
 
+  const vintageFilter = useVintageFilter();
+  const vintageScopeValue = vintageFilter.scope;
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ["trips", selectedVineyardId, paddockIds.length],
+    queryKey: ["trips", selectedVineyardId, paddockIds.length, vintageScopeValue.vintage],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchTripsForVineyard(selectedVineyardId!, paddockIds),
+    queryFn: () => fetchTripsForVineyard(selectedVineyardId!, paddockIds, vintageScopeValue),
   });
 
   // Stage 4B — resolve trips.work_task_id → display label. Read-only.
@@ -384,6 +389,11 @@ export default function TripsPage() {
 
 
       <div className="rounded-2xl border border-border bg-card p-4 flex flex-wrap items-end gap-3">
+        <VintageSelect
+          vintage={vintageFilter.vintage}
+          options={vintageFilter.options}
+          onChange={vintageFilter.setVintage}
+        />
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground">From</div>
           <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />

@@ -15,6 +15,8 @@
 //   No tractor_id / spray_equipment_id / operator user FK
 //   (person_name is free text). No archive flag (only deleted_at).
 import { supabase } from "@/integrations/ios-supabase/client";
+import { applyVintageScope, type VintageScope } from "@/lib/vintageScope";
+
 
 export interface Trip {
   id: string;
@@ -79,16 +81,25 @@ export interface TripsQueryResult {
   missingPaddock: number;
 }
 
+/** Dated column used to attribute a trip to a Vintage. */
+export const TRIP_DATE_COLUMN = "start_time";
+
 export async function fetchTripsForVineyard(
   vineyardId: string,
   paddockIds: string[],
+  /** Season window; omit for cross-vintage surfaces such as maps. */
+  scope?: VintageScope | null,
 ): Promise<TripsQueryResult> {
   // 1) Primary: vineyard_id direct match.
-  const byVineyard = await supabase
-    .from("trips")
-    .select("*")
-    .eq("vineyard_id", vineyardId)
-    .is("deleted_at", null);
+  const byVineyard = await applyVintageScope(
+    supabase
+      .from("trips")
+      .select("*")
+      .eq("vineyard_id", vineyardId)
+      .is("deleted_at", null) as any,
+    TRIP_DATE_COLUMN,
+    scope,
+  );
   if (byVineyard.error) throw byVineyard.error;
 
   const primary = (byVineyard.data ?? []) as Trip[];
@@ -100,11 +111,15 @@ export async function fetchTripsForVineyard(
 
   if (paddockIds.length) {
     // 2) Fallback: scalar paddock_id in this vineyard's paddocks.
-    const byPaddock = await supabase
-      .from("trips")
-      .select("*")
-      .in("paddock_id", paddockIds)
-      .is("deleted_at", null);
+    const byPaddock = await applyVintageScope(
+      supabase
+        .from("trips")
+        .select("*")
+        .in("paddock_id", paddockIds)
+        .is("deleted_at", null) as any,
+      TRIP_DATE_COLUMN,
+      scope,
+    );
     if (!byPaddock.error) {
       const extras = ((byPaddock.data ?? []) as Trip[]).filter((t) => !ids.has(t.id));
       paddockFallbackCount = extras.length;
@@ -123,11 +138,16 @@ export async function fetchTripsForVineyard(
     const orExpr = paddockIds
       .map((pid) => `paddock_ids.cs.["${pid}"]`)
       .join(",");
-    const byJsonb = await supabase
-      .from("trips")
-      .select("*")
-      .or(orExpr)
-      .is("deleted_at", null);
+    const byJsonb = await applyVintageScope(
+      supabase
+        .from("trips")
+        .select("*")
+        .or(orExpr)
+        .is("deleted_at", null) as any,
+      TRIP_DATE_COLUMN,
+      scope,
+    );
+
     if (!byJsonb.error) {
       const extras = ((byJsonb.data ?? []) as Trip[]).filter((t) => !ids.has(t.id));
       paddockJsonbFallbackCount = extras.length;

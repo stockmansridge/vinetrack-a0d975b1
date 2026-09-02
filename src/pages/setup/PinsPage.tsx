@@ -49,6 +49,8 @@ import { downloadPinsCsv } from "@/lib/pinsExport";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import UnifiedPinDialog from "@/components/pins/UnifiedPinDialog";
+import { useVintageFilter } from "@/hooks/useVintageFilter";
+import { VintageSelect } from "@/components/VintageSelect";
 
 interface PaddockLite {
   id: string;
@@ -112,10 +114,13 @@ export default function PinsPage() {
 
   const paddockIds = useMemo(() => paddocks.map((p) => p.id), [paddocks]);
 
+  const vintageFilter = useVintageFilter();
+  const vintageScopeValue = vintageFilter.scope;
+
   const { data: pinsResult, isLoading, error } = useQuery({
-    queryKey: ["pins", selectedVineyardId, paddockIds.length],
+    queryKey: ["pins", selectedVineyardId, paddockIds.length, vintageScopeValue.vintage],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchPinsForVineyard(selectedVineyardId!, paddockIds),
+    queryFn: () => fetchPinsForVineyard(selectedVineyardId!, paddockIds, vintageScopeValue),
   });
   const pins = pinsResult?.pins ?? [];
 
@@ -455,6 +460,12 @@ export default function PinsPage() {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <VintageSelect
+            vintage={vintageFilter.vintage}
+            options={vintageFilter.options}
+            onChange={vintageFilter.setVintage}
+            className="space-y-1"
+          />
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Search title, notes, {rf.blockLabel.toLowerCase()}</Label>
             <Input

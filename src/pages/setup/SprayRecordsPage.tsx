@@ -48,6 +48,8 @@ import { fetchList } from "@/lib/queries";
 import { formatDate } from "@/lib/dateFormat";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { ReportDateCell } from "@/components/reports/ReportDateCell";
+import { useVintageFilter } from "@/hooks/useVintageFilter";
+import { VintageSelect } from "@/components/VintageSelect";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
@@ -79,10 +81,13 @@ export default function SprayRecordsPage() {
   const [opType, setOpType] = useState<string>(ANY);
   const [selected, setSelected] = useState<SprayRecord | null>(null);
 
+  const vintageFilter = useVintageFilter();
+  const vintageScopeValue = vintageFilter.scope;
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ["spray_records", selectedVineyardId],
+    queryKey: ["spray_records", selectedVineyardId, vintageScopeValue.vintage],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchSprayRecordsForVineyard(selectedVineyardId!),
+    queryFn: () => fetchSprayRecordsForVineyard(selectedVineyardId!, vintageScopeValue),
   });
 
   const records = data?.records ?? [];
@@ -183,6 +188,11 @@ export default function SprayRecordsPage() {
       />
 
       <div className="flex flex-wrap items-end gap-2">
+        <VintageSelect
+          vintage={vintageFilter.vintage}
+          options={vintageFilter.options}
+          onChange={vintageFilter.setVintage}
+        />
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground">From</div>
           <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />

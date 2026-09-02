@@ -35,12 +35,15 @@ import {
 } from "@/lib/irrigationQuery";
 import { SetupStatusPanel } from "@/components/irrigation/SetupStatusPanel";
 import { formatDate } from "@/lib/dateFormat";
+import { useVintageFilter } from "@/hooks/useVintageFilter";
+import { VintageSelect } from "@/components/VintageSelect";
 
 
 export default function IrrigationRecordsPage() {
   const { selectedVineyardId } = useVineyard();
   const { capabilities, loading: capsLoading } = useIrrigationCapabilities(selectedVineyardId);
-  const { vintage } = useVintage();
+  const vintageFilter = useVintageFilter();
+  const vintage = vintageFilter.vintage;
 
   const status = useSetupStatus(selectedVineyardId);
   const summary = useVintageSummary(selectedVineyardId, vintage);
@@ -74,7 +77,12 @@ export default function IrrigationRecordsPage() {
           </p>
         </div>
 
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-end">
+          <VintageSelect
+            vintage={vintageFilter.vintage}
+            options={vintageFilter.options}
+            onChange={vintageFilter.setVintage}
+          />
           {!capsLoading && capabilities.can_manage_irrigation_setup && (
             <Button asChild variant="ghost" className="w-full sm:w-auto">
               <Link to="/irrigation/setup">

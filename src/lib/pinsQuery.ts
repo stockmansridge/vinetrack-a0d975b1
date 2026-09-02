@@ -1,6 +1,10 @@
 // READ-ONLY pin queries. No writes.
 import { supabase } from "@/integrations/ios-supabase/client";
 import type { PinRecord } from "@/components/PinDetailPanel";
+import { applyVintageScope, type VintageScope } from "@/lib/vintageScope";
+
+/** Dated column used to attribute a pin to a Vintage. */
+export const PIN_DATE_COLUMN = "created_at";
 
 export interface PinsQueryResult {
   pins: PinRecord[];
@@ -18,12 +22,18 @@ export interface PinsQueryResult {
 export async function fetchPinsForVineyard(
   vineyardId: string,
   paddockIds: string[],
+  /** Season window; omit for cross-vintage surfaces such as maps. */
+  scope?: VintageScope | null,
 ): Promise<PinsQueryResult> {
-  const byVineyard = await supabase
-    .from("pins")
-    .select("*")
-    .eq("vineyard_id", vineyardId)
-    .is("deleted_at", null);
+  const byVineyard = await applyVintageScope(
+    supabase
+      .from("pins")
+      .select("*")
+      .eq("vineyard_id", vineyardId)
+      .is("deleted_at", null) as any,
+    PIN_DATE_COLUMN,
+    scope,
+  );
   if (byVineyard.error) throw byVineyard.error;
 
   const primary = (byVineyard.data ?? []) as PinRecord[];
@@ -34,11 +44,15 @@ export async function fetchPinsForVineyard(
   let source: PinsQueryResult["source"] = primary.length ? "vineyard_id" : "empty";
 
   if (paddockIds.length) {
-    const byPaddock = await supabase
-      .from("pins")
-      .select("*")
-      .in("paddock_id", paddockIds)
-      .is("deleted_at", null);
+    const byPaddock = await applyVintageScope(
+      supabase
+        .from("pins")
+        .select("*")
+        .in("paddock_id", paddockIds)
+        .is("deleted_at", null) as any,
+      PIN_DATE_COLUMN,
+      scope,
+    );
     if (!byPaddock.error) {
       const extras = ((byPaddock.data ?? []) as PinRecord[]).filter((p) => !ids.has(p.id));
       paddockFallbackCount = extras.length;

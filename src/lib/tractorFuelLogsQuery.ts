@@ -5,6 +5,7 @@
 // for the same tractor (matching the iOS calculation).
 
 import { supabase } from "@/integrations/ios-supabase/client";
+import { applyVintageScope, type VintageScope } from "@/lib/vintageScope";
 
 export interface TractorFuelLog {
   id: string;
@@ -34,15 +35,22 @@ export interface TractorRef {
   name: string | null;
 }
 
+export const TRACTOR_FUEL_DATE_COLUMN = "fill_datetime";
+
 export async function fetchTractorFuelLogsForVineyard(
   vineyardId: string,
+  scope?: VintageScope | null,
 ): Promise<TractorFuelLog[]> {
-  const { data, error } = await supabase
-    .from("tractor_fuel_logs")
-    .select("*")
-    .eq("vineyard_id", vineyardId)
-    .is("deleted_at", null)
-    .order("fill_datetime", { ascending: false });
+  const { data, error } = await applyVintageScope(
+    supabase
+      .from("tractor_fuel_logs")
+      .select("*")
+      .eq("vineyard_id", vineyardId)
+      .is("deleted_at", null)
+      .order("fill_datetime", { ascending: false }) as any,
+    TRACTOR_FUEL_DATE_COLUMN,
+    scope,
+  );
   if (error) throw error;
   return (data ?? []) as TractorFuelLog[];
 }

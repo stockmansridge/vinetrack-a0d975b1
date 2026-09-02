@@ -51,6 +51,8 @@ import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import type { RegionFormatters } from "@/lib/regionFormatters";
+import { useVintageFilter } from "@/hooks/useVintageFilter";
+import { VintageSelect } from "@/components/VintageSelect";
 
 const WRITE_ROLES = new Set(["owner", "manager", "supervisor"]);
 
@@ -126,10 +128,13 @@ export default function FuelPurchasesPage({ embedded = false }: { embedded?: boo
     { vineyardId: selectedVineyardId },
   );
 
+  const vintageFilter = useVintageFilter();
+  const vintageScopeValue = vintageFilter.scope;
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ["fuel_purchases", selectedVineyardId],
+    queryKey: ["fuel_purchases", selectedVineyardId, vintageScopeValue.vintage],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchFuelPurchasesForVineyard(selectedVineyardId!),
+    queryFn: () => fetchFuelPurchasesForVineyard(selectedVineyardId!, vintageScopeValue),
   });
 
   const records = data ?? [];
@@ -258,6 +263,11 @@ export default function FuelPurchasesPage({ embedded = false }: { embedded?: boo
 
 
       <div className="flex flex-wrap items-end gap-2">
+        <VintageSelect
+          vintage={vintageFilter.vintage}
+          options={vintageFilter.options}
+          onChange={vintageFilter.setVintage}
+        />
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground">From</div>
           <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />
