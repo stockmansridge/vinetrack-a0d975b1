@@ -180,12 +180,36 @@ export function daysBetween(fromISO: string, toISO: string): number {
   return Math.round((b - a) / 86_400_000);
 }
 
-/** Documented deterministic recency rule. */
+/**
+ * Documented deterministic recency rule.
+ *  age 0            → 1 (full influence on the observation date)
+ *  age 21 (1 half-life) → 0.5, decaying exponentially thereafter
+ *  age >= 84        → 0 (no influence on the heat surface at all)
+ * The final 14 days before the cut-off taper linearly so influence reaches
+ * zero smoothly rather than stepping off a cliff.
+ */
 export function recencyWeight(ageDays: number): number {
   const age = Math.max(0, ageDays);
-  const w = Math.pow(0.5, age / RECENCY_HALF_LIFE_DAYS);
-  return Math.max(RECENCY_MIN_WEIGHT, w);
+  if (age >= RECENCY_MAX_AGE_DAYS) return 0;
+  const decay = Math.pow(0.5, age / RECENCY_HALF_LIFE_DAYS);
+  const taper = clamp((RECENCY_MAX_AGE_DAYS - age) / RECENCY_TAPER_DAYS, 0, 1);
+  return decay * taper;
 }
+
+/** True when the observation still influences the heat surface at `atDateISO`. */
+export function isInfluencing(obs: HeatObservation, atDateISO: string): boolean {
+  const age = daysBetween(obs.dateISO, atDateISO);
+  return age >= 0 && recencyWeight(age) > 0;
+}
+
+/** Split qualifying observations into those still driving the surface and stale ones. */
+export function partitionByInfluence(obs: HeatObservation[], atDateISO: string) {
+  const influencing: HeatObservation[] = [];
+  const stale: HeatObservation[] = [];
+  for (const o of obs) (isInfluencing(o, atDateISO) ? influencing : stale).push(o);
+  return { influencing, stale };
+}
+
 
 /** "Typical recorded stage" — median of the qualifying RECORDED observations. */
 export function medianStage(obs: HeatObservation[]): number | null {
