@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { initMapKit } from "@/lib/mapkit";
-import { elColourCss } from "@/lib/growthHeatmap";
+import { elColourCss, formatEl } from "@/lib/growthHeatmap";
 import type { HeatMapViewProps } from "@/components/growth/heatMapTypes";
 
 interface Props extends HeatMapViewProps {
@@ -239,7 +239,15 @@ export default function AppleHeatMap({
             new mapkit.Annotation(
               new mapkit.Coordinate(lat, lng),
               () => labelElement(
-                `${b.paddockName}${b.mode === "none" ? " · No observations" : b.mode === "stale" ? " · No current observations" : ""}`,
+                `${b.paddockName}${
+                  b.mode === "none"
+                    ? " · No observations"
+                    : b.mode === "stale"
+                      ? " · No current observations"
+                      : b.medianEl != null
+                        ? ` · ${formatEl(b.medianEl)}`
+                        : ""
+                }`,
               ),
               { collisionMode: mapkit.Annotation.CollisionMode.None },
             ),
