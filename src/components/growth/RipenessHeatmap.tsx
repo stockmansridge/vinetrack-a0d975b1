@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { MapContainer, TileLayer, Polygon, ImageOverlay, CircleMarker, Tooltip, useMap } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Play, Pause, ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
+import AppleHeatMap from "@/components/growth/AppleHeatMap";
+import LeafletHeatMap from "@/components/growth/LeafletHeatMap";
+
 import { useVineyard } from "@/context/VineyardContext";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { useVintage } from "@/lib/useVintage";
@@ -51,16 +53,6 @@ function addDays(iso: string, n: number): string {
   return new Date(t).toISOString().slice(0, 10);
 }
 
-function FitTo({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
-  const map = useMap();
-  useEffect(() => {
-    if (!bounds) return;
-    try {
-      map.fitBounds(L.latLngBounds(bounds as L.LatLngBoundsLiteral).pad(0.15), { padding: [16, 16] });
-    } catch { /* noop */ }
-  }, [bounds, map]);
-  return null;
-}
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
@@ -95,6 +87,10 @@ export default function RipenessHeatmap({
   const [playing, setPlaying] = useState(false);
   const [selectedObs, setSelectedObs] = useState<HeatObservation | null>(null);
   const [fitKey, setFitKey] = useState(0);
+  const [showBoundaries, setShowBoundaries] = useState(true);
+  const [mapProvider, setMapProvider] = useState<"apple" | "fallback">("apple");
+  const [mapReason, setMapReason] = useState<string | null>(null);
+
   const touchedDay = useRef(false);
 
   const activeVintage = vintage ?? currentVintage;
@@ -197,19 +193,29 @@ export default function RipenessHeatmap({
           bounds: [
             [b.gridBounds.minLat, b.gridBounds.minLng],
             [b.gridBounds.maxLat, b.gridBounds.maxLng],
-          ] as L.LatLngBoundsLiteral,
+          ] as [[number, number], [number, number]],
         }];
       }),
     [model],
   );
 
-  const bounds = useMemo<L.LatLngBoundsExpression | null>(() => {
+  const fitPoints = useMemo(() => {
     const pts: LatLng[] = [];
     model.blocks.forEach((b) => pts.push(...b.polygon));
     if (!pts.length) model.qualifying.forEach((o) => pts.push({ lat: o.lat, lng: o.lng }));
-    if (!pts.length) return null;
-    return pts.map((p) => [p.lat, p.lng]) as L.LatLngBoundsLiteral;
-  }, [model, fitKey]);
+    return pts;
+  }, [model]);
+
+  const mapProps = {
+    blocks: model.blocks,
+    overlays,
+    observations: model.qualifying,
+    fitPoints,
+    fitKey,
+    showBoundaries,
+    onSelect: setSelectedObs,
+  };
+
 
   // ---- playback -----------------------------------------------------------
   useEffect(() => {
@@ -296,10 +302,28 @@ export default function RipenessHeatmap({
           <Button variant="outline" size="sm" onClick={() => setFitKey((k) => k + 1)}>
             <Maximize2 className="mr-2 h-4 w-4" /> Fit to {blockFilter === ALL ? "vineyard" : "block"}
           </Button>
-          <div className="ml-auto text-xs text-muted-foreground">
-            Season {season.startISO} → {season.endISO} · {hemisphere === "southern" ? "Southern" : "Northern"} hemisphere
+          <div className="flex items-center gap-2 pb-1">
+            <Switch
+              id="heatmap-boundaries"
+              checked={showBoundaries}
+              onCheckedChange={setShowBoundaries}
+            />
+            <Label htmlFor="heatmap-boundaries" className="text-xs">
+              Block boundaries &amp; names
+            </Label>
+          </div>
+          <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+            {mapProvider === "fallback" && (
+              <Badge variant="outline" className="text-xs" title={mapReason ?? undefined}>
+                Apple Maps unavailable — using fallback
+              </Badge>
+            )}
+            <span>
+              Season {season.startISO} → {season.endISO} · {hemisphere === "southern" ? "Southern" : "Northern"} hemisphere
+            </span>
           </div>
         </div>
+
 
         {/* Fixed EL legend — never rescaled to the current result set. */}
         <div className="flex flex-wrap items-center gap-3">
@@ -340,46 +364,14 @@ export default function RipenessHeatmap({
           </div>
         ) : (
           <div className="h-[540px] overflow-hidden rounded-md border">
-            <MapContainer center={[-34.3, 138.6]} zoom={14} style={{ height: "100%", width: "100%" }}>
-              <TileLayer
-                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                attribution="Tiles &copy; Esri"
-              />
-              <FitTo bounds={bounds} />
-              {model.blocks.map((b) =>
-                b.polygon.length >= 3 ? (
-                  <Polygon
-                    key={`poly-${b.paddockId}`}
-                    positions={b.polygon.map((p) => [p.lat, p.lng]) as any}
-                    pathOptions={{ color: "#ffffff", weight: 2, fillOpacity: b.mode === "none" ? 0.05 : 0 }}
-                  >
-                    <Tooltip direction="center" permanent className="!bg-transparent !border-0 !shadow-none !text-white">
-                      {b.paddockName}
-                      {b.mode === "none" ? " · No observations" : ""}
-                    </Tooltip>
-                  </Polygon>
-                ) : null,
-              )}
-              {overlays.map((o) => (
-                <ImageOverlay key={`heat-${o.id}-${selectedDay}`} url={o.url} bounds={o.bounds} opacity={1} />
-              ))}
-              {model.qualifying.map((o) => (
-                <CircleMarker
-                  key={o.id}
-                  center={[o.lat, o.lng]}
-                  radius={6}
-                  pathOptions={{
-                    color: "#ffffff",
-                    weight: 2,
-                    fillColor: elColourCss(o.el),
-                    fillOpacity: o.assigned && o.paddockId ? 1 : 0,
-                  }}
-                  eventHandlers={{ click: () => setSelectedObs(o) }}
-                />
-              ))}
-            </MapContainer>
+            {mapProvider === "apple" ? (
+              <AppleHeatMap {...mapProps} onUnavailable={(r) => { setMapReason(r); setMapProvider("fallback"); }} />
+            ) : (
+              <LeafletHeatMap {...mapProps} />
+            )}
           </div>
         )}
+
 
         {/* Timeline */}
         <div className="space-y-2">
