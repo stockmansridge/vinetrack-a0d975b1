@@ -15,6 +15,8 @@
 //   No tractor_id / spray_equipment_id / operator user FK
 //   (person_name is free text). No archive flag (only deleted_at).
 import { supabase } from "@/integrations/ios-supabase/client";
+import { applyVintageScope, type VintageScope } from "@/lib/vintageScope";
+
 
 export interface Trip {
   id: string;
