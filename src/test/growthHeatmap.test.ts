@@ -132,13 +132,15 @@ describe("vintage and hemisphere handling", () => {
 
   it("handles a northern-hemisphere 1 January season", () => {
     const { startISO, endISO } = seasonRangeForVintage(1, 1, 2027);
-    expect(startISO.startsWith("2027-01-01")).toBe(true);
+    expect(startISO).toBe("2026-01-01");
+    expect(endISO).toBe("2026-12-31");
     const obs = toObservations([
-      rec({ id: "in", date: "2027-06-01" }),
-      rec({ id: "out", date: "2026-12-31" }),
+      rec({ id: "in", date: "2026-06-01" }),
+      rec({ id: "out", date: "2027-06-01" }),
     ]);
     expect(filterToVintage(obs, startISO, endISO).map((o) => o.id)).toEqual(["in"]);
   });
+
 
   it("derives the current vintage from stored season settings", () => {
     expect(currentVintageForSeason(7, 1, new Date("2027-08-01T00:00:00Z"))).toBe(2028);
