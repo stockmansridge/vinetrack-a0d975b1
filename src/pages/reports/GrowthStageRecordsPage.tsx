@@ -386,7 +386,7 @@ function DetailSheet({
               <Field label="Date" value={record.date ? rf.date(record.date) : "—"} />
               <Field label={rf.blockLabel} value={fmt(record.paddock_name)} />
               <Field label="Variety" value={fmt(record.variety)} />
-              <Field label="E-L stage" value={record.growth_stage_code ? `E-L ${record.growth_stage_code}` : "—"} />
+              <Field label="E-L stage" value={elStage(record.growth_stage_code)} />
               {record.growth_stage_label && (
                 <Field label="Stage label" value={record.growth_stage_label} />
               )}
