@@ -123,6 +123,8 @@ import type { RegionFormatters } from "@/lib/regionFormatters";
 import { useVintage } from "@/lib/useVintage";
 import { isUserVineyardMachine } from "@/lib/equipmentTaxonomy";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
+import { vintageOptions } from "@/lib/vintageScope";
+
 
 
 interface PaddockLite {
