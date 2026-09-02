@@ -94,7 +94,28 @@ export default function RipenessHeatmap({
 
   const touchedDay = useRef(false);
 
-  const [selectedVintage, setSelectedVintage] = [vintage, setVintage];
+  /** Data-driven: only Vintages that actually contain observations. */
+  const vintageOptions = useMemo(() => {
+    const s = new Set<number>();
+    for (const r of records) {
+      const iso = observationDate(r);
+      if (!iso) continue;
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) continue;
+      s.add(vintageForDate(d, seasonStartMonth, seasonStartDay));
+    }
+    const list = Array.from(s).sort((a, b) => b - a);
+    return list.length ? list : [currentVintage];
+  }, [records, currentVintage, seasonStartMonth, seasonStartDay]);
+
+  /** Default to the current Vintage only when it has observations. */
+  const activeVintage =
+    vintage != null && vintageOptions.includes(vintage)
+      ? vintage
+      : vintageOptions.includes(currentVintage)
+        ? currentVintage
+        : vintageOptions[0];
+
   const season = useMemo(
     () => seasonRangeForVintage(seasonStartMonth, seasonStartDay, activeVintage),
     [seasonStartMonth, seasonStartDay, activeVintage],
@@ -120,20 +141,6 @@ export default function RipenessHeatmap({
   }, [placements]);
 
   const allObs = useMemo(() => toObservations(records, { assignedById }), [records, assignedById]);
-
-  /** Data-driven: only Vintages that actually contain observations. */
-  const vintageOptions = useMemo(() => {
-    const s = new Set<number>();
-    for (const r of records) {
-      const iso = observationDate(r);
-      if (!iso) continue;
-      const d = new Date(iso);
-      if (Number.isNaN(d.getTime())) continue;
-      s.add(vintageForDate(d, seasonStartMonth, seasonStartDay));
-    }
-    const list = Array.from(s).sort((a, b) => b - a);
-    return list.length ? list : [currentVintage];
-  }, [records, currentVintage, seasonStartMonth, seasonStartDay]);
 
   const seasonObs = useMemo(
     () => filterToVintage(allObs, season.startISO, season.endISO),
