@@ -162,9 +162,21 @@ export default function YieldCalculatorPage() {
         vinesPerHa: parse(s.vinesPerHa),
         bunchWeightGrams: parse(s.bunchWeight),
       }),
-    onSuccess: () => {
+    onSuccess: async () => {
       setConflict(null);
       qc.invalidateQueries({ queryKey: ["pruning-yield-settings", selectedVineyardId] });
+      // SQL 221: recalculate the canonical base estimate for the CURRENT
+      // vintage only — historical vintages are never refreshed or overwritten.
+      if (selectedVineyardId && currentVintage != null) {
+        try {
+          await refreshPruningYieldEstimates(selectedVineyardId, currentVintage);
+        } catch {
+          /* the saved settings still stand; the overview reloads on next read */
+        }
+        qc.invalidateQueries({
+          queryKey: [SEASON_YIELD_OVERVIEW_KEY, selectedVineyardId, currentVintage],
+        });
+      }
       toast({ title: "Block values saved", description: `Shared with the mobile apps for ${block?.name ?? "this block"}.` });
     },
     onError: (e: any) => {
