@@ -10,7 +10,7 @@
 import { supabase } from "@/integrations/ios-supabase/client";
 
 /** One dated table feeding a surface's Vintage options. */
-export interface VintageSource {
+export interface TableVintageSource {
   table: string;
   /** Dated column used to attribute a row to a Vintage. */
   dateColumn: string;
@@ -21,6 +21,28 @@ export interface VintageSource {
   /** Optional extra equality filters, e.g. `{ is_template: false }`. */
   equals?: Record<string, unknown>;
 }
+
+/**
+ * A surface whose records are only reachable through an RPC (or that carries a
+ * canonical `vintage_year`). Returns the Vintages that have records.
+ */
+export interface CustomVintageSource {
+  /** Stable identity used in the react-query key. */
+  key: string;
+  loadVintages: (vineyardId: string) => Promise<number[]>;
+}
+
+export type VintageSource = TableVintageSource | CustomVintageSource;
+
+export function isCustomSource(s: VintageSource): s is CustomVintageSource {
+  return typeof (s as CustomVintageSource).loadVintages === "function";
+}
+
+/** Stable identity of a source, used for react-query keys. */
+export function sourceKey(s: VintageSource): string {
+  return isCustomSource(s) ? s.key : `${s.table}.${s.dateColumn}`;
+}
+
 
 /** Vintage year for an ISO date/timestamp string, or null when undated. */
 export function vintageForISO(
