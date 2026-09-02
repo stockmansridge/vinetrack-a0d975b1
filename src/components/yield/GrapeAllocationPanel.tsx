@@ -172,6 +172,8 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
 
   return (
     <div className="space-y-4">
+      {active && (
+      <>
       <p className="text-sm text-muted-foreground">
         Allocate the {vintage ?? "selected"} vintage estimate to your own use and to
         external commitments, and track what is still available.
