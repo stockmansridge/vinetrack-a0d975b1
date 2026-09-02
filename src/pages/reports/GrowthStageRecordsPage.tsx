@@ -5,6 +5,9 @@ import { useVineyard } from "@/context/VineyardContext";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { useGrowthStagePhoto } from "@/hooks/useGrowthStagePhoto";
 import { Card } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import RipenessHeatmap from "@/components/growth/RipenessHeatmap";
+
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
