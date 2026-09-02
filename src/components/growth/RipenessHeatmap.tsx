@@ -121,9 +121,9 @@ export default function RipenessHeatmap({
 
   const allObs = useMemo(() => toObservations(records, { assignedById }), [records, assignedById]);
 
-  /** Vintages present in the data, plus the current one. */
+  /** Data-driven: only Vintages that actually contain observations. */
   const vintageOptions = useMemo(() => {
-    const s = new Set<number>([currentVintage]);
+    const s = new Set<number>();
     for (const r of records) {
       const iso = observationDate(r);
       if (!iso) continue;
@@ -131,7 +131,8 @@ export default function RipenessHeatmap({
       if (Number.isNaN(d.getTime())) continue;
       s.add(vintageForDate(d, seasonStartMonth, seasonStartDay));
     }
-    return Array.from(s).sort((a, b) => b - a);
+    const list = Array.from(s).sort((a, b) => b - a);
+    return list.length ? list : [currentVintage];
   }, [records, currentVintage, seasonStartMonth, seasonStartDay]);
 
   const seasonObs = useMemo(
