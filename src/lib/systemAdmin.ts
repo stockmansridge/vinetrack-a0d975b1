@@ -20,7 +20,8 @@ export interface SystemFeatureFlag {
 const ADMIN_QK = ["system-admin", "is-admin"] as const;
 const FLAGS_QK = ["system-admin", "feature-flags"] as const;
 
-export function useIsSystemAdmin(): { isAdmin: boolean; loading: boolean } {
+/** True system-admin status, ignoring demo mode. Used only by the demo toggle. */
+export function useIsSystemAdminRaw(): { isAdmin: boolean; loading: boolean } {
   const { user, loading: authLoading } = useAuth();
   const q = useQuery({
     queryKey: [...ADMIN_QK, user?.id ?? null],
@@ -39,6 +40,13 @@ export function useIsSystemAdmin(): { isAdmin: boolean; loading: boolean } {
     },
   });
   return { isAdmin: !!q.data, loading: authLoading || q.isLoading };
+}
+
+/** Effective system-admin status: false while demo mode is on. */
+export function useIsSystemAdmin(): { isAdmin: boolean; loading: boolean } {
+  const { isAdmin, loading } = useIsSystemAdminRaw();
+  const { demoMode } = useDemoMode();
+  return { isAdmin: demoMode ? false : isAdmin, loading };
 }
 
 export function useFeatureFlags() {
