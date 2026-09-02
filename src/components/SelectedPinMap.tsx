@@ -15,6 +15,8 @@ interface Props {
   pin: PinRecord;
   /** Canonical SQL 171 placement row (public.pin_placements). */
   placement?: PinPlacementRow | null;
+  /** Paddock row_direction in degrees — adds "facing North" orientation wording. */
+  paddockRowDirection?: number | null;
 }
 
 type Provider = "checking" | "apple" | "unavailable";
