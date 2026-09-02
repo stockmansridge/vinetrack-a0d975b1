@@ -123,7 +123,6 @@ import type { RegionFormatters } from "@/lib/regionFormatters";
 import { useVintage } from "@/lib/useVintage";
 import { isUserVineyardMachine } from "@/lib/equipmentTaxonomy";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
-import { vintageOptions } from "@/lib/vintageScope";
 
 
 
@@ -469,12 +468,23 @@ export default function WorkTasksPage() {
   }, [labourLines]);
 
   const seasons = useMemo(() => {
-    // Standard Vintage list: current + previous 15, plus any older Vintage
-    // that actually has tasks so historical rows stay reachable.
-    const s = new Set<number>(vintageOptions(currentVintageYear));
+    // Data-driven: only Vintages that actually contain non-deleted tasks.
+    const s = new Set<number>();
     tasks.forEach((t) => s.add(taskVintage(t, seasonStartMonth, seasonStartDay, currentVintageYear)));
     return Array.from(s).sort((a, b) => b - a);
   }, [tasks, seasonStartMonth, seasonStartDay, currentVintageYear]);
+
+  /**
+   * "Current" only applies when the current Vintage has tasks; otherwise the
+   * list falls back to all Vintages instead of showing an empty season.
+   */
+  const currentHasTasks = seasons.includes(currentVintageYear);
+  const effectiveSeason =
+    season === "current" && !currentHasTasks
+      ? "all"
+      : season !== "all" && season !== "current" && !seasons.includes(Number(season))
+        ? "all"
+        : season;
 
 
 
@@ -549,13 +559,18 @@ export default function WorkTasksPage() {
   }, [tasks, filter, from, to, paddockId, taskType, status, workerType, labourFilter, linesByTask, totalsByTask, taskPaddockIds]);
 
   const seasonFiltered = useMemo(() => {
-    if (season === "all") return filtered;
-    const year = season === "current" ? currentVintageYear : Number(season);
+    if (effectiveSeason === "all") return filtered;
+    const year = effectiveSeason === "current" ? currentVintageYear : Number(effectiveSeason);
     return filtered.filter((t) => taskVintage(t, seasonStartMonth, seasonStartDay, currentVintageYear) === year);
-  }, [filtered, season, seasonStartMonth, seasonStartDay, currentVintageYear]);
+  }, [filtered, effectiveSeason, seasonStartMonth, seasonStartDay, currentVintageYear]);
 
   const seasonTotals = useMemo(() => {
-    const targetYear = season === "all" ? null : season === "current" ? currentVintageYear : Number(season);
+    const targetYear =
+      effectiveSeason === "all"
+        ? null
+        : effectiveSeason === "current"
+          ? currentVintageYear
+          : Number(effectiveSeason);
     const list = targetYear == null ? tasks : tasks.filter((t) => taskVintage(t, seasonStartMonth, seasonStartDay, currentVintageYear) === targetYear);
     let totalHours = 0;
     let totalCost = 0;
@@ -569,7 +584,7 @@ export default function WorkTasksPage() {
       }
     });
     return { taskCount, totalHours, totalCost };
-  }, [tasks, season, seasonStartMonth, seasonStartDay, currentVintageYear, totalsByTask]);
+  }, [tasks, effectiveSeason, seasonStartMonth, seasonStartDay, currentVintageYear, totalsByTask]);
 
 
   // Dev-only sync diagnostic: keep visibility on rows that still need
@@ -755,11 +770,13 @@ export default function WorkTasksPage() {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Filter label="Season">
-            <Select value={season} onValueChange={setSeason}>
+            <Select value={effectiveSeason} onValueChange={setSeason}>
               <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All seasons</SelectItem>
-                <SelectItem value="current">Current ({currentVintageYear})</SelectItem>
+                <SelectItem value="all">All vintages</SelectItem>
+                {currentHasTasks && (
+                  <SelectItem value="current">Current ({currentVintageYear})</SelectItem>
+                )}
                 {seasons.map((y) => (
                   <SelectItem key={y} value={String(y)}>{y}</SelectItem>
                 ))}
