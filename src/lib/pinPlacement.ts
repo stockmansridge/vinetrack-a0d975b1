@@ -8,7 +8,7 @@
 // Placement never affects category colour. The amber "Unassigned location"
 // treatment is shown ONLY when location_warning_code = 'unassigned_location'.
 
-import { formatSideWording } from "@/lib/pinStyle";
+import { formatFacingFromBearing, formatSideWording } from "@/lib/pinStyle";
 
 export type PinLocationScope = "point" | "row" | "block" | string;
 
@@ -79,6 +79,8 @@ const EM_DASH = "—";
  */
 export function pinPlacementDisplay(
   row: PinPlacementRow | null | undefined,
+  /** Paddock row_direction in degrees — adds "facing North" orientation wording. */
+  rowDirectionDeg?: number | null,
 ): PinPlacementDisplay {
   const warning = (row?.location_warning_code ?? null) || null;
   const showWarning = warning === "unassigned_location";
@@ -111,9 +113,12 @@ export function pinPlacementDisplay(
     const attached = numeric(row?.pin_row_number);
     const driving = numeric(row?.driving_row_number);
     const side = formatSideWording(row?.pin_side ?? null);
+    const facing = formatFacingFromBearing(rowDirectionDeg ?? null);
     if (attached != null) rowLines.push(`On Row: Row ${attached}`);
     if (driving != null) rowLines.push(`Driving row: ${driving}`);
-    if (side && (attached != null || driving != null)) rowLines.push(`Side: ${side}`);
+    if (side && (attached != null || driving != null)) {
+      rowLines.push(`Side: ${facing ? `${side} ${facing}` : side}`);
+    }
   }
 
   return {

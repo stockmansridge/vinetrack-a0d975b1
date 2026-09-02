@@ -15,11 +15,13 @@ interface Props {
   pin: PinRecord;
   /** Canonical SQL 171 placement row (public.pin_placements). */
   placement?: PinPlacementRow | null;
+  /** Paddock row_direction in degrees — adds "facing North" orientation wording. */
+  paddockRowDirection?: number | null;
 }
 
 type Provider = "checking" | "apple" | "unavailable";
 
-export default function SelectedPinMap({ pin, placement }: Props) {
+export default function SelectedPinMap({ pin, placement, paddockRowDirection }: Props) {
   const coords = useMemo(() => pinDisplayCoords(pin as any), [pin]);
   const [provider, setProvider] = useState<Provider>("checking");
   const [externalMapResult, setExternalMapResult] = useState<ExternalMapOpenResult | null>(null);
@@ -49,7 +51,7 @@ export default function SelectedPinMap({ pin, placement }: Props) {
   const coordinatesLabel = `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`;
 
   // Location wording comes from the canonical placement only.
-  const place = pinPlacementDisplay(placement);
+  const place = pinPlacementDisplay(placement, paddockRowDirection ?? null);
   const category = (pin as any).category;
   const note = (pin as any).notes;
   const whatsappLines = [

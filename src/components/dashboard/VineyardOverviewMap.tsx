@@ -971,7 +971,7 @@ function PinPanelBody({
   const photoUrl = directPhotoUrl ?? signed;
 
   // Canonical SQL 171 placement — never derived from the base pins row.
-  const placement = pinPlacementDisplay(useResolvedPinPlacement(pin.id));
+  const placement = pinPlacementDisplay(useResolvedPinPlacement(pin.id), paddockRowDirection ?? null);
 
   const { resolve } = useTeamLookup(pin.vineyard_id);
   const resolveName = (raw?: string | null) => {

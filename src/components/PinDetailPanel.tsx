@@ -84,7 +84,7 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, paddock
   const rf = useRegionFormatters();
   const catColours = usePinCategoryColours(pin.vineyard_id ?? null);
   const style = pinDisplayStyle(pin, catColours);
-  const placement = pinPlacementDisplay(placementRow);
+  const placement = pinPlacementDisplay(placementRow, paddockRowDirection ?? null);
   // Pins may store photo as a storage path (signed) or as a direct URL.
   const photoPath = pin.photo_path ?? pin.attachment_path ?? null;
   const directPhotoUrl =
