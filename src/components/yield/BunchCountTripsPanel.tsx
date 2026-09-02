@@ -222,16 +222,51 @@ export default function BunchCountTripsPanel({
                               <span className="text-muted-foreground">No blocks sampled.</span>
                             )}
                           </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onOpenTrip(t.id);
-                            }}
-                          >
-                            View full trip detail
-                          </Button>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenTrip(t.id);
+                              }}
+                            >
+                              View full trip detail
+                            </Button>
+                            {canDelete && onDeleteTrip && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    data-testid={`trip-delete-${t.id}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Trash2 className="mr-1 h-3.5 w-3.5" />
+                                    Delete trip
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete this Bunch Count Trip?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      {isCurrent
+                                        ? "This trip currently supplies the estimate for one or more blocks. Deleting it will fall back to the previous completed trip."
+                                        : "This dated observation will be removed from the trip history."}{" "}
+                                      The trip is soft-deleted and can be restored by support.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => onDeleteTrip(t.id)}>
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                          </div>
+
                         </div>
                       </TableCell>
                     </TableRow>
