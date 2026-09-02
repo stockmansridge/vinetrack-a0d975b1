@@ -9,9 +9,10 @@
 //  * An observation qualifies for a timeline date D when it is not
 //    soft-deleted, has a parseable EL stage in [1, 43], has valid GPS and
 //    its OBSERVATION timestamp (not updated_at) is on or before D.
-//  * Recency: weight = 0.5 ^ (ageDays / RECENCY_HALF_LIFE_DAYS), floored at
-//    RECENCY_MIN_WEIGHT. Used for both interpolation weighting and layer
-//    opacity, so stale areas fade out instead of reverting to EL 1.
+//  * Recency: weight = 0.5 ^ (ageDays / RECENCY_HALF_LIFE_DAYS), tapered to
+//    exactly 0 at RECENCY_MAX_AGE_DAYS. An observation older than that has
+//    ZERO influence on the heat surface — it stays visible as a recorded
+//    historical pin (rendered as stale) but never implies live coverage.
 //  * Blocks are interpolated independently and clipped to their polygon.
 
 import type { GrowthStageRecord } from "@/lib/growthStageRecordsQuery";
@@ -20,9 +21,13 @@ import type { LatLng } from "@/lib/paddockGeometry";
 export const EL_MIN = 1;
 export const EL_MAX = 43;
 export const RECENCY_HALF_LIFE_DAYS = 21;
-export const RECENCY_MIN_WEIGHT = 0.15;
+/** Beyond this age an observation has zero heat-surface influence. */
+export const RECENCY_MAX_AGE_DAYS = 84;
+/** Final linear taper window so influence reaches zero smoothly. */
+export const RECENCY_TAPER_DAYS = 14;
 /** Inverse-distance weighting exponent. */
 export const IDW_POWER = 2;
+
 
 export type RGB = { r: number; g: number; b: number };
 
