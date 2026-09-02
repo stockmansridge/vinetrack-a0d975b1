@@ -44,21 +44,28 @@ describe("applyVintageScope", () => {
   let query: any;
 
   beforeEach(() => {
-    query = { gte: vi.fn(() => query), lte: vi.fn(() => query) };
+    query = { gte: vi.fn(() => query), lt: vi.fn(() => query) };
   });
 
-  it("bounds the query on the given date column", () => {
+  it("bounds the query as a half-open range on the given date column", () => {
     const scope = vintageScope(2025, SEASON_MONTH, SEASON_DAY);
     applyVintageScope(query, "date", scope);
     expect(query.gte).toHaveBeenCalledWith("date", scope.startISO);
-    expect(query.lte).toHaveBeenCalledWith("date", scope.endISO);
+    expect(query.lt).toHaveBeenCalledWith("date", scope.endExclusiveISO);
+  });
+
+  it("uses the next season start as the exclusive bound", () => {
+    const a = vintageScope(2025, SEASON_MONTH, SEASON_DAY);
+    const b = vintageScope(2026, SEASON_MONTH, SEASON_DAY);
+    expect(a.endExclusiveISO).toBe(b.startISO);
+    expect(a.endISO < a.endExclusiveISO).toBe(true);
   });
 
   it("leaves cross-vintage queries untouched when no scope is given", () => {
     applyVintageScope(query, "date", null);
     applyVintageScope(query, "date", undefined);
     expect(query.gte).not.toHaveBeenCalled();
-    expect(query.lte).not.toHaveBeenCalled();
+    expect(query.lt).not.toHaveBeenCalled();
   });
 });
 
@@ -71,6 +78,11 @@ describe("isWithinVintage", () => {
     expect(isWithinVintage(scope.endISO, scope)).toBe(true);
   });
 
+  it("keeps a timestamp late on the final day of the season", () => {
+    expect(isWithinVintage(`${scope.endISO}T23:59:59Z`, scope)).toBe(true);
+    expect(isWithinVintage(scope.endExclusiveISO, scope)).toBe(false);
+  });
+
   it("rejects records from another Vintage", () => {
     expect(isWithinVintage(other.startISO, scope)).toBe(false);
     expect(isWithinVintage(other.endISO, scope)).toBe(false);
@@ -81,3 +93,4 @@ describe("isWithinVintage", () => {
     expect(isWithinVintage(null, null)).toBe(true);
   });
 });
+
