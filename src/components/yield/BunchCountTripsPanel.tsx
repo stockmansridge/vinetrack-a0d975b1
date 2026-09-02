@@ -36,6 +36,8 @@ export default function BunchCountTripsPanel({
   loading,
   error,
   onOpenTrip,
+  canDelete = false,
+  onDeleteTrip,
 }: {
   trips: BunchCountTrip[];
   currentEstimates: Map<string, CurrentBlockEstimate>;
@@ -43,6 +45,8 @@ export default function BunchCountTripsPanel({
   loading?: boolean;
   error?: string | null;
   onOpenTrip: (tripId: string) => void;
+  canDelete?: boolean;
+  onDeleteTrip?: (tripId: string) => void;
 }) {
   const rf = useRegionFormatters();
   const [expanded, setExpanded] = useState<string | null>(null);
