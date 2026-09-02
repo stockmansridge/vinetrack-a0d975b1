@@ -52,6 +52,15 @@ import {
 } from "@/lib/yieldReportsQuery";
 import { buildYieldOverview, type OverviewBlockCard } from "@/lib/yieldOverview";
 import {
+  buildSeasonYieldEstimates,
+  splitBlockEstimateToGroups,
+  setupWarningLabel,
+  type SeasonYieldBlockEstimate,
+} from "@/lib/seasonYieldContract";
+import { useSeasonYieldBaseOverview } from "@/lib/seasonYieldQuery";
+import { fetchDamageRecordsForVineyard } from "@/lib/damageRecordsQuery";
+import { aggregateDamageByPaddock } from "@/lib/damageImpact";
+import {
   buildBunchCountTrips,
   currentEstimatesByBlock,
   currentTripIds,
