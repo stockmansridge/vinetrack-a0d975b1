@@ -21,7 +21,7 @@ interface Props {
 
 type Provider = "checking" | "apple" | "unavailable";
 
-export default function SelectedPinMap({ pin, placement }: Props) {
+export default function SelectedPinMap({ pin, placement, paddockRowDirection }: Props) {
   const coords = useMemo(() => pinDisplayCoords(pin as any), [pin]);
   const [provider, setProvider] = useState<Provider>("checking");
   const [externalMapResult, setExternalMapResult] = useState<ExternalMapOpenResult | null>(null);
