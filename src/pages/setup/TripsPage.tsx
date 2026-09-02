@@ -87,6 +87,8 @@ const MAINT = "__maint__";
 
 import { TRIP_FUNCTION_LABELS, tripFunctionLabel } from "@/lib/tripFunctionLabels";
 import {
+import { useVintageFilter } from "@/hooks/useVintageFilter";
+import { VintageSelect } from "@/components/VintageSelect";
   formatTripPatternLabel,
   formatTripNameLabel,
   formatTripDurationLabel,
@@ -153,10 +155,13 @@ export default function TripsPage() {
     return m;
   }, [paddocks]);
 
+  const vintageFilter = useVintageFilter();
+  const vintageScopeValue = vintageFilter.scope;
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ["trips", selectedVineyardId, paddockIds.length],
+    queryKey: ["trips", selectedVineyardId, paddockIds.length, vintageScopeValue.vintage],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchTripsForVineyard(selectedVineyardId!, paddockIds),
+    queryFn: () => fetchTripsForVineyard(selectedVineyardId!, paddockIds, vintageScopeValue),
   });
 
   // Stage 4B — resolve trips.work_task_id → display label. Read-only.

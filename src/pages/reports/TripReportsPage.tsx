@@ -141,7 +141,7 @@ export default function TripReportsPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["trip-reports", selectedVineyardId, paddockIds.length],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchTripsForVineyard(selectedVineyardId!, paddockIds),
+    queryFn: () => fetchTripsForVineyard(selectedVineyardId!, paddockIds, vintageScopeValue),
   });
   const trips = data?.trips ?? [];
 

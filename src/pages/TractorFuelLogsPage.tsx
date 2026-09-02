@@ -40,6 +40,8 @@ import {
 import { useCanSeeCosts } from "@/lib/permissions";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import type { RegionFormatters } from "@/lib/regionFormatters";
+import { useVintageFilter } from "@/hooks/useVintageFilter";
+import { VintageSelect } from "@/components/VintageSelect";
 
 const L_PER_US_GAL = 3.785411784;
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
@@ -125,10 +127,13 @@ export default function TractorFuelLogsPage({ embedded = false }: { embedded?: b
   const [fullFilter, setFullFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
 
+  const vintageFilter = useVintageFilter();
+  const vintageScopeValue = vintageFilter.scope;
+
   const { data: logs, isLoading, error } = useQuery({
-    queryKey: ["tractor_fuel_logs", selectedVineyardId],
+    queryKey: ["tractor_fuel_logs", selectedVineyardId, vintageScopeValue.vintage],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchTractorFuelLogsForVineyard(selectedVineyardId!),
+    queryFn: () => fetchTractorFuelLogsForVineyard(selectedVineyardId!, vintageScopeValue),
   });
 
   const { data: tractors } = useQuery({

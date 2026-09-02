@@ -88,6 +88,8 @@ import { useSortableTable } from "@/lib/useSortableTable";
 import { formatDate } from "@/lib/dateFormat";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import type { RegionFormatters } from "@/lib/regionFormatters";
+import { useVintageFilter } from "@/hooks/useVintageFilter";
+import { VintageSelect } from "@/components/VintageSelect";
 
 const mkMaintFmt = (rf: RegionFormatters) => ({
   date: (v?: string | null) => (v ? rf.date(v) || "—" : "—"),
@@ -208,10 +210,13 @@ export default function MaintenancePage() {
     { vineyardId: selectedVineyardId },
   );
 
+  const vintageFilter = useVintageFilter();
+  const vintageScopeValue = vintageFilter.scope;
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ["maintenance_logs", selectedVineyardId],
+    queryKey: ["maintenance_logs", selectedVineyardId, vintageScopeValue.vintage],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchMaintenanceLogsForVineyard(selectedVineyardId!),
+    queryFn: () => fetchMaintenanceLogsForVineyard(selectedVineyardId!, vintageScopeValue),
   });
 
   const logs = data?.logs ?? [];

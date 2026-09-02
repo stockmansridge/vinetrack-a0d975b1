@@ -51,6 +51,8 @@ import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import type { RegionFormatters } from "@/lib/regionFormatters";
+import { useVintageFilter } from "@/hooks/useVintageFilter";
+import { VintageSelect } from "@/components/VintageSelect";
 
 const WRITE_ROLES = new Set(["owner", "manager", "supervisor"]);
 
@@ -126,10 +128,13 @@ export default function FuelPurchasesPage({ embedded = false }: { embedded?: boo
     { vineyardId: selectedVineyardId },
   );
 
+  const vintageFilter = useVintageFilter();
+  const vintageScopeValue = vintageFilter.scope;
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ["fuel_purchases", selectedVineyardId],
+    queryKey: ["fuel_purchases", selectedVineyardId, vintageScopeValue.vintage],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchFuelPurchasesForVineyard(selectedVineyardId!),
+    queryFn: () => fetchFuelPurchasesForVineyard(selectedVineyardId!, vintageScopeValue),
   });
 
   const records = data ?? [];

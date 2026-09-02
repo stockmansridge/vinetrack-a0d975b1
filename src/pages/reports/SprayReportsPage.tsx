@@ -103,7 +103,7 @@ export default function SprayReportsPage() {
   const { data: recordsResult, isLoading: recordsLoading } = useQuery({
     queryKey: ["spray-records", selectedVineyardId],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchSprayRecordsForVineyard(selectedVineyardId!),
+    queryFn: () => fetchSprayRecordsForVineyard(selectedVineyardId!, vintageScopeValue),
   });
 
   const records = useMemo(() => {
