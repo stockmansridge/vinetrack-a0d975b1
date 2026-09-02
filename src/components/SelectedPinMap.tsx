@@ -51,7 +51,7 @@ export default function SelectedPinMap({ pin, placement, paddockRowDirection }: 
   const coordinatesLabel = `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`;
 
   // Location wording comes from the canonical placement only.
-  const place = pinPlacementDisplay(placement);
+  const place = pinPlacementDisplay(placement, paddockRowDirection ?? null);
   const category = (pin as any).category;
   const note = (pin as any).notes;
   const whatsappLines = [
