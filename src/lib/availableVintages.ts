@@ -76,9 +76,9 @@ export function vintagesFromDates(
   return Array.from(set).sort((a, b) => b - a);
 }
 
-/** Read every non-deleted dated value for one source in one vineyard. */
+/** Read every non-deleted dated value for one table source in one vineyard. */
 export async function fetchSourceDates(
-  source: VintageSource,
+  source: TableVintageSource,
   vineyardId: string,
 ): Promise<string[]> {
   let q = supabase
@@ -102,9 +102,22 @@ export async function fetchAvailableVintages(
   seasonStartMonth: number,
   seasonStartDay: number,
 ): Promise<number[]> {
-  const lists = await Promise.all(sources.map((s) => fetchSourceDates(s, vineyardId)));
-  return vintagesFromDates(lists.flat(), seasonStartMonth, seasonStartDay);
+  const results = await Promise.all(
+    sources.map(async (s) =>
+      isCustomSource(s)
+        ? await s.loadVintages(vineyardId)
+        : vintagesFromDates(
+            await fetchSourceDates(s, vineyardId),
+            seasonStartMonth,
+            seasonStartDay,
+          ),
+    ),
+  );
+  const set = new Set<number>();
+  results.flat().forEach((y) => Number.isFinite(y) && set.add(Number(y)));
+  return Array.from(set).sort((a, b) => b - a);
 }
+
 
 /** Stable react-query key prefix so any surface can invalidate the options. */
 export const VINTAGE_OPTIONS_KEY = "vintage-options";
