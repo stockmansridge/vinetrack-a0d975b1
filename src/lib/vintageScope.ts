@@ -5,7 +5,6 @@
 //    stored season start month/day). This module NEVER invents its own season
 //    logic — it only turns a vintage year into the canonical season window via
 //    `seasonRangeForVintage`.
-//  * Surfaces offer the current Vintage and the previous 15 (16 options).
 //  * Scoping is applied to the QUERY, not the heading: the underlying date
 //    column is bounded by the season window so records from other Vintages can
 //    never reach the client.
