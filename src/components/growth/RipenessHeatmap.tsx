@@ -95,6 +95,10 @@ export default function RipenessHeatmap({
   const [playing, setPlaying] = useState(false);
   const [selectedObs, setSelectedObs] = useState<HeatObservation | null>(null);
   const [fitKey, setFitKey] = useState(0);
+  const [showBoundaries, setShowBoundaries] = useState(true);
+  const [mapProvider, setMapProvider] = useState<"apple" | "fallback">("apple");
+  const [mapReason, setMapReason] = useState<string | null>(null);
+
   const touchedDay = useRef(false);
 
   const activeVintage = vintage ?? currentVintage;
