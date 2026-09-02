@@ -7,17 +7,19 @@ interface Props extends HeatMapViewProps {
   onUnavailable: (reason: string) => void;
 }
 
-function pinElement(hex: string, outlined: boolean) {
+function pinElement(hex: string, outlined: boolean, stale: boolean) {
   const el = document.createElement("div");
   el.style.cssText = `
-    width:16px;height:16px;border-radius:50%;
+    width:${stale ? 12 : 16}px;height:${stale ? 12 : 16}px;border-radius:50%;
     background:${outlined ? "transparent" : hex};
-    border:2px solid #ffffff;
+    border:2px ${stale ? "dashed" : "solid"} #ffffff;
+    opacity:${stale ? 0.55 : 1};
     box-shadow:0 1px 4px rgba(0,0,0,0.45);
     cursor:pointer;
   `;
   return el;
 }
+
 
 function labelElement(text: string) {
   const el = document.createElement("div");
