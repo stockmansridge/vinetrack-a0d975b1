@@ -79,6 +79,8 @@ const EM_DASH = "—";
  */
 export function pinPlacementDisplay(
   row: PinPlacementRow | null | undefined,
+  /** Paddock row_direction in degrees — adds "facing North" orientation wording. */
+  rowDirectionDeg?: number | null,
 ): PinPlacementDisplay {
   const warning = (row?.location_warning_code ?? null) || null;
   const showWarning = warning === "unassigned_location";
