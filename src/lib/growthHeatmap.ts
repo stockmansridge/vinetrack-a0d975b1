@@ -290,7 +290,16 @@ export function buildBlockHeat(input: BuildBlockHeatInput): BlockHeat {
     w: recencyWeight(daysBetween(o.dateISO, atDateISO)),
   }));
 
+  // Sparse data must not fabricate coverage: a single observation renders a
+  // localised halo, two observations a localised gradient between them.
+  const diag = Math.sqrt(
+    Math.pow(b.maxLat - b.minLat, 2) + Math.pow((b.maxLng - b.minLng) * Math.cos((b.minLat * Math.PI) / 180), 2),
+  );
+  const maxInfluence =
+    mode === "halo" ? diag * 0.22 : mode === "gradient" ? diag * 0.35 : Infinity;
+
   for (let i = 0; i < resolution; i++) {
+
     const lat = b.minLat + latStep * i;
     const rowVals: (number | null)[] = [];
     const rowW: (number | null)[] = [];
