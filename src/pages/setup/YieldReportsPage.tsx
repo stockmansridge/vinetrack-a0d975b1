@@ -994,12 +994,72 @@ export function actualSourceLabel(
   return "";
 }
 
+function SeasonEstimateHeader({
+  model,
+  loading,
+  error,
+  applyDamage,
+  onApplyDamage,
+  vintage,
+}: {
+  model: SeasonYieldEstimateModel;
+  loading: boolean;
+  error: Error | null;
+  applyDamage: boolean;
+  onApplyDamage: (v: boolean) => void;
+  vintage: string | null;
+}) {
+  if (vintage == null) return null;
+  return (
+    <Card className="p-4 space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Estimated yield — Vintage {vintage}
+          </div>
+          <div className="text-2xl font-bold leading-tight tabular-nums">
+            {loading
+              ? "…"
+              : model.totalTonnes == null
+              ? "—"
+              : `${fmtNum(model.totalTonnes)} t`}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {error
+              ? "Estimate unavailable"
+              : model.totalTonnes == null
+              ? `${model.blocksMissing} of ${model.blocksTotal} block${
+                  model.blocksTotal === 1 ? "" : "s"
+                } missing an estimate — ${fmtNum(model.knownTonnes)} t known so far`
+              : `${model.blocksAvailable} block${model.blocksAvailable === 1 ? "" : "s"} estimated`}
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-sm">
+          <Switch checked={applyDamage} onCheckedChange={onApplyDamage} />
+          <span>Apply damage</span>
+        </label>
+      </div>
+      {model.warnings.length > 0 && (
+        <ul className="space-y-1 text-xs text-muted-foreground">
+          {model.warnings.slice(0, 4).map((w) => (
+            <li key={w}>• {setupWarningLabel(w)}</li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 function YieldOverviewGrid({
   cards,
   vintage,
+  estimateInfo,
+  bunchCountBlocks,
 }: {
   cards: OverviewBlockCard[];
   vintage: string | null;
+  estimateInfo?: Map<string, SeasonYieldBlockEstimate>;
+  bunchCountBlocks?: Map<string, unknown>;
 }) {
   const rf = useRegionFormatters();
   if (!cards.length) {
@@ -1018,14 +1078,35 @@ function YieldOverviewGrid({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((c) => {
           const head = headline(c.estimatedTonnes, c.actualTonnes);
+          const info = estimateInfo?.get(c.blockId.toLowerCase());
           return (
             <Card key={c.blockId} className="p-4 space-y-2.5">
               <div className="flex items-baseline justify-between gap-2">
                 <div className="font-medium leading-tight">{c.blockName}</div>
-                {c.areaHa != null && (
-                  <span className="text-xs text-muted-foreground">{rf.area(c.areaHa, 2)}</span>
-                )}
+                <div className="flex items-center gap-1">
+                  {c.areaHa != null && (
+                    <span className="text-xs text-muted-foreground">{rf.area(c.areaHa, 2)}</span>
+                  )}
+                  {info && (
+                    <BlockEstimateInfo
+                      block={info}
+                      supersededByBunchCount={!!bunchCountBlocks?.has(c.blockId.toLowerCase())}
+                    />
+                  )}
+                </div>
               </div>
+
+              {!head && (
+                <div className="space-y-0.5">
+                  <div className="text-[26px] font-bold leading-none text-muted-foreground">—</div>
+                  <div className="text-xs text-muted-foreground">
+                    {info?.warnings.length
+                      ? setupWarningLabel(info.warnings[0])
+                      : "No estimate calculated yet"}
+                  </div>
+                </div>
+              )}
+
 
               {head && (
                 <div className="space-y-0.5">
