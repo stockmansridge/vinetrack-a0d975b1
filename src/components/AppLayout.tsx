@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronDown } from "lucide-react";
 import { BrandName } from "@/components/BrandName";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { DemoModeToggle } from "@/components/DemoModeToggle";
 import { SupportAlertPill } from "@/components/support/SupportAlertPill";
 import { useCurrentProfile, displayNameFor } from "@/hooks/useCurrentProfile";
 import { ProfileDialog } from "@/components/ProfileDialog";
@@ -133,6 +134,7 @@ export default function AppLayout() {
             </div>
             <div className="ml-auto flex items-center gap-2">
               <SupportAlertPill />
+              <DemoModeToggle />
               <ThemeToggle />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
