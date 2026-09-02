@@ -246,11 +246,12 @@ describe("sparse data behaviour", () => {
 });
 
 describe("recency, median and timeline helpers", () => {
-  it("uses a deterministic half-life rule with a floor", () => {
+  it("uses a deterministic half-life rule that ages to zero", () => {
     expect(recencyWeight(0)).toBe(1);
     expect(recencyWeight(21)).toBeCloseTo(0.5, 5);
-    expect(recencyWeight(500)).toBeCloseTo(0.15, 5);
+    expect(recencyWeight(500)).toBe(0);
   });
+
 
   it("computes the typical recorded stage from recorded values only", () => {
     const obs = toObservations([

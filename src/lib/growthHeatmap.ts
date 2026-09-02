@@ -9,9 +9,10 @@
 //  * An observation qualifies for a timeline date D when it is not
 //    soft-deleted, has a parseable EL stage in [1, 43], has valid GPS and
 //    its OBSERVATION timestamp (not updated_at) is on or before D.
-//  * Recency: weight = 0.5 ^ (ageDays / RECENCY_HALF_LIFE_DAYS), floored at
-//    RECENCY_MIN_WEIGHT. Used for both interpolation weighting and layer
-//    opacity, so stale areas fade out instead of reverting to EL 1.
+//  * Recency: weight = 0.5 ^ (ageDays / RECENCY_HALF_LIFE_DAYS), tapered to
+//    exactly 0 at RECENCY_MAX_AGE_DAYS. An observation older than that has
+//    ZERO influence on the heat surface — it stays visible as a recorded
+//    historical pin (rendered as stale) but never implies live coverage.
 //  * Blocks are interpolated independently and clipped to their polygon.
 
 import type { GrowthStageRecord } from "@/lib/growthStageRecordsQuery";
@@ -20,9 +21,13 @@ import type { LatLng } from "@/lib/paddockGeometry";
 export const EL_MIN = 1;
 export const EL_MAX = 43;
 export const RECENCY_HALF_LIFE_DAYS = 21;
-export const RECENCY_MIN_WEIGHT = 0.15;
+/** Beyond this age an observation has zero heat-surface influence. */
+export const RECENCY_MAX_AGE_DAYS = 84;
+/** Final linear taper window so influence reaches zero smoothly. */
+export const RECENCY_TAPER_DAYS = 14;
 /** Inverse-distance weighting exponent. */
 export const IDW_POWER = 2;
+
 
 export type RGB = { r: number; g: number; b: number };
 
@@ -175,12 +180,36 @@ export function daysBetween(fromISO: string, toISO: string): number {
   return Math.round((b - a) / 86_400_000);
 }
 
-/** Documented deterministic recency rule. */
+/**
+ * Documented deterministic recency rule.
+ *  age 0            → 1 (full influence on the observation date)
+ *  age 21 (1 half-life) → 0.5, decaying exponentially thereafter
+ *  age >= 84        → 0 (no influence on the heat surface at all)
+ * The final 14 days before the cut-off taper linearly so influence reaches
+ * zero smoothly rather than stepping off a cliff.
+ */
 export function recencyWeight(ageDays: number): number {
   const age = Math.max(0, ageDays);
-  const w = Math.pow(0.5, age / RECENCY_HALF_LIFE_DAYS);
-  return Math.max(RECENCY_MIN_WEIGHT, w);
+  if (age >= RECENCY_MAX_AGE_DAYS) return 0;
+  const decay = Math.pow(0.5, age / RECENCY_HALF_LIFE_DAYS);
+  const taper = clamp((RECENCY_MAX_AGE_DAYS - age) / RECENCY_TAPER_DAYS, 0, 1);
+  return decay * taper;
 }
+
+/** True when the observation still influences the heat surface at `atDateISO`. */
+export function isInfluencing(obs: HeatObservation, atDateISO: string): boolean {
+  const age = daysBetween(obs.dateISO, atDateISO);
+  return age >= 0 && recencyWeight(age) > 0;
+}
+
+/** Split qualifying observations into those still driving the surface and stale ones. */
+export function partitionByInfluence(obs: HeatObservation[], atDateISO: string) {
+  const influencing: HeatObservation[] = [];
+  const stale: HeatObservation[] = [];
+  for (const o of obs) (isInfluencing(o, atDateISO) ? influencing : stale).push(o);
+  return { influencing, stale };
+}
+
 
 /** "Typical recorded stage" — median of the qualifying RECORDED observations. */
 export function medianStage(obs: HeatObservation[]): number | null {
@@ -218,15 +247,20 @@ export function polygonBounds(poly: LatLng[]) {
 
 // ---------------------------------------------------------------- block model
 
-export type BlockHeatMode = "none" | "halo" | "gradient" | "surface" | "no_polygon";
+export type BlockHeatMode = "none" | "stale" | "halo" | "gradient" | "surface" | "no_polygon";
 
 export interface BlockHeat {
   paddockId: string;
   paddockName: string;
   polygon: LatLng[];
+  /** Every qualifying observation on or before the date (incl. stale ones). */
   observations: HeatObservation[];
+  /** Subset still influencing the heat surface (age < RECENCY_MAX_AGE_DAYS). */
+  influencing: HeatObservation[];
+  /** Qualifying but too old to influence the surface — shown as stale pins. */
+  stale: HeatObservation[];
   mode: BlockHeatMode;
-  /** Median EL of this block's qualifying observations. */
+  /** Median EL of this block's influencing observations. */
   medianEl: number | null;
   /** Grid of interpolated EL values (null = outside polygon). */
   grid: (number | null)[][] | null;
@@ -235,9 +269,13 @@ export interface BlockHeat {
   gridBounds: { minLat: number; maxLat: number; minLng: number; maxLng: number } | null;
 }
 
-export function blockHeatMode(count: number, hasPolygon: boolean): BlockHeatMode {
+export function blockHeatMode(
+  count: number,
+  hasPolygon: boolean,
+  totalObservations = count,
+): BlockHeatMode {
   if (!hasPolygon) return "no_polygon";
-  if (count <= 0) return "none";
+  if (count <= 0) return totalObservations > 0 ? "stale" : "none";
   if (count === 1) return "halo";
   if (count === 2) return "gradient";
   return "surface";
@@ -263,19 +301,22 @@ export function buildBlockHeat(input: BuildBlockHeatInput): BlockHeat {
   const { paddockId, paddockName, polygon, observations, atDateISO } = input;
   const resolution = input.resolution ?? 48;
   const hasPolygon = polygon.length >= 3;
-  const mode = blockHeatMode(observations.length, hasPolygon);
+  const { influencing, stale } = partitionByInfluence(observations, atDateISO);
+  const mode = blockHeatMode(influencing.length, hasPolygon, observations.length);
   const base: BlockHeat = {
     paddockId,
     paddockName,
     polygon,
     observations,
+    influencing,
+    stale,
     mode,
-    medianEl: medianStage(observations),
+    medianEl: medianStage(influencing),
     grid: null,
     weightGrid: null,
     gridBounds: null,
   };
-  if (!hasPolygon || observations.length === 0) return base;
+  if (!hasPolygon || influencing.length === 0) return base;
 
   const b = polygonBounds(polygon);
   const grid: (number | null)[][] = [];
@@ -283,12 +324,13 @@ export function buildBlockHeat(input: BuildBlockHeatInput): BlockHeat {
   const latStep = (b.maxLat - b.minLat) / (resolution - 1);
   const lngStep = (b.maxLng - b.minLng) / (resolution - 1);
 
-  const pts = observations.map((o) => ({
+  const pts = influencing.map((o) => ({
     lat: o.lat,
     lng: o.lng,
     el: o.el,
     w: recencyWeight(daysBetween(o.dateISO, atDateISO)),
   }));
+
 
   // Sparse data must not fabricate coverage: a single observation renders a
   // localised halo, two observations a localised gradient between them.
@@ -371,6 +413,10 @@ export interface HeatModel {
   unassigned: HeatObservation[];
   /** All qualifying observations for the date (assigned + unassigned). */
   qualifying: HeatObservation[];
+  /** Qualifying observations still influencing a heat surface. */
+  influencing: HeatObservation[];
+  /** Qualifying observations too old to influence any heat surface. */
+  stale: HeatObservation[];
   medianEl: number | null;
 }
 
@@ -406,13 +452,20 @@ export function buildHeatModel(input: BuildHeatModelInput): HeatModel {
     }),
   );
 
+  // Unassigned observations are visible pins but never influence a surface.
+  const assignedQualifying = qualifying.filter((o) => o.assigned && o.paddockId);
+  const split = partitionByInfluence(assignedQualifying, atDateISO);
+
   return {
     blocks: heat,
     unassigned: filter ? [] : qualifying.filter((o) => !o.assigned || !o.paddockId),
     qualifying,
-    medianEl: medianStage(qualifying),
+    influencing: split.influencing,
+    stale: split.stale,
+    medianEl: medianStage(split.influencing),
   };
 }
+
 
 // ---------------------------------------------------------------- formatting
 

@@ -1,23 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { initMapKit } from "@/lib/mapkit";
-import { elColourCss } from "@/lib/growthHeatmap";
+import { elColourCss, formatEl } from "@/lib/growthHeatmap";
 import type { HeatMapViewProps } from "@/components/growth/heatMapTypes";
 
 interface Props extends HeatMapViewProps {
   onUnavailable: (reason: string) => void;
 }
 
-function pinElement(hex: string, outlined: boolean) {
+function pinElement(hex: string, outlined: boolean, stale: boolean) {
   const el = document.createElement("div");
   el.style.cssText = `
-    width:16px;height:16px;border-radius:50%;
+    width:${stale ? 12 : 16}px;height:${stale ? 12 : 16}px;border-radius:50%;
     background:${outlined ? "transparent" : hex};
-    border:2px solid #ffffff;
+    border:2px ${stale ? "dashed" : "solid"} #ffffff;
+    opacity:${stale ? 0.55 : 1};
     box-shadow:0 1px 4px rgba(0,0,0,0.45);
     cursor:pointer;
   `;
   return el;
 }
+
 
 function labelElement(text: string) {
   const el = document.createElement("div");
@@ -40,6 +42,7 @@ export default function AppleHeatMap({
   blocks,
   overlays,
   observations,
+  staleIds,
   fitPoints,
   fitKey,
   showBoundaries,
@@ -191,7 +194,7 @@ export default function AppleHeatMap({
           strokeOpacity: 0.9,
           lineWidth: 2,
           fillColor: "#ffffff",
-          fillOpacity: b.mode === "none" ? 0.06 : 0,
+          fillOpacity: b.mode === "none" || b.mode === "stale" ? 0.06 : 0,
         });
         next.push(new mapkit.PolygonOverlay(coords, { style }));
       } catch { /* noop */ }
@@ -218,7 +221,7 @@ export default function AppleHeatMap({
       try {
         const ann = new mapkit.Annotation(
           new mapkit.Coordinate(o.lat, o.lng),
-          () => pinElement(elColourCss(o.el), !(o.assigned && o.paddockId)),
+          () => pinElement(elColourCss(o.el), !(o.assigned && o.paddockId), staleIds.has(o.id)),
           { title: "" },
         );
         ann.addEventListener?.("select", () => onSelect(o));
@@ -235,7 +238,17 @@ export default function AppleHeatMap({
           next.push(
             new mapkit.Annotation(
               new mapkit.Coordinate(lat, lng),
-              () => labelElement(`${b.paddockName}${b.mode === "none" ? " · No observations" : ""}`),
+              () => labelElement(
+                `${b.paddockName}${
+                  b.mode === "none"
+                    ? " · No observations"
+                    : b.mode === "stale"
+                      ? " · No current observations"
+                      : b.medianEl != null
+                        ? ` · ${formatEl(b.medianEl)}`
+                        : ""
+                }`,
+              ),
               { collisionMode: mapkit.Annotation.CollisionMode.None },
             ),
           );
@@ -249,7 +262,7 @@ export default function AppleHeatMap({
     }
     draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [observations, blocks, showBoundaries, ready, onSelect]);
+  }, [observations, blocks, showBoundaries, ready, onSelect, staleIds]);
 
   // --- fit -----------------------------------------------------------------
   useEffect(() => {
