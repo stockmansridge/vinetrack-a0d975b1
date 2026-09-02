@@ -514,6 +514,7 @@ function MaintenanceSheet({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["maintenance_logs"] });
+      vintageFilter.refresh();
       toast({ title: "Maintenance log archived" });
       setConfirmDelete(false);
       onOpenChange(false);
@@ -742,6 +743,7 @@ function MaintenanceEditor({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["maintenance_logs"] });
+      vintageFilter.refresh();
       toast({ title: "Maintenance log created" });
       onOpenChange(false);
     },
@@ -776,6 +778,7 @@ function MaintenanceEditor({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["maintenance_logs"] });
+      vintageFilter.refresh();
       toast({ title: "Maintenance log updated" });
       onOpenChange(false);
     },

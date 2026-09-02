@@ -602,6 +602,7 @@ function TripSheet({
         existingEndTime: trip.end_time ?? null,
       });
       await queryClient.invalidateQueries({ queryKey: ["trips"] });
+      vintageFilter.refresh();
       toast({ title: "Trip completed", description: "The trip has been marked as completed." });
       setConfirmComplete(false);
       onOpenChange(false);
@@ -626,6 +627,7 @@ function TripSheet({
         userId: user?.id ?? null,
       });
       await queryClient.invalidateQueries({ queryKey: ["trips"] });
+      vintageFilter.refresh();
       toast({ title: "Trip deleted", description: "The trip has been removed from your records." });
       setConfirmDelete(false);
       onOpenChange(false);

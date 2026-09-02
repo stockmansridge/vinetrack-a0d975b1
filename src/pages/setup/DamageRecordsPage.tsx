@@ -224,6 +224,7 @@ export default function DamageRecordsPage() {
     onSuccess: () => {
       toast({ title: "Damage record archived" });
       queryClient.invalidateQueries({ queryKey: ["damage_records", selectedVineyardId] });
+      vintageFilter.refresh();
       setSelected(null);
       setArchiveTarget(null);
     },
@@ -506,6 +507,7 @@ export default function DamageRecordsPage() {
         onSaved={() => {
           setEditingOpen(false);
           queryClient.invalidateQueries({ queryKey: ["damage_records", selectedVineyardId] });
+          vintageFilter.refresh();
         }}
         
       />

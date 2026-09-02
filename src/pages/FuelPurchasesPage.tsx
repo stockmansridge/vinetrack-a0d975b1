@@ -435,6 +435,7 @@ function FuelSheet({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fuel_purchases"] });
+      vintageFilter.refresh();
       toast({ title: "Fuel purchase archived" });
       setConfirmDelete(false);
       onOpenChange(false);
@@ -610,6 +611,7 @@ function FuelEditor({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fuel_purchases"] });
+      vintageFilter.refresh();
       toast({ title: "Fuel purchase created" });
       onOpenChange(false);
     },
@@ -635,6 +637,7 @@ function FuelEditor({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fuel_purchases"] });
+      vintageFilter.refresh();
       toast({ title: "Fuel purchase updated" });
       onOpenChange(false);
     },
