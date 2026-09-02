@@ -54,6 +54,8 @@ export interface DamageRecord {
   damage_percent?: number | null;
   polygon_points?: any;
   date?: string | null;
+  /** Vintage the record belongs to (SQL 221) — damage never crosses vintages. */
+  vintage?: number | null;
   date_observed?: string | null;
   row_number?: number | null;
   side?: string | null;
