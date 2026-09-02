@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
 import { useVintage } from "@/lib/useVintage";
 import { hemisphereLabel } from "@/lib/hemisphere";
+import { applyVintageScope, vintageScope } from "@/lib/vintageScope";
+
 
 import { usePruningVineyardSummary } from "@/lib/pruningSummaryQuery";
 import { fetchGrapeAllocations } from "@/lib/grapeAllocationsQuery";
