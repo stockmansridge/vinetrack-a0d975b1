@@ -218,7 +218,7 @@ export default function GrowthStageRecordsPage() {
                   </div>
                 </div>
                 <Badge variant="secondary" className="shrink-0">
-                  E-L {s.latest_stage ?? "—"}
+                  {elStage(s.latest_stage)}
                 </Badge>
               </div>
             ))}
