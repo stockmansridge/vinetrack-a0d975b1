@@ -51,6 +51,9 @@ export interface GrapeAllocationPanelProps {
   blocks: { id: string; name: string; varieties?: string[] }[];
   /** Canonical vineyard varieties for the allocation picker. */
   varieties?: string[];
+  /** When false, only the dialogs stay mounted — the summary cards, tables
+   *  and notices render only on the Grape Allocation tab. Defaults to true. */
+  active?: boolean;
 }
 
 export interface GrapeAllocationPanelRef {
