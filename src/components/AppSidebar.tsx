@@ -51,7 +51,8 @@ import {
 } from "@/components/ui/collapsible";
 import { useVineyard } from "@/context/VineyardContext";
 import { canAccessRoute } from "@/lib/rolePermissions";
-import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import { useIsSystemAdmin, useIsSystemAdminRaw } from "@/lib/systemAdmin";
+import { useDemoMode } from "@/context/DemoModeContext";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
 import { BrandMark } from "@/components/BrandMark";
 import {
@@ -73,7 +74,7 @@ import { useIrrigationCapabilities } from "@/lib/irrigationQuery";
 import { useBillingVineyards } from "@/lib/customerBillingQuery";
 
 
-type NavItem = { title: string; url: string; icon: any; soon?: boolean };
+type NavItem = { title: string; url: string; icon: any; soon?: boolean; admin?: boolean };
 
 const dashboard: NavItem[] = [
   { title: "Overview", url: "/dashboard", icon: LayoutDashboard },
