@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { GuideImageZoom } from "@/components/guide/GuideImageLightbox";
 import { useGuideImage } from "@/lib/guide/guideImageStore";
 import {
   focusToObjectPosition,
@@ -45,15 +46,17 @@ export function GuideScreenshot({
       )}
     >
       {src ? (
-        <img
-          src={src}
-          alt={alt}
-          loading="lazy"
-          decoding="async"
-          onError={() => setBroken(true)}
-          style={{ objectPosition: focusToObjectPosition(focus) }}
-          className={cn("h-full w-full", isScreenshot ? "object-contain p-2" : "object-cover")}
-        />
+        <GuideImageZoom src={src} alt={alt} className="h-full">
+          <img
+            src={src}
+            alt={alt}
+            loading="lazy"
+            decoding="async"
+            onError={() => setBroken(true)}
+            style={{ objectPosition: focusToObjectPosition(focus) }}
+            className={cn("h-full w-full", isScreenshot ? "object-contain p-2" : "object-cover")}
+          />
+        </GuideImageZoom>
       ) : (
         <div
           role="img"

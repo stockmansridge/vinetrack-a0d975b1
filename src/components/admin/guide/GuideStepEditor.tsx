@@ -24,13 +24,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
-import { GuideStepImageUploader } from "@/components/admin/guide/GuideStepImageUploader";
+import { GuideStepImagesUploader } from "@/components/admin/guide/GuideStepImagesUploader";
 import { GuideImageKeyEditor } from "@/components/admin/guide/GuideImageSlotEditor";
 import {
   GUIDE_PLATFORM_LABELS,
+  stepImages,
   type GuideContentStep,
   type GuideStepImagePosition,
 } from "@/lib/guide/guideContent";
+
 
 const NO_PLATFORM = "__none__";
 
@@ -333,7 +335,7 @@ export function GuideStepEditor({
 
           <div>
             <Label className="mb-1.5 block">
-              {step.imageKey ? "Step screenshot (guide image)" : "Step screenshot"}
+              {step.imageKey ? "Step screenshots (guide image)" : "Step screenshots"}
             </Label>
             {step.imageKey ? (
               // This step uses an existing Guide Image key, so it is managed
@@ -341,15 +343,18 @@ export function GuideStepEditor({
               // uploads here replace that exact image, not a copy.
               <GuideImageKeyEditor imageKey={step.imageKey} />
             ) : (
-              <GuideStepImageUploader
+              <GuideStepImagesUploader
                 sectionKey={sectionKey}
                 stepId={step.id}
-                image={step.image}
+                images={stepImages(step)}
                 fallbackUrl={fallbackImageUrl}
-                onChange={(next) => set({ image: next })}
+                onChange={(next) =>
+                  set({ images: next.length > 0 ? next : undefined, image: undefined })
+                }
               />
             )}
           </div>
+
 
         </div>
       )}

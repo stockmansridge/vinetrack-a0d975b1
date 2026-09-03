@@ -2,7 +2,8 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { guideImagePublicUrl } from "@/lib/guide/guideImageStore";
 import { GuideScreenshot } from "@/components/guide/GuideScreenshot";
-import type { GuideContentStep } from "@/lib/guide/guideContent";
+import { GuideImageZoom } from "@/components/guide/GuideImageLightbox";
+import { stepImages, type GuideContentStep } from "@/lib/guide/guideContent";
 
 /**
  * The one renderer for managed How VineTrack Works step rows.
@@ -11,6 +12,9 @@ import type { GuideContentStep } from "@/lib/guide/guideContent";
  * previews is exactly what a reader sees. Step numbers come from row order —
  * never from stored content — while the image side comes from the step's own
  * managed `imagePosition`, never from the row number.
+ *
+ * A step may carry up to three uploaded screenshots; every image can be
+ * clicked to expand it in a centred overlay.
  */
 export function GuideStepList({
   steps,
@@ -24,8 +28,10 @@ export function GuideStepList({
   return (
     <ol className={cn("space-y-4", className)}>
       {steps.map((step, i) => {
-        const url = step.image ? guideImagePublicUrl(step.image) : undefined;
-        const hasImage = Boolean(url || step.imageKey);
+        const urls = stepImages(step)
+          .map((img) => guideImagePublicUrl(img))
+          .filter((u): u is string => Boolean(u));
+        const hasImage = urls.length > 0 || Boolean(step.imageKey);
         const imageLeft = (step.imagePosition ?? "right") === "left";
         const imageSide = imageLeft ? "lg:order-first" : undefined;
         return (
@@ -69,21 +75,37 @@ export function GuideStepList({
               </div>
 
               {hasImage &&
-                (url ? (
+                (urls.length > 0 ? (
                   <div
                     data-guide-step-image={step.id}
                     className={cn(
-                      "flex w-full items-center justify-center overflow-hidden rounded-xl border border-border bg-muted/30 p-3",
+                      "grid w-full gap-2 overflow-hidden rounded-xl border border-border bg-muted/30 p-3",
+                      urls.length > 1 && "sm:grid-cols-2",
                       imageSide,
                     )}
                   >
-                    <img
-                      src={url}
-                      alt={step.heading}
-                      loading="lazy"
-                      decoding="async"
-                      className="max-h-[380px] w-auto max-w-full object-contain"
-                    />
+                    {urls.map((u, n) => {
+                      const alt = urls.length > 1 ? `${step.heading} (${n + 1})` : step.heading;
+                      return (
+                        <GuideImageZoom
+                          key={u}
+                          src={u}
+                          alt={alt}
+                          className="flex items-center justify-center"
+                        >
+                          <img
+                            src={u}
+                            alt={alt}
+                            loading="lazy"
+                            decoding="async"
+                            className={cn(
+                              "mx-auto w-auto max-w-full object-contain transition-transform group-hover:scale-[1.01]",
+                              urls.length > 1 ? "max-h-[220px]" : "max-h-[380px]",
+                            )}
+                          />
+                        </GuideImageZoom>
+                      );
+                    })}
                   </div>
                 ) : (
                   <GuideScreenshot
