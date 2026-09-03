@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { HelmetProvider } from "react-helmet-async";
 import Login from "@/pages/Login";
 
 vi.mock("@/context/AuthContext", () => ({
@@ -16,9 +17,11 @@ vi.mock("@/lib/maintenanceMode", () => ({
 function wrapper({ children }: { children: React.ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   return (
-    <MemoryRouter>
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
-    </MemoryRouter>
+    <HelmetProvider>
+      <MemoryRouter>
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      </MemoryRouter>
+    </HelmetProvider>
   );
 }
 
