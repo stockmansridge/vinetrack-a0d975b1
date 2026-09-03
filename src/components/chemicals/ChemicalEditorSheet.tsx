@@ -421,6 +421,7 @@ export function ChemicalEditor({
           emptyManualRateDraft(),
       );
       setMasterUpdateOpen(false);
+      setEditorReverifyOpen(false);
     }
   }, [open, initial, initialName]);
 
