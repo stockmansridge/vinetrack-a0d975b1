@@ -106,9 +106,9 @@ describe("rate-gate safeguard actions", () => {
     expect(screen.getByText("Open official label").closest("a")).toBeNull();
   });
 
-  it("explains manual entry becomes an unverified record", () => {
+  it("explains only the rate is user-entered, not the product", () => {
     const p = setup();
-    expect(screen.getByText(/unverified manual record/i)).toBeTruthy();
+    expect(screen.getByText(/Only the rate is user-entered/i)).toBeTruthy();
     fireEvent.click(screen.getByText("Enter rate manually"));
     expect(p.onManual).toHaveBeenCalledTimes(1);
   });
