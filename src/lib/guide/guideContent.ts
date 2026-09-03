@@ -28,6 +28,9 @@ export interface GuideStepImage {
 }
 
 export type GuideStepImagePosition = "left" | "right";
+/** Hard cap on uploaded screenshots per step row. */
+export const MAX_STEP_IMAGES = 3;
+
 
 /**
  * Legacy layout: rows alternated by index (even rows had the image on the
