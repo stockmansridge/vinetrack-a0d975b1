@@ -65,6 +65,9 @@ export function GuideStepEditor({
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [newItem, setNewItem] = useState("");
+  // The card is only draggable while the pointer is on the grip handle, so
+  // text fields inside remain selectable/editable.
+  const [gripArmed, setGripArmed] = useState(false);
 
   const set = (patch: Partial<GuideContentStep>) => onChange({ ...step, ...patch });
   const items = step.items ?? [];
