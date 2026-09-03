@@ -205,6 +205,11 @@ export function AppSidebar() {
   const [supportOpen, setSupportOpen] = useState(false);
   const { currentRole, memberships, selectedVineyardId } = useVineyard();
   const { isAdmin: isSystemAdmin, loading: systemAdminLoading } = useIsSystemAdmin();
+  const { isAdmin: isSystemAdminRaw } = useIsSystemAdminRaw();
+  const { demoMode } = useDemoMode();
+  // Highlight System Admin-gated menu items only for real admins with demo
+  // mode off, so they can tell internal surfaces apart from customer ones.
+  const highlightAdminItems = isSystemAdminRaw && !demoMode;
   const { capabilities: irrigation } = useIrrigationCapabilities(selectedVineyardId);
   const { data: logoUrl } = useVineyardLogo();
   const vineyardName =
@@ -226,7 +231,11 @@ export function AppSidebar() {
         <SidebarMenuButton
           asChild
           isActive={isActive(item.url)}
-          className="rounded-lg text-[13px] font-medium text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:font-semibold data-[active=true]:shadow-[inset_2px_0_0_hsl(var(--sidebar-primary))] data-[active=true]:hover:bg-sidebar-accent data-[active=true]:hover:text-sidebar-accent-foreground [&_svg]:text-current"
+          className={`rounded-lg text-[13px] font-medium hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:font-semibold data-[active=true]:shadow-[inset_2px_0_0_hsl(var(--sidebar-primary))] data-[active=true]:hover:bg-sidebar-accent data-[active=true]:hover:text-sidebar-accent-foreground [&_svg]:text-current ${
+            item.admin && highlightAdminItems
+              ? "text-amber-600 dark:text-amber-400"
+              : "text-sidebar-foreground"
+          }`}
         >
           <NavLink to={item.url} className="flex items-center gap-2.5">
             <item.icon className="h-4 w-4" />
