@@ -128,7 +128,8 @@ describe("Edit existing chemical", () => {
     renderEditor(existing);
     fireEvent.click(await screen.findByRole("button", { name: /Check for updates/i }));
     await screen.findByText("Re-verify chemical");
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    const closes = screen.getAllByRole("button", { name: "Close" });
+    fireEvent.click(closes[closes.length - 1]);
     await waitFor(() => expect(screen.queryByText("Re-verify chemical")).toBeNull());
     expect(await screen.findByDisplayValue("Thiovit Jet")).toBeTruthy();
     expect(invoke).not.toHaveBeenCalled();
