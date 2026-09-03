@@ -36,7 +36,7 @@ const line = () =>
   });
 
 function record(rate: number | null) {
-  const app = hydrateDraft({ vineyardId: "v1", job: null }) as any;
+  const app = hydrateDraft({ vineyardId: "v1", job: null, isTemplate: false } as any) as any;
   app.operationType = "foliar";
   app.carrier = { basis: "manual", manualTotalLitres: 1000 };
   app.products = [{ ...line(), rate }];
@@ -90,6 +90,7 @@ describe("applied-rate provenance on the spray record", () => {
     const app = hydrateDraft({
       vineyardId: "v1",
       job: { vineyard_id: "v1", chemical_lines: [saved] },
+      isTemplate: false,
     } as any) as any;
     expect(app.products[0]).toMatchObject({
       rate: 2.5,
