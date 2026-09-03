@@ -78,17 +78,27 @@ export function GuideStepEditor({
 
   return (
     <Card
-      draggable
-      onDragStart={onDragStart}
+      draggable={gripArmed}
+      onDragStart={(e) => {
+        if (!gripArmed) {
+          e.preventDefault();
+          return;
+        }
+        onDragStart();
+      }}
       onDragOver={(e) => {
         e.preventDefault();
         onDragOver();
       }}
       onDrop={(e) => {
         e.preventDefault();
+        setGripArmed(false);
         onDrop();
       }}
-      onDragEnd={onDragEnd}
+      onDragEnd={() => {
+        setGripArmed(false);
+        onDragEnd();
+      }}
       className={cn("p-3", dragging && "border-primary/60 opacity-70")}
     >
       <div className="flex items-center gap-2">
@@ -96,6 +106,9 @@ export function GuideStepEditor({
           className="cursor-grab text-muted-foreground active:cursor-grabbing"
           aria-label="Drag to reorder"
           title="Drag to reorder"
+          onMouseDown={() => setGripArmed(true)}
+          onMouseUp={() => setGripArmed(false)}
+          onMouseLeave={() => setGripArmed(false)}
         >
           <GripVertical className="h-4 w-4" />
         </span>
