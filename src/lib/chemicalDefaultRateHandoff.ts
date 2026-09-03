@@ -106,6 +106,8 @@ export function confirmedSprayPrefill(
   rate: number;
   unit: "L" | "mL" | "kg" | "g";
   rateBasis: "whole_block_area" | "per_100_litres";
+  /** SQL 222 — provenance of the confirmed default that produced this dose. */
+  entryMethod: "canonical" | "manual";
 } | null {
   const sole = soleConfirmedDefault(defaults);
   if (
@@ -119,7 +121,12 @@ export function confirmedSprayPrefill(
   }
   const unit = SPRAY_UNITS[(sole.unit ?? "").trim().toLowerCase()];
   if (!unit) return null;
-  return { rate: sole.value, unit, rateBasis: productRateBasisFor(sole.basis) };
+  return {
+    rate: sole.value,
+    unit,
+    rateBasis: productRateBasisFor(sole.basis),
+    entryMethod: sole.entry_method === "manual" ? "manual" : "canonical",
+  };
 }
 
 /**
