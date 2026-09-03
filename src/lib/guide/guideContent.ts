@@ -52,6 +52,12 @@ export interface GuideContentStep {
   /** Uploaded screenshot for this row — takes precedence over imageKey. */
   image?: GuideStepImage;
   /**
+   * Up to MAX_STEP_IMAGES uploaded screenshots for this row. Takes precedence
+   * over `image` (kept for rows saved before multi-image support).
+   */
+  images?: GuideStepImage[];
+
+  /**
    * Which side the image sits on for desktop/tablet rendering. Explicitly
    * managed per step — never derived from the row number.
    */
