@@ -107,3 +107,89 @@ describe("applied-rate provenance on the spray record", () => {
     expect(saved.applied_rate ?? null).toBeNull();
   });
 });
+
+describe("manual scalar provenance (production path)", () => {
+  const scalar = decodePersistedDefaultRates({
+    version: 1,
+    per_100_litres: {
+      option_key: "",
+      rate_ids: [],
+      basis: "per_100_litres",
+      unit: "L",
+      value: 1.5,
+      min_value: null,
+      max_value: null,
+      source: "operator",
+      entry_method: "manual",
+    },
+  });
+  const scalarLine = () =>
+    productLineFromChemical({
+      savedChemicalId: "chem-1",
+      productName: "SACOA STIFLE DORMANT SPRAY OIL",
+      unit: "L",
+      intelligence: {
+        defaultRates: scalar,
+        activityGroups: [],
+        verification: { status: "unverified" },
+        legacy: { chemicalGroup: null },
+      } as any,
+    });
+
+  it("prefills 1.5 and keeps manual provenance through save and reload", () => {
+    expect(scalarLine()).toMatchObject({ rate: 1.5, rateEntryMethod: "manual" });
+    const saved = toChemicalLine(scalarLine() as any);
+    expect(saved).toMatchObject({
+      applied_rate: 1.5,
+      applied_rate_unit: "L",
+      applied_rate_basis: "per_100_litres",
+      rate_entry_method: "manual",
+    });
+    expect(saved.rate_range_min ?? null).toBeNull();
+    expect(saved.rate_range_max ?? null).toBeNull();
+
+    const app = hydrateDraft({
+      vineyardId: "v1",
+      job: { vineyard_id: "v1", chemical_lines: [saved] },
+      isTemplate: false,
+    } as any) as any;
+    expect(app.products[0]).toMatchObject({
+      rate: 1.5,
+      unit: "L",
+      rateBasis: "per_100_litres",
+      rateEntryMethod: "manual",
+    });
+    expect(app.products[0].labelMinRate ?? null).toBeNull();
+    expect(app.products[0].labelMaxRate ?? null).toBeNull();
+  });
+
+  it("leaves a canonical scalar without manual provenance", () => {
+    const canonical = decodePersistedDefaultRates({
+      version: 1,
+      per_100_litres: {
+        option_key: "default_option_v1_94df25e59456a8a736cdb446e1a7af3e",
+        rate_ids: ["rate_v1_347ebfa9ad731449f589ae79458eaa88"],
+        basis: "per_100_litres",
+        unit: "L",
+        value: 1.5,
+        min_value: null,
+        max_value: null,
+        source: "operator",
+      },
+    });
+    const l = productLineFromChemical({
+      savedChemicalId: "chem-1",
+      productName: "P",
+      unit: "L",
+      intelligence: {
+        defaultRates: canonical,
+        activityGroups: [],
+        verification: { status: "unverified" },
+        legacy: { chemicalGroup: null },
+      } as any,
+    });
+    expect(l.rate).toBe(1.5);
+    expect(l.rateEntryMethod ?? null).toBeNull();
+    expect(toChemicalLine(l as any).rate_entry_method ?? null).toBeNull();
+  });
+});
