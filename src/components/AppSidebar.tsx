@@ -84,7 +84,7 @@ const dashboard: NavItem[] = [
 // System Admin-only guide (internal preview). Access is enforced by the route
 // guard — this entry only controls navigation visibility.
 const dashboardSystemAdmin: NavItem[] = [
-  { title: "How VineTrack Works", url: "/dashboard/how-vinetrack-works", icon: BookOpen },
+  { title: "How VineTrack Works", url: "/dashboard/how-vinetrack-works", icon: BookOpen, admin: true },
 ];
 
 
@@ -167,8 +167,8 @@ const toolsGeneral: NavItem[] = [
 
 // System-admin-only tools (visibility gated in render).
 const toolsSystemAdmin: NavItem[] = [
-  { title: "Crop Health Maps", url: "/tools/satellite-mapping", icon: Satellite },
-  { title: "Fertiliser Calculator", url: "/tools/fertiliser-calculator", icon: FlaskConical },
+  { title: "Crop Health Maps", url: "/tools/satellite-mapping", icon: Satellite, admin: true },
+  { title: "Fertiliser Calculator", url: "/tools/fertiliser-calculator", icon: FlaskConical, admin: true },
 ];
 
 
@@ -181,22 +181,22 @@ const account: NavItem[] = [
 ];
 
 const systemAdmin: NavItem[] = [
-  { title: "Admin Dashboard", url: "/admin/dashboard", icon: AdminDashIcon },
-  { title: "User Activity", url: "/admin/user-activity", icon: Activity },
-  { title: "Vineyards", url: "/admin/vineyards", icon: Grape },
-  { title: "Integrations", url: "/admin/integrations", icon: Plug },
-  { title: "Master Catalogue", url: "/admin/master-catalogue", icon: FlaskConical },
-  { title: "Block Troubleshooter", url: "/admin/block-troubleshooter", icon: ShieldCheck },
-  { title: "Support Requests", url: "/admin/support-requests", icon: LifeBuoy },
-  { title: "System Admins", url: "/admin/system-admins", icon: ShieldCheck },
-  { title: "Access & Entitlements", url: "/admin/access-entitlements", icon: ShieldCheck },
-  { title: "Billing Grants", url: "/admin/billing-grants", icon: DollarSign },
-  { title: "App Notices", url: "/admin/notices", icon: Bell },
-  { title: "Feature Flags", url: "/admin/feature-flags", icon: Flag },
-  { title: "Canopy Reference Images", url: "/admin/canopy-images", icon: Images },
-  { title: "Guide Content", url: "/admin/guide-content", icon: BookOpen },
-  { title: "Email Test", url: "/admin/email-diagnostics", icon: Mail },
-  { title: "Data Coverage", url: "/settings/data-coverage", icon: Database },
+  { title: "Admin Dashboard", url: "/admin/dashboard", icon: AdminDashIcon, admin: true },
+  { title: "User Activity", url: "/admin/user-activity", icon: Activity, admin: true },
+  { title: "Vineyards", url: "/admin/vineyards", icon: Grape, admin: true },
+  { title: "Integrations", url: "/admin/integrations", icon: Plug, admin: true },
+  { title: "Master Catalogue", url: "/admin/master-catalogue", icon: FlaskConical, admin: true },
+  { title: "Block Troubleshooter", url: "/admin/block-troubleshooter", icon: ShieldCheck, admin: true },
+  { title: "Support Requests", url: "/admin/support-requests", icon: LifeBuoy, admin: true },
+  { title: "System Admins", url: "/admin/system-admins", icon: ShieldCheck, admin: true },
+  { title: "Access & Entitlements", url: "/admin/access-entitlements", icon: ShieldCheck, admin: true },
+  { title: "Billing Grants", url: "/admin/billing-grants", icon: DollarSign, admin: true },
+  { title: "App Notices", url: "/admin/notices", icon: Bell, admin: true },
+  { title: "Feature Flags", url: "/admin/feature-flags", icon: Flag, admin: true },
+  { title: "Canopy Reference Images", url: "/admin/canopy-images", icon: Images, admin: true },
+  { title: "Guide Content", url: "/admin/guide-content", icon: BookOpen, admin: true },
+  { title: "Email Test", url: "/admin/email-diagnostics", icon: Mail, admin: true },
+  { title: "Data Coverage", url: "/settings/data-coverage", icon: Database, admin: true },
 ];
 
 
