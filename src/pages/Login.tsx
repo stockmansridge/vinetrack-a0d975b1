@@ -102,10 +102,7 @@ export default function Login() {
             <BrandName suffix="Portal" suffixClassName="text-white" className="text-white" />
           </h1>
           <p className="text-white/90 font-semibold text-[15px] leading-snug px-4">
-            Management access for vineyard Owners and Managers.
-          </p>
-          <p className="text-white/85 font-medium text-[13px] leading-snug px-4">
-            Sign in with the same account you use in the VineTrack iOS app.
+            Sign in with the same email address you use in the VineTrack iOS or Android app.
           </p>
         </div>
 
