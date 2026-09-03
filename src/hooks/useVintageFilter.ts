@@ -45,7 +45,7 @@ export interface VintageFilter {
  */
 export function useVintageFilter(
   sources: VintageSource | VintageSource[] = [],
-  options: UseVintageFilterOptions = {},
+  filterOptions: UseVintageFilterOptions = {},
 ): VintageFilter {
   const { selectedVineyardId } = useVineyard();
   const { vintage: currentVintage, seasonStartMonth, seasonStartDay, isLoading } = useVintage();
@@ -88,8 +88,9 @@ export function useVintageFilter(
       return options.includes(selected) ? selected : null;
     }
     if (!options.length) return null;
+    if (filterOptions.defaultToAll) return null;
     return options.includes(currentVintage) ? currentVintage : null;
-  }, [selected, options, currentVintage]);
+  }, [selected, options, currentVintage, filterOptions.defaultToAll]);
 
   const scope = useMemo(
     () =>
