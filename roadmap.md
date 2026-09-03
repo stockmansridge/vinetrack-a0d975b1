@@ -7,3 +7,5 @@
 - [x] Confirm System Admin menu/routes are visible to system admins only
 - [x] Invite User: audit worker-type payload (role-independent, optional) + regression tests
 - [x] Seasonal yield estimates: Portal consumes `get_season_yield_base_overview` (SQL 221), calls `refresh_pruning_yield_estimates` after calculator saves, applies the existing vintage-filtered damage engine behind the Apply Damage toggle. See mem://features/seasonal-yield-estimate-contract.md
+- [ ] Guide Content steps: support up to 3 screenshots per step (admin editor + public guide rendering)
+- [ ] How VineTrack Works: clicking any guide image opens it in a centred lightbox
