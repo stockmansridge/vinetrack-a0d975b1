@@ -42,6 +42,16 @@ export interface SprayJobChemicalLine {
     | "per_100_litres"
     | "per_100_metres"
     | null;
+  /**
+   * SQL 222 — applied-rate provenance snapshot (mobile parity). Written when
+   * the governing rate came from a user-confirmed Chemical Store rate.
+   */
+  applied_rate?: number | null;
+  applied_rate_unit?: string | null;
+  applied_rate_basis?: string | null;
+  rate_entry_method?: "canonical" | "manual" | null;
+  rate_range_min?: number | null;
+  rate_range_max?: number | null;
   /** iOS legacy numeric fields. Filled automatically on save. */
   ratePerHa?: number | null;
   ratePer100L?: number | null;

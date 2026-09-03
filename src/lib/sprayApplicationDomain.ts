@@ -653,9 +653,13 @@ export function fromLegacySprayJob(
       rate: num(line.rate) ?? num(line.ratePerHa) ?? num(line.ratePer100L),
       unit: chemUnitOnly(line.unit),
       rateBasis: basis,
-      labelMinRate: null,
-      labelMaxRate: null,
-      labelRateUnit: null,
+      labelMinRate: num((line as any).rate_range_min),
+      labelMaxRate: num((line as any).rate_range_max),
+      labelRateUnit:
+        (line as any).rate_entry_method === "manual"
+          ? chemUnitOnly((line as any).applied_rate_unit ?? line.unit)
+          : null,
+      rateEntryMethod: (line as any).rate_entry_method === "manual" ? "manual" : null,
       chemistryStamp: stamp,
       activityGroups: stamp ? stamp.activity_groups : liveGroups,
       verificationStatus: (stamp?.verification_status ??
