@@ -581,11 +581,10 @@ export function ChemicalEditor({
         // rate value. The unit here is the INVENTORY unit implied by the
         // authoritative physical form only — never by a rate unit.
         unit: inventory ? composeUnit(inventory, inferRateBasis(p.unit)) : "",
-        label_url:
-          r.fields.regulatorLabelUrl ??
-          (r.fields.labelReference && /^https?:\/\//i.test(r.fields.labelReference)
-            ? r.fields.labelReference
-            : (p.label_url ?? "")),
+        // ONLY the resolved regulator eLabel document may populate label_url.
+        // A `label_reference` is registration evidence, never a product label,
+        // and is never promoted here (it surfaces as the registration source).
+        label_url: r.fields.regulatorLabelUrl ?? p.label_url ?? "",
         // The manufacturer's own product page — never the regulator URL.
         product_url: r.fields.manufacturerProductUrl ?? p.product_url ?? "",
       }));
