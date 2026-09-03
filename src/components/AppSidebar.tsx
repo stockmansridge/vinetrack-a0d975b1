@@ -51,7 +51,8 @@ import {
 } from "@/components/ui/collapsible";
 import { useVineyard } from "@/context/VineyardContext";
 import { canAccessRoute } from "@/lib/rolePermissions";
-import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import { useIsSystemAdmin, useIsSystemAdminRaw } from "@/lib/systemAdmin";
+import { useDemoMode } from "@/context/DemoModeContext";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
 import { BrandMark } from "@/components/BrandMark";
 import {
@@ -73,7 +74,7 @@ import { useIrrigationCapabilities } from "@/lib/irrigationQuery";
 import { useBillingVineyards } from "@/lib/customerBillingQuery";
 
 
-type NavItem = { title: string; url: string; icon: any; soon?: boolean };
+type NavItem = { title: string; url: string; icon: any; soon?: boolean; admin?: boolean };
 
 const dashboard: NavItem[] = [
   { title: "Overview", url: "/dashboard", icon: LayoutDashboard },
@@ -83,7 +84,7 @@ const dashboard: NavItem[] = [
 // System Admin-only guide (internal preview). Access is enforced by the route
 // guard — this entry only controls navigation visibility.
 const dashboardSystemAdmin: NavItem[] = [
-  { title: "How VineTrack Works", url: "/dashboard/how-vinetrack-works", icon: BookOpen },
+  { title: "How VineTrack Works", url: "/dashboard/how-vinetrack-works", icon: BookOpen, admin: true },
 ];
 
 
@@ -166,8 +167,8 @@ const toolsGeneral: NavItem[] = [
 
 // System-admin-only tools (visibility gated in render).
 const toolsSystemAdmin: NavItem[] = [
-  { title: "Crop Health Maps", url: "/tools/satellite-mapping", icon: Satellite },
-  { title: "Fertiliser Calculator", url: "/tools/fertiliser-calculator", icon: FlaskConical },
+  { title: "Crop Health Maps", url: "/tools/satellite-mapping", icon: Satellite, admin: true },
+  { title: "Fertiliser Calculator", url: "/tools/fertiliser-calculator", icon: FlaskConical, admin: true },
 ];
 
 
@@ -180,22 +181,22 @@ const account: NavItem[] = [
 ];
 
 const systemAdmin: NavItem[] = [
-  { title: "Admin Dashboard", url: "/admin/dashboard", icon: AdminDashIcon },
-  { title: "User Activity", url: "/admin/user-activity", icon: Activity },
-  { title: "Vineyards", url: "/admin/vineyards", icon: Grape },
-  { title: "Integrations", url: "/admin/integrations", icon: Plug },
-  { title: "Master Catalogue", url: "/admin/master-catalogue", icon: FlaskConical },
-  { title: "Block Troubleshooter", url: "/admin/block-troubleshooter", icon: ShieldCheck },
-  { title: "Support Requests", url: "/admin/support-requests", icon: LifeBuoy },
-  { title: "System Admins", url: "/admin/system-admins", icon: ShieldCheck },
-  { title: "Access & Entitlements", url: "/admin/access-entitlements", icon: ShieldCheck },
-  { title: "Billing Grants", url: "/admin/billing-grants", icon: DollarSign },
-  { title: "App Notices", url: "/admin/notices", icon: Bell },
-  { title: "Feature Flags", url: "/admin/feature-flags", icon: Flag },
-  { title: "Canopy Reference Images", url: "/admin/canopy-images", icon: Images },
-  { title: "Guide Content", url: "/admin/guide-content", icon: BookOpen },
-  { title: "Email Test", url: "/admin/email-diagnostics", icon: Mail },
-  { title: "Data Coverage", url: "/settings/data-coverage", icon: Database },
+  { title: "Admin Dashboard", url: "/admin/dashboard", icon: AdminDashIcon, admin: true },
+  { title: "User Activity", url: "/admin/user-activity", icon: Activity, admin: true },
+  { title: "Vineyards", url: "/admin/vineyards", icon: Grape, admin: true },
+  { title: "Integrations", url: "/admin/integrations", icon: Plug, admin: true },
+  { title: "Master Catalogue", url: "/admin/master-catalogue", icon: FlaskConical, admin: true },
+  { title: "Block Troubleshooter", url: "/admin/block-troubleshooter", icon: ShieldCheck, admin: true },
+  { title: "Support Requests", url: "/admin/support-requests", icon: LifeBuoy, admin: true },
+  { title: "System Admins", url: "/admin/system-admins", icon: ShieldCheck, admin: true },
+  { title: "Access & Entitlements", url: "/admin/access-entitlements", icon: ShieldCheck, admin: true },
+  { title: "Billing Grants", url: "/admin/billing-grants", icon: DollarSign, admin: true },
+  { title: "App Notices", url: "/admin/notices", icon: Bell, admin: true },
+  { title: "Feature Flags", url: "/admin/feature-flags", icon: Flag, admin: true },
+  { title: "Canopy Reference Images", url: "/admin/canopy-images", icon: Images, admin: true },
+  { title: "Guide Content", url: "/admin/guide-content", icon: BookOpen, admin: true },
+  { title: "Email Test", url: "/admin/email-diagnostics", icon: Mail, admin: true },
+  { title: "Data Coverage", url: "/settings/data-coverage", icon: Database, admin: true },
 ];
 
 
@@ -204,6 +205,11 @@ export function AppSidebar() {
   const [supportOpen, setSupportOpen] = useState(false);
   const { currentRole, memberships, selectedVineyardId } = useVineyard();
   const { isAdmin: isSystemAdmin, loading: systemAdminLoading } = useIsSystemAdmin();
+  const { isAdmin: isSystemAdminRaw } = useIsSystemAdminRaw();
+  const { demoMode } = useDemoMode();
+  // Highlight System Admin-gated menu items only for real admins with demo
+  // mode off, so they can tell internal surfaces apart from customer ones.
+  const highlightAdminItems = isSystemAdminRaw && !demoMode;
   const { capabilities: irrigation } = useIrrigationCapabilities(selectedVineyardId);
   const { data: logoUrl } = useVineyardLogo();
   const vineyardName =
@@ -225,7 +231,11 @@ export function AppSidebar() {
         <SidebarMenuButton
           asChild
           isActive={isActive(item.url)}
-          className="rounded-lg text-[13px] font-medium text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:font-semibold data-[active=true]:shadow-[inset_2px_0_0_hsl(var(--sidebar-primary))] data-[active=true]:hover:bg-sidebar-accent data-[active=true]:hover:text-sidebar-accent-foreground [&_svg]:text-current"
+          className={`rounded-lg text-[13px] font-medium hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:font-semibold data-[active=true]:shadow-[inset_2px_0_0_hsl(var(--sidebar-primary))] data-[active=true]:hover:bg-sidebar-accent data-[active=true]:hover:text-sidebar-accent-foreground [&_svg]:text-current ${
+            item.admin && highlightAdminItems
+              ? "text-amber-600 dark:text-amber-400"
+              : "text-sidebar-foreground"
+          }`}
         >
           <NavLink to={item.url} className="flex items-center gap-2.5">
             <item.icon className="h-4 w-4" />
