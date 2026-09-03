@@ -303,6 +303,13 @@ export interface SprayProductLine {
   labelMinRate?: number | null;
   labelMaxRate?: number | null;
   labelRateUnit?: string | null;
+  /**
+   * SQL 222 — provenance of the governing range/rate on this line.
+   * "manual" = a user-confirmed Chemical Store rate (hard gate, and displayed
+   * as a user-confirmed range, never as a label rate). Absent/"canonical" =
+   * label-derived guidance.
+   */
+  rateEntryMethod?: "canonical" | "manual" | null;
   /** Structured resistance groups carried for the future Resistance Check. */
   activityGroups: WriteActivityGroup[];
   /** Trust state travels with the line; it never blocks calculation. */
@@ -646,9 +653,13 @@ export function fromLegacySprayJob(
       rate: num(line.rate) ?? num(line.ratePerHa) ?? num(line.ratePer100L),
       unit: chemUnitOnly(line.unit),
       rateBasis: basis,
-      labelMinRate: null,
-      labelMaxRate: null,
-      labelRateUnit: null,
+      labelMinRate: num((line as any).rate_range_min),
+      labelMaxRate: num((line as any).rate_range_max),
+      labelRateUnit:
+        (line as any).rate_entry_method === "manual"
+          ? chemUnitOnly((line as any).applied_rate_unit ?? line.unit)
+          : null,
+      rateEntryMethod: (line as any).rate_entry_method === "manual" ? "manual" : null,
       chemistryStamp: stamp,
       activityGroups: stamp ? stamp.activity_groups : liveGroups,
       verificationStatus: (stamp?.verification_status ??

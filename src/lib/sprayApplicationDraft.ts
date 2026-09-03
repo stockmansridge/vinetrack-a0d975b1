@@ -107,6 +107,7 @@ export function productLineFromChemical(args: {
     labelMinRate: range ? range.min : null,
     labelMaxRate: range ? range.max : null,
     labelRateUnit: range ? range.unit : null,
+    rateEntryMethod: range ? "manual" : null,
     activityGroups,
     verificationStatus: (intel?.verification.status ?? "unverified") as WriteVerificationStatus,
     intelligence: intel,

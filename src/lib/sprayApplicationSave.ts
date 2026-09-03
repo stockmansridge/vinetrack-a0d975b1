@@ -57,6 +57,20 @@ export function toChemicalLine(line: SprayProductLine): SprayJobChemicalLine {
   const stamp = stampMatchesLine(line.chemistryStamp, line.savedChemicalId)
     ? line.chemistryStamp!
     : chemistryStampFromLine(line);
+  // SQL 222 — freeze the applied-rate provenance for a user-confirmed manual
+  // rate: what was applied, and the saved range it was chosen from. The saved
+  // Chemical Store range itself is never rewritten by this.
+  const manualProvenance =
+    line.rateEntryMethod === "manual"
+      ? {
+          applied_rate: line.rate ?? null,
+          applied_rate_unit: chemUnitOnly(line.unit ?? "") || line.unit || null,
+          applied_rate_basis: basis,
+          rate_entry_method: "manual" as const,
+          rate_range_min: line.labelMinRate ?? null,
+          rate_range_max: line.labelMaxRate ?? null,
+        }
+      : {};
   return {
     chemical_id: line.savedChemicalId ?? null,
     savedChemicalId: line.savedChemicalId ?? null,
@@ -75,6 +89,7 @@ export function toChemicalLine(line: SprayProductLine): SprayJobChemicalLine {
     notes: line.notes ?? null,
     ...(line.legacyChemicalGroup ? { chemical_group: line.legacyChemicalGroup } : {}),
     ...(stamp ?? {}),
+    ...manualProvenance,
   };
 }
 

@@ -447,18 +447,25 @@ export function calculateProducts(args: {
     }
 
     const rateValidation = validateRate(line);
+    // SQL 222 — a user-confirmed manual range is a hard gate: a dose outside
+    // it cannot be recorded. Label-derived ranges stay advisory.
+    const manualRange = line.rateEntryMethod === "manual";
     if (rateValidation === "above_range") {
       diagnostics.push({
-        code: "rate_above_label",
-        severity: "warning",
-        message: `${line.productName ?? "Product"} rate is above the label range.`,
+        code: manualRange ? "rate_above_confirmed_range" : "rate_above_label",
+        severity: manualRange ? "error" : "warning",
+        message: manualRange
+          ? `${line.productName ?? "Product"} rate is above the user-confirmed range (${line.labelMinRate}–${line.labelMaxRate} ${line.labelRateUnit ?? ""}).`.trim()
+          : `${line.productName ?? "Product"} rate is above the label range.`,
         productIndex: index,
       });
     } else if (rateValidation === "below_range") {
       diagnostics.push({
-        code: "rate_below_label",
-        severity: "warning",
-        message: `${line.productName ?? "Product"} rate is below the label range.`,
+        code: manualRange ? "rate_below_confirmed_range" : "rate_below_label",
+        severity: manualRange ? "error" : "warning",
+        message: manualRange
+          ? `${line.productName ?? "Product"} rate is below the user-confirmed range (${line.labelMinRate}–${line.labelMaxRate} ${line.labelRateUnit ?? ""}).`.trim()
+          : `${line.productName ?? "Product"} rate is below the label range.`,
         productIndex: index,
       });
     }
