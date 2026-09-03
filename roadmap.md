@@ -18,4 +18,4 @@
 - [x] Field Trips: fix repeated Trip name edits reporting saved without persisting the new value
 - [x] System Admin: add gated Maintenance Mode settings and login message
 
-- [ ] Field Trips: fix repeated Trip name edits reporting saved without persisting the new value
+
