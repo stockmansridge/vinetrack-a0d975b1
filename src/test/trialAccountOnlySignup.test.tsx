@@ -24,12 +24,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 /* Recording Supabase double                                           */
 /* ------------------------------------------------------------------ */
 
-const calls = {
+const { calls } = vi.hoisted(() => ({ calls: {
   signUp: [] as unknown[],
   rpc: [] as { name: string; args: unknown }[],
   tableWrites: [] as { table: string; op: string; payload: unknown }[],
   tableReads: [] as string[],
-};
+} }));
 
 let matrixPayload: unknown = { vineyards: [] };
 
@@ -56,7 +56,7 @@ function tableStub(table: string) {
   return chain;
 }
 
-const supabaseStub = {
+const supabaseStub: any = {
   auth: {
     signUp: (args: unknown) => {
       calls.signUp.push(args);
@@ -100,8 +100,8 @@ const supabaseStub = {
 };
 
 vi.mock("@/integrations/ios-supabase/client", () => ({
-  supabase: supabaseStub,
-  iosSupabase: supabaseStub,
+  get supabase() { return supabaseStub; },
+  get iosSupabase() { return supabaseStub; },
   IOS_SUPABASE_URL: "https://example.test",
   IOS_SUPABASE_ANON_KEY: "anon",
 }));
