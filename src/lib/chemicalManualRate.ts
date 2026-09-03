@@ -12,7 +12,10 @@
 //   * A range stays a range. No midpoint, no collapse to min/max, and
 //     /ha and /100 L are never converted into one another.
 
-import type { CanonicalRateBasis } from "@/lib/chemicalDefaultRatesContract";
+import type {
+  CanonicalRateBasis,
+  PersistedDefaultRateSelection,
+} from "@/lib/chemicalDefaultRatesContract";
 import type {
   LabelRateBasis,
   WriteLabelRate,
@@ -202,4 +205,69 @@ export function manualRateRegisteredUse(
     },
     extra: { user_entered: true, user_confirmed_against_label: draft.confirmed },
   } as WriteRegisteredUse;
+}
+
+/* ------------------------------------- SQL 222 shared manual-rate contract */
+
+/**
+ * The operational selection for a user-entered, user-confirmed rate.
+ *
+ * `source` stays `operator`; `entry_method: "manual"` is what distinguishes it
+ * from a backend label option. It carries an EMPTY `option_key` and EMPTY
+ * `rate_ids` — no canonical identity is ever fabricated — and a range stays a
+ * range (no midpoint, no collapse, no basis/unit conversion).
+ */
+export function manualRateSelection(
+  draft: ManualRateDraft,
+  meta?: { selected_at?: string | null },
+): PersistedDefaultRateSelection | null {
+  if (!manualRateSatisfiesGate(draft)) return null;
+  const v = validateManualRate(draft);
+  if (!v.ok) return null;
+  return {
+    option_key: "",
+    rate_ids: [],
+    basis: v.basis,
+    unit: v.unit,
+    value: v.value,
+    min_value: v.min_value,
+    max_value: v.max_value,
+    source: "operator",
+    entry_method: "manual",
+    selected_at: meta?.selected_at ?? null,
+    label_version: null,
+  };
+}
+
+/** True for a persisted selection the operator typed themselves. */
+export function isManualRateSelection(
+  selection: Pick<PersistedDefaultRateSelection, "entry_method"> | null | undefined,
+): boolean {
+  return selection?.entry_method === "manual";
+}
+
+const isManualUnit = (u: string): u is ManualRateUnit =>
+  (MANUAL_RATE_UNITS as readonly string[]).includes(u);
+
+/**
+ * Reopening the Chemical Store: reconstruct the EXACT manual draft (rate type,
+ * basis, unit, amounts and confirmed provenance) from the persisted selection.
+ */
+export function manualRateDraftFromSelection(
+  selection: PersistedDefaultRateSelection | null | undefined,
+): ManualRateDraft | null {
+  if (!selection || !isManualRateSelection(selection)) return null;
+  if (!isManualUnit(selection.unit)) return null;
+  const isRange = selection.value == null;
+  if (isRange && (selection.min_value == null || selection.max_value == null)) return null;
+  return {
+    open: true,
+    kind: isRange ? "range" : "single",
+    basis: selection.basis,
+    unit: selection.unit,
+    value: isRange ? "" : String(selection.value),
+    min: isRange ? String(selection.min_value) : "",
+    max: isRange ? String(selection.max_value) : "",
+    confirmed: true,
+  };
 }

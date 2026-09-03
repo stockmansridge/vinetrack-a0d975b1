@@ -121,3 +121,40 @@ export function confirmedSprayPrefill(
   if (!unit) return null;
   return { rate: sole.value, unit, rateBasis: productRateBasisFor(sole.basis) };
 }
+
+/**
+ * SQL 222 — a confirmed MANUAL range never prefills a dose: the operator must
+ * choose the actual application dose inside it, so the range is surfaced as
+ * guidance on the spray line. Choosing that dose NEVER rewrites the saved
+ * Chemical Store range. Canonical backend ranges keep their existing
+ * behaviour and are not surfaced here.
+ */
+export function confirmedSprayRangeGuidance(
+  defaults: PersistedDefaultRates | null,
+): {
+  min: number;
+  max: number;
+  unit: "L" | "mL" | "kg" | "g";
+  rateBasis: "whole_block_area" | "per_100_litres";
+} | null {
+  const sole = soleConfirmedDefault(defaults);
+  if (
+    !sole ||
+    sole.entry_method !== "manual" ||
+    sole.value != null ||
+    sole.min_value == null ||
+    sole.max_value == null ||
+    !Number.isFinite(sole.min_value) ||
+    !Number.isFinite(sole.max_value)
+  ) {
+    return null;
+  }
+  const unit = SPRAY_UNITS[(sole.unit ?? "").trim().toLowerCase()];
+  if (!unit) return null;
+  return {
+    min: sole.min_value,
+    max: sole.max_value,
+    unit,
+    rateBasis: productRateBasisFor(sole.basis),
+  };
+}

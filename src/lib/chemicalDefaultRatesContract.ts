@@ -37,6 +37,19 @@ export const RATE_ID_PREFIX = "rate_v1_";
 
 export type DefaultRateSelectionSource = "operator" | "recommended";
 
+/**
+ * SQL 222 / shared manual-rate contract.
+ *
+ * `canonical` — the selection cites a backend-minted label option identity.
+ * `manual`    — the operator typed and confirmed the rate themselves; there is
+ *               no official `option_key` / `rate_ids` and none may be minted.
+ *
+ * Rows written before SQL 222 carry no `entry_method` and MUST keep behaving
+ * as canonical.
+ */
+export type DefaultRateEntryMethod = "canonical" | "manual";
+
+
 /* -------------------------------------------------- backend canonical option */
 
 /** One backend-constructed operational default option. */
@@ -73,6 +86,12 @@ export interface PersistedDefaultRateSelection {
   min_value: number | null;
   max_value: number | null;
   source: DefaultRateSelectionSource;
+  /**
+   * Absent in legacy rows => `canonical`. A `manual` selection carries an
+   * empty `option_key` and empty `rate_ids` and never a fabricated identity.
+   */
+  entry_method?: DefaultRateEntryMethod;
+
   /**
    * Provenance, NOT identity (shared D3). Null/absent/malformed => null; the
    * selection itself survives.
@@ -242,12 +261,26 @@ function decodePersistedSelection(
   const o = rec(value);
   if (!o) return null;
 
-  if (typeof o.option_key !== "string" || !o.option_key.startsWith(DEFAULT_OPTION_KEY_PREFIX)) {
+  // SQL 222: absent => canonical, so pre-222 rows are unchanged.
+  if (o.entry_method != null && o.entry_method !== "manual" && o.entry_method !== "canonical") {
     return null;
   }
-  const rateIds = stringArray(o.rate_ids);
-  if (!rateIds || rateIds.length === 0) return null;
-  if (!rateIds.every((id) => id.startsWith(RATE_ID_PREFIX))) return null;
+  const entryMethod: DefaultRateEntryMethod =
+    o.entry_method === "manual" ? "manual" : "canonical";
+
+  if (entryMethod === "manual") {
+    // A manual rate has NO official identity and never a fabricated one.
+    if (o.option_key != null && o.option_key !== "") return null;
+    if (o.rate_ids != null && !(Array.isArray(o.rate_ids) && o.rate_ids.length === 0)) return null;
+  } else {
+    if (typeof o.option_key !== "string" || !o.option_key.startsWith(DEFAULT_OPTION_KEY_PREFIX)) {
+      return null;
+    }
+    const ids = stringArray(o.rate_ids);
+    if (!ids || ids.length === 0) return null;
+    if (!ids.every((id) => id.startsWith(RATE_ID_PREFIX))) return null;
+  }
+  const rateIds: string[] = entryMethod === "manual" ? [] : (stringArray(o.rate_ids) as string[]);
 
   if (!isCanonicalBasis(o.basis) || o.basis !== expectedBasis) return null;
   if (typeof o.unit !== "string" || o.unit === "") return null;
@@ -258,7 +291,7 @@ function decodePersistedSelection(
   if (o.source !== "operator" && o.source !== "recommended") return null;
 
   return {
-    option_key: o.option_key,
+    option_key: entryMethod === "manual" ? "" : (o.option_key as string),
     rate_ids: rateIds,
     basis: o.basis,
     unit: o.unit,
@@ -266,6 +299,7 @@ function decodePersistedSelection(
     min_value: amount.min_value,
     max_value: amount.max_value,
     source: o.source,
+    entry_method: entryMethod,
     // Provenance is tolerant: malformed values degrade to null and never
     // invalidate the operational selection (D3 `provenance_malformed`).
     selected_at: provenanceString(o.selected_at),

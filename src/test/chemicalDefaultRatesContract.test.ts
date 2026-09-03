@@ -166,6 +166,7 @@ const selection = (basis: "per_hectare" | "per_100_litres", value: number) => ({
   min_value: null,
   max_value: null,
   source: "operator" as const,
+  entry_method: "canonical" as const,
   selected_at: "2026-08-26T00:00:00.000Z",
   label_version: "APVMA label approval 33182-0623",
 });

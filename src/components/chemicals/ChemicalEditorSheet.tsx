@@ -13,7 +13,9 @@ import { MissingRateOptionsPanel } from "@/components/chemicals/MissingRateOptio
 import { ManualRateEditor } from "@/components/chemicals/ManualRateEditor";
 import {
   emptyManualRateDraft,
+  manualRateDraftFromSelection,
   manualRateRegisteredUse,
+  manualRateSelection,
   manualRateSatisfiesGate,
   type ManualRateDraft,
 } from "@/lib/chemicalManualRate";
@@ -54,13 +56,15 @@ import {
 } from "@/lib/chemicalVineyardScope";
 
 import { DefaultRatesCard } from "@/components/chemicals/DefaultRatesCard";
-import type {
-  CanonicalDefaultRateOption,
-  CanonicalRateBasis,
+import {
+  decodePersistedDefaultRates,
+  type CanonicalDefaultRateOption,
+  type CanonicalRateBasis,
 } from "@/lib/chemicalDefaultRatesContract";
 import {
   PRODUCT_CHANGED_MESSAGE,
   matchDefaultRateSlots,
+  withBasisSelection,
 } from "@/lib/chemicalDefaultRateSelection";
 import {
   applyAuthoritativeChemistry,
@@ -400,7 +404,18 @@ export function ChemicalEditor({
         setRateLife(newDefaultRateLifecycle());
 
       }
-      setManualRate(emptyManualRateDraft());
+      // Reopening reconstructs the EXACT saved manual rate (type, basis, unit,
+      // amounts) together with its user-confirmed provenance.
+      const storedDefaults = initial
+        ? decodePersistedDefaultRates((initial as any).default_rates)
+        : null;
+      setManualRate(
+        manualRateDraftFromSelection(
+          storedDefaults?.per_hectare ?? null,
+        ) ??
+          manualRateDraftFromSelection(storedDefaults?.per_100_litres ?? null) ??
+          emptyManualRateDraft(),
+      );
       setMasterUpdateOpen(false);
     }
   }, [open, initial, initialName]);
@@ -426,6 +441,9 @@ export function ChemicalEditor({
       // Recovery path: append the user-entered rate as an explicitly
       // user-entered grapevine use. No canonical option/rate identity is minted
       // and the resolved registered identity is left exactly as it was.
+      const manualSelection = manualRateConfirmed
+        ? manualRateSelection(manualRate, { selected_at: new Date().toISOString() })
+        : null;
       const manualUse = manualRateConfirmed
         ? manualRateRegisteredUse(manualRate, intel.registeredUses[0]?.target_raw ?? null)
         : null;
@@ -458,13 +476,19 @@ export function ChemicalEditor({
         // wipe the persisted default; when dirty the FULL version-1 object is
         // written, including explicit null slots. Never set to null just
         // because both slots are null.
-        ...(rateLife.dirty
+        // SQL 222: a user-entered, user-confirmed rate is ALSO the operational
+        // selection. It is written with `entry_method: "manual"`, an empty
+        // `option_key` and empty `rate_ids` — never a fabricated canonical id —
+        // and a range stays a range.
+        ...(rateLife.dirty || manualSelection
           ? {
-              default_rates: {
-                version: 1 as const,
-                per_hectare: defaultRates.per_hectare,
-                per_100_litres: defaultRates.per_100_litres,
-              },
+              default_rates: manualSelection
+                ? withBasisSelection(defaultRates, manualSelection.basis, manualSelection)
+                : {
+                    version: 1 as const,
+                    per_hectare: defaultRates.per_hectare,
+                    per_100_litres: defaultRates.per_100_litres,
+                  },
             }
           : {}),
 
