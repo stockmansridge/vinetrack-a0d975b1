@@ -84,3 +84,6 @@ verify_jwt = false
 
 [functions.admin-delete-user]
 verify_jwt = false
+
+[functions.admin-set-maintenance]
+verify_jwt = false

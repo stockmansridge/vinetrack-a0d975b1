@@ -68,6 +68,7 @@ export interface Trip {
   deleted_at?: string | null;
   created_by?: string | null;
   updated_by?: string | null;
+  sync_version?: number | null;
 }
 
 export interface TripsQueryResult {

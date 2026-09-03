@@ -1,5 +1,5 @@
 import { VINTAGE_OPTIONS_KEY } from "@/lib/availableVintages";
-import { useMemo, useState, useEffect, Fragment } from "react";
+import { useMemo, useState, useEffect, useRef, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { useVineyard } from "@/context/VineyardContext";
@@ -550,6 +550,13 @@ export default function TripsPage() {
         vineyardId={selectedVineyardId}
         open={!!selected}
         onOpenChange={(o) => !o && setSelected(null)}
+        onTitleSaved={(tripId, tripTitle, syncVersion) => {
+          setSelected((current) =>
+            current?.id === tripId
+              ? { ...current, trip_title: tripTitle, sync_version: syncVersion }
+              : current,
+          );
+        }}
       />
     </div>
   );
@@ -567,6 +574,7 @@ function TripSheet({
   vineyardId,
   open,
   onOpenChange,
+  onTitleSaved,
 }: {
   trip: Trip | null;
   paddockNameById: Map<string, string | null>;
@@ -575,6 +583,7 @@ function TripSheet({
   vineyardId: string | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  onTitleSaved: (tripId: string, tripTitle: string | null, syncVersion: number) => void;
 }) {
   const { data: vineyardLogoUrl } = useVineyardLogo();
   const formatters = useRegionFormatters();
@@ -592,23 +601,38 @@ function TripSheet({
   const [completing, setCompleting] = useState(false);
   const [editTitle, setEditTitle] = useState(trip?.trip_title ?? "");
   const [savingTitle, setSavingTitle] = useState(false);
+  const savingTitleRef = useRef(false);
+  const savedTitleRef = useRef(trip?.trip_title ?? "");
 
   useEffect(() => {
-    setEditTitle(trip?.trip_title ?? "");
-  }, [trip?.id, trip?.trip_title]);
+    // Only reset when a different trip is opened. A query refresh for the same
+    // trip must not replace text the operator is currently editing.
+    const nextTitle = trip?.trip_title ?? "";
+    setEditTitle(nextTitle);
+    savedTitleRef.current = nextTitle;
+  }, [trip?.id]);
 
   const isCompletable = !!trip && !trip.end_time && (trip.is_active || trip.is_paused);
 
-  const handleSaveTitle = async () => {
-    if (!trip || !canDeleteTrip) return;
+  const handleSaveTitle = async (nextTitle?: string) => {
+    if (!trip || !canDeleteTrip || savingTitleRef.current) return;
+    const tripTitle = (nextTitle ?? editTitle).trim() || null;
+    const savedTitle = savedTitleRef.current.trim() || null;
+    if (tripTitle === savedTitle) return;
+
+    savingTitleRef.current = true;
     setSavingTitle(true);
+    const syncVersion = (trip.sync_version ?? 0) + 1;
     try {
       await updateTripTitle({
         tripId: trip.id,
-        tripTitle: editTitle.trim() || null,
-        currentSyncVersion: (trip as any).sync_version ?? null,
+        tripTitle,
+        currentSyncVersion: trip.sync_version ?? null,
         userId: user?.id ?? null,
       });
+      savedTitleRef.current = tripTitle ?? "";
+      setEditTitle(tripTitle ?? "");
+      onTitleSaved(trip.id, tripTitle, syncVersion);
       await queryClient.invalidateQueries({ queryKey: ["trips"] });
       toast({ title: "Trip name updated" });
     } catch (err) {
@@ -618,6 +642,7 @@ function TripSheet({
         variant: "destructive",
       });
     } finally {
+      savingTitleRef.current = false;
       setSavingTitle(false);
     }
   };
@@ -820,7 +845,7 @@ function TripSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-screen sm:w-[95vw] md:w-[90vw] lg:w-[50vw] sm:max-w-[1000px] overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{trip ? tripDisplayName(trip) : "Trip"} — {fmtDay(trip?.start_time)}</SheetTitle>
+          <SheetTitle>{trip ? (canDeleteTrip ? (editTitle || tripDisplayName(trip)) : tripDisplayName(trip)) : "Trip"} — {fmtDay(trip?.start_time)}</SheetTitle>
           {trip?.work_task_id && (
             <div className="pt-1">
               <Badge variant="outline" className="font-normal">
@@ -896,9 +921,12 @@ function TripSheet({
                     <Input
                       value={editTitle}
                       onChange={(e) => setEditTitle(e.target.value)}
-                      onBlur={handleSaveTitle}
+                      onBlur={(e) => void handleSaveTitle(e.currentTarget.value)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") handleSaveTitle();
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void handleSaveTitle(e.currentTarget.value);
+                        }
                       }}
                       disabled={savingTitle}
                       placeholder="Trip name"

@@ -14,3 +14,8 @@
 - [x] New Task Log drawer widened to 50% (removed max-width cap)
 - [x] Pins / Repairs / Observations page: default Vintage filter to "All vintages"
 - [x] Field Trips page: allow editing the Trip name
+- [x] Field Trips: update the detail header name immediately while editing Title / details
+- [x] Field Trips: fix repeated Trip name edits reporting saved without persisting the new value
+- [x] System Admin: add gated Maintenance Mode settings and login message
+
+

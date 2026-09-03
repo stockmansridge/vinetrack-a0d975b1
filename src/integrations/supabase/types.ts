@@ -197,6 +197,36 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_maintenance: {
+        Row: {
+          created_at: string
+          id: number
+          is_enabled: boolean
+          message: string
+          updated_at: string
+          updated_by: string | null
+          updated_by_email: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          is_enabled?: boolean
+          message?: string
+          updated_at?: string
+          updated_by?: string | null
+          updated_by_email?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          is_enabled?: boolean
+          message?: string
+          updated_at?: string
+          updated_by?: string | null
+          updated_by_email?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
