@@ -177,7 +177,13 @@ export function GuideStepImagesUploader({
             ))}
           </div>
         ) : fallbackUrl ? (
-          <img src={fallbackUrl} alt="Step screenshot" className="h-[130px] w-full object-contain" />
+          <figure className="overflow-hidden rounded-md border border-border bg-background">
+            <img src={fallbackUrl} alt="Step screenshot" className="h-[112px] w-full object-contain p-1" />
+            <figcaption className="border-t border-border px-1 py-0.5 text-[10.5px] font-medium text-muted-foreground">
+              #1 · existing guide image
+            </figcaption>
+          </figure>
+
         ) : (
           <div className="flex h-[110px] w-full flex-col items-center justify-center gap-1 text-muted-foreground">
             <ImageIcon className="h-6 w-6 opacity-60" aria-hidden />
