@@ -183,26 +183,39 @@ export default function Login() {
               <AppleSignInButton redirectPath="/auth/callback?next=/select-vineyard" />
             </form>
 
-            <div className="flex flex-col items-center gap-2">
-              <button
-                type="button"
-                onClick={onReset}
-                disabled={sendingReset}
-                className="text-sm font-medium hover:underline disabled:opacity-60"
-                style={{ color: "#F0EBB8" }}
-              >
-                {sendingReset ? "Sending reset email…" : "Forgot password?"}
-              </button>
-              <a
-                href="/signup"
-                className="text-sm font-semibold hover:underline"
-                style={{ color: "#FFFFFF" }}
-              >
-                Don't have an account? Create one
-              </a>
-              <p className="text-white/80 text-xs text-center max-w-[16rem] leading-snug">
-                Invited to a vineyard? Create an account first using the same email address your invite was sent to.
+            <div className="flex flex-col items-center gap-4 text-center">
+              <p className="text-white/80 text-sm">
+                Having trouble logging in?{" "}
+                <a
+                  href="mailto:support@vinetrack.com.au"
+                  className="font-semibold underline hover:text-white"
+                  style={{ color: "#F0EBB8" }}
+                >
+                  support@vinetrack.com.au
+                </a>
               </p>
+
+              <div className="flex flex-col items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onReset}
+                  disabled={sendingReset}
+                  className="text-sm font-medium hover:underline disabled:opacity-60"
+                  style={{ color: "#F0EBB8" }}
+                >
+                  {sendingReset ? "Sending reset email…" : "Forgot password?"}
+                </button>
+                <a
+                  href="/signup"
+                  className="text-sm font-semibold hover:underline"
+                  style={{ color: "#FFFFFF" }}
+                >
+                  Don't have an account? Create one
+                </a>
+                <p className="text-white/70 text-xs max-w-[16rem] leading-snug">
+                  Invited to a vineyard? Create an account first using the same email address your invite was sent to.
+                </p>
+              </div>
             </div>
           </>
         )}
