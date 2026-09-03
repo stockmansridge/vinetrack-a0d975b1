@@ -292,6 +292,92 @@ export interface BuildBlockHeatInput {
   resolution?: number;
 }
 
+/** One influencing observation reduced to the values IDW needs. */
+export interface HeatPoint {
+  lat: number;
+  lng: number;
+  el: number;
+  /** Recency weight at the timeline date. */
+  w: number;
+}
+
+/** Build the IDW input points for a set of influencing observations. */
+export function heatPoints(obs: HeatObservation[], atDateISO: string): HeatPoint[] {
+  return obs.map((o) => ({
+    lat: o.lat,
+    lng: o.lng,
+    el: o.el,
+    w: recencyWeight(daysBetween(o.dateISO, atDateISO)),
+  }));
+}
+
+/** Polygon diagonal in degrees (longitude scaled by cos(latitude)). */
+export function polygonDiagonalDeg(b: {
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
+}): number {
+  return Math.sqrt(
+    Math.pow(b.maxLat - b.minLat, 2) +
+      Math.pow((b.maxLng - b.minLng) * Math.cos((b.minLat * Math.PI) / 180), 2),
+  );
+}
+
+/**
+ * Sparse-mode influence radius, in the same scaled-degree units as the IDW
+ * distance. FULL PRECISION — never round this before using it; rounding is a
+ * display concern only.
+ */
+export function maxInfluenceDeg(diagonalDeg: number, mode: BlockHeatMode): number {
+  if (mode === "halo") return diagonalDeg * 0.22;
+  if (mode === "gradient") return diagonalDeg * 0.35;
+  return Infinity;
+}
+
+/**
+ * Interpolated EL and cell weight at one coordinate. This is the single
+ * source of truth used by every grid cell and by contract sampling — the
+ * fixture and the rendered surface can never diverge.
+ */
+export function sampleHeatAt(
+  lat: number,
+  lng: number,
+  pts: HeatPoint[],
+  maxInfluence: number,
+): { el: number | null; weight: number | null } {
+  let num = 0;
+  let den = 0;
+  let wNum = 0;
+  let nearest = Infinity;
+  let exact: { el: number; w: number } | null = null;
+  for (const p of pts) {
+    const dLat = lat - p.lat;
+    const dLng = (lng - p.lng) * Math.cos((lat * Math.PI) / 180);
+    const d2 = dLat * dLat + dLng * dLng;
+    nearest = Math.min(nearest, Math.sqrt(d2));
+    if (d2 < 1e-14) {
+      exact = { el: p.el, w: p.w };
+      break;
+    }
+    const wDist = 1 / Math.pow(Math.sqrt(d2), IDW_POWER);
+    const w = wDist * p.w;
+    num += p.el * w;
+    den += w;
+    wNum += p.w * wDist;
+  }
+  if (exact) return { el: exact.el, weight: exact.w };
+  if (nearest > maxInfluence) return { el: null, weight: null };
+  if (den > 0) {
+    // Fade with distance inside a sparse halo/gradient so edges soften.
+    const falloff = Number.isFinite(maxInfluence)
+      ? clamp(1 - nearest / maxInfluence, 0, 1)
+      : 1;
+    return { el: num / den, weight: clamp((wNum / (den || 1)) * falloff, 0, 1) };
+  }
+  return { el: null, weight: null };
+}
+
 /**
  * Interpolate one block, independently of every other block. Only this
  * block's own observations are ever passed in, so colour can never bleed
@@ -324,24 +410,13 @@ export function buildBlockHeat(input: BuildBlockHeatInput): BlockHeat {
   const latStep = (b.maxLat - b.minLat) / (resolution - 1);
   const lngStep = (b.maxLng - b.minLng) / (resolution - 1);
 
-  const pts = influencing.map((o) => ({
-    lat: o.lat,
-    lng: o.lng,
-    el: o.el,
-    w: recencyWeight(daysBetween(o.dateISO, atDateISO)),
-  }));
-
+  const pts = heatPoints(influencing, atDateISO);
 
   // Sparse data must not fabricate coverage: a single observation renders a
   // localised halo, two observations a localised gradient between them.
-  const diag = Math.sqrt(
-    Math.pow(b.maxLat - b.minLat, 2) + Math.pow((b.maxLng - b.minLng) * Math.cos((b.minLat * Math.PI) / 180), 2),
-  );
-  const maxInfluence =
-    mode === "halo" ? diag * 0.22 : mode === "gradient" ? diag * 0.35 : Infinity;
+  const maxInfluence = maxInfluenceDeg(polygonDiagonalDeg(b), mode);
 
   for (let i = 0; i < resolution; i++) {
-
     const lat = b.minLat + latStep * i;
     const rowVals: (number | null)[] = [];
     const rowW: (number | null)[] = [];
@@ -352,44 +427,9 @@ export function buildBlockHeat(input: BuildBlockHeatInput): BlockHeat {
         rowW.push(null);
         continue;
       }
-      let num = 0;
-      let den = 0;
-      let wNum = 0;
-      let nearest = Infinity;
-      let exact: { el: number; w: number } | null = null;
-      for (const p of pts) {
-        const dLat = lat - p.lat;
-        const dLng = (lng - p.lng) * Math.cos((lat * Math.PI) / 180);
-        const d2 = dLat * dLat + dLng * dLng;
-        nearest = Math.min(nearest, Math.sqrt(d2));
-        if (d2 < 1e-14) {
-          exact = { el: p.el, w: p.w };
-          break;
-        }
-        const wDist = 1 / Math.pow(Math.sqrt(d2), IDW_POWER);
-        const w = wDist * p.w;
-        num += p.el * w;
-        den += w;
-        wNum += p.w * wDist;
-      }
-      if (!exact && nearest > maxInfluence) {
-        rowVals.push(null);
-        rowW.push(null);
-      } else if (exact) {
-        rowVals.push(exact.el);
-        rowW.push(exact.w);
-      } else if (den > 0) {
-        rowVals.push(num / den);
-        // Fade with distance inside a sparse halo/gradient so edges soften.
-        const falloff = Number.isFinite(maxInfluence)
-          ? clamp(1 - nearest / maxInfluence, 0, 1)
-          : 1;
-        rowW.push(clamp((wNum / (den || 1)) * falloff, 0, 1));
-      } else {
-        rowVals.push(null);
-        rowW.push(null);
-      }
-
+      const s = sampleHeatAt(lat, lng, pts, maxInfluence);
+      rowVals.push(s.el);
+      rowW.push(s.weight);
     }
     grid.push(rowVals);
     weightGrid.push(rowW);
