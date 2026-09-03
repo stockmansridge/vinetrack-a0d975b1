@@ -366,14 +366,16 @@ function ProductRow({
 
       {(line.labelMinRate != null || line.labelMaxRate != null) && (
         <div className="text-xs text-muted-foreground">
-          Label rate:{" "}
+          {line.rateEntryMethod === "manual" ? "User-confirmed range: " : "Label rate: "}
           {formatLabelRate({
             min: line.labelMinRate ?? null,
             max: line.labelMaxRate ?? null,
             unit: line.labelRateUnit ?? null,
             basis: null,
           }) ?? "—"}
-          {!labelAuthoritative && intel ? " (foreign label — not authoritative here)" : ""}
+          {line.rateEntryMethod !== "manual" && !labelAuthoritative && intel
+            ? " (foreign label — not authoritative here)"
+            : ""}
         </div>
       )}
 

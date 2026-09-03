@@ -303,6 +303,13 @@ export interface SprayProductLine {
   labelMinRate?: number | null;
   labelMaxRate?: number | null;
   labelRateUnit?: string | null;
+  /**
+   * SQL 222 — provenance of the governing range/rate on this line.
+   * "manual" = a user-confirmed Chemical Store rate (hard gate, and displayed
+   * as a user-confirmed range, never as a label rate). Absent/"canonical" =
+   * label-derived guidance.
+   */
+  rateEntryMethod?: "canonical" | "manual" | null;
   /** Structured resistance groups carried for the future Resistance Check. */
   activityGroups: WriteActivityGroup[];
   /** Trust state travels with the line; it never blocks calculation. */
