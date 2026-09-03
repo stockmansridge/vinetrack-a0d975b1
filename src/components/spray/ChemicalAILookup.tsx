@@ -485,7 +485,7 @@ export function ChemicalAILookup({
           placeholder="Search a registered product name"
           aria-label="Search product"
           className="h-9 text-sm"
-          disabled={!countryCode}
+          disabled={!countryCode || phase === "enriching"}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
