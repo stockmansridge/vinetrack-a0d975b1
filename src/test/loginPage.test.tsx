@@ -28,7 +28,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
 describe("Login page simplified layout", () => {
   it("renders the VineTrack Portal heading with the updated account guidance", () => {
     render(<Login />, { wrapper });
-    expect(screen.getByText((content) => content.includes("VineTrack") && content.includes("Portal"))).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/VineTrack Portal/i);
     expect(
       screen.getByText(/Sign in with the same email address you use in the VineTrack iOS or Android app/i),
     ).toBeInTheDocument();
