@@ -894,22 +894,59 @@ export function ChemicalEditor({
 
   const lookupBlock = (
     <>
-      <ChemicalAILookup
-        initialName={form.name ?? ""}
-        country={currentCountry}
-        existingLibrary={existingLibrary
-          .filter((c) => !initial || c.id !== initial.id)
-          .map((c) => ({
-            id: c.id,
-            name: c.name,
-            active_ingredient: c.active_ingredient,
-            registration_number: (c as { registration_number?: string | null }).registration_number,
-          }))}
-        onApply={applySuggestion}
-        onSelectionChange={handleSelectionChange}
-        retryLabelRef={retryLabelRef}
+      {/* Add = identify/search. Edit never mounts the lookup: opening an
+          existing chemical performs no product search and no network call. */}
+      {!initial && (
+        <ChemicalAILookup
+          initialName={form.name ?? ""}
+          country={currentCountry}
+          existingLibrary={existingLibrary
+            .filter((c) => !initial || c.id !== initial.id)
+            .map((c) => ({
+              id: c.id,
+              name: c.name,
+              active_ingredient: c.active_ingredient,
+              registration_number: (c as { registration_number?: string | null }).registration_number,
+            }))}
+          onApply={applySuggestion}
+          onSelectionChange={handleSelectionChange}
+          retryLabelRef={retryLabelRef}
+        />
+      )}
+      {initial && (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-border/60 p-2 text-xs">
+          <span className="text-muted-foreground">
+            Editing the saved chemical. Product details are only re-checked when you ask.
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setEditorReverifyOpen(true)}
+          >
+            Check for updates
+          </Button>
+        </div>
+      )}
+      {initial && (
+        <ChemicalReverifyDialog
+          open={editorReverifyOpen}
+          onOpenChange={setEditorReverifyOpen}
+          draft={intel}
+          productName={form.name}
+          country={currentCountry}
+          onAccept={(next) => {
+            handleIntelChange(next);
+            setIntelBase(next);
+            setUpgraded(true);
+            toast({
+              title: "Re-verified details applied",
+              description: "Save the chemical to keep these changes.",
+            });
+          }}
+        />
+      )}
 
-      />
       {/* Jurisdiction suitability is computed, never stored. Chemistry is
           kept; only label authority changes. */}
       <JurisdictionNoticeBanner
