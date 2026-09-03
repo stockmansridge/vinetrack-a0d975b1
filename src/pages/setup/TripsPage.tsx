@@ -602,18 +602,26 @@ function TripSheet({
   const [editTitle, setEditTitle] = useState(trip?.trip_title ?? "");
   const [savingTitle, setSavingTitle] = useState(false);
   const savingTitleRef = useRef(false);
+  const savedTitleRef = useRef(trip?.trip_title ?? "");
 
   useEffect(() => {
-    setEditTitle(trip?.trip_title ?? "");
-  }, [trip?.id, trip?.trip_title]);
+    // Only reset when a different trip is opened. A query refresh for the same
+    // trip must not replace text the operator is currently editing.
+    const nextTitle = trip?.trip_title ?? "";
+    setEditTitle(nextTitle);
+    savedTitleRef.current = nextTitle;
+  }, [trip?.id]);
 
   const isCompletable = !!trip && !trip.end_time && (trip.is_active || trip.is_paused);
 
-  const handleSaveTitle = async () => {
+  const handleSaveTitle = async (nextTitle?: string) => {
     if (!trip || !canDeleteTrip || savingTitleRef.current) return;
+    const tripTitle = (nextTitle ?? editTitle).trim() || null;
+    const savedTitle = savedTitleRef.current.trim() || null;
+    if (tripTitle === savedTitle) return;
+
     savingTitleRef.current = true;
     setSavingTitle(true);
-    const tripTitle = editTitle.trim() || null;
     const syncVersion = (trip.sync_version ?? 0) + 1;
     try {
       await updateTripTitle({
@@ -622,6 +630,8 @@ function TripSheet({
         currentSyncVersion: trip.sync_version ?? null,
         userId: user?.id ?? null,
       });
+      savedTitleRef.current = tripTitle ?? "";
+      setEditTitle(tripTitle ?? "");
       onTitleSaved(trip.id, tripTitle, syncVersion);
       await queryClient.invalidateQueries({ queryKey: ["trips"] });
       toast({ title: "Trip name updated" });
@@ -911,11 +921,11 @@ function TripSheet({
                     <Input
                       value={editTitle}
                       onChange={(e) => setEditTitle(e.target.value)}
-                      onBlur={handleSaveTitle}
+                      onBlur={(e) => void handleSaveTitle(e.currentTarget.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
-                          void handleSaveTitle();
+                          void handleSaveTitle(e.currentTarget.value);
                         }
                       }}
                       disabled={savingTitle}
