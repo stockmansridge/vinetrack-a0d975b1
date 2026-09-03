@@ -12,3 +12,5 @@
 
 - [x] Fix work_task_types sort_order NOT NULL on create
 - [x] New Task Log drawer widened to 50% (removed max-width cap)
+- [x] Pins / Repairs / Observations page: default Vintage filter to "All vintages"
+- [x] Field Trips page: allow editing the Trip name

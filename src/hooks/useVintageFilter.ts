@@ -13,6 +13,11 @@ import {
 /** Sentinel used by the selector for "All vintages". */
 export const ALL_VINTAGES = null;
 
+export interface UseVintageFilterOptions {
+  /** When true the surface opens on "All vintages" instead of the current Vintage. */
+  defaultToAll?: boolean;
+}
+
 export interface VintageFilter {
   /** Selected Vintage, or null for "All vintages" (no date restriction). */
   vintage: number | null;
@@ -40,6 +45,7 @@ export interface VintageFilter {
  */
 export function useVintageFilter(
   sources: VintageSource | VintageSource[] = [],
+  filterOptions: UseVintageFilterOptions = {},
 ): VintageFilter {
   const { selectedVineyardId } = useVineyard();
   const { vintage: currentVintage, seasonStartMonth, seasonStartDay, isLoading } = useVintage();
@@ -82,8 +88,9 @@ export function useVintageFilter(
       return options.includes(selected) ? selected : null;
     }
     if (!options.length) return null;
+    if (filterOptions.defaultToAll) return null;
     return options.includes(currentVintage) ? currentVintage : null;
-  }, [selected, options, currentVintage]);
+  }, [selected, options, currentVintage, filterOptions.defaultToAll]);
 
   const scope = useMemo(
     () =>

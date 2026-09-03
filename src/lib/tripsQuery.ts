@@ -203,6 +203,38 @@ export async function setTripWorkTaskId(params: {
   if (error) throw error;
 }
 
+// ------------------- Update trip title -------------------
+
+export async function updateTripTitle(params: {
+  tripId: string;
+  tripTitle: string | null;
+  currentSyncVersion?: number | null;
+  userId?: string | null;
+}): Promise<void> {
+  const { tripId, tripTitle, currentSyncVersion, userId } = params;
+  const ts = tripsNowIso();
+  const { error } = await supabase
+    .from("trips")
+    .update({
+      trip_title: tripTitle,
+      updated_by: userId ?? null,
+      client_updated_at: ts,
+      sync_version: (currentSyncVersion ?? 0) + 1,
+    })
+    .eq("id", tripId)
+    .is("deleted_at", null);
+  if (error) throw error;
+}
+
+export function describeTripTitleError(err: unknown): string {
+  const e = err as { message?: string } | null;
+  const msg = e?.message ?? String(err ?? "");
+  if (/row-level security|permission denied|RLS|42501/i.test(msg)) {
+    return "You don't have permission to edit this trip. Only owners, managers, or supervisors can update trip details.";
+  }
+  return msg || "Something went wrong. Please try again.";
+}
+
 // ------------------- Complete trip -------------------
 //
 // Completing a paused/active trip clears the active/paused flags and stamps
