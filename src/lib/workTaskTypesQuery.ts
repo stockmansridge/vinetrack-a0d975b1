@@ -41,11 +41,26 @@ export interface CreateWorkTaskTypeInput {
 export async function createWorkTaskType(
   input: CreateWorkTaskTypeInput,
 ): Promise<WorkTaskType> {
+  // sort_order is NOT NULL on the shared schema: derive the next position
+  // when the caller does not supply one.
+  let sortOrder = input.sort_order ?? null;
+  if (sortOrder === null || sortOrder === undefined) {
+    const { data: existing } = await supabase
+      .from("work_task_types")
+      .select("sort_order")
+      .eq("vineyard_id", input.vineyard_id)
+      .is("deleted_at", null)
+      .order("sort_order", { ascending: false })
+      .limit(1);
+    const highest = (existing?.[0] as { sort_order?: number | null } | undefined)?.sort_order;
+    sortOrder = typeof highest === "number" ? highest + 1 : 0;
+  }
+
   const payload = {
     vineyard_id: input.vineyard_id,
     name: input.name,
     is_default: false,
-    sort_order: input.sort_order ?? null,
+    sort_order: sortOrder,
     created_by: input.user_id,
     updated_by: input.user_id,
     client_updated_at: nowIso(),
