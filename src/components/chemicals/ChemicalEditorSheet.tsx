@@ -1228,25 +1228,24 @@ export function ChemicalEditor({
             <div className="space-y-4">
               {structuredUses && (
                 <Section title="Default rate">
+                  {/* The recovery actions (retry / official label / change
+                      product) stay visible while the manual rate is typed —
+                      the operator needs the label open to confirm the rate. */}
+                  {showRateRecovery && (
+                    <MissingRateOptionsPanel
+                      labelUrl={labelLinks.regulatorLabelUrl ?? null}
+                      canRetry={!!retryLabelRef.current}
+                      manualOpen={manualRateActive}
+                      onRetry={() => retryLabelRef.current?.()}
+                      onManual={handleManualFromRecovery}
+                      onChangeProduct={() => handleSelectionChange("none")}
+                    />
+                  )}
                   {showRateRecovery && manualRateActive && (
                     <ManualRateEditor
                       draft={manualRate}
                       onChange={setManualRate}
                       onCancel={() => setManualRate(emptyManualRateDraft())}
-                    />
-                  )}
-                  {showRateRecovery && !manualRateActive && (
-                    <MissingRateOptionsPanel
-                      labelUrl={
-                        labelLinks.regulatorLabelUrl ??
-                        labelLinks.manufacturerLabelUrl ??
-                        form.label_url ??
-                        null
-                      }
-                      canRetry={!!retryLabelRef.current}
-                      onRetry={() => retryLabelRef.current?.()}
-                      onManual={handleManualFromRecovery}
-                      onChangeProduct={() => handleSelectionChange("none")}
                     />
                   )}
 
