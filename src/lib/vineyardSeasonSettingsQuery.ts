@@ -46,15 +46,29 @@ export function isValidSeason(month: number, day: number): boolean {
   return day <= maxDayForMonth(month);
 }
 
-/** Current vintage for a season start date, matching iOS/Android. */
+/**
+ * Season-year offset, matching the authoritative database rule
+ * (`resolve_vintage_year`, SQL 119) and the mobile shared VintageResolver:
+ *  * A 1 January season start means the Vintage IS the calendar year, so the
+ *    season that begins on 1 Jan <Y> is Vintage <Y> (offset 0).
+ *  * Any other season start rolls into the FOLLOWING calendar year, so the
+ *    season beginning in <Y> is Vintage <Y + 1> (offset 1).
+ * Never derived from hemisphere — only from season_start_month/day.
+ */
+function seasonYearOffset(month: number, day: number): number {
+  return month === 1 && day === 1 ? 0 : 1;
+}
+
+/** Current vintage for a season start date, matching iOS/Android and SQL 119. */
 export function currentVintageForSeason(
   month: number,
   day: number,
   now: Date = new Date(),
 ): number {
   const y = now.getFullYear();
+  const offset = seasonYearOffset(month, day);
   const start = new Date(y, month - 1, day);
-  return now >= start ? y + 1 : y;
+  return now >= start ? y + offset : y - 1 + offset;
 }
 
 /** Inclusive ISO date range covering the given vintage. */
@@ -63,8 +77,9 @@ export function seasonRangeForVintage(month: number, day: number, vintage: numbe
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
       d.getDate(),
     ).padStart(2, "0")}`;
-  const start = new Date(vintage - 1, month - 1, day);
-  const endExclusive = new Date(vintage, month - 1, day);
+  const startYear = vintage - seasonYearOffset(month, day);
+  const start = new Date(startYear, month - 1, day);
+  const endExclusive = new Date(startYear + 1, month - 1, day);
   const end = new Date(endExclusive.getTime() - 24 * 60 * 60 * 1000);
   return { startISO: iso(start), endISO: iso(end) };
 }

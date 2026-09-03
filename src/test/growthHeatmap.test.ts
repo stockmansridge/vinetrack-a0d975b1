@@ -130,13 +130,13 @@ describe("vintage and hemisphere handling", () => {
     expect(kept.map((o) => o.id)).toEqual(["in"]);
   });
 
-  it("handles a northern-hemisphere 1 January season", () => {
+  it("handles a northern-hemisphere 1 January season (SQL 119 calendar year)", () => {
     const { startISO, endISO } = seasonRangeForVintage(1, 1, 2027);
-    expect(startISO).toBe("2026-01-01");
-    expect(endISO).toBe("2026-12-31");
+    expect(startISO).toBe("2027-01-01");
+    expect(endISO).toBe("2027-12-31");
     const obs = toObservations([
-      rec({ id: "in", date: "2026-06-01" }),
-      rec({ id: "out", date: "2027-06-01" }),
+      rec({ id: "in", date: "2027-06-01" }),
+      rec({ id: "out", date: "2026-06-01" }),
     ]);
     expect(filterToVintage(obs, startISO, endISO).map((o) => o.id)).toEqual(["in"]);
   });
