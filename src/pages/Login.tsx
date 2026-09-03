@@ -1,7 +1,8 @@
 import { FormEvent, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { Mail, Lock } from "lucide-react";
+import { Mail, Lock, Wrench } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
+import { useMaintenance } from "@/lib/maintenanceMode";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import appIcon from "@/assets/vinetrack-app-icon.png";
@@ -13,12 +14,14 @@ import { AppleSignInButton } from "@/components/auth/AppleSignInButton";
 
 export default function Login() {
   const { session, loading } = useAuth();
+  const { data: maintenance } = useMaintenance();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
+  const maintenanceEnabled = maintenance?.is_enabled === true;
 
   if (loading) return <div className="p-8">Loading…</div>;
   if (session) return <Navigate to="/select-vineyard" replace />;
@@ -107,84 +110,105 @@ export default function Login() {
         </div>
 
 
-        {/* Form card */}
-        <form
-          onSubmit={onSubmit}
-          className="w-full bg-white/95 backdrop-blur-sm p-4 space-y-3"
-          style={{
-            borderRadius: 22,
-            boxShadow: "0 10px 18px rgba(0,0,0,0.20)",
-          }}
-        >
-          <FieldRow icon={<Mail className="h-4 w-4" style={{ color: "#055124" }} />}>
-            <input
-              type="email"
-              required
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="flex-1 bg-transparent outline-none text-[15px] placeholder:text-[#4D5C52]"
-              style={{ color: "#03331A" }}
-            />
-          </FieldRow>
-          <FieldRow icon={<Lock className="h-4 w-4" style={{ color: "#055124" }} />}>
-            <input
-              type={showPassword ? "text" : "password"}
-              required
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="flex-1 bg-transparent outline-none text-[15px] placeholder:text-[#4D5C52]"
-              style={{ color: "#03331A" }}
-              autoComplete="current-password"
-            />
-            <PasswordToggleButton visible={showPassword} onToggle={() => setShowPassword((v) => !v)} />
-          </FieldRow>
-
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full h-12 font-bold text-white disabled:opacity-60 transition-opacity"
+        {maintenanceEnabled ? (
+          <div
+            role="alert"
+            className="w-full bg-white/95 backdrop-blur-sm p-6 text-center space-y-4"
             style={{
-              background: "#007AFF",
-              borderRadius: 15,
-              boxShadow: "0 8px 14px rgba(0,0,0,0.22)",
+              borderRadius: 22,
+              boxShadow: "0 10px 18px rgba(0,0,0,0.20)",
             }}
           >
-            {submitting ? "Signing in…" : "Sign In"}
-          </button>
-
-          <div className="flex items-center gap-3 pt-1">
-            <div className="h-px flex-1 bg-black/10" />
-            <span className="text-[11px] font-medium uppercase tracking-wide text-[#4D5C52]">or</span>
-            <div className="h-px flex-1 bg-black/10" />
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-800">
+              <Wrench className="h-6 w-6" aria-hidden="true" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-bold text-foreground">VineTrack is temporarily unavailable</h2>
+              <p className="text-sm leading-relaxed text-muted-foreground">{maintenance.message}</p>
+            </div>
           </div>
+        ) : (
+          <>
+            {/* Form card */}
+            <form
+              onSubmit={onSubmit}
+              className="w-full bg-white/95 backdrop-blur-sm p-4 space-y-3"
+              style={{
+                borderRadius: 22,
+                boxShadow: "0 10px 18px rgba(0,0,0,0.20)",
+              }}
+            >
+              <FieldRow icon={<Mail className="h-4 w-4" style={{ color: "#055124" }} />}>
+                <input
+                  type="email"
+                  required
+                  placeholder="Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="flex-1 bg-transparent outline-none text-[15px] placeholder:text-[#4D5C52]"
+                  style={{ color: "#03331A" }}
+                />
+              </FieldRow>
+              <FieldRow icon={<Lock className="h-4 w-4" style={{ color: "#055124" }} />}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="flex-1 bg-transparent outline-none text-[15px] placeholder:text-[#4D5C52]"
+                  style={{ color: "#03331A" }}
+                  autoComplete="current-password"
+                />
+                <PasswordToggleButton visible={showPassword} onToggle={() => setShowPassword((v) => !v)} />
+              </FieldRow>
 
-          <GoogleSignInButton redirectPath="/auth/callback?next=/select-vineyard" />
-          <AppleSignInButton redirectPath="/auth/callback?next=/select-vineyard" />
-        </form>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full h-12 font-bold text-white disabled:opacity-60 transition-opacity"
+                style={{
+                  background: "#007AFF",
+                  borderRadius: 15,
+                  boxShadow: "0 8px 14px rgba(0,0,0,0.22)",
+                }}
+              >
+                {submitting ? "Signing in…" : "Sign In"}
+              </button>
 
-        <div className="flex flex-col items-center gap-2">
-          <button
-            type="button"
-            onClick={onReset}
-            disabled={sendingReset}
-            className="text-sm font-medium hover:underline disabled:opacity-60"
-            style={{ color: "#F0EBB8" }}
-          >
-            {sendingReset ? "Sending reset email…" : "Forgot password?"}
-          </button>
-          <a
-            href="/signup"
-            className="text-sm font-semibold hover:underline"
-            style={{ color: "#FFFFFF" }}
-          >
-            Don't have an account? Create one
-          </a>
-          <p className="text-white/80 text-xs text-center max-w-[16rem] leading-snug">
-            Invited to a vineyard? Create an account first using the same email address your invite was sent to.
-          </p>
-        </div>
+              <div className="flex items-center gap-3 pt-1">
+                <div className="h-px flex-1 bg-black/10" />
+                <span className="text-[11px] font-medium uppercase tracking-wide text-[#4D5C52]">or</span>
+                <div className="h-px flex-1 bg-black/10" />
+              </div>
+
+              <GoogleSignInButton redirectPath="/auth/callback?next=/select-vineyard" />
+              <AppleSignInButton redirectPath="/auth/callback?next=/select-vineyard" />
+            </form>
+
+            <div className="flex flex-col items-center gap-2">
+              <button
+                type="button"
+                onClick={onReset}
+                disabled={sendingReset}
+                className="text-sm font-medium hover:underline disabled:opacity-60"
+                style={{ color: "#F0EBB8" }}
+              >
+                {sendingReset ? "Sending reset email…" : "Forgot password?"}
+              </button>
+              <a
+                href="/signup"
+                className="text-sm font-semibold hover:underline"
+                style={{ color: "#FFFFFF" }}
+              >
+                Don't have an account? Create one
+              </a>
+              <p className="text-white/80 text-xs text-center max-w-[16rem] leading-snug">
+                Invited to a vineyard? Create an account first using the same email address your invite was sent to.
+              </p>
+            </div>
+          </>
+        )}
       </div>
     </div>
     </>
