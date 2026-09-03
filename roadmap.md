@@ -16,3 +16,5 @@
 - [x] Field Trips page: allow editing the Trip name
 
 - [ ] Field Trips: update the detail header name immediately while editing Title / details
+
+- [ ] Field Trips: fix repeated Trip name edits reporting saved without persisting the new value
