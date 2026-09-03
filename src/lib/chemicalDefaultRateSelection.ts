@@ -95,6 +95,7 @@ export function selectionFromCanonicalOption(
     min_value: option.min_value,
     max_value: option.max_value,
     source: opts.source,
+    entry_method: "canonical",
     selected_at: opts.selectedAt,
     label_version: opts.labelVersion,
   };
@@ -229,6 +230,7 @@ export function narrowedSelectionFromOption(
     min_value: null,
     max_value: null,
     source: "operator",
+    entry_method: "canonical",
     selected_at: meta?.selected_at ?? null,
     label_version: meta?.label_version ?? null,
   };

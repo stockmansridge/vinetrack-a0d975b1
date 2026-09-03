@@ -69,7 +69,10 @@ export function applyOperationType(app: SprayApplication, op: OperationType | nu
 
 /* ----------------------------------------------------------- product lines */
 
-import { confirmedSprayPrefill } from "@/lib/chemicalDefaultRateHandoff";
+import {
+  confirmedSprayPrefill,
+  confirmedSprayRangeGuidance,
+} from "@/lib/chemicalDefaultRateHandoff";
 
 export function productLineFromChemical(args: {
   savedChemicalId: string | null;
@@ -91,15 +94,19 @@ export function productLineFromChemical(args: {
   // explicit scalar amount may prefill, paired with the CONFIRMED label-rate
   // unit. Ranges, label rates, rate_per_ha and inventory units never prefill.
   const prefill = confirmedSprayPrefill(intel?.defaultRates ?? null);
+  // A confirmed RANGE (canonical or user-entered) never prefills a dose: it is
+  // shown as guidance and the operator must choose the dose inside it. The
+  // saved Chemical Store range is never rewritten by that choice.
+  const range = prefill ? null : confirmedSprayRangeGuidance(intel?.defaultRates ?? null);
   return {
     savedChemicalId: args.savedChemicalId,
     productName: args.productName,
     rate: prefill ? prefill.rate : null,
-    unit: prefill ? prefill.unit : args.unit,
-    rateBasis: prefill ? prefill.rateBasis : null,
-    labelMinRate: null,
-    labelMaxRate: null,
-    labelRateUnit: null,
+    unit: prefill ? prefill.unit : range ? range.unit : args.unit,
+    rateBasis: prefill ? prefill.rateBasis : range ? range.rateBasis : null,
+    labelMinRate: range ? range.min : null,
+    labelMaxRate: range ? range.max : null,
+    labelRateUnit: range ? range.unit : null,
     activityGroups,
     verificationStatus: (intel?.verification.status ?? "unverified") as WriteVerificationStatus,
     intelligence: intel,

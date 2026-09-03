@@ -86,6 +86,7 @@ describe("D4B-P2B — canonical option -> persisted selection", () => {
       min_value: null,
       max_value: null,
       source: "operator",
+      entry_method: "canonical",
       selected_at: AT,
       label_version: "2024-05",
     });
@@ -285,6 +286,7 @@ describe("D4B-P2B — save semantics", () => {
         min_value: null,
         max_value: null,
         source: "operator",
+        entry_method: "canonical",
         selected_at: AT,
         label_version: null,
       },
@@ -434,6 +436,7 @@ describe("D4B-P2B — VICOL APVMA 33182 acceptance", () => {
       min_value: null,
       max_value: null,
       source: "operator",
+      entry_method: "canonical",
       selected_at: AT,
       label_version: null,
     });

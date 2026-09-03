@@ -20,6 +20,7 @@ import {
   type CanonicalDefaultRateOption,
   type CanonicalDefaultRateOptions,
   type CanonicalRateBasis,
+  type PersistedDefaultRateSelection,
   type PersistedDefaultRates,
 } from "./chemicalDefaultRatesContract";
 import {
@@ -218,6 +219,24 @@ export function clearDefaultRate(
   return {
     ...state,
     defaultRates: clearBasisSelection(state.defaultRates, basis),
+    dirty: true,
+    productChangedNotice: false,
+  };
+}
+
+/**
+ * SQL 222 — a user-entered, user-confirmed manual rate becomes the operational
+ * default for its basis. It is stored with `entry_method: "manual"`, an empty
+ * `option_key` and empty `rate_ids`; the other basis slot is preserved and no
+ * canonical identity is minted.
+ */
+export function applyManualRateSelection(
+  state: DefaultRateLifecycleState,
+  selection: PersistedDefaultRateSelection,
+): DefaultRateLifecycleState {
+  return {
+    ...state,
+    defaultRates: withBasisSelection(state.defaultRates, selection.basis, selection),
     dirty: true,
     productChangedNotice: false,
   };
