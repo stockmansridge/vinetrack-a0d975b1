@@ -170,12 +170,16 @@ export function lookupSaveBlocked(args: {
   uses: WriteRegisteredUse[];
   defaults: PersistedDefaultRates | null;
   staleDefaultRate: boolean;
+  /**
+   * Recovery path only: the operator entered the missing rate by hand AND
+   * ticked the label-check confirmation. It never makes the rate look
+   * automatically label-verified — provenance stays user-entered.
+   */
+  manualRateConfirmed?: boolean;
 }): boolean {
   const lookup = args.selectionMode === "registered" || args.selectionMode === "master";
   if (args.isExistingRecord || !lookup) return false;
-  return !(
-    hasGrapevineRegistration(args.uses) &&
-    hasConfirmedRate(args.defaults) &&
-    !args.staleDefaultRate
-  );
+  if (!hasGrapevineRegistration(args.uses)) return true;
+  if (args.manualRateConfirmed) return false;
+  return !(hasConfirmedRate(args.defaults) && !args.staleDefaultRate);
 }

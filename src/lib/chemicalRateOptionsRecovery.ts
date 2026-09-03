@@ -15,11 +15,11 @@ export const MISSING_RATE_OPTIONS_MESSAGE =
 
 export const RETRY_LABEL_DETAILS_LABEL = "Retry label details";
 export const OPEN_OFFICIAL_LABEL_LABEL = "Open official label";
-export const ENTER_MANUALLY_LABEL = "Enter manually";
+export const ENTER_MANUALLY_LABEL = "Enter rate manually";
 export const CHANGE_PRODUCT_LABEL = "Change product";
 
 export const MANUAL_ENTRY_UNVERIFIED_MESSAGE =
-  "Entering this chemical manually saves it as an unverified manual record, not a label-checked product.";
+  "The registered product details stay as resolved. Only the rate is user-entered, and it is saved as user-confirmed rather than label-verified.";
 
 /** True when the backend supplied at least one canonical option on any basis. */
 export function hasUsableRateOptions(
