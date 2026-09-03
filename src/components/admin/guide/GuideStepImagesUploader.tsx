@@ -222,8 +222,9 @@ export function GuideStepImagesUploader({
           {images.length > 0 ? "Add image" : "Upload image"}
         </Button>
         <span className="text-[11px] text-muted-foreground">
-          {images.length}/{MAX_STEP_IMAGES} images
+          {images.length === 0 && fallbackUrl ? 1 : images.length}/{MAX_STEP_IMAGES} images
         </span>
+
       </div>
       <p className="text-[11px] text-muted-foreground">
         JPEG, PNG or WebP, up to 10 MB each. Up to {MAX_STEP_IMAGES} per step. Screenshots are shown
