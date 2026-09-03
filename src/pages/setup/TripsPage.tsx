@@ -589,8 +589,37 @@ function TripSheet({
   const [deleting, setDeleting] = useState(false);
   const [confirmComplete, setConfirmComplete] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [editTitle, setEditTitle] = useState(trip?.trip_title ?? "");
+  const [savingTitle, setSavingTitle] = useState(false);
+
+  useEffect(() => {
+    setEditTitle(trip?.trip_title ?? "");
+  }, [trip?.id, trip?.trip_title]);
 
   const isCompletable = !!trip && !trip.end_time && (trip.is_active || trip.is_paused);
+
+  const handleSaveTitle = async () => {
+    if (!trip || !canDeleteTrip) return;
+    setSavingTitle(true);
+    try {
+      await updateTripTitle({
+        tripId: trip.id,
+        tripTitle: editTitle.trim() || null,
+        currentSyncVersion: (trip as any).sync_version ?? null,
+        userId: user?.id ?? null,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["trips"] });
+      toast({ title: "Trip name updated" });
+    } catch (err) {
+      toast({
+        title: "Could not update trip name",
+        description: describeTripTitleError(err),
+        variant: "destructive",
+      });
+    } finally {
+      setSavingTitle(false);
+    }
+  };
 
   const handleCompleteTrip = async () => {
     if (!trip) return;
