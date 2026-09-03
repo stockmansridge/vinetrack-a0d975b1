@@ -624,10 +624,10 @@ export function ChemicalEditor({
         ...p,
         name: s.master!.registered_product_name?.trim() || s.name || p.name || "",
         manufacturer: s.master!.registrant ?? p.manufacturer ?? "",
-        label_url:
-          s.master!.label_reference && /^https?:\/\//i.test(s.master!.label_reference)
-            ? s.master!.label_reference
-            : (p.label_url ?? ""),
+        // Master supplies `label_reference` (registration evidence) only. It is
+        // never promoted to label_url — the regulator label stays unresolved
+        // until an authoritative lookup returns a real eLabel document.
+        label_url: p.label_url ?? "",
       }));
       return;
     }
