@@ -25,7 +25,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { GuideStepImagesUploader } from "@/components/admin/guide/GuideStepImagesUploader";
-import { GuideImageKeyEditor } from "@/components/admin/guide/GuideImageSlotEditor";
 import {
   GUIDE_PLATFORM_LABELS,
   stepImages,
@@ -175,10 +174,7 @@ export function GuideStepEditor({
       </div>
 
       {open && (
-        <div className={cn(
-            "mt-3 grid gap-4 border-t border-border pt-3",
-            step.imageKey ? "grid-cols-1" : "lg:grid-cols-[minmax(0,1fr)_300px]",
-          )}>
+        <div className="mt-3 grid gap-4 border-t border-border pt-3 lg:grid-cols-[minmax(0,1fr)_300px]">
           <div className="space-y-3">
             <div className="space-y-1.5">
               <Label htmlFor={`heading-${step.id}`}>Step heading</Label>
@@ -334,25 +330,16 @@ export function GuideStepEditor({
           </div>
 
           <div>
-            <Label className="mb-1.5 block">
-              {step.imageKey ? "Step screenshots (guide image)" : "Step screenshots"}
-            </Label>
-            {step.imageKey ? (
-              // This step uses an existing Guide Image key, so it is managed
-              // through the same slot the public guide already resolves —
-              // uploads here replace that exact image, not a copy.
-              <GuideImageKeyEditor imageKey={step.imageKey} />
-            ) : (
-              <GuideStepImagesUploader
-                sectionKey={sectionKey}
-                stepId={step.id}
-                images={stepImages(step)}
-                fallbackUrl={fallbackImageUrl}
-                onChange={(next) =>
-                  set({ images: next.length > 0 ? next : undefined, image: undefined })
-                }
-              />
-            )}
+            <Label className="mb-1.5 block">Step screenshots</Label>
+            <GuideStepImagesUploader
+              sectionKey={sectionKey}
+              stepId={step.id}
+              images={stepImages(step)}
+              fallbackUrl={fallbackImageUrl}
+              onChange={(next) =>
+                set({ images: next.length > 0 ? next : undefined, image: undefined })
+              }
+            />
           </div>
 
 
