@@ -140,6 +140,7 @@ import {
   MASTER_UPDATE_MESSAGE,
 } from "@/lib/masterChemicals";
 import { ChemicalIntelligenceEditor } from "@/components/chemicals/ChemicalIntelligenceEditor";
+import { ChemicalReverifyDialog } from "@/components/chemicals/ChemicalReverifyDialog";
 import {
   type ChemicalIntelligenceDraft,
   activityGroupReferenceSource,
@@ -242,6 +243,8 @@ export function ChemicalEditor({
    * existing saved chemical always starts unlocked.
    */
   const [selectionMode, setSelectionMode] = useState<ChemicalSelectionMode>("none");
+  // Explicit, operator-initiated re-verification of an existing chemical.
+  const [editorReverifyOpen, setEditorReverifyOpen] = useState(false);
   const [existingCost, setExistingCost] = useState<number | null>(null);
   const [currency, setCurrency] = useState("AUD");
   const [whp, setWhp] = useState("");
