@@ -6,6 +6,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
