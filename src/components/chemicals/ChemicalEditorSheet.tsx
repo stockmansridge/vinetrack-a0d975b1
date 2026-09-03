@@ -4,7 +4,7 @@
 // match, verification, Chemical Intelligence) can be reused inside nested
 // contexts such as the Spray Program Step wizard. There is deliberately no
 // simplified variant: this is the one Add New Chemical experience.
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   hasUsableRateOptions,
   showMissingRateOptionsRecovery,
@@ -313,8 +313,9 @@ export function ChemicalEditor({
   // Cost we'll actually save: prefer freshly computed, fall back to existing.
   const effectiveCost = computedCost ?? existingCost;
 
-  // Reset when opening
-  useMemo(() => {
+  // Reset when opening. This performs setState, so it MUST be an effect —
+  // never a useMemo side effect.
+  useEffect(() => {
     if (open) {
       if (initial) {
         // Category authority is the raw shared key; a legacy row falls back to
@@ -851,8 +852,13 @@ export function ChemicalEditor({
    * candidate selection and clears the previous authoritative identity so a
    * product A result can never bleed into a product B review.
    */
-  const editorUnlocked = selectionMode !== "none";
+  // Editing an existing saved chemical is ALWAYS unlocked: the search workflow
+  // belongs to Add only and can never re-lock a stored record.
+  const editorUnlocked = !!initial || selectionMode !== "none";
   const handleSelectionChange = (mode: ChemicalSelectionMode) => {
+    // An existing record's identity is only changed by the explicit re-verify
+    // action, never by a lookup child's initial state broadcast.
+    if (initial) return;
     setSelectionMode((prev) => {
       if (prev === mode) return prev;
       if (mode === "none" && !initial) {
