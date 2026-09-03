@@ -45,6 +45,7 @@ export interface VintageFilter {
  */
 export function useVintageFilter(
   sources: VintageSource | VintageSource[] = [],
+  options: UseVintageFilterOptions = {},
 ): VintageFilter {
   const { selectedVineyardId } = useVineyard();
   const { vintage: currentVintage, seasonStartMonth, seasonStartDay, isLoading } = useVintage();
