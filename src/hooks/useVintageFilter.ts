@@ -13,6 +13,11 @@ import {
 /** Sentinel used by the selector for "All vintages". */
 export const ALL_VINTAGES = null;
 
+export interface UseVintageFilterOptions {
+  /** When true the surface opens on "All vintages" instead of the current Vintage. */
+  defaultToAll?: boolean;
+}
+
 export interface VintageFilter {
   /** Selected Vintage, or null for "All vintages" (no date restriction). */
   vintage: number | null;
