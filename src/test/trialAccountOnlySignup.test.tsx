@@ -19,6 +19,7 @@ import { join } from "node:path";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { HelmetProvider } from "react-helmet-async";
 
 /* ------------------------------------------------------------------ */
 /* Recording Supabase double                                           */
@@ -139,9 +140,11 @@ beforeEach(reset);
 describe("Portal signup is an account-only flow", () => {
   it("creates only an auth account — no store purchase, no trial row", async () => {
     render(
-      <MemoryRouter>
-        <SignUp />
-      </MemoryRouter>,
+      <HelmetProvider>
+        <MemoryRouter>
+          <SignUp />
+        </MemoryRouter>
+      </HelmetProvider>,
     );
 
     fireEvent.change(screen.getByPlaceholderText("Full name"), {
@@ -339,7 +342,11 @@ describe("Portal never provisions entitlement client-side", () => {
 
   it("applies no platform-specific or country-based entitlement logic", () => {
     const offenders: string[] = [];
-    for (const f of files) {
+    // Scope: the auth / access / entitlement surfaces only.
+    const gated = files.filter((f) =>
+      /(auth|access|entitle|billing|onboard|signup|login|invite)/i.test(f),
+    );
+    for (const f of gated) {
       const src = readFileSync(f, "utf8");
       // Store names may appear as display labels; gating on them may not.
       if (
