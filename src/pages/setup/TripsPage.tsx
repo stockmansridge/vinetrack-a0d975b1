@@ -888,7 +888,27 @@ function TripSheet({
             </Section>
             <Section title="Job record">
               <Field label="Trip type / function" value={fmt(tripFunctionLabel(trip.trip_function))} />
-              <Field label="Title / details" value={fmt(trip.trip_title)} />
+              {canDeleteTrip ? (
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                  <Label className="text-muted-foreground pt-2">Title / details</Label>
+                  <div className="flex-1 flex items-center gap-2">
+                    <Input
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      onBlur={handleSaveTitle}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSaveTitle();
+                      }}
+                      disabled={savingTitle}
+                      placeholder="Trip name"
+                      className="h-8 text-right"
+                    />
+                    {savingTitle && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                  </div>
+                </div>
+              ) : (
+                <Field label="Title / details" value={fmt(trip.trip_title)} />
+              )}
               <Field label={formatters.blockLabel} value={fmt(padName)} />
               <Field label="Pattern" value={trip.tracking_pattern ? formatTripPatternLabel(trip.tracking_pattern) : "—"} />
               <Field label="Person" value={fmt(trip.person_name)} />
