@@ -84,7 +84,7 @@ describe("rate-gate safeguard actions", () => {
     expect(screen.getByText(MISSING_RATE_OPTIONS_MESSAGE)).toBeTruthy();
     expect(screen.getByText("Retry label details")).toBeTruthy();
     expect(screen.getByText("Open official label")).toBeTruthy();
-    expect(screen.getByText("Enter manually")).toBeTruthy();
+    expect(screen.getByText("Enter rate manually")).toBeTruthy();
     expect(screen.getByText("Change product")).toBeTruthy();
   });
 
@@ -109,7 +109,7 @@ describe("rate-gate safeguard actions", () => {
   it("explains manual entry becomes an unverified record", () => {
     const p = setup();
     expect(screen.getByText(/unverified manual record/i)).toBeTruthy();
-    fireEvent.click(screen.getByText("Enter manually"));
+    fireEvent.click(screen.getByText("Enter rate manually"));
     expect(p.onManual).toHaveBeenCalledTimes(1);
   });
 
