@@ -514,8 +514,8 @@ export function ChemicalAILookup({
       {/* Exactly ONE enrichment message. No second progress control. */}
       {phase === "enriching" && (
         <div className="space-y-1" role="status" aria-live="polite">
-          <p className="flex items-center gap-1.5 text-xs font-semibold text-primary">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          <p className="flex items-center gap-2 text-sm font-bold tracking-tight text-primary">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
             Reading the official product label…
           </p>
           <p className="text-[11px] text-muted-foreground">{LOOKUP_DURATION_NOTICE}</p>

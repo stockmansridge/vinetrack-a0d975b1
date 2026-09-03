@@ -14,12 +14,15 @@ import {
 export function MissingRateOptionsPanel({
   labelUrl,
   canRetry,
+  manualOpen = false,
   onRetry,
   onManual,
   onChangeProduct,
 }: {
   labelUrl?: string | null;
   canRetry: boolean;
+  /** When true the manual rate editor is already expanded below this panel. */
+  manualOpen?: boolean;
   onRetry: () => void;
   onManual: () => void;
   onChangeProduct: () => void;
@@ -55,9 +58,11 @@ export function MissingRateOptionsPanel({
             <span>{OPEN_OFFICIAL_LABEL_LABEL}</span>
           )}
         </Button>
-        <Button type="button" size="sm" variant="outline" onClick={onManual}>
-          {ENTER_MANUALLY_LABEL}
-        </Button>
+        {!manualOpen && (
+          <Button type="button" size="sm" variant="outline" onClick={onManual}>
+            {ENTER_MANUALLY_LABEL}
+          </Button>
+        )}
         <Button type="button" size="sm" variant="ghost" onClick={onChangeProduct}>
           {CHANGE_PRODUCT_LABEL}
         </Button>

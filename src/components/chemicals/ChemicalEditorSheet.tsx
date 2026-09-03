@@ -581,11 +581,10 @@ export function ChemicalEditor({
         // rate value. The unit here is the INVENTORY unit implied by the
         // authoritative physical form only — never by a rate unit.
         unit: inventory ? composeUnit(inventory, inferRateBasis(p.unit)) : "",
-        label_url:
-          r.fields.regulatorLabelUrl ??
-          (r.fields.labelReference && /^https?:\/\//i.test(r.fields.labelReference)
-            ? r.fields.labelReference
-            : (p.label_url ?? "")),
+        // ONLY the resolved regulator eLabel document may populate label_url.
+        // A `label_reference` is registration evidence, never a product label,
+        // and is never promoted here (it surfaces as the registration source).
+        label_url: r.fields.regulatorLabelUrl ?? p.label_url ?? "",
         // The manufacturer's own product page — never the regulator URL.
         product_url: r.fields.manufacturerProductUrl ?? p.product_url ?? "",
       }));
@@ -625,10 +624,10 @@ export function ChemicalEditor({
         ...p,
         name: s.master!.registered_product_name?.trim() || s.name || p.name || "",
         manufacturer: s.master!.registrant ?? p.manufacturer ?? "",
-        label_url:
-          s.master!.label_reference && /^https?:\/\//i.test(s.master!.label_reference)
-            ? s.master!.label_reference
-            : (p.label_url ?? ""),
+        // Master supplies `label_reference` (registration evidence) only. It is
+        // never promoted to label_url — the regulator label stays unresolved
+        // until an authoritative lookup returns a real eLabel document.
+        label_url: p.label_url ?? "",
       }));
       return;
     }
@@ -1228,25 +1227,24 @@ export function ChemicalEditor({
             <div className="space-y-4">
               {structuredUses && (
                 <Section title="Default rate">
+                  {/* The recovery actions (retry / official label / change
+                      product) stay visible while the manual rate is typed —
+                      the operator needs the label open to confirm the rate. */}
+                  {showRateRecovery && (
+                    <MissingRateOptionsPanel
+                      labelUrl={labelLinks.regulatorLabelUrl ?? null}
+                      canRetry={!!retryLabelRef.current}
+                      manualOpen={manualRateActive}
+                      onRetry={() => retryLabelRef.current?.()}
+                      onManual={handleManualFromRecovery}
+                      onChangeProduct={() => handleSelectionChange("none")}
+                    />
+                  )}
                   {showRateRecovery && manualRateActive && (
                     <ManualRateEditor
                       draft={manualRate}
                       onChange={setManualRate}
                       onCancel={() => setManualRate(emptyManualRateDraft())}
-                    />
-                  )}
-                  {showRateRecovery && !manualRateActive && (
-                    <MissingRateOptionsPanel
-                      labelUrl={
-                        labelLinks.regulatorLabelUrl ??
-                        labelLinks.manufacturerLabelUrl ??
-                        form.label_url ??
-                        null
-                      }
-                      canRetry={!!retryLabelRef.current}
-                      onRetry={() => retryLabelRef.current?.()}
-                      onManual={handleManualFromRecovery}
-                      onChangeProduct={() => handleSelectionChange("none")}
                     />
                   )}
 
