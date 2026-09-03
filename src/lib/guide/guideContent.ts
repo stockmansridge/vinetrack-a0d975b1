@@ -206,21 +206,36 @@ export function newGuideStep(sectionKey: string): GuideContentStep {
   };
 }
 
+function sanitiseImage(raw: unknown): GuideStepImage | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.path !== "string" || !r.path) return undefined;
+  return {
+    path: r.path,
+    updated_at: typeof r.updated_at === "string" ? r.updated_at : undefined,
+  };
+}
+
+/**
+ * Every uploaded screenshot for a row, newest model first and capped at
+ * MAX_STEP_IMAGES. Rows saved before multi-image support fall back to the
+ * single legacy `image`.
+ */
+export function stepImages(step: GuideContentStep): GuideStepImage[] {
+  const many = (step.images ?? []).filter((i) => i && i.path);
+  if (many.length > 0) return many.slice(0, MAX_STEP_IMAGES);
+  return step.image ? [step.image] : [];
+}
+
 function sanitiseStep(raw: unknown, index: number, sectionKey: string): GuideContentStep | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   const heading = typeof r.heading === "string" ? r.heading : "";
   const body = typeof r.body === "string" ? r.body : "";
-  const image =
-    r.image && typeof r.image === "object" && typeof (r.image as any).path === "string"
-      ? {
-          path: (r.image as any).path as string,
-          updated_at:
-            typeof (r.image as any).updated_at === "string"
-              ? ((r.image as any).updated_at as string)
-              : undefined,
-        }
-      : undefined;
+  const image = sanitiseImage(r.image);
+  const images = Array.isArray(r.images)
+    ? (r.images.map(sanitiseImage).filter(Boolean) as GuideStepImage[]).slice(0, MAX_STEP_IMAGES)
+    : undefined;
   return {
     id: typeof r.id === "string" && r.id ? r.id : `${sectionKey}.${index + 1}`,
     heading,
@@ -231,6 +246,7 @@ function sanitiseStep(raw: unknown, index: number, sectionKey: string): GuideCon
       : undefined,
     imageKey: typeof r.imageKey === "string" ? (r.imageKey as GuideImageKey) : undefined,
     image,
+    images: images && images.length > 0 ? images : undefined,
     imagePosition:
       r.imagePosition === "left" || r.imagePosition === "right"
         ? r.imagePosition
@@ -238,6 +254,7 @@ function sanitiseStep(raw: unknown, index: number, sectionKey: string): GuideCon
     enabled: r.enabled !== false,
   };
 }
+
 
 /** Parse the stored jsonb value, merged over built-in defaults. */
 export function parseGuideContent(value: unknown): GuideContentMap {
