@@ -114,7 +114,10 @@ export default function PinsPage() {
 
   const paddockIds = useMemo(() => paddocks.map((p) => p.id), [paddocks]);
 
-  const vintageFilter = useVintageFilter({ table: "pins", dateColumn: "created_at" });
+  const vintageFilter = useVintageFilter(
+    { table: "pins", dateColumn: "created_at" },
+    { defaultToAll: true },
+  );
   const vintageScopeValue = vintageFilter.scope;
 
   const { data: pinsResult, isLoading, error } = useQuery({
