@@ -32,7 +32,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { fetchTripsForVineyard, softDeleteTrip, describeTripDeleteError, completeTrip, describeTripCompleteError, type Trip } from "@/lib/tripsQuery";
+import { fetchTripsForVineyard, softDeleteTrip, describeTripDeleteError, completeTrip, describeTripCompleteError, updateTripTitle, describeTripTitleError, type Trip } from "@/lib/tripsQuery";
 import {
   AlertDialog,
   AlertDialogAction,
