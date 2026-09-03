@@ -485,7 +485,7 @@ export function ChemicalAILookup({
           placeholder="Search a registered product name"
           aria-label="Search product"
           className="h-9 text-sm"
-          disabled={!countryCode}
+          disabled={!countryCode || phase === "enriching"}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
@@ -513,8 +513,11 @@ export function ChemicalAILookup({
       )}
       {/* Exactly ONE enrichment message. No second progress control. */}
       {phase === "enriching" && (
-        <div className="space-y-1" role="status">
-          <p className="text-xs font-medium">Reading the official product label</p>
+        <div className="space-y-1" role="status" aria-live="polite">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            Reading the official product label…
+          </p>
           <p className="text-[11px] text-muted-foreground">{LOOKUP_DURATION_NOTICE}</p>
         </div>
       )}

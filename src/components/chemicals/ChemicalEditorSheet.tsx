@@ -5,8 +5,18 @@
 // contexts such as the Spray Program Step wizard. There is deliberately no
 // simplified variant: this is the one Add New Chemical experience.
 import React, { useMemo, useRef, useState } from "react";
-import { showMissingRateOptionsRecovery } from "@/lib/chemicalRateOptionsRecovery";
+import {
+  hasUsableRateOptions,
+  showMissingRateOptionsRecovery,
+} from "@/lib/chemicalRateOptionsRecovery";
 import { MissingRateOptionsPanel } from "@/components/chemicals/MissingRateOptionsPanel";
+import { ManualRateEditor } from "@/components/chemicals/ManualRateEditor";
+import {
+  emptyManualRateDraft,
+  manualRateRegisteredUse,
+  manualRateSatisfiesGate,
+  type ManualRateDraft,
+} from "@/lib/chemicalManualRate";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
 import { Card } from "@/components/ui/card";
@@ -253,6 +263,9 @@ export function ChemicalEditor({
   // Enrichment-only retry handle published by the lookup component. Reusing the
   // already-selected registration — never a new search.
   const retryLabelRef = useRef<(() => void) | null>(null);
+  // Recovery-only manual RATE draft. The product stays `registered`: this never
+  // switches the selection mode and never clears the resolved identity.
+  const [manualRate, setManualRate] = useState<ManualRateDraft>(emptyManualRateDraft());
   const showIntelEditor = !initial || upgraded || hasStructuredIntelligence(intel);
 
 
@@ -383,6 +396,7 @@ export function ChemicalEditor({
         setRateLife(newDefaultRateLifecycle());
 
       }
+      setManualRate(emptyManualRateDraft());
       setMasterUpdateOpen(false);
     }
   }, [open, initial, initialName]);
@@ -405,7 +419,16 @@ export function ChemicalEditor({
       const reconciled = reconcileEditedDraft(intelBase, intel);
       // Vineyard scope: only grapevine registered uses are ever persisted.
       // Other-crop directions are dropped whole, never merged or rewritten.
-      const encoded = encodeChemicalIntelligenceForWrite(grapevineOnlyDraft(reconciled));
+      // Recovery path: append the user-entered rate as an explicitly
+      // user-entered grapevine use. No canonical option/rate identity is minted
+      // and the resolved registered identity is left exactly as it was.
+      const manualUse = manualRateConfirmed
+        ? manualRateRegisteredUse(manualRate, intel.registeredUses[0]?.target_raw ?? null)
+        : null;
+      const withManual = manualUse
+        ? { ...reconciled, registeredUses: [...reconciled.registeredUses, manualUse] }
+        : reconciled;
+      const encoded = encodeChemicalIntelligenceForWrite(grapevineOnlyDraft(withManual));
       // Category: the RAW shared key is the stored authority; `use` carries the
       // display label as a compatibility projection only.
       const categoryKey = matchProductCategoryKey(form.product_category);
@@ -497,6 +520,9 @@ export function ChemicalEditor({
       setIntel(r.draft);
       setIntelBase(r.draft);
       setUpgraded(true);
+      // A new authoritative result owns the rate question again: a manual rate
+      // entered for the previous product never survives.
+      setManualRate(emptyManualRateDraft());
       if (s.master) {
         setMasterLink({ id: s.master.id, revision: masterRevision(s.master) ?? null });
       }
@@ -698,12 +724,21 @@ export function ChemicalEditor({
   const lookupSelected = selectionMode === "registered" || selectionMode === "master";
   const grapevineRegistered = hasGrapevineRegistration(intel.registeredUses);
   const noGrapevineRegistration = !initial && lookupSelected && !grapevineRegistered;
+  // A successful retry that resolves canonical options retires the manual
+  // fallback entirely — derived, never an effect.
+  const manualRateActive =
+    !initial &&
+    lookupSelected &&
+    manualRate.open &&
+    !hasUsableRateOptions(canonicalRateOptions);
+  const manualRateConfirmed = manualRateActive && manualRateSatisfiesGate(manualRate);
   const firstAddBlocked = lookupSaveBlocked({
     isExistingRecord: !!initial,
     selectionMode,
     uses: intel.registeredUses,
     defaults: defaultRates,
     staleDefaultRate,
+    manualRateConfirmed,
   });
   const saveBlocked = staleDefaultRate || firstAddBlocked;
 
@@ -720,11 +755,13 @@ export function ChemicalEditor({
     options: canonicalRateOptions,
   });
 
-  /** Manual entry from the recovery block — an explicitly unverified record. */
+  /**
+   * Recovery: the RATE is entered by hand. The chemical itself remains the
+   * resolved registered product — selection mode, registration identity,
+   * actives, manufacturer, category and label links are all untouched.
+   */
   const handleManualFromRecovery = () => {
-    setIntel((p) => ({ ...p, claimedStatus: "unverified" }));
-    setUpgraded(true);
-    handleSelectionChange("manual");
+    setManualRate((p) => ({ ...emptyManualRateDraft(), ...p, open: true }));
   };
 
 
@@ -794,6 +831,7 @@ export function ChemicalEditor({
         setRestNotes("");
         setUnresolvedItems([]);
         setRateLife(newDefaultRateLifecycle());
+        setManualRate(emptyManualRateDraft());
       }
       return mode;
     });
@@ -1190,7 +1228,14 @@ export function ChemicalEditor({
             <div className="space-y-4">
               {structuredUses && (
                 <Section title="Default rate">
-                  {showRateRecovery && (
+                  {showRateRecovery && manualRateActive && (
+                    <ManualRateEditor
+                      draft={manualRate}
+                      onChange={setManualRate}
+                      onCancel={() => setManualRate(emptyManualRateDraft())}
+                    />
+                  )}
+                  {showRateRecovery && !manualRateActive && (
                     <MissingRateOptionsPanel
                       labelUrl={
                         labelLinks.regulatorLabelUrl ??
