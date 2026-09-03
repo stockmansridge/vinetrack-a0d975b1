@@ -24,13 +24,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
-import { GuideStepImageUploader } from "@/components/admin/guide/GuideStepImageUploader";
+import { GuideStepImagesUploader } from "@/components/admin/guide/GuideStepImagesUploader";
 import { GuideImageKeyEditor } from "@/components/admin/guide/GuideImageSlotEditor";
 import {
   GUIDE_PLATFORM_LABELS,
+  stepImages,
   type GuideContentStep,
   type GuideStepImagePosition,
 } from "@/lib/guide/guideContent";
+
 
 const NO_PLATFORM = "__none__";
 
