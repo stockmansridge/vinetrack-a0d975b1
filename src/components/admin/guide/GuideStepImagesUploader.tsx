@@ -177,7 +177,13 @@ export function GuideStepImagesUploader({
             ))}
           </div>
         ) : fallbackUrl ? (
-          <img src={fallbackUrl} alt="Step screenshot" className="h-[130px] w-full object-contain" />
+          <figure className="overflow-hidden rounded-md border border-border bg-background">
+            <img src={fallbackUrl} alt="Step screenshot" className="h-[112px] w-full object-contain p-1" />
+            <figcaption className="border-t border-border px-1 py-0.5 text-[10.5px] font-medium text-muted-foreground">
+              #1 · existing guide image
+            </figcaption>
+          </figure>
+
         ) : (
           <div className="flex h-[110px] w-full flex-col items-center justify-center gap-1 text-muted-foreground">
             <ImageIcon className="h-6 w-6 opacity-60" aria-hidden />
@@ -216,8 +222,9 @@ export function GuideStepImagesUploader({
           {images.length > 0 ? "Add image" : "Upload image"}
         </Button>
         <span className="text-[11px] text-muted-foreground">
-          {images.length}/{MAX_STEP_IMAGES} images
+          {images.length === 0 && fallbackUrl ? 1 : images.length}/{MAX_STEP_IMAGES} images
         </span>
+
       </div>
       <p className="text-[11px] text-muted-foreground">
         JPEG, PNG or WebP, up to 10 MB each. Up to {MAX_STEP_IMAGES} per step. Screenshots are shown
