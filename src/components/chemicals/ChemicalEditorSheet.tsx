@@ -93,6 +93,10 @@ import {
   hardDeleteUnusedSavedChemical, ChemicalInUseError,
   type SavedChemical, type SavedChemicalInput,
 } from "@/lib/savedChemicalsQuery";
+import {
+  legacyRatePerHa,
+  describeSavedChemicalSaveError,
+} from "@/lib/savedChemicalLegacyRate";
 import { parseRestrictions, composeRestrictions } from "@/lib/chemicalCategories";
 import {
   PRODUCT_CATEGORIES,
@@ -432,14 +436,23 @@ export function ChemicalEditor({
       // Category: the RAW shared key is the stored authority; `use` carries the
       // display label as a compatibility projection only.
       const categoryKey = matchProductCategoryKey(form.product_category);
+      const legacyRate = legacyRatePerHa({
+        typed: rateStr,
+        manual: manualRateConfirmed ? manualRate : null,
+        defaults: defaultRates,
+      });
       const payload: SavedChemicalInput = {
         ...form,
+        rate_per_ha: undefined,
         product_category: categoryKey,
         use: categoryKey ? productCategoryLabel(categoryKey) : (form.use ?? ""),
         intelligence: encoded,
         master_chemical_id: masterLink?.id ?? null,
         master_source_revision: masterLink?.revision ?? null,
-        rate_per_ha: rateNum,
+        // Legacy per-hectare scalar (compatibility projection only). Omitted
+        // whenever there is no genuine per-hectare scalar — a per-100 L rate
+        // is never converted, copied or fabricated into this column.
+        ...(legacyRate === undefined ? {} : { rate_per_ha: legacyRate }),
         restrictions,
         // Omit-vs-write (§14): omitted while clean so an unrelated edit cannot
         // wipe the persisted default; when dirty the FULL version-1 object is
@@ -493,7 +506,11 @@ export function ChemicalEditor({
       toast({ title: initial ? "Chemical updated" : "Chemical created" });
       onSaved(saved);
     },
-    onError: (e: any) => toast({ title: "Save failed", description: e?.message ?? String(e), variant: "destructive" }),
+    onError: (e: any) => toast({
+      title: "Save failed",
+      description: describeSavedChemicalSaveError(e),
+      variant: "destructive",
+    }),
   });
 
   const set = <K extends keyof SavedChemicalInput>(k: K, v: SavedChemicalInput[K]) =>

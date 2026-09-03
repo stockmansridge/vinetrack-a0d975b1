@@ -176,6 +176,10 @@ function sanitize(input: SavedChemicalInput, mode: "insert" | "update" = "insert
   const out: Record<string, any> = {};
   for (const k of ALLOWED_FIELDS) {
     const v = input[k];
+    // Legacy per-hectare scalar: NEVER written as null (the shared column is
+    // NOT NULL) and never fabricated for a non-hectare rate. Omitting it keeps
+    // the existing/legacy value or the column default.
+    if (k === "rate_per_ha" && (v == null || !Number.isFinite(Number(v)))) continue;
     // Omitted means "leave the column alone" — critical for default_rates so a
     // commercial-only edit can never wipe a persisted operator default.
     if (v === undefined) continue;
