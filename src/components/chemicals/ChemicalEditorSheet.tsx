@@ -4,7 +4,7 @@
 // match, verification, Chemical Intelligence) can be reused inside nested
 // contexts such as the Spray Program Step wizard. There is deliberately no
 // simplified variant: this is the one Add New Chemical experience.
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   hasUsableRateOptions,
   showMissingRateOptionsRecovery,
@@ -140,6 +140,7 @@ import {
   MASTER_UPDATE_MESSAGE,
 } from "@/lib/masterChemicals";
 import { ChemicalIntelligenceEditor } from "@/components/chemicals/ChemicalIntelligenceEditor";
+import { ChemicalReverifyDialog } from "@/components/chemicals/ChemicalReverifyDialog";
 import {
   type ChemicalIntelligenceDraft,
   activityGroupReferenceSource,
@@ -242,6 +243,8 @@ export function ChemicalEditor({
    * existing saved chemical always starts unlocked.
    */
   const [selectionMode, setSelectionMode] = useState<ChemicalSelectionMode>("none");
+  // Explicit, operator-initiated re-verification of an existing chemical.
+  const [editorReverifyOpen, setEditorReverifyOpen] = useState(false);
   const [existingCost, setExistingCost] = useState<number | null>(null);
   const [currency, setCurrency] = useState("AUD");
   const [whp, setWhp] = useState("");
@@ -313,8 +316,9 @@ export function ChemicalEditor({
   // Cost we'll actually save: prefer freshly computed, fall back to existing.
   const effectiveCost = computedCost ?? existingCost;
 
-  // Reset when opening
-  useMemo(() => {
+  // Reset when opening. This performs setState, so it MUST be an effect —
+  // never a useMemo side effect.
+  useEffect(() => {
     if (open) {
       if (initial) {
         // Category authority is the raw shared key; a legacy row falls back to
@@ -417,6 +421,7 @@ export function ChemicalEditor({
           emptyManualRateDraft(),
       );
       setMasterUpdateOpen(false);
+      setEditorReverifyOpen(false);
     }
   }, [open, initial, initialName]);
 
@@ -851,8 +856,13 @@ export function ChemicalEditor({
    * candidate selection and clears the previous authoritative identity so a
    * product A result can never bleed into a product B review.
    */
-  const editorUnlocked = selectionMode !== "none";
+  // Editing an existing saved chemical is ALWAYS unlocked: the search workflow
+  // belongs to Add only and can never re-lock a stored record.
+  const editorUnlocked = !!initial || selectionMode !== "none";
   const handleSelectionChange = (mode: ChemicalSelectionMode) => {
+    // An existing record's identity is only changed by the explicit re-verify
+    // action, never by a lookup child's initial state broadcast.
+    if (initial) return;
     setSelectionMode((prev) => {
       if (prev === mode) return prev;
       if (mode === "none" && !initial) {
@@ -888,22 +898,59 @@ export function ChemicalEditor({
 
   const lookupBlock = (
     <>
-      <ChemicalAILookup
-        initialName={form.name ?? ""}
-        country={currentCountry}
-        existingLibrary={existingLibrary
-          .filter((c) => !initial || c.id !== initial.id)
-          .map((c) => ({
-            id: c.id,
-            name: c.name,
-            active_ingredient: c.active_ingredient,
-            registration_number: (c as { registration_number?: string | null }).registration_number,
-          }))}
-        onApply={applySuggestion}
-        onSelectionChange={handleSelectionChange}
-        retryLabelRef={retryLabelRef}
+      {/* Add = identify/search. Edit never mounts the lookup: opening an
+          existing chemical performs no product search and no network call. */}
+      {!initial && (
+        <ChemicalAILookup
+          initialName={form.name ?? ""}
+          country={currentCountry}
+          existingLibrary={existingLibrary
+            .filter((c) => !initial || c.id !== initial.id)
+            .map((c) => ({
+              id: c.id,
+              name: c.name,
+              active_ingredient: c.active_ingredient,
+              registration_number: (c as { registration_number?: string | null }).registration_number,
+            }))}
+          onApply={applySuggestion}
+          onSelectionChange={handleSelectionChange}
+          retryLabelRef={retryLabelRef}
+        />
+      )}
+      {initial && (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-border/60 p-2 text-xs">
+          <span className="text-muted-foreground">
+            Editing the saved chemical. Product details are only re-checked when you ask.
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setEditorReverifyOpen(true)}
+          >
+            Check for updates
+          </Button>
+        </div>
+      )}
+      {initial && (
+        <ChemicalReverifyDialog
+          open={editorReverifyOpen}
+          onOpenChange={setEditorReverifyOpen}
+          draft={intel}
+          productName={form.name}
+          country={currentCountry}
+          onAccept={(next) => {
+            handleIntelChange(next);
+            setIntelBase(next);
+            setUpgraded(true);
+            toast({
+              title: "Re-verified details applied",
+              description: "Save the chemical to keep these changes.",
+            });
+          }}
+        />
+      )}
 
-      />
       {/* Jurisdiction suitability is computed, never stored. Chemistry is
           kept; only label authority changes. */}
       <JurisdictionNoticeBanner

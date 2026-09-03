@@ -347,7 +347,8 @@ describe("new chemical flow before selection", () => {
   const lookup = src("src/components/spray/ChemicalAILookup.tsx");
 
   it("keeps the product editor gated until a product is chosen", () => {
-    expect(editor).toContain("const editorUnlocked = selectionMode !== \"none\"");
+    // Add stays gated on selection; editing an existing record is always open.
+    expect(editor).toContain("const editorUnlocked = !!initial || selectionMode !== \"none\"");
     expect(editor).toContain("{editorUnlocked && (");
     expect(editor).toContain("onSelectionChange={handleSelectionChange}");
   });
