@@ -138,3 +138,38 @@ describe("manual rate entry keeps the label controls", () => {
     });
   });
 });
+
+/* -------------------------- APVMA Gazette must never be an "official label" */
+
+const ELABEL = "https://elabels.apvma.gov.au/90279ELBL.pdf";
+const GAZETTE = "https://www.apvma.gov.au/sites/default/files/gazette_20210209.pdf";
+
+describe("APVMA Gazette is never offered as a label", () => {
+  it("prefers the eLabel supplied in label_reference over a Gazette", () => {
+    const resolved = resolveChemicalLabelLinks({
+      labelUrl: GAZETTE,
+      labelReference: ELABEL,
+    });
+    expect(resolved.regulatorLabelUrl).toBe(ELABEL);
+    render(<LabelSurfaces resolved={resolved} />);
+    expect(href("Open official label")).toBe(ELABEL);
+    expect(href(OPEN_REGULATOR_LABEL)).toBe(ELABEL);
+    expect(screen.queryByText(OPEN_REGULATOR_LABEL)?.closest("a")?.getAttribute("href")).not.toBe(
+      GAZETTE,
+    );
+  });
+
+  it("never resolves a Gazette-only payload to a label", () => {
+    const resolved = resolveChemicalLabelLinks({ labelUrl: GAZETTE, labelReference: null });
+    expect(resolved.regulatorLabelUrl).toBeUndefined();
+    render(<LabelSurfaces resolved={resolved} />);
+    expect(screen.queryByText(OPEN_REGULATOR_LABEL)).toBeNull();
+    expect(screen.getByText("Open official label").closest("a")).toBeNull();
+  });
+
+  it("keeps a register citation as a registration source only", () => {
+    const resolved = resolveChemicalLabelLinks({ labelUrl: ELABEL, labelReference: REFERENCE });
+    expect(resolved.regulatorLabelUrl).toBe(ELABEL);
+    expect(resolved.registrationSourceUrl).toBe(REFERENCE);
+  });
+});
