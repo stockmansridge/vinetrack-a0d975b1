@@ -295,3 +295,59 @@ describe("provenance gating", () => {
     expect(r.fields.activeIngredientText).toBeUndefined();
   });
 });
+
+/* ---------------------------- backend default_rate_options pass through */
+
+describe("backend default_rate_options survive malformed registered_uses", () => {
+  const OPTION = {
+    option_key: "default_option_v1_42d1761ddc477436ffd40e7b881f0255",
+    rate_ids: [
+      "rate_v1_2b559abc7cadaefe20e405674c523811",
+      "rate_v1_758843c84a12d817494ccd5acd13720f",
+    ],
+    basis: "per_100_litres",
+    unit: "L",
+    value: 2,
+    min_value: null,
+    max_value: null,
+    condition_ambiguous: false,
+  };
+
+  const res = parseChemicalLookup(
+    {
+      match_source: "authoritative",
+      jurisdiction: { country_code: "AU", registration_scheme: "apvma" },
+      field_provenance: {
+        product_name: "official_register",
+        registration_number: "official_register",
+      },
+      product: {
+        registered_product_name: "Vicol",
+        registration_country: "AU",
+        registration_scheme: "apvma",
+        registration_number: "33182",
+        // Malformed / rate-less authoritative uses — the Portal must not repair
+        // these, and must not derive a default from them.
+        registered_uses: [{ crop: "Grapevines", rates: [] }],
+      },
+      default_rate_options: { per_hectare: [], per_100_litres: [OPTION] },
+    },
+    "AU",
+  );
+
+  it("renders the supplied /100 L option verbatim", () => {
+    expect(res.defaultRateOptions?.per_100_litres).toHaveLength(1);
+    expect(res.defaultRateOptions?.per_100_litres[0]).toMatchObject({
+      option_key: OPTION.option_key,
+      rate_ids: OPTION.rate_ids,
+      basis: "per_100_litres",
+      unit: "L",
+      value: 2,
+    });
+    expect(res.defaultRateOptions?.per_hectare).toEqual([]);
+  });
+
+  it("does not reconstruct a default from the malformed uses", () => {
+    expect(res.fields.rates ?? []).toHaveLength(0);
+  });
+});
