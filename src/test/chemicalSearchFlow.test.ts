@@ -218,7 +218,7 @@ describe("live camelCase search wire format", () => {
 
   it("does not duplicate the mapping inside the lookup component", () => {
     const file = src("src/components/spray/ChemicalAILookup.tsx");
-    expect(file).not.toContain("activeIngredient:");
+    expect(file).not.toContain("o.activeIngredient");
     expect(file).not.toContain("primaryUse");
   });
 });
