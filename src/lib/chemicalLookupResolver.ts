@@ -60,6 +60,7 @@ import {
 } from "@/lib/chemicalLookupDiagnostics";
 import { vineyardCountryCode, countryLabel } from "@/lib/chemicalJurisdiction";
 import { parsePhysicalForm, type PhysicalForm } from "@/lib/chemicalPhysicalForm";
+import { pickRegulatorLabelUrl } from "@/lib/chemicalLabelLinks";
 import {
   normaliseMatchSource,
   parseMasterLookupEnvelope,
@@ -905,10 +906,10 @@ export function parseChemicalLookup(
   // `label_reference`), and an APVMA Gazette/publication PDF is never eligible.
   // Nothing is constructed or guessed from the registration number.
   const regulatorLabelUrl = pickRegulatorLabelUrl([
-    httpsUrl(labelReference),
     httpsUrl(p.regulator_label_url),
     httpsUrl(labelUrls.regulator_label_url),
     httpsUrl(labelUrls.regulator),
+    httpsUrl(labelReference),
   ]);
 
   const fields: CanonicalChemicalFields = {
