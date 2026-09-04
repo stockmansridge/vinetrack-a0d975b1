@@ -91,7 +91,12 @@ export function resolveChemicalLabelLinks(input: {
     httpUrl(sources.find((s) => s.kind === "manufacturer_label")?.reference);
   // A recognised eLabel wins wherever it arrives; a Gazette never becomes a
   // label. The portal never constructs a guessed eLabel URL.
-  const regulatorLabel = pickRegulatorLabelUrl([input.labelUrl, input.labelReference]);
+  // `label_reference` is only eligible as the label when it IS a recognised
+  // eLabel document — a register/gazette citation stays a citation.
+  const regulatorLabel = pickRegulatorLabelUrl([
+    input.labelUrl,
+    isApvmaELabelUrl(input.labelReference) ? input.labelReference : undefined,
+  ]);
   const registrationSource =
     httpUrl(input.labelReference) ??
     httpUrl(sources.find((s) => s.kind === "official_register")?.reference);
