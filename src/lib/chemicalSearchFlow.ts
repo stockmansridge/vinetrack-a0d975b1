@@ -80,16 +80,27 @@ export function parseSearchCandidates(payload: unknown): ChemicalSearchResponse 
       index: c.index,
       productName:
         str(o.registered_product_name) ?? str(o.product_name) ?? str(o.productName) ?? str(o.name),
-      registrant: str(o.registrant) ?? str(o.manufacturer) ?? str(o.company),
+      // The live wire format is camelCase (`brand`, `activeIngredient`,
+      // `primaryUse`); older payloads are snake_case. Both are normalised here
+      // — this function is the single search normalisation boundary.
+      registrant:
+        str(o.registrant) ?? str(o.brand) ?? str(o.manufacturer) ?? str(o.company),
       registrationNumber: str(o.registration_number) ?? str(o.registrationNumber),
       registrationScheme: str(o.registration_scheme) ?? str(o.registrationScheme),
       registrationCountry:
         str(o.registration_country) ?? str(o.registrationCountry) ?? str(o.country),
       identityKey: str(o.registration_identity_key) ?? str(o.identity_key),
       activeIngredientText:
-        str(o.active_ingredient) ?? str(o.active_ingredients_text) ?? str(o.actives),
+        str(o.activeIngredient) ??
+        str(o.active_ingredient) ??
+        str(o.active_ingredients_text) ??
+        str(o.actives),
       category:
-        str(o.product_category) ?? str(o.category) ?? str(o.productCategory) ?? str(o.primary_use),
+        str(o.product_category) ??
+        str(o.category) ??
+        str(o.productCategory) ??
+        str(o.primaryUse) ??
+        str(o.primary_use),
       labelReference: str(o.label_reference) ?? str(o.label_url),
 
       ranking: c.ranking,

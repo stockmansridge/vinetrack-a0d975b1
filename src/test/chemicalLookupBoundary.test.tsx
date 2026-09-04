@@ -205,3 +205,30 @@ describe("one-step selection and enrichment recovery", () => {
     expect(bodiesOf().filter((b) => b.action === "search").length).toBe(1);
   });
 });
+
+describe("active ingredient is visible before selection", () => {
+  it("renders the camelCase activeIngredient from the live search wire format", async () => {
+    invoke.mockResolvedValue({
+      data: {
+        results: [
+          {
+            name: "SACOA STIFLE DORMANT SPRAY OIL",
+            activeIngredient: "Petroleum Oil 859 g/L",
+            brand: "AGRION CROP SOLUTIONS PTY LTD",
+            primaryUse: "insecticide",
+            registration_number: "54000",
+          },
+        ],
+      },
+      error: null,
+    });
+    renderLookup();
+    await typeAndSearch("stifle");
+
+    await screen.findByText("Petroleum Oil 859 g/L");
+    expect(screen.getByText("AGRION CROP SOLUTIONS PTY LTD")).toBeInTheDocument();
+    // Visible BEFORE any selection / label lookup happens.
+    expect(screen.getAllByRole("button", { name: "Select this product" }).length).toBeGreaterThan(0);
+    expect(bodiesOf().every((b) => b.action === "search")).toBe(true);
+  });
+});

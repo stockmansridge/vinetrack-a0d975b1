@@ -115,3 +115,62 @@ describe("chemical editor collapsible defaults", () => {
     );
   });
 });
+
+/* ------------------------------- APVMA Gazette is never a product label */
+
+const MIXED_90279 = {
+  match_source: "authoritative",
+  jurisdiction: { country_code: "AU", registration_scheme: "apvma" },
+  field_provenance: {
+    product_name: "official_register",
+    registrant: "official_register",
+    registration_number: "official_register",
+    label_reference: "official_register",
+  },
+  product: {
+    registered_product_name: "CropSure Greenshield 750WG Fungicide",
+    registrant: "CropSure",
+    registration_country: "AU",
+    registration_scheme: "apvma",
+    registration_number: "90279",
+    label_reference: "https://elabels.apvma.gov.au/90279ELBL.pdf",
+    regulator_label_url: "https://www.apvma.gov.au/sites/default/files/gazette_20210209.pdf",
+  },
+};
+
+describe("mixed eLabel + Gazette payload (90279)", () => {
+  const r = parseChemicalLookup(MIXED_90279, "AU");
+
+  it("resolves the eLabel as the regulator label", () => {
+    expect(r.fields.regulatorLabelUrl).toBe("https://elabels.apvma.gov.au/90279ELBL.pdf");
+  });
+
+  it("never presents the Gazette as a label", () => {
+    expect(r.fields.regulatorLabelUrl).not.toContain("gazette");
+    expect(r.fields.manufacturerLabelUrl).toBeUndefined();
+  });
+});
+
+describe("manufacturer label support stays distinct", () => {
+  const r = parseChemicalLookup(
+    {
+      ...MIXED_90279,
+      product: {
+        ...MIXED_90279.product,
+        manufacturer_label_url:
+          "https://cropsure.com/wp-content/uploads/2023/10/cropsure-greenshield-750wg-fungicide-label.pdf",
+        manufacturer_product_url: "https://cropsure.com/fungicide/",
+      },
+    },
+    "AU",
+  );
+
+  it("keeps manufacturer label, product page and eLabel separate", () => {
+    expect(r.fields.manufacturerLabelUrl).toBe(
+      "https://cropsure.com/wp-content/uploads/2023/10/cropsure-greenshield-750wg-fungicide-label.pdf",
+    );
+    expect(r.fields.manufacturerProductUrl).toBe("https://cropsure.com/fungicide/");
+    expect(r.fields.regulatorLabelUrl).toBe("https://elabels.apvma.gov.au/90279ELBL.pdf");
+    expect(r.fields.manufacturerLabelUrl).not.toBe(r.fields.regulatorLabelUrl);
+  });
+});

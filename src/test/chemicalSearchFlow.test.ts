@@ -171,3 +171,54 @@ describe("multi-rate contract survives structured import", () => {
     expect(rates.some((r) => r.condition_ambiguous === true)).toBe(true);
   });
 });
+
+/* --------------------------------- live camelCase wire format (results[]) */
+
+const LIVE_RESULTS_PAYLOAD = {
+  results: [
+    {
+      name: "SACOA STIFLE DORMANT SPRAY OIL",
+      activeIngredient: "Petroleum Oil 859 g/L",
+      brand: "AGRION CROP SOLUTIONS PTY LTD",
+      primaryUse: "insecticide",
+      registration_number: "54000",
+    },
+  ],
+};
+
+describe("live camelCase search wire format", () => {
+  it("maps name, brand, activeIngredient and primaryUse", () => {
+    const res = parseSearchCandidates(LIVE_RESULTS_PAYLOAD);
+    expect(isSearchEnvelope(LIVE_RESULTS_PAYLOAD)).toBe(true);
+    const c = res.candidates[0];
+    expect(c.productName).toBe("SACOA STIFLE DORMANT SPRAY OIL");
+    expect(c.activeIngredientText).toBe("Petroleum Oil 859 g/L");
+    expect(c.registrant).toBe("AGRION CROP SOLUTIONS PTY LTD");
+    expect(c.category).toBe("insecticide");
+    expect(c.registrationNumber).toBe("54000");
+  });
+
+  it("keeps snake_case compatibility", () => {
+    const res = parseSearchCandidates({
+      candidates: [
+        {
+          registered_product_name: "Legacy Product",
+          active_ingredient: "Sulfur 800 g/kg",
+          manufacturer: "Legacy Co",
+          primary_use: "fungicide",
+          registration_number: "12345",
+        },
+      ],
+    });
+    const c = res.candidates[0];
+    expect(c.activeIngredientText).toBe("Sulfur 800 g/kg");
+    expect(c.registrant).toBe("Legacy Co");
+    expect(c.category).toBe("fungicide");
+  });
+
+  it("does not duplicate the mapping inside the lookup component", () => {
+    const file = src("src/components/spray/ChemicalAILookup.tsx");
+    expect(file).not.toContain("o.activeIngredient");
+    expect(file).not.toContain("primaryUse");
+  });
+});
