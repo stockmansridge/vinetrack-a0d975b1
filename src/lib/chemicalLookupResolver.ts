@@ -900,11 +900,16 @@ export function parseChemicalLookup(
     httpsUrl(
       draft.sources.find((src) => src.kind === "manufacturer_label")?.reference,
     );
-  const regulatorLabelUrl =
-    httpsUrl(p.regulator_label_url) ??
-    httpsUrl(labelUrls.regulator_label_url) ??
-    httpsUrl(labelUrls.regulator) ??
-    httpsUrl(labelReference);
+  // The regulator LABEL is the product label document. A recognised APVMA
+  // eLabel wins wherever it arrives (the backend often supplies it as
+  // `label_reference`), and an APVMA Gazette/publication PDF is never eligible.
+  // Nothing is constructed or guessed from the registration number.
+  const regulatorLabelUrl = pickRegulatorLabelUrl([
+    httpsUrl(labelReference),
+    httpsUrl(p.regulator_label_url),
+    httpsUrl(labelUrls.regulator_label_url),
+    httpsUrl(labelUrls.regulator),
+  ]);
 
   const fields: CanonicalChemicalFields = {
 
