@@ -196,6 +196,18 @@ export default function AdminDashboardPage() {
   );
   const blocks = useBlocksTotal(activeVineyardIds);
   const platformScale = usePlatformScale();
+  const activityCounts = useAdminVineyardActivityCounts();
+
+  // Vineyard-level Platform Scale metrics only count vineyards that have
+  // created at least one block. null while the counts feed is unavailable.
+  const vineyardsWithBlocks = useMemo(() => {
+    if (!activityCounts.data) return null;
+    let n = 0;
+    for (const id of activeVineyardIds) {
+      if ((activityCounts.data.get(id)?.block_count ?? 0) > 0) n += 1;
+    }
+    return n;
+  }, [activityCounts.data, activeVineyardIds]);
 
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
