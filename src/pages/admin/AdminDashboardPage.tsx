@@ -142,9 +142,11 @@ function PlatformScaleSection({
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div>
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">Vineyards</div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">
+            Vineyards with blocks
+          </div>
           <div className="text-lg font-medium mt-0.5">
-            {isLoading || unavailable ? "—" : formatNumber(data?.total_vineyards)}
+            {vineyardsWithBlocks != null ? formatNumber(vineyardsWithBlocks) : "—"}
           </div>
         </div>
         <div>
@@ -166,12 +168,15 @@ function PlatformScaleSection({
             Average ha per vineyard
           </div>
           <div className="text-lg font-medium mt-0.5">
-            {isLoading || unavailable
+            {isLoading || unavailable || avgHaPerVineyard == null
               ? "—"
-              : formatHectares(data?.average_hectares_per_vineyard)}
+              : formatHectares(avgHaPerVineyard)}
           </div>
         </div>
       </div>
+      <p className="text-xs text-muted-foreground mt-3">
+        Vineyard figures include only vineyards that have created at least one block.
+      </p>
     </Card>
   );
 }
