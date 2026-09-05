@@ -11,6 +11,7 @@ import {
   useEngagementSummary,
   useAdminUsers,
   useAdminVineyards,
+  useAdminVineyardActivityCounts,
   usePlatformScale,
 } from "@/lib/adminApi";
 import { iosSupabase } from "@/integrations/ios-supabase/client";
@@ -94,11 +95,24 @@ function formatNumber(v: number | null | undefined): string {
 
 function PlatformScaleSection({
   query,
+  vineyardsWithBlocks,
 }: {
   query: ReturnType<typeof usePlatformScale>;
+  /**
+   * Number of active vineyards that have created at least one block, or null
+   * while the activity-counts feed is loading/unavailable. Vineyard-level
+   * metrics (vineyard count, average ha per vineyard) are based on this
+   * cohort only — vineyards with no blocks are excluded.
+   */
+  vineyardsWithBlocks: number | null;
 }) {
   const { data, isLoading, error } = query;
   const unavailable = !!error;
+  const totalHa = data?.total_hectares_under_management ?? null;
+  const avgHaPerVineyard =
+    totalHa != null && vineyardsWithBlocks != null && vineyardsWithBlocks > 0
+      ? totalHa / vineyardsWithBlocks
+      : null;
 
   return (
     <Card className="p-5">
@@ -128,9 +142,11 @@ function PlatformScaleSection({
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div>
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">Vineyards</div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">
+            Vineyards with blocks
+          </div>
           <div className="text-lg font-medium mt-0.5">
-            {isLoading || unavailable ? "—" : formatNumber(data?.total_vineyards)}
+            {vineyardsWithBlocks != null ? formatNumber(vineyardsWithBlocks) : "—"}
           </div>
         </div>
         <div>
@@ -152,12 +168,15 @@ function PlatformScaleSection({
             Average ha per vineyard
           </div>
           <div className="text-lg font-medium mt-0.5">
-            {isLoading || unavailable
+            {isLoading || unavailable || avgHaPerVineyard == null
               ? "—"
-              : formatHectares(data?.average_hectares_per_vineyard)}
+              : formatHectares(avgHaPerVineyard)}
           </div>
         </div>
       </div>
+      <p className="text-xs text-muted-foreground mt-3">
+        Vineyard figures include only vineyards that have created at least one block.
+      </p>
     </Card>
   );
 }
@@ -177,6 +196,18 @@ export default function AdminDashboardPage() {
   );
   const blocks = useBlocksTotal(activeVineyardIds);
   const platformScale = usePlatformScale();
+  const activityCounts = useAdminVineyardActivityCounts();
+
+  // Vineyard-level Platform Scale metrics only count vineyards that have
+  // created at least one block. null while the counts feed is unavailable.
+  const vineyardsWithBlocks = useMemo(() => {
+    if (!activityCounts.data) return null;
+    let n = 0;
+    for (const id of activeVineyardIds) {
+      if ((activityCounts.data.get(id)?.block_count ?? 0) > 0) n += 1;
+    }
+    return n;
+  }, [activityCounts.data, activeVineyardIds]);
 
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -224,7 +255,7 @@ export default function AdminDashboardPage() {
         </Card>
       )}
 
-      <PlatformScaleSection query={platformScale} />
+      <PlatformScaleSection query={platformScale} vineyardsWithBlocks={vineyardsWithBlocks} />
 
 
 
