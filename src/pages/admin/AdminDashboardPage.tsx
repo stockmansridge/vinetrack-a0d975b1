@@ -11,6 +11,7 @@ import {
   useEngagementSummary,
   useAdminUsers,
   useAdminVineyards,
+  useAdminVineyardActivityCounts,
   usePlatformScale,
 } from "@/lib/adminApi";
 import { iosSupabase } from "@/integrations/ios-supabase/client";
