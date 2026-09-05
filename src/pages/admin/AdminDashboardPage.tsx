@@ -255,7 +255,7 @@ export default function AdminDashboardPage() {
         </Card>
       )}
 
-      <PlatformScaleSection query={platformScale} />
+      <PlatformScaleSection query={platformScale} vineyardsWithBlocks={vineyardsWithBlocks} />
 
 
 
