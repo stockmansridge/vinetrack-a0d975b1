@@ -95,11 +95,24 @@ function formatNumber(v: number | null | undefined): string {
 
 function PlatformScaleSection({
   query,
+  vineyardsWithBlocks,
 }: {
   query: ReturnType<typeof usePlatformScale>;
+  /**
+   * Number of active vineyards that have created at least one block, or null
+   * while the activity-counts feed is loading/unavailable. Vineyard-level
+   * metrics (vineyard count, average ha per vineyard) are based on this
+   * cohort only — vineyards with no blocks are excluded.
+   */
+  vineyardsWithBlocks: number | null;
 }) {
   const { data, isLoading, error } = query;
   const unavailable = !!error;
+  const totalHa = data?.total_hectares_under_management ?? null;
+  const avgHaPerVineyard =
+    totalHa != null && vineyardsWithBlocks != null && vineyardsWithBlocks > 0
+      ? totalHa / vineyardsWithBlocks
+      : null;
 
   return (
     <Card className="p-5">
