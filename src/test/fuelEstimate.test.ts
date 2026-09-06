@@ -149,7 +149,7 @@ describe("computeFuelEstimate — production regression fixture", () => {
       start_engine_hours: null,
       end_engine_hours: 996.2,
       pause_timestamps: ["2026-09-04T02:00:00Z"],
-      resume_timestamps: ["2026-09-04T02:38:11.921Z"],
+      resume_timestamps: ["2026-09-04T02:34:09.274Z"],
     });
     const fuelPurchases = [
       { litres: 100, total_cost: 152.841807909605 },
