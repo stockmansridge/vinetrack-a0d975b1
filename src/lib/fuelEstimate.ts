@@ -64,8 +64,25 @@ function tripActiveHours(trip: Trip): number | null {
   return ms == null ? null : ms / 3_600_000;
 }
 
+/**
+ * Strict numeric parser for engine-hour readings.
+ *
+ * CRITICAL: Number(null) === 0, so a naive Number() coercion turns a missing
+ * reading into a genuine 0 and makes an end-only reading look like a valid
+ * pair (end - 0 = end). Never substitute zero for a missing reading here.
+ *
+ * Rules:
+ *   - null / undefined → null
+ *   - empty or whitespace-only string → null
+ *   - finite number (including a genuine 0) → valid
+ *   - non-empty finite numeric string → valid
+ *   - booleans, objects, NaN, Infinity → null
+ */
 function num(v: unknown): number | null {
-  const n = Number(v);
+  if (v == null) return null;
+  if (typeof v === "string" && v.trim() === "") return null;
+  if (typeof v !== "number" && typeof v !== "string") return null;
+  const n = typeof v === "number" ? v : Number(v);
   return isFinite(n) ? n : null;
 }
 
