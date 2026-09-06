@@ -109,7 +109,10 @@ export function computeFuelEstimate(
     engineHourDelta = (endEh as number) - (startEh as number);
   } else {
     basis = "trip_duration";
-    if (engineProvidedButInvalid) {
+    // engineHourDelta stays null when duration is used.
+    if (hasStart !== hasEnd) {
+      warnings.push("Incomplete engine-hour pair — using trip duration.");
+    } else if (engineProvidedButInvalid) {
       warnings.push("Engine hours invalid — falling back to trip duration.");
     }
     if (activeHours == null) {
