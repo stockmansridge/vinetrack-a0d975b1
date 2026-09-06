@@ -152,7 +152,7 @@ describe("computeFuelEstimate — production regression fixture", () => {
       resume_timestamps: ["2026-09-04T02:34:09.274Z"],
     });
     const fuelPurchases = [
-      { litres: 100, total_cost: 152.841807909605 },
+      { volume_litres: 100, total_cost: 152.841807909605 },
     ] as any;
     const r = computeFuelEstimate(trip, tractor, fuelPurchases);
     expect(r.basis).toBe("trip_duration");
