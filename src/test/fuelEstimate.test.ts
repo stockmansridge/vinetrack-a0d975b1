@@ -14,7 +14,7 @@ const tractor: TractorLite = {
   fuel_usage_l_per_hour: 6.8,
 } as any;
 
-function makeTrip(over: Partial<Trip> & Record<string, unknown>): Trip {
+function makeTrip(over: Record<string, unknown>): Trip {
   return {
     id: "trip-1",
     start_time: "2026-09-04T01:21:12Z",
