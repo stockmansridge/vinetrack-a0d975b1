@@ -915,8 +915,8 @@ function TripSheet({
             <Section title="Job record">
               <Field label="Trip type / function" value={fmt(tripFunctionLabel(trip.trip_function))} />
               {canDeleteTrip ? (
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-                  <Label className="text-muted-foreground pt-2">Title / details</Label>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <Label className="text-muted-foreground">Title / details</Label>
                   <div className="flex-1 flex items-center gap-2">
                     <Input
                       value={editTitle}
