@@ -527,11 +527,13 @@ function AppleDrawMap({
         () => {
           const el = document.createElement("div");
           el.style.cssText =
-            "background:#34C759;color:#fff;font-size:11px;font-weight:600;padding:2px 6px;border-radius:9999px;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:translate(-50%,-50%);cursor:grab";
+            "background:#34C759;color:#fff;font-size:11px;font-weight:600;height:20px;line-height:16px;padding:2px 6px;box-sizing:border-box;border-radius:9999px;box-shadow:0 1px 2px rgba(0,0,0,.4);cursor:grab";
           el.textContent = String(i + 1);
           return el;
         },
       );
+      // Centre the chip on the coordinate (MapKit anchors bottom-centre).
+      try { (ann as any).anchorOffset = new mapkit.Point(0, 10); } catch { /* noop */ }
       try { ann.draggable = true; } catch { /* noop */ }
       ann.addEventListener("drag-end", () => {
         try {
