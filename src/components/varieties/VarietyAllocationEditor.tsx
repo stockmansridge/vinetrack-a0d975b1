@@ -6,6 +6,7 @@
 // a stable identity key (`cloneKey` / `rootstockKey`, or the `mass_selection` /
 // `own_roots` sentinels) alongside the human-readable snapshot. Legacy free
 // text with no key is preserved verbatim.
+import { generateUuid } from "@/lib/uuid";
 import { useMemo } from "react";
 import { Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -40,9 +41,7 @@ interface Props {
 
 export const newAllocationRow = (): VarietyAllocationRow => ({
   id:
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : `tmp-${Math.random().toString(36).slice(2)}`,
+    generateUuid(),
   varietyKey: null,
   name: null,
   varietyId: null,
@@ -104,9 +103,7 @@ export function deserialiseAllocations(raw: any): VarietyAllocationRow[] {
     .map((a) => ({
       id:
         a.id ??
-        (typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `tmp-${Math.random().toString(36).slice(2)}`),
+        (generateUuid(),
       varietyKey: a.varietyKey ?? a.variety_key ?? null,
       name: a.name ?? a.varietyName ?? a.variety_name ?? a.variety ?? null,
       varietyId: a.varietyId ?? a.variety_id ?? null,

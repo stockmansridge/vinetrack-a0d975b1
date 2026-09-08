@@ -8,6 +8,7 @@
 // the table. The library is advisory: the identifier already lives on the
 // spray, so a missing or unreachable library never changes what a spray
 // targeted — it only changes how readable and reusable it is.
+import { generateUuid } from "@/lib/uuid";
 import { supabase } from "@/integrations/supabase/client";
 import {
   SPRAY_TARGETS,
@@ -107,7 +108,7 @@ export async function createVineyardSprayTarget(input: {
   const identifier = slugifySprayTarget(label);
   if (!label || !identifier) return null;
   const { data, error } = await (supabase as any).rpc("create_vineyard_spray_target", {
-    p_id: crypto.randomUUID(),
+    p_id: generateUuid(),
     p_vineyard_id: input.vineyardId,
     p_identifier: identifier,
     p_label: label,

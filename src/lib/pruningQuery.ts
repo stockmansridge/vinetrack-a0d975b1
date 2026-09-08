@@ -7,6 +7,7 @@
 // if a row already exists for (vineyard, paddock, season_year) we adopt
 // its id whatever it is, and only insert with the deterministic id when
 // none exists. Never generate random season IDs.
+import { generateUuid } from "@/lib/uuid";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { pruningSeasonId } from "@/lib/pruningSeasonId";
@@ -301,7 +302,7 @@ export function useRecordPruningEntry(seasonId: string) {
     // idempotent on p_id, so the SAME uuid is safe to replay; do NOT roll a
     // fresh uuid here or a retry would double-save.
     mutationFn: async (input: RecordEntryInput): Promise<RecordEntryResult> => {
-      const entryId = input.entryId ?? crypto.randomUUID();
+      const entryId = input.entryId ?? generateUuid();
       const { data, error } = await (supabase as any).rpc("record_pruning_entry", {
         p_id: entryId,
         p_vineyard_id: input.vineyardId,
@@ -557,7 +558,7 @@ export async function ensurePruningSeasonId(
 export async function recordSkippedPruningEntry(
   input: RecordSkippedEntryInput,
 ): Promise<RecordEntryResult> {
-  const entryId = input.entryId ?? crypto.randomUUID();
+  const entryId = input.entryId ?? generateUuid();
   const { data, error } = await (supabase as any).rpc("record_skipped_pruning_entry", {
     p_id: entryId,
     p_vineyard_id: input.vineyardId,
@@ -577,7 +578,7 @@ export function useRecordSkippedPruningEntry(seasonId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: RecordSkippedEntryInput): Promise<RecordEntryResult> => {
-      const entryId = input.entryId ?? crypto.randomUUID();
+      const entryId = input.entryId ?? generateUuid();
       const { data, error } = await (supabase as any).rpc("record_skipped_pruning_entry", {
 
         p_id: entryId,

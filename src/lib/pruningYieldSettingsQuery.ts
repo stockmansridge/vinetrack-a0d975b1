@@ -16,6 +16,7 @@
 //
 // No schema, RLS or RPC changes are made from the portal — RLS remains the
 // security boundary for who may read/write a vineyard's settings.
+import { generateUuid } from "@/lib/uuid";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { revisionWrite, serverRevisionOf } from "@/lib/revisionWrite";
 import type { PruneMethod } from "@/lib/pruningYieldFormula";
@@ -154,7 +155,7 @@ export async function savePruningYieldSettings(
   // semantics — no base_revision. The block key upsert also resurrects a
   // soft-deleted row.
   const row = await revisionWrite<any>({
-    payload: { id: input.id ?? crypto.randomUUID(), ...fields },
+    payload: { id: input.id ?? generateUuid(), ...fields },
     baseRevision: null,
     run: (payload) =>
       (supabase as any)

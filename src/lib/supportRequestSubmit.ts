@@ -17,6 +17,7 @@
 //
 // Rules: never email when saving fails; never delete the request when an
 // email fails; never surface raw Supabase/Resend errors to the user.
+import { generateUuid } from "@/lib/uuid";
 import { supabase as vinetrack } from "@/integrations/ios-supabase/client";
 
 
@@ -161,9 +162,7 @@ export async function submitSupportRequest(
     return { ...base, message: SAVE_FAILED };
   }
   const newRequestId =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}`;
+    generateUuid();
 
   // 2. Attachments upload first — the email function must see the final record.
   const upload = await uploadAttachments(input, newRequestId, userId);

@@ -6,6 +6,7 @@
 // Operational geometry (polygon_points, rows[]) is NEVER altered by import.
 // Per-row length overrides are calculation-only data; trip tracking is
 // untouched.
+import { generateUuid } from "@/lib/uuid";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { deriveMetrics } from "./paddockGeometry";
 
@@ -490,7 +491,7 @@ function dbValuesFromImport(
       const rootstock = v.rootstock ? String(v.rootstock).trim() : "";
       patch.variety_allocations = [
         {
-          id: crypto.randomUUID(),
+          id: generateUuid(),
           varietyKey: null,
           varietyId: null,
           name: v.variety ?? null,

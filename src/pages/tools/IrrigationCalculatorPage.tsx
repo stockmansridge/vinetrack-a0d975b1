@@ -1,3 +1,4 @@
+import { generateUuid } from "@/lib/uuid";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Trash2, RefreshCw, CloudSun, Pencil, Save, Info } from "lucide-react";
@@ -83,7 +84,7 @@ interface DayRow {
 }
 
 const fmt = (n: number, d = 1) => (Number.isFinite(n) ? n.toFixed(d) : "—");
-const newId = () => crypto.randomUUID();
+const newId = () => generateUuid();
 
 const DURATION_OPTIONS = [3, 5, 7, 14];
 

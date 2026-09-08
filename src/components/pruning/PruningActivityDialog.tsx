@@ -4,6 +4,7 @@
 //   create -> record_pruning_activity(p_payload)
 //   edit   -> update_pruning_activity(p_activity_id, p_activity, p_allocations)
 // The legacy one-entry-per-block path is never used from here.
+import { generateUuid } from "@/lib/uuid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -158,7 +159,7 @@ export default function PruningActivityDialog({
   const skipEntryIds = useRef<Record<string, string>>({});
   const qc = useQueryClient();
   // Client uuid, generated once per dialog instance so a retry is idempotent.
-  const [newId] = useState(() => crypto.randomUUID());
+  const [newId] = useState(() => generateUuid());
 
   // SQL 200 — labour lives ONLY in Work Tasks. Tasks created before the
   // activity exists are linked immediately after the first successful save.
@@ -251,7 +252,7 @@ export default function PruningActivityDialog({
         const seasonId = alloc.seasonId
           ?? (await ensurePruningSeasonId(vineyardId, alloc.paddockId, seasonYear));
         const entryId = skipEntryIds.current[alloc.paddockId]
-          ?? (skipEntryIds.current[alloc.paddockId] = crypto.randomUUID());
+          ?? (skipEntryIds.current[alloc.paddockId] = generateUuid());
         await recordSkippedPruningEntry({
           entryId,
           vineyardId,

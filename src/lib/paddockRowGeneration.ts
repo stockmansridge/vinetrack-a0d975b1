@@ -1,3 +1,4 @@
+import { generateUuid } from "@/lib/uuid";
 // Paddock row generation — direct port of iOS RowGeometry.calculateRowLines
 // Reference: docs/paddock-geometry-writer-spec.md §4
 //
@@ -14,7 +15,7 @@ export type GeneratedRow = {
 };
 
 const M_PER_DEG_LAT = 111320.0;
-const uuid = () => crypto.randomUUID();
+const uuid = () => generateUuid();
 
 function mPerDegLon(centroidLat: number) {
   return M_PER_DEG_LAT * Math.cos((centroidLat * Math.PI) / 180);

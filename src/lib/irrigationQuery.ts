@@ -4,6 +4,7 @@
 // SQL 125 RPC contract. The portal never recalculates volumes, allocations
 // or reporting figures locally: the server is authoritative and the UI only
 // renders what the RPCs return.
+import { generateUuid } from "@/lib/uuid";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import {
@@ -536,7 +537,7 @@ export function useCreateSystem(vineyardId: string | null) {
       notes?: string | null;
     }) =>
       call<IrrigationSystem>("create_irrigation_system", {
-        p_id: crypto.randomUUID(),
+        p_id: generateUuid(),
         p_vineyard_id: vineyardId,
         p_name: input.name,
         p_water_source: input.water_source ?? null,
@@ -588,7 +589,7 @@ export function useCreateValve(vineyardId: string | null) {
       notes?: string | null;
     }) =>
       call<IrrigationValve>("create_irrigation_valve", {
-        p_id: crypto.randomUUID(),
+        p_id: generateUuid(),
         p_vineyard_id: vineyardId,
         p_irrigation_system_id: input.irrigation_system_id,
         p_name: input.name,

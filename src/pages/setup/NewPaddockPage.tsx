@@ -6,6 +6,7 @@
 //
 // Spec: docs/paddock-geometry-writer-spec.md
 
+import { generateUuid } from "@/lib/uuid";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -213,7 +214,7 @@ export default function NewPaddockPage() {
   // Build payload (per spec §8 / docs §7)
   const payload = useMemo(() => {
     const base: Record<string, any> = {
-      id: crypto.randomUUID(),
+      id: generateUuid(),
       vineyard_id: selectedVineyardId,
       name: name.trim(),
       polygon_points: toCanonicalPolygon(polygon),

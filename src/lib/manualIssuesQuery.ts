@@ -1,5 +1,6 @@
 // Manual Issues data layer — SQL 169 RPCs on the shared VineTrack backend.
 // All reads/writes go through the shared pin contract used by iOS and Android.
+import { generateUuid } from "@/lib/uuid";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import {
@@ -121,9 +122,7 @@ export function useManualIssue(id: string | null) {
 }
 
 function newId(): string {
-  return typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return generateUuid();
 }
 
 export function useSaveManualIssue(vineyardId: string | null) {

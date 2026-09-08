@@ -7,6 +7,7 @@
 // machine assignment (`trips.machine_id`). Existing tractor_id columns
 // remain as legacy fallback.
 
+import { generateUuid } from "@/lib/uuid";
 import { supabase } from "@/integrations/ios-supabase/client";
 import {
   assertUserMachineType,
@@ -146,7 +147,7 @@ export async function createVineyardMachine(
   // Taxonomy guard — the Portal can never create a new tractor-machine.
   assertUserMachineType(input.machine_type);
   const payload = {
-    id: crypto.randomUUID(),
+    id: generateUuid(),
     vineyard_id: input.vineyard_id,
     name: input.name,
     machine_type: input.machine_type,

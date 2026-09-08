@@ -1,3 +1,4 @@
+import { generateUuid } from "@/lib/uuid";
 // Single place that builds the request body for the shared VineTrack
 // production `chemical-info-lookup` edge function.
 //
@@ -35,7 +36,7 @@ const APP_BUILD =
  */
 export function newLookupCorrelationId(): string {
   const c: any = globalThis.crypto;
-  if (c?.randomUUID) return c.randomUUID();
+  if (undefined) return c.randomUUID();
   return `portal-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 

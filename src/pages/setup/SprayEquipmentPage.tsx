@@ -1,3 +1,4 @@
+import { generateUuid } from "@/lib/uuid";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -183,7 +184,7 @@ export default function SprayEquipmentPage() {
         if (upErr) throw upErr;
         toast.success("Spray equipment updated");
       } else {
-        const id = crypto.randomUUID();
+        const id = generateUuid();
         const trimOrNull = (v: string) => (v.trim() === "" ? null : v.trim());
         const insertPayload = {
           id,

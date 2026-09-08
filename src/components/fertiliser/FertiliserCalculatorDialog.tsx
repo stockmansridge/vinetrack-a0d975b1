@@ -1,3 +1,4 @@
+import { generateUuid } from "@/lib/uuid";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
@@ -166,7 +167,7 @@ export default function FertiliserCalculatorDialog({
   const [hourlyRate, setHourlyRate] = useState<string>("");
 
   // Stable ids kept across retries so upserts don't duplicate rows.
-  const [recordId, setRecordId] = useState<string>(() => crypto.randomUUID());
+  const [recordId, setRecordId] = useState<string>(() => generateUuid());
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
   const [pendingLabourLineId, setPendingLabourLineId] = useState<string | null>(null);
 
@@ -196,7 +197,7 @@ export default function FertiliserCalculatorDialog({
       setStatus(ALL_STATUSES.includes(s) ? s : "planned");
       setCreateTask(false);
     } else {
-      setRecordId(crypto.randomUUID());
+      setRecordId(generateUuid());
       setApplicationDate(new Date().toISOString().slice(0, 10));
       setProductId(null);
       setProductName("");
@@ -230,7 +231,7 @@ export default function FertiliserCalculatorDialog({
         return {
           ...p,
           selected: alloc != null,
-          allocationId: alloc?.id ?? crypto.randomUUID(),
+          allocationId: alloc?.id ?? generateUuid(),
           // If reloading, preserve saved area/vine values so historical
           // snapshots don't shift.
           areaHa: alloc ? Number(alloc.area_ha) : p.areaHa,
@@ -359,7 +360,7 @@ export default function FertiliserCalculatorDialog({
       // Optional Work Task creation. Uses the same idempotent pattern as
       // pruning: stable UUIDs, upsert on retry.
       if (createTask && selectedBlocks.length > 0) {
-        const taskId = pendingTaskId ?? crypto.randomUUID();
+        const taskId = pendingTaskId ?? generateUuid();
         setPendingTaskId(taskId);
         const primary = selectedBlocks[0];
         await createWorkTask({
@@ -396,7 +397,7 @@ export default function FertiliserCalculatorDialog({
         });
         // Single labour line seeded from the calculator's labour fields.
         if (numOr(workerCount) > 0 && numOr(hoursPerWorker) > 0) {
-          const lineId = pendingLabourLineId ?? crypto.randomUUID();
+          const lineId = pendingLabourLineId ?? generateUuid();
           setPendingLabourLineId(lineId);
           await createLabourLine({
             id: lineId,

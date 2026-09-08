@@ -1,3 +1,4 @@
+import { generateUuid } from "@/lib/uuid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useVineyard } from "@/context/VineyardContext";
@@ -89,7 +90,7 @@ export default function IrrigationRecordPage() {
   const [previewing, setPreviewing] = useState(false);
 
   // The client generates the session id up front so retries are idempotent.
-  const sessionIdRef = useRef<string>(crypto.randomUUID());
+  const sessionIdRef = useRef<string>(generateUuid());
 
   const validation = useValveValidation(selectedVineyardId, valveId || null);
   const valve = valves.data?.find((v) => v.id === valveId) ?? null;
