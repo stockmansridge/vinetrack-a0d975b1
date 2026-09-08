@@ -75,10 +75,18 @@ import {
   type VineyardMachine,
 } from "@/lib/vineyardMachinesQuery";
 
+import SystemAdminDiagnostics from "@/components/admin/SystemAdminDiagnostics";
+import {
+  ACTUALS_SAVE_UNAVAILABLE,
+  SPRAY_UNIT_EDIT_UNAVAILABLE as SPRAY_UNIT_MSG,
+  TRIP_FUEL_RATE_UNAVAILABLE,
+  toCustomerError,
+} from "@/lib/sprayReportMessaging";
+
 const NONE = "__none__";
 
-export const SPRAY_UNIT_EDIT_UNAVAILABLE =
-  "The spray unit is stored on the linked spray record. Correcting it here needs Rork's shared spray-record save path.";
+/** Practical wording; the technical reason lives in admin diagnostics. */
+export const SPRAY_UNIT_EDIT_UNAVAILABLE = SPRAY_UNIT_MSG.customer;
 
 export function sprayReportQueryKey(tripId: string) {
   return ["spray-report-v1", tripId] as const;
