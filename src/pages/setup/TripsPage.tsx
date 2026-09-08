@@ -867,14 +867,22 @@ function TripSheet({
             </div>
           )}
         </SheetHeader>
-        {trip && (
+        {trip && (() => {
+          // Spraying trips are corrected inline in the worksheet, so the
+          // separate dialog is only offered for other trip types.
+          const sprayingTrip = isSprayingTrip({
+            tripFunction: trip.trip_function,
+            hasLinkedSprayRecord: sprayLinkedTripIds?.has(trip.id),
+          });
+          return (
           <div className="mt-4 space-y-4 text-sm">
             <div className="flex flex-wrap justify-end gap-2">
-              {canDeleteTrip && (
+              {canDeleteTrip && !sprayingTrip && (
                 <Button size="sm" variant="outline" onClick={() => setEditDetailsOpen(true)}>
                   Edit trip details
                 </Button>
               )}
+
               {canDeleteTrip && isCompletable && (
 
                 <Button
@@ -945,23 +953,28 @@ function TripSheet({
               </Button>
 
             </div>
-            <EditTripDetailsDialog
-              trip={trip}
-              vineyardId={vineyardId ?? null}
-              open={editDetailsOpen}
-              onOpenChange={setEditDetailsOpen}
-            />
+            {!sprayingTrip && (
+              <EditTripDetailsDialog
+                trip={trip}
+                vineyardId={vineyardId ?? null}
+                open={editDetailsOpen}
+                onOpenChange={setEditDetailsOpen}
+              />
+            )}
             <Section title="Route map">
               <TripRouteAppleMap pathPoints={trip.path_points} height={280} />
             </Section>
-            {isSprayingTrip({
-              tripFunction: trip.trip_function,
-              hasLinkedSprayRecord: sprayLinkedTripIds?.has(trip.id),
-            }) && (
+            {sprayingTrip && (
               <Section title="Spray worksheet">
-                <SprayTripWorksheet tripId={trip.id} />
+                <SprayTripWorksheet
+                  tripId={trip.id}
+                  trip={trip}
+                  vineyardId={vineyardId ?? null}
+                  canEdit={canDeleteTrip}
+                />
               </Section>
             )}
+
 
             <Section title="Schedule">
               <Field label="Date" value={fmtDate(trip.start_time)} />
@@ -1160,7 +1173,9 @@ function TripSheet({
               <Field label="Record ID" value={trip.id} mono />
             </Section>
           </div>
-        )}
+          );
+        })()}
+
         <AlertDialog open={confirmComplete} onOpenChange={(o) => !completing && setConfirmComplete(o)}>
           <AlertDialogContent>
             <AlertDialogHeader>

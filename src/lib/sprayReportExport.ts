@@ -6,6 +6,7 @@ import { extractPathPoints } from "./tripReport";
 import { fetchSprayReportV1, SPRAY_RECORD_UNAVAILABLE_MESSAGE } from "./sprayReportV1";
 import { resolveSprayRoute, ROUTE_RENDER_FAILED_MESSAGE } from "./sprayReportRoute";
 import { saveSprayReportPdf } from "./sprayReportPdf";
+import { EMPTY_BRANDING, loadSprayReportBranding } from "./sprayReportBranding";
 
 export interface DownloadSprayReportOptions {
   tripId: string;
@@ -39,10 +40,16 @@ export async function downloadSprayReport(
     routeWarning = ROUTE_RENDER_FAILED_MESSAGE;
   }
 
+  // Branding uses the TRIP's vineyard, never the currently selected one.
+  const branding = await loadSprayReportBranding(payload.identity.vineyardId).catch(
+    () => EMPTY_BRANDING,
+  );
+
   const filename = saveSprayReportPdf(payload, {
     formatters: opts.formatters,
     routeImage,
     routeWarning,
+    branding,
   });
   return { ok: true, filename };
 }
