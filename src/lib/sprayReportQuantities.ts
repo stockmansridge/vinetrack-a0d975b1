@@ -241,7 +241,7 @@ export function costValueKind(key: string): CostValueKind {
 export function costFieldLabel(key: string): string {
   return humanise(key)
     .replace(/ per ha$/i, " per hectare")
-    .replace(/\bha\b/i, "hectare");
+    .replace(/ ha$/i, " (ha)");
 }
 
 /** True when the payload exposes any chemical rate/basis detail. */
