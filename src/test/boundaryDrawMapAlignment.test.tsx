@@ -1,8 +1,9 @@
 // Regression: boundary draw/edit markers must be centred exactly on the
 // coordinate so the drop point matches the cursor location on the Edit Block
 // Boundary screen. MapKit custom annotations are already horizontally centred
-// and bottom-anchored, so existing-boundary markers use a half-height Y offset.
-import { describe, it, expect, vi, beforeEach } from "vitest";
+// and bottom-anchored. Positive offsets move the element UP, so centring needs
+// a NEGATIVE half-height Y offset (Apple's Annotation.anchorOffset contract).
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, waitFor, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
@@ -133,15 +134,70 @@ describe("BoundaryDrawMap marker alignment", () => {
 
     for (const ann of vertexAnnotations) {
       expect(ann.anchorOffset.x).toBe(0);
-      expect(ann.anchorOffset.y).toBe(10);
       const el = ann._factory();
       expect(el.style.transform).toBe("");
+      // Projected coordinate at y=200: MapKit subtracts the bottom anchor and
+      // anchorOffset. Assert the visual centre, not the old incorrect +10.
+      const height = parseFloat(el.style.height);
+      expect(200 - height - ann.anchorOffset.y + height / 2).toBe(200);
     }
     for (const ann of midpointAnnotations) {
       expect(ann.anchorOffset.x).toBe(0);
-      expect(ann.anchorOffset.y).toBe(7);
       const el = ann._factory();
       expect(el.style.transform).toBe("");
+      const height = parseFloat(el.style.height);
+      expect(200 - height - ann.anchorOffset.y + height / 2).toBe(200);
+    }
+  });
+
+  it("keeps the dropped vertex coordinate and centred handles after redraw", async () => {
+    const polygon: LatLng[] = [
+      { lat: -34.5, lng: 138.7 },
+      { lat: -34.501, lng: 138.701 },
+      { lat: -34.502, lng: 138.699 },
+      { lat: -34.501, lng: 138.698 },
+    ];
+    const setPolygon = vi.fn();
+    const { rerender } = render(
+      <BoundaryDrawMap polygon={polygon} setPolygon={setPolygon} editingExistingBoundary />,
+      { wrapper: wrapper() },
+    );
+    await waitFor(() => expect(createdAnnotations).toHaveLength(8));
+    const vertex = createdAnnotations[1];
+    const drop = { lat: -34.5007, lng: 138.7014 };
+    vertex.coordinate = { latitude: drop.lat, longitude: drop.lng };
+    const dragEnd = vertex.addEventListener.mock.calls.find(([type]: [string]) => type === "drag-end")[1];
+    act(() => dragEnd());
+    const expected = [polygon[0], drop, polygon[2], polygon[3]];
+    expect(setPolygon).toHaveBeenCalledExactlyOnceWith(expected);
+
+    createdAnnotations.length = 0;
+    rerender(<BoundaryDrawMap polygon={expected} setPolygon={setPolygon} editingExistingBoundary />);
+    await waitFor(() => expect(createdAnnotations).toHaveLength(8));
+    expect(createdAnnotations[1].coordinate).toEqual(vertex.coordinate);
+    const overlays = mockState.fakeMapKit.PolygonOverlay.mock.results;
+    expect(overlays[overlays.length - 1].value.coords[1]).toEqual(vertex.coordinate);
+    for (const ann of createdAnnotations) {
+      const el = ann._factory();
+      expect(el.style.transform).toBe("");
+      expect(-parseFloat(el.style.height) / 2 - ann.anchorOffset.y).toBe(0);
+    }
+  });
+
+  it("preserves the create-block marker configuration", async () => {
+    render(
+      <BoundaryDrawMap polygon={[
+        { lat: -34.5, lng: 138.7 },
+        { lat: -34.501, lng: 138.701 },
+        { lat: -34.502, lng: 138.699 },
+      ]} setPolygon={() => {}} />,
+      { wrapper: wrapper() },
+    );
+    await waitFor(() => expect(createdAnnotations).toHaveLength(6));
+    for (const ann of createdAnnotations) {
+      expect(ann.anchorOffset.x).toBe(0);
+      expect(ann.anchorOffset.y).toBe(0);
+      expect(ann._factory().style.transform).toBe("translate(-50%,-50%)");
     }
   });
 

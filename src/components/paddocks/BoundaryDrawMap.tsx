@@ -544,9 +544,10 @@ function AppleDrawMap({
         },
       );
       // MapKit already centres custom annotations horizontally and anchors their
-      // bottom edge to the coordinate. Move an existing-boundary marker down by
-      // half its fixed height so its visual centre is exactly on the vertex.
-      try { (ann as any).anchorOffset = new DOMPoint(0, editingExistingBoundary ? 10 : 0); } catch { /* noop */ }
+      // bottom edge to the coordinate. Negative anchorOffset.y moves the element
+      // down; use minus half its height to centre it on the vertex. Positive
+      // offsets move it up, doubling the gap instead of correcting it.
+      try { (ann as any).anchorOffset = new DOMPoint(0, editingExistingBoundary ? -10 : 0); } catch { /* noop */ }
       try { ann.draggable = true; } catch { /* noop */ }
       ann.addEventListener("drag-end", () => {
         try {
@@ -587,8 +588,8 @@ function AppleDrawMap({
             return el;
           },
         );
-        // As above, MapKit's bottom-centre anchor needs half the marker height.
-        try { (ann as any).anchorOffset = new DOMPoint(0, editingExistingBoundary ? 7 : 0); } catch { /* noop */ }
+        // As above, MapKit's bottom-centre anchor needs minus half the height.
+        try { (ann as any).anchorOffset = new DOMPoint(0, editingExistingBoundary ? -7 : 0); } catch { /* noop */ }
         const insertAt = i + 1;
         ann.addEventListener("select", () => {
           const next = polygonRef.current.slice();
