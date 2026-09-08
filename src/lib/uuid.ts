@@ -67,3 +67,12 @@ export function uuidErrorMessage(e: unknown): string {
   if (e instanceof SecureRandomUnavailableError) return e.message;
   return e instanceof Error ? e.message : String(e);
 }
+
+/** Never-throwing variant for render paths (component state initialisers). */
+export function tryGenerateUuid(): { id: string | null; error: string | null } {
+  try {
+    return { id: generateUuid(), error: null };
+  } catch (e) {
+    return { id: null, error: uuidErrorMessage(e) };
+  }
+}
