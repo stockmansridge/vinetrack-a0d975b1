@@ -222,7 +222,7 @@ export interface SprayReportMetadataAmendment {
 }
 
 export interface SprayReportPayloadV1 {
-  schemaVersion: "1.1" | "1.0";
+  schemaVersion: "1.1";
   identity: SprayReportIdentity;
   trip: SprayReportTrip;
   blocks: SprayReportBlock[] | null;
@@ -284,7 +284,7 @@ const isObj = (v: unknown): v is Record<string, any> =>
 export function parseSprayReportPayload(raw: unknown): SprayReportParseResult {
   const errors: string[] = [];
   if (!isObj(raw)) return { payload: null, errors: ["Payload is not an object"] };
-  if (raw.schemaVersion !== "1.1" && raw.schemaVersion !== "1.0") {
+  if (raw.schemaVersion !== "1.1") {
     errors.push("Unsupported schemaVersion");
   }
 
