@@ -223,15 +223,50 @@ function buildRow(input: UpsertPaddockSoilProfileInput) {
   return row;
 }
 
+/**
+ * The shared table's RLS check is scoped by vineyard (and, on the deployed
+ * schema, by the writing user). Resolve the vineyard from the paddock when
+ * the caller did not supply it, and stamp ownership columns when they exist.
+ */
+async function resolveVineyardId(
+  paddockId: string,
+  supplied?: string | null,
+): Promise<string | null> {
+  if (supplied) return supplied;
+  const { data } = await (supabase as any)
+    .from("paddocks")
+    .select("vineyard_id")
+    .eq("id", paddockId)
+    .maybeSingle();
+  return (data?.vineyard_id as string | undefined) ?? null;
+}
+
+const MISSING_COLUMN = "42703";
+
 export function useUpsertPaddockSoilProfile() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: UpsertPaddockSoilProfileInput) => {
-      const { error } = await (supabase as any)
-        .from("paddock_soil_profiles")
-        .upsert(buildRow(input), { onConflict: "paddock_id" });
+      const vineyardId = await resolveVineyardId(input.paddockId, input.vineyardId);
+      const base = buildRow({ ...input, vineyardId });
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id ?? null;
+
+      const attempt = async (row: Record<string, unknown>) =>
+        (supabase as any)
+          .from("paddock_soil_profiles")
+          .upsert(row, { onConflict: "paddock_id" });
+
+      let { error } = await attempt(
+        userId ? { ...base, created_by: userId, updated_by: userId } : base,
+      );
+      // Older deployments have no ownership columns — retry without them.
+      if (error && (error.code === MISSING_COLUMN || /created_by|updated_by/.test(error.message ?? ""))) {
+        ({ error } = await attempt(base));
+      }
       if (error) throw error;
     },
+
     onSuccess: (_d, input) => {
       qc.invalidateQueries({ queryKey: PADDOCK_QK(input.paddockId) });
       qc.invalidateQueries({ queryKey: ["soil", "vineyard-list"] });
