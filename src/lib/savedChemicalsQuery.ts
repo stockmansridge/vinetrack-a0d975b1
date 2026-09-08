@@ -65,7 +65,17 @@ export interface SavedChemical {
   registered_uses?: any;
   label_rate_bases?: string[] | null;
   intelligence_schema_version?: number | null;
-  pack_size?: string | null;
+  /* ---- Shared mobile operational columns (verified against the deployed
+   * shared schema): pack_size / price_per_pack / inventory_quantity are
+   * numeric, organic_certified is boolean, the rest are text. ---- */
+  product_form?: string | null;
+  pack_size?: number | null;
+  pack_unit?: string | null;
+  price_per_pack?: number | null;
+  inventory_quantity?: number | null;
+  inventory_unit?: string | null;
+  application_notes?: string | null;
+  organic_certified?: boolean | null;
   // --- SQL 199 Master Chemical Catalogue link (read + write) ---
   /** Which Master catalogue product this saved chemical was copied from. */
   master_chemical_id?: string | null;
