@@ -1,7 +1,19 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
+
+const rpcCalls: Array<[string, any]> = [];
+let rpcError: any = null;
+
+vi.mock("@/integrations/ios-supabase/client", () => ({
+  supabase: {
+    rpc: async (name: string, args: any) => {
+      rpcCalls.push([name, args]);
+      return { data: null, error: rpcError };
+    },
+  },
+}));
+
 import {
   amendmentValueLabel,
-  configureSprayActualsSaver,
   diffActualsDraft,
   draftFromPayload,
   formatAmendmentMarker,
@@ -10,11 +22,11 @@ import {
   parseActualWater,
   payloadAmendments,
   saveSprayActuals,
-  sprayActualsSaveAvailable,
-  SPRAY_ACTUALS_SAVE_UNAVAILABLE,
+  SprayActualsConflictError,
 } from "@/lib/sprayActuals";
 import { fitWithin, dataUrlImageFormat, imageSizeFromBytes } from "@/lib/imageDimensions";
 import type { SprayReportPayloadV1 } from "@/lib/sprayReportV1";
+
 
 function payload(): SprayReportPayloadV1 {
   return {
