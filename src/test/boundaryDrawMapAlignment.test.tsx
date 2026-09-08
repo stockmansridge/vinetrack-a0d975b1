@@ -125,7 +125,7 @@ describe("BoundaryDrawMap marker alignment", () => {
 
     // Every created annotation should be CSS-centred on its coordinate.
     for (const ann of createdAnnotations) {
-      expect(ann._anchorOffset).toEqual({ x: 0, y: 0 });
+      expect(ann.anchorOffset).toEqual({ x: 0, y: 0 });
       const el = ann._factory();
       expect(el.style.transform).toBe("translate(-50%, -50%)");
     }
