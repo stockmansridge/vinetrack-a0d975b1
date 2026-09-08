@@ -18,7 +18,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import {
-  useVineyardGrapeVarieties,
+  useCombinedGrapeVarieties,
   useUpsertVineyardGrapeVariety,
   type CatalogVariety,
 } from "@/lib/varietyCatalog";
@@ -44,7 +44,8 @@ export default function VarietyPicker({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const { data: list = [], isLoading } = useVineyardGrapeVarieties(vineyardId);
+  // Full built-in catalogue ∪ vineyard list — matches the iOS picker.
+  const { data: list = [], isLoading } = useCombinedGrapeVarieties(vineyardId);
   const upsert = useUpsertVineyardGrapeVariety();
 
   const excluded = useMemo(() => new Set(excludeKeys), [excludeKeys]);

@@ -9,6 +9,7 @@
 // The local resolver still ships an alias map (varietyResolver.ts) as a
 // FALLBACK only — used when the catalogue RPC is unreachable or the
 // allocation snapshot uses an old/free-text name.
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 
@@ -104,6 +105,55 @@ export function useVineyardGrapeVarieties(vineyardId: string | null | undefined)
       return ((data as any[]) ?? []).map(normaliseRow).filter(Boolean) as CatalogVariety[];
     },
   });
+}
+
+/** Full picker list matching iOS: the global built-in catalogue UNION the
+ *  vineyard list (built-ins with vineyard overrides + custom varieties).
+ *  The `list_vineyard_grape_varieties` RPC only returns varieties the vineyard
+ *  has explicitly added, so on its own a fresh vineyard shows customs only —
+ *  this hook layers the built-in catalogue underneath, like iOS does.
+ *
+ *  Merge rules:
+ *  - Built-ins always appear (catalogue is the source of truth for name/GDD).
+ *  - A vineyard built-in row contributes its id, is_active and GDD override
+ *    without clobbering the catalogue GDD.
+ *  - Custom varieties come only from the vineyard list; archived customs are
+ *    excluded from pickers.
+ *  - Sorted by display name. */
+export function useCombinedGrapeVarieties(vineyardId: string | null | undefined) {
+  const catalog = useGrapeVarietyCatalog();
+  const vineyardList = useVineyardGrapeVarieties(vineyardId);
+  const data = useMemo<CatalogVariety[]>(() => {
+    const byKey = new Map<string, CatalogVariety>();
+    for (const v of catalog.data ?? []) {
+      byKey.set(v.variety_key, { ...v, is_custom: false });
+    }
+    for (const v of vineyardList.data ?? []) {
+      const isCustom = v.is_custom === true || v.variety_key.startsWith("custom:");
+      if (isCustom) {
+        if (v.archived_at) continue; // archived customs stay out of pickers
+        byKey.set(v.variety_key, v);
+      } else {
+        const base = byKey.get(v.variety_key);
+        const catalogueGdd = base?.optimal_gdd ?? null;
+        const override = v.optimal_gdd_override ?? null;
+        byKey.set(v.variety_key, {
+          ...(base ?? {}),
+          ...v,
+          is_custom: false,
+          optimal_gdd: override != null ? override : catalogueGdd,
+          optimal_gdd_override: override,
+        });
+      }
+    }
+    const list = Array.from(byKey.values());
+    list.sort((a, b) => a.display_name.localeCompare(b.display_name));
+    return list;
+  }, [catalog.data, vineyardList.data]);
+  return {
+    data,
+    isLoading: catalog.isLoading || (!!vineyardId && vineyardList.isLoading),
+  };
 }
 
 /** Upsert a vineyard variety. Pass `variety_key = null` to create a CUSTOM variety —
