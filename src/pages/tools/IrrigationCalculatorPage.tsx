@@ -131,7 +131,9 @@ function InfoTip({ text }: { text: string }) {
 }
 
 export default function IrrigationCalculatorPage() {
-  const { selectedVineyardId } = useVineyard();
+  const { selectedVineyardId, currentRole } = useVineyard();
+  const canEditSoil = currentRole === "owner" || currentRole === "manager";
+
   const { toast } = useToast();
   const [mode, setMode] = useState<"forecast" | "manual">("forecast");
   const [duration, setDuration] = useState<number>(5);
