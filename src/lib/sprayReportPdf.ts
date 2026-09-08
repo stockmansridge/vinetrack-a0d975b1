@@ -83,6 +83,8 @@ function weatherRow(w: SprayReportWeather, fmt: RegionFormatters, tz: string): s
 export interface SprayReportPdfContext {
   formatters?: RegionFormatters;
   routeImage?: ResolvedRouteImage | null;
+  /** Honest reason shown in the Route section when no image can be embedded. */
+  routeWarning?: string | null;
   logoDataUrl?: string | null;
 }
 
