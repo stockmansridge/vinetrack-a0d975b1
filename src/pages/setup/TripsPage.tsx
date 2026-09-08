@@ -1118,16 +1118,18 @@ function TripSheet({
                 )}
               </Section>
             )}
-            <Section title="Rows / paths">
-              <Field label="Rows covered" value={String(cov?.rowsCovered ?? 0)} />
-              <Field label="Completed" value={String(cov?.completed ?? completed)} />
-              <Field label="Partial" value={String(cov?.partial ?? 0)} />
-              <Field label="Skipped" value={String(cov?.skipped ?? skipped)} />
-              <Field label="Manually marked complete" value={String(cov?.manuallyMarkedComplete ?? 0)} />
-              <Field label="Total distance" value={trip.total_distance == null ? "—" : formatters.distance(Number(trip.total_distance) / 1000, 2)} />
-              <Field label="Path points" value={points == null ? "—" : String(points)} />
-              <Field label="Pins" value={pins == null ? "—" : String(pins)} />
-            </Section>
+            {!sprayingTrip && (
+              <Section title="Rows / paths">
+                <Field label="Rows covered" value={String(cov?.rowsCovered ?? 0)} />
+                <Field label="Completed" value={String(cov?.completed ?? completed)} />
+                <Field label="Partial" value={String(cov?.partial ?? 0)} />
+                <Field label="Skipped" value={String(cov?.skipped ?? skipped)} />
+                <Field label="Manually marked complete" value={String(cov?.manuallyMarkedComplete ?? 0)} />
+                <Field label="Total distance" value={trip.total_distance == null ? "—" : formatters.distance(Number(trip.total_distance) / 1000, 2)} />
+                <Field label="Path points" value={points == null ? "—" : String(points)} />
+                <Field label="Pins" value={pins == null ? "—" : String(pins)} />
+              </Section>
+            )}
             {corrections.length > 0 && (
               <Section title="Manual corrections">
                 <ul className="space-y-1 list-disc pl-5">
