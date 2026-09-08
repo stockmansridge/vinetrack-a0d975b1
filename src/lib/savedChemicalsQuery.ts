@@ -65,7 +65,17 @@ export interface SavedChemical {
   registered_uses?: any;
   label_rate_bases?: string[] | null;
   intelligence_schema_version?: number | null;
-  pack_size?: string | null;
+  /* ---- Shared mobile operational columns (verified against the deployed
+   * shared schema): pack_size / price_per_pack / inventory_quantity are
+   * numeric, organic_certified is boolean, the rest are text. ---- */
+  product_form?: string | null;
+  pack_size?: number | null;
+  pack_unit?: string | null;
+  price_per_pack?: number | null;
+  inventory_quantity?: number | null;
+  inventory_unit?: string | null;
+  application_notes?: string | null;
+  organic_certified?: boolean | null;
   // --- SQL 199 Master Chemical Catalogue link (read + write) ---
   /** Which Master catalogue product this saved chemical was copied from. */
   master_chemical_id?: string | null;
@@ -214,6 +224,20 @@ function sanitize(input: SavedChemicalInput, mode: "insert" | "update" = "insert
       out[k] = v;
     }
   }
+  // Shared operational columns are typed in the deployed schema:
+  // pack_size / price_per_pack / inventory_quantity are numeric and
+  // organic_certified is boolean. A non-numeric value is never coerced to 0 —
+  // it is dropped so the stored value survives. Explicit null clears.
+  for (const key of ["pack_size", "price_per_pack", "inventory_quantity"] as const) {
+    if (!(key in out)) continue;
+    if (out[key] === null) continue;
+    const n = Number(out[key]);
+    if (Number.isFinite(n)) out[key] = n;
+    else delete out[key];
+  }
+  if ("organic_certified" in out && out.organic_certified !== null) {
+    out.organic_certified = Boolean(out.organic_certified);
+  }
   // iOS stores saved_chemicals.unit as the raw base unit enum
   // ("Litres" | "mL" | "Kg" | "g"), while spray job chemical lines store the
   // combined application unit (e.g. "Litres/ha", "mL/100L").
@@ -293,19 +317,11 @@ function sanitize(input: SavedChemicalInput, mode: "insert" | "update" = "insert
 }
 
 /**
- * SQL 222 makes `rate_per_ha` nullable. Deployment of that migration is not
- * verifiable from the portal, so an explicit null write degrades safely: if
- * the column is still NOT NULL the row is retried without the field rather
- * than losing the operator's save.
+ * SQL 222 (deployed) makes `rate_per_ha` nullable. A deliberate rate change
+ * that replaces a per-hectare scalar with a range or a /100 L rate therefore
+ * persists an explicit `null`. There is NO silent retry-without-the-field: if
+ * the write fails the error surfaces so the draft is kept and shown.
  */
-const isRatePerHaNotNull = (error: unknown): boolean => {
-  const e = error as { code?: string; message?: string } | null;
-  if (!e) return false;
-  return (
-    (e.code === "23502" || /not[-\s]?null/i.test(String(e.message ?? ""))) &&
-    /rate_per_ha/i.test(String(e.message ?? ""))
-  );
-};
 
 export async function createSavedChemical(vineyardId: string, input: SavedChemicalInput) {
   const now = new Date().toISOString();
@@ -320,13 +336,8 @@ export async function createSavedChemical(vineyardId: string, input: SavedChemic
   if (import.meta.env.DEV) {
     console.debug("Sanitised saved chemical payload", payload);
   }
-  const insert = (body: Record<string, any>) =>
-    supabase.from("saved_chemicals").insert(body).select().single();
-  let { data, error } = await insert(payload);
-  if (error && payload.rate_per_ha === null && isRatePerHaNotNull(error)) {
-    const { rate_per_ha: _drop, ...retry } = payload;
-    ({ data, error } = await insert(retry));
-  }
+  const { data, error } = await supabase
+    .from("saved_chemicals").insert(payload).select().single();
   if (error) throw error;
   return data as SavedChemical;
 }
@@ -339,13 +350,8 @@ export async function updateSavedChemical(id: string, input: SavedChemicalInput)
   if (import.meta.env.DEV) {
     console.debug("Sanitised saved chemical payload", payload);
   }
-  const patch = (body: Record<string, any>) =>
-    supabase.from("saved_chemicals").update(body).eq("id", id).select().single();
-  let { data, error } = await patch(payload);
-  if (error && payload.rate_per_ha === null && isRatePerHaNotNull(error)) {
-    const { rate_per_ha: _drop, ...retry } = payload;
-    ({ data, error } = await patch(retry));
-  }
+  const { data, error } = await supabase
+    .from("saved_chemicals").update(payload).eq("id", id).select().single();
   if (error) throw error;
   return data as SavedChemical;
 }
