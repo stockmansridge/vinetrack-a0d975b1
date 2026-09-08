@@ -971,20 +971,51 @@ function TripSheet({
                   trip={trip}
                   vineyardId={vineyardId ?? null}
                   canEdit={canDeleteTrip}
+                  summary={{
+                    status: tripStatus(trip),
+                    functionLabel: tripFunctionLabel(trip.trip_function),
+                    title: trip.trip_title ?? null,
+                    pattern: trip.tracking_pattern
+                      ? formatTripPatternLabel(trip.tracking_pattern)
+                      : null,
+                    created: fmtDate(trip.created_at),
+                    updated: fmtDate(trip.updated_at),
+                    recordId: trip.id,
+                  }}
+                  coverage={{
+                    rowsCovered: cov?.rowsCovered ?? 0,
+                    completed: cov?.completed ?? completed,
+                    partial: cov?.partial ?? 0,
+                    skipped: cov?.skipped ?? skipped,
+                    manuallyMarkedComplete: cov?.manuallyMarkedComplete ?? 0,
+                    totalDistance:
+                      trip.total_distance == null
+                        ? null
+                        : formatters.distance(Number(trip.total_distance) / 1000, 2),
+                    pathPoints: points ?? null,
+                    pins: pins ?? null,
+                    activeTank:
+                      trip.active_tank_number == null ? null : String(trip.active_tank_number),
+                    totalTanks: trip.total_tanks == null ? null : String(trip.total_tanks),
+                  }}
                 />
               </Section>
             )}
 
 
-            <Section title="Schedule">
-              <Field label="Date" value={fmtDate(trip.start_time)} />
-              <Field label="Start time" value={trip.start_time ? new Date(trip.start_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"} />
-              <Field label="Finish time" value={trip.end_time ? new Date(trip.end_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"} />
-              <Field label="Duration" value={fmtDuration(trip.start_time, trip.end_time)} />
-              <Field label="Status" value={tripStatus(trip)} />
-            </Section>
+            {!sprayingTrip && (
+              <Section title="Schedule">
+                <Field label="Date" value={fmtDate(trip.start_time)} />
+                <Field label="Start time" value={trip.start_time ? new Date(trip.start_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"} />
+                <Field label="Finish time" value={trip.end_time ? new Date(trip.end_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"} />
+                <Field label="Duration" value={fmtDuration(trip.start_time, trip.end_time)} />
+                <Field label="Status" value={tripStatus(trip)} />
+              </Section>
+            )}
             <Section title="Job record">
-              <Field label="Trip type / function" value={fmt(tripFunctionLabel(trip.trip_function))} />
+              {!sprayingTrip && (
+                <Field label="Trip type / function" value={fmt(tripFunctionLabel(trip.trip_function))} />
+              )}
               {canDeleteTrip ? (
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <Label className="text-muted-foreground">Title / details</Label>
@@ -1007,11 +1038,15 @@ function TripSheet({
                   </div>
                 </div>
               ) : (
-                <Field label="Title / details" value={fmt(trip.trip_title)} />
+                !sprayingTrip && <Field label="Title / details" value={fmt(trip.trip_title)} />
               )}
-              <Field label={formatters.blockLabel} value={fmt(padName)} />
-              <Field label="Pattern" value={trip.tracking_pattern ? formatTripPatternLabel(trip.tracking_pattern) : "—"} />
-              <Field label="Person" value={fmt(trip.person_name)} />
+              {!sprayingTrip && (
+                <>
+                  <Field label={formatters.blockLabel} value={fmt(padName)} />
+                  <Field label="Pattern" value={trip.tracking_pattern ? formatTripPatternLabel(trip.tracking_pattern) : "—"} />
+                  <Field label="Person" value={fmt(trip.person_name)} />
+                </>
+              )}
             </Section>
             {fuelEstimate && (
               <Section title="Fuel estimate">
