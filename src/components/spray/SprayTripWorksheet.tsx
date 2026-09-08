@@ -825,6 +825,22 @@ export default function SprayTripWorksheet({
 
 
       <Block title="Hourly weather">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            Recorded observations are never overwritten; recovery only fills in
+            missing hours.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => recoverWeather.mutate()}
+            disabled={recoverWeather.isPending}
+          >
+            {recoverWeather.isPending ? "Retrieving…" : "Retrieve historical weather"}
+          </Button>
+        </div>
+        {weatherNote && <p className="mb-2 text-xs text-muted-foreground">{weatherNote}</p>}
+
         <Table>
           <TableHeader>
             <TableRow>
