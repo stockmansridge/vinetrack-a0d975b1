@@ -1,7 +1,7 @@
 // Regression: boundary draw/edit markers must be centred exactly on the
-// coordinate so the drop point matches the cursor location. Both the New Block
-// wizard and the Edit Block Boundary screen reuse BoundaryDrawMap, so this test
-// covers both Portal entry points.
+// coordinate so the drop point matches the cursor location on the Edit Block
+// Boundary screen. MapKit custom annotations are already horizontally centred
+// and bottom-anchored, so existing-boundary markers use a half-height Y offset.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, waitFor, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -102,7 +102,7 @@ describe("BoundaryDrawMap marker alignment", () => {
     delete (globalThis as any).mapkit;
   });
 
-  it("centres vertex and midpoint annotations exactly on their coordinates", async () => {
+  it("centres edit-boundary vertex and midpoint annotations exactly on their coordinates", async () => {
     const polygon: LatLng[] = [
       { lat: -34.5, lng: 138.7 },
       { lat: -34.501, lng: 138.701 },
@@ -110,7 +110,12 @@ describe("BoundaryDrawMap marker alignment", () => {
     ];
 
     render(
-      <BoundaryDrawMap polygon={polygon} setPolygon={() => {}} readonly={false} />,
+      <BoundaryDrawMap
+        polygon={polygon}
+        setPolygon={() => {}}
+        readonly={false}
+        editingExistingBoundary
+      />,
       { wrapper: wrapper() }
     );
 
@@ -121,12 +126,22 @@ describe("BoundaryDrawMap marker alignment", () => {
     // Wait for the effect that adds annotations to run.
     await waitFor(() => expect(createdAnnotations.length).toBeGreaterThan(0), { timeout: 10000 });
 
-    // Every created annotation should be CSS-centred on its coordinate.
-    for (const ann of createdAnnotations) {
+    const vertexAnnotations = createdAnnotations.slice(0, polygon.length);
+    const midpointAnnotations = createdAnnotations.slice(polygon.length);
+    expect(vertexAnnotations).toHaveLength(3);
+    expect(midpointAnnotations).toHaveLength(3);
+
+    for (const ann of vertexAnnotations) {
       expect(ann.anchorOffset.x).toBe(0);
-      expect(ann.anchorOffset.y).toBe(0);
+      expect(ann.anchorOffset.y).toBe(10);
       const el = ann._factory();
-      expect(el.style.transform).toContain("translate(-50%,-50%)");
+      expect(el.style.transform).toBe("");
+    }
+    for (const ann of midpointAnnotations) {
+      expect(ann.anchorOffset.x).toBe(0);
+      expect(ann.anchorOffset.y).toBe(7);
+      const el = ann._factory();
+      expect(el.style.transform).toBe("");
     }
   });
 

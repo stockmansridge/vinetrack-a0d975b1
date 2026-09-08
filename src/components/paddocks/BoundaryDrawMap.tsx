@@ -53,6 +53,7 @@ interface Props {
   readonly?: boolean;
   rows?: RowOverlay[];
   excludePaddockId?: string;
+  editingExistingBoundary?: boolean;
 }
 
 
@@ -138,7 +139,14 @@ function useInitialCentre(
   return centre;
 }
 
-export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false, rows = [], excludePaddockId }: Props) {
+export default function BoundaryDrawMap({
+  polygon,
+  setPolygon,
+  readonly = false,
+  rows = [],
+  excludePaddockId,
+  editingExistingBoundary = false,
+}: Props) {
   const { selectedVineyardId } = useVineyard();
   const { data: loc } = useQuery({
     queryKey: ["vineyard-location-centre", selectedVineyardId],
@@ -235,6 +243,7 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
           rows={rows}
           rowLabels={rowLabels}
           existingPolygons={existingPolygons}
+          editingExistingBoundary={editingExistingBoundary}
         />
       ) : (
         <LeafletSatelliteDraw
@@ -272,7 +281,7 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
 // ────────────────────────────────────────────────────────────────────────────
 
 function AppleDrawMap({
-  centre, initialBBox, polygon, setPolygon, readonly, rows, rowLabels, existingPolygons,
+  centre, initialBBox, polygon, setPolygon, readonly, rows, rowLabels, existingPolygons, editingExistingBoundary,
 }: {
   centre: LatLng;
   initialBBox: { sw: LatLng; ne: LatLng } | null;
@@ -282,6 +291,7 @@ function AppleDrawMap({
   rows: RowOverlay[];
   rowLabels: { n: number; lat: number; lng: number }[];
   existingPolygons: LatLng[][];
+  editingExistingBoundary: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
@@ -528,14 +538,15 @@ function AppleDrawMap({
         () => {
           const el = document.createElement("div");
           el.style.cssText =
-            "background:#34C759;color:#fff;font-size:11px;font-weight:600;height:20px;line-height:16px;padding:2px 6px;box-sizing:border-box;border-radius:9999px;box-shadow:0 1px 2px rgba(0,0,0,.4);cursor:grab;transform:translate(-50%,-50%)";
+            `background:#34C759;color:#fff;font-size:11px;font-weight:600;height:20px;line-height:16px;padding:2px 6px;box-sizing:border-box;border-radius:9999px;box-shadow:0 1px 2px rgba(0,0,0,.4);cursor:grab${editingExistingBoundary ? "" : ";transform:translate(-50%,-50%)"}`;
           el.textContent = String(i + 1);
           return el;
         },
       );
-      // Pin the element's top-left corner to the coordinate, then centre it
-      // with CSS translate so the number sits exactly on the vertex.
-      try { (ann as any).anchorOffset = new DOMPoint(0, 0); } catch { /* noop */ }
+      // MapKit already centres custom annotations horizontally and anchors their
+      // bottom edge to the coordinate. Move an existing-boundary marker down by
+      // half its fixed height so its visual centre is exactly on the vertex.
+      try { (ann as any).anchorOffset = new DOMPoint(0, editingExistingBoundary ? 10 : 0); } catch { /* noop */ }
       try { ann.draggable = true; } catch { /* noop */ }
       ann.addEventListener("drag-end", () => {
         try {
@@ -572,12 +583,12 @@ function AppleDrawMap({
           () => {
             const el = document.createElement("div");
             el.style.cssText =
-              "width:14px;height:14px;box-sizing:border-box;border-radius:9999px;background:#fff;border:2px solid #34C759;box-shadow:0 1px 2px rgba(0,0,0,.4);cursor:pointer;opacity:.85;transform:translate(-50%,-50%)";
+              `width:14px;height:14px;box-sizing:border-box;border-radius:9999px;background:#fff;border:2px solid #34C759;box-shadow:0 1px 2px rgba(0,0,0,.4);cursor:pointer;opacity:.85${editingExistingBoundary ? "" : ";transform:translate(-50%,-50%)"}`;
             return el;
           },
         );
-        // Centre the midpoint dot exactly on the coordinate.
-        try { (ann as any).anchorOffset = new DOMPoint(0, 0); } catch { /* noop */ }
+        // As above, MapKit's bottom-centre anchor needs half the marker height.
+        try { (ann as any).anchorOffset = new DOMPoint(0, editingExistingBoundary ? 7 : 0); } catch { /* noop */ }
         const insertAt = i + 1;
         ann.addEventListener("select", () => {
           const next = polygonRef.current.slice();
@@ -591,7 +602,7 @@ function AppleDrawMap({
         midAnnsRef.current = midAnns;
       }
     }
-  }, [polygon, readonly, mapReady]);
+  }, [polygon, readonly, mapReady, editingExistingBoundary]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }
