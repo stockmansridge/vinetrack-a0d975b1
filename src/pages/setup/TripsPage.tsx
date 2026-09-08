@@ -1167,11 +1167,13 @@ function TripSheet({
                 <Field label="Filling" value={trip.is_filling_tank ? `Yes (#${trip.filling_tank_number ?? "?"})` : "No"} />
               </Section>
             )}
-            <Section title="Meta">
-              <Field label="Created" value={fmtDate(trip.created_at)} />
-              <Field label="Updated" value={fmtDate(trip.updated_at)} />
-              <Field label="Record ID" value={trip.id} mono />
-            </Section>
+            {!sprayingTrip && (
+              <Section title="Meta">
+                <Field label="Created" value={fmtDate(trip.created_at)} />
+                <Field label="Updated" value={fmtDate(trip.updated_at)} />
+                <Field label="Record ID" value={trip.id} mono />
+              </Section>
+            )}
           </div>
           );
         })()}
