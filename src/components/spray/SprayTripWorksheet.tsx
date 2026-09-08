@@ -148,6 +148,29 @@ function numOrNull(v: string): number | null {
   return isFinite(n) ? n : NaN;
 }
 
+export interface SprayTripCoverage {
+  rowsCovered?: number | null;
+  completed?: number | null;
+  partial?: number | null;
+  skipped?: number | null;
+  manuallyMarkedComplete?: number | null;
+  totalDistance?: string | null;
+  pathPoints?: number | null;
+  pins?: number | null;
+  activeTank?: string | null;
+  totalTanks?: string | null;
+}
+
+export interface SprayTripSummary {
+  status?: string | null;
+  functionLabel?: string | null;
+  title?: string | null;
+  pattern?: string | null;
+  created?: string | null;
+  updated?: string | null;
+  recordId?: string | null;
+}
+
 export interface SprayTripWorksheetProps {
   tripId: string;
   /** The trip row, needed to correct its operational metadata. */
@@ -155,6 +178,12 @@ export interface SprayTripWorksheetProps {
   vineyardId?: string | null;
   /** Owners, managers and supervisors may correct this trip. */
   canEdit?: boolean;
+  /** Generic trip facts merged in so there is no duplicate spray summary. */
+  summary?: SprayTripSummary | null;
+  /** Counts calculated from the recorded path — always labelled as such. */
+  coverage?: SprayTripCoverage | null;
+  /** Extra trip sections (fuel estimate, manual corrections) rendered inline. */
+  extraSections?: React.ReactNode;
 }
 
 export default function SprayTripWorksheet({
@@ -162,6 +191,9 @@ export default function SprayTripWorksheet({
   trip = null,
   vineyardId = null,
   canEdit = false,
+  summary = null,
+  coverage = null,
+  extraSections = null,
 }: SprayTripWorksheetProps) {
   const formatters = useRegionFormatters();
   const { toast } = useToast();
