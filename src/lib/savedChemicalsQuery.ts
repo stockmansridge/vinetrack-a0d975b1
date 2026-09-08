@@ -322,13 +322,8 @@ export async function createSavedChemical(vineyardId: string, input: SavedChemic
   if (import.meta.env.DEV) {
     console.debug("Sanitised saved chemical payload", payload);
   }
-  const insert = (body: Record<string, any>) =>
-    supabase.from("saved_chemicals").insert(body).select().single();
-  let { data, error } = await insert(payload);
-  if (error && payload.rate_per_ha === null && isRatePerHaNotNull(error)) {
-    const { rate_per_ha: _drop, ...retry } = payload;
-    ({ data, error } = await insert(retry));
-  }
+  const { data, error } = await supabase
+    .from("saved_chemicals").insert(payload).select().single();
   if (error) throw error;
   return data as SavedChemical;
 }
