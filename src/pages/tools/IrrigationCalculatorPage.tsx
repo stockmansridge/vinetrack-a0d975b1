@@ -56,6 +56,8 @@ import {
   deriveSoilBufferMm,
   aggregateConservativeBuffer,
 } from "@/lib/soilProfiles";
+import SoilProfileEditDialog from "@/components/soil/SoilProfileEditDialog";
+
 import { useGrapeVarieties } from "@/lib/varietyResolver";
 import { useVineyardGrapeVarieties } from "@/lib/varietyCatalog";
 import { buildWizardItems } from "@/lib/irrigationWizard";
