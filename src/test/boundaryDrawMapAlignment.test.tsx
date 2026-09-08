@@ -187,7 +187,7 @@ describe("BoundaryDrawMap marker alignment", () => {
     expect(next[2]).toEqual(polygon[2]);
   });
 
-  it("keeps create-block behaviour unchanged (CSS centring, zero offset)", async () => {
+  it("centres create-flow vertex and midpoint annotations exactly on their coordinates", async () => {
     const polygon: LatLng[] = [
       { lat: -34.5, lng: 138.7 },
       { lat: -34.501, lng: 138.701 },
@@ -207,11 +207,72 @@ describe("BoundaryDrawMap marker alignment", () => {
     await act(async () => { await initMapKit(); });
     await waitFor(() => expect(createdAnnotations.length).toBeGreaterThan(0), { timeout: 10000 });
 
-    for (const ann of createdAnnotations) {
+    const vertexAnnotations = createdAnnotations.slice(0, polygon.length);
+    const midpointAnnotations = createdAnnotations.slice(polygon.length);
+    expect(vertexAnnotations).toHaveLength(3);
+    expect(midpointAnnotations).toHaveLength(3);
+
+    for (const ann of vertexAnnotations) {
+      // Same centring as the existing-block editor: no CSS translation,
+      // negative half-height anchor offset.
       expect(ann.anchorOffset.x).toBe(0);
-      expect(ann.anchorOffset.y).toBe(0);
+      expect(ann.anchorOffset.y).toBe(-10);
       const el = ann._factory();
-      expect(el.style.transform).toContain("translate(-50%,-50%)");
+      expect(el.style.transform).toBe("");
+    }
+    for (const ann of midpointAnnotations) {
+      expect(ann.anchorOffset.x).toBe(0);
+      expect(ann.anchorOffset.y).toBe(-7);
+      const el = ann._factory();
+      expect(el.style.transform).toBe("");
+    }
+  });
+
+  it("inserts a create-flow midpoint at the exact edge midpoint and centres the resulting vertex", async () => {
+    const polygon: LatLng[] = [
+      { lat: -34.5, lng: 138.7 },
+      { lat: -34.501, lng: 138.701 },
+      { lat: -34.502, lng: 138.699 },
+    ];
+    const setPolygon = vi.fn();
+
+    render(
+      <BoundaryDrawMap
+        polygon={polygon}
+        setPolygon={setPolygon}
+        readonly={false}
+      />,
+      { wrapper: wrapper() }
+    );
+
+    const { initMapKit } = await import("@/lib/mapkit");
+    await act(async () => { await initMapKit(); });
+    await waitFor(() => expect(createdAnnotations.length).toBeGreaterThan(0), { timeout: 10000 });
+
+    const midAnn = createdAnnotations[polygon.length];
+    const select = midAnn.addEventListener.mock.calls.find((c: any[]) => c[0] === "select")?.[1];
+    expect(select).toBeDefined();
+
+    act(() => { select(); });
+
+    expect(setPolygon).toHaveBeenCalledTimes(1);
+    const next = setPolygon.mock.calls[0][0] as LatLng[];
+    // Midpoint inserted at index 1 with the exact edge-midpoint coordinates.
+    expect(next).toHaveLength(4);
+    expect(next[1]).toEqual({
+      lat: (polygon[0].lat + polygon[1].lat) / 2,
+      lng: (polygon[0].lng + polygon[1].lng) / 2,
+    });
+    // All other vertices preserved exactly.
+    expect(next[0]).toEqual(polygon[0]);
+    expect(next[2]).toEqual(polygon[1]);
+    expect(next[3]).toEqual(polygon[2]);
+
+    // The vertex annotation created for an inserted point uses the same
+    // centring (no CSS translation, -10 anchor offset) as every other vertex.
+    for (const ann of createdAnnotations.slice(0, polygon.length)) {
+      expect(ann.anchorOffset.y).toBe(-10);
+      expect(ann._factory().style.transform).toBe("");
     }
   });
 
