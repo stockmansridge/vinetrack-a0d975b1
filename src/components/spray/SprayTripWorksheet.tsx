@@ -719,6 +719,59 @@ export default function SprayTripWorksheet({
         </Table>
       </Block>
 
+      {coverage && (
+        <Block title="Coverage (calculated from the recorded path)">
+          <p className="mb-2 text-xs text-muted-foreground">
+            Worked out from the recorded track and pins — not part of the signed
+            spray record above.
+          </p>
+          <Field label="Rows covered" value={String(coverage.rowsCovered ?? 0)} />
+          <Field label="Completed" value={String(coverage.completed ?? 0)} />
+          <Field label="Partial" value={String(coverage.partial ?? 0)} />
+          <Field label="Skipped" value={String(coverage.skipped ?? 0)} />
+          <Field
+            label="Manually marked complete"
+            value={String(coverage.manuallyMarkedComplete ?? 0)}
+          />
+          <Field label="Total distance" value={coverage.totalDistance || NOT_RECORDED} />
+          <Field
+            label="Path points"
+            value={coverage.pathPoints == null ? NOT_RECORDED : String(coverage.pathPoints)}
+          />
+          <Field
+            label="Pins"
+            value={coverage.pins == null ? NOT_RECORDED : String(coverage.pins)}
+          />
+          {(coverage.activeTank || coverage.totalTanks) && (
+            <>
+              <Field label="Active tank" value={coverage.activeTank || NOT_RECORDED} />
+              <Field label="Total tanks" value={coverage.totalTanks || NOT_RECORDED} />
+            </>
+          )}
+        </Block>
+      )}
+
+      {summary && (
+        <Block title="Trip record">
+          <Field label="Status" value={summary.status || NOT_RECORDED} />
+          <Field label="Trip type / function" value={summary.functionLabel || NOT_RECORDED} />
+          <Field label="Title / details" value={summary.title || NOT_RECORDED} />
+          <Field label="Pattern" value={summary.pattern || NOT_RECORDED} />
+          <Field label="Created" value={summary.created || NOT_RECORDED} />
+          <Field label="Updated" value={summary.updated || NOT_RECORDED} />
+          {summary.recordId && (
+            <Field
+              label="Record ID"
+              value={<span className="break-all font-mono text-xs">{summary.recordId}</span>}
+            />
+          )}
+        </Block>
+      )}
+
+      {extraSections}
+
+
+
       <Block title="Hourly weather">
         <Table>
           <TableHeader>
