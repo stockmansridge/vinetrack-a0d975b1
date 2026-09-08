@@ -735,9 +735,11 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
                 paddockId={paddock.id}
                 paddockName={paddock.name}
                 vineyardId={vineyardId ?? paddock.vineyard_id ?? null}
+                canEdit={canEdit}
                 latitude={polygonCentroid(parsePolygonPoints(paddock.polygon_points))?.lat}
                 longitude={polygonCentroid(parsePolygonPoints(paddock.polygon_points))?.lng}
               />
+
 
             </CardContent>
           </Card>

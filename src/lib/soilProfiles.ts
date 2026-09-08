@@ -1,14 +1,21 @@
 // Shared Soil Profile helpers.
 //
-// Source of truth: iOS-shared Supabase (paddock_soil_profiles table +
-// soil_class_defaults via the get_soil_class_defaults RPC).
+// Source of truth: iOS-shared Supabase. RLS is enabled on
+// paddock_soil_profiles with no direct-access policies — every read and
+// write goes through the deployed RPCs, which enforce vineyard membership
+// (reads) and Owner/Manager permission (writes):
+//   get_paddock_soil_profile(p_paddock_id)
+//   list_vineyard_soil_profiles(p_vineyard_id)
+//   get_vineyard_default_soil_profile(p_vineyard_id)
+//   upsert_paddock_soil_profile(...)            -- all arguments required
+//   upsert_vineyard_default_soil_profile(...)
+//   delete_paddock_soil_profile(p_paddock_id)
+//   delete_vineyard_default_soil_profile(p_vineyard_id)
+//   get_soil_class_defaults()
 //
-// The shared backend exposes the TABLE (protected by RLS) but not the
-// get/upsert/delete paddock RPCs the portal originally called, so the
-// portal reads and writes the table directly. The deployed column names
-// differ from the old RPC contract; both directions are mapped here.
-// There is no per-row allowed-depletion column on the deployed table —
-// depletion is derived from the soil-class defaults on read.
+// Vineyard-wide profiles live in the same table with paddock_id = null.
+// Because the upsert arguments have no meaningful defaults, every write
+// re-sends the stored values for fields the portal does not edit.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
@@ -41,7 +48,9 @@ export interface SoilClassDefault {
 }
 
 export interface PaddockSoilProfile {
-  paddock_id: string;
+  /** Null for the vineyard-wide (whole vineyard) profile. */
+  paddock_id: string | null;
+  vineyard_id?: string | null;
   irrigation_soil_class?: IrrigationSoilClass | null;
   soil_landscape?: string | null;
   salis_code?: string | null;
@@ -72,54 +81,53 @@ export function useSoilClassDefaults() {
     staleTime: 60 * 60 * 1000,
     queryFn: async (): Promise<SoilClassDefault[]> => {
       const { data, error } = await (supabase as any).rpc("get_soil_class_defaults");
-      if (error) {
-        console.debug("[soil] get_soil_class_defaults error", error.message);
-        return [];
-      }
+      if (error) throw error;
       const rows = (data ?? []) as SoilClassDefault[];
       return [...rows].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
     },
   });
 }
 
-/** Map a deployed paddock_soil_profiles row to the portal shape. */
-function fromRow(row: Record<string, any>): PaddockSoilProfile {
+/** Map a stored paddock_soil_profiles row to the portal model. */
+export function fromRow(row: Record<string, any>): PaddockSoilProfile {
   return {
     ...row,
+    paddock_id: row.paddock_id ?? null,
     awc_mm_per_m: row.available_water_capacity_mm_per_m ?? null,
+    allowed_depletion_percent: row.management_allowed_depletion_percent ?? null,
     salis_code: row.soil_landscape_code ?? null,
     land_and_soil_capability: row.land_soil_capability ?? null,
     manual_override: row.is_manual_override ?? null,
     provider: row.source_provider ?? null,
-    raw: null,
+    raw: row.raw_source_json ?? null,
   } as PaddockSoilProfile;
 }
 
-async function fetchClassDefaults(): Promise<SoilClassDefault[]> {
-  const { data, error } = await (supabase as any).rpc("get_soil_class_defaults");
-  if (error) return [];
-  return (data ?? []) as SoilClassDefault[];
+function firstRow(data: any): Record<string, any> | null {
+  if (!data) return null;
+  if (Array.isArray(data)) return (data[0] as Record<string, any>) ?? null;
+  return data as Record<string, any>;
 }
 
-/**
- * The deployed table has no allowed-depletion column; derive it from the
- * soil-class defaults so the irrigation buffer maths still works.
- */
-function withDerivedDepletion(
-  profile: PaddockSoilProfile | null,
-  defaults: SoilClassDefault[],
-): PaddockSoilProfile | null {
-  if (!profile) return null;
-  const def = defaults.find(
-    (d) => d.irrigation_soil_class === profile.irrigation_soil_class,
+async function rpcGetPaddockProfile(paddockId: string): Promise<PaddockSoilProfile | null> {
+  const { data, error } = await (supabase as any).rpc("get_paddock_soil_profile", {
+    p_paddock_id: paddockId,
+  });
+  if (error) throw error;
+  const row = firstRow(data);
+  return row ? fromRow(row) : null;
+}
+
+async function rpcGetVineyardDefaultProfile(
+  vineyardId: string,
+): Promise<PaddockSoilProfile | null> {
+  const { data, error } = await (supabase as any).rpc(
+    "get_vineyard_default_soil_profile",
+    { p_vineyard_id: vineyardId },
   );
-  return {
-    ...profile,
-    allowed_depletion_percent:
-      profile.allowed_depletion_percent ??
-      def?.default_allowed_depletion_percent ??
-      null,
-  };
+  if (error) throw error;
+  const row = firstRow(data);
+  return row ? fromRow(row) : null;
 }
 
 export function usePaddockSoilProfile(paddockId?: string | null) {
@@ -127,43 +135,25 @@ export function usePaddockSoilProfile(paddockId?: string | null) {
     queryKey: PADDOCK_QK(paddockId),
     enabled: !!paddockId,
     staleTime: 30_000,
-    queryFn: async (): Promise<PaddockSoilProfile | null> => {
-      const { data, error } = await (supabase as any)
-        .from("paddock_soil_profiles")
-        .select("*")
-        .eq("paddock_id", paddockId)
-        .maybeSingle();
-      if (error) {
-        console.debug("[soil] paddock_soil_profiles read error", error.message);
-        return null;
-      }
-      if (!data) return null;
-      const defaults = await fetchClassDefaults();
-      return withDerivedDepletion(fromRow(data), defaults);
-    },
+    queryFn: () => rpcGetPaddockProfile(paddockId as string),
   });
 }
 
+/** Block profiles for a vineyard. Vineyard-wide rows are excluded. */
 export function useVineyardSoilProfiles(vineyardId?: string | null) {
   return useQuery({
     queryKey: VINEYARD_LIST_QK(vineyardId),
     enabled: !!vineyardId,
     staleTime: 30_000,
     queryFn: async (): Promise<PaddockSoilProfile[]> => {
-      const { data, error } = await (supabase as any)
-        .from("paddock_soil_profiles")
-        .select("*")
-        .eq("vineyard_id", vineyardId);
-      if (error) {
-        console.debug("[soil] paddock_soil_profiles list error", error.message);
-        return [];
-      }
-      const rows = ((data ?? []) as Record<string, any>[]).map(fromRow);
-      if (!rows.length) return [];
-      const defaults = await fetchClassDefaults();
-      return rows.map(
-        (p) => withDerivedDepletion(p, defaults) as PaddockSoilProfile,
+      const { data, error } = await (supabase as any).rpc(
+        "list_vineyard_soil_profiles",
+        { p_vineyard_id: vineyardId },
       );
+      if (error) throw error;
+      return ((data ?? []) as Record<string, any>[])
+        .map(fromRow)
+        .filter((p) => !!p.paddock_id);
     },
   });
 }
@@ -173,14 +163,50 @@ export function useVineyardDefaultSoilProfile(vineyardId?: string | null) {
     queryKey: VINEYARD_DEFAULT_QK(vineyardId),
     enabled: !!vineyardId,
     staleTime: 30_000,
-    queryFn: async (): Promise<PaddockSoilProfile | null> => {
-      // The shared backend has no vineyard-default soil storage (the RPC
-      // is not deployed); there is no portal-accessible source, so this
-      // intentionally resolves to null.
-      return null;
-    },
+    queryFn: () => rpcGetVineyardDefaultProfile(vineyardId as string),
   });
 }
+
+// ---------- Validation ----------
+
+export const SOIL_LIMITS = {
+  awcMmPerM: { min: 0, max: 400 },
+  rootDepthM: { min: 0, max: 5 },
+  depletionPercent: { min: 0, max: 100 },
+} as const;
+
+/** null/blank => null; finite numbers (including 0) pass through. */
+export function parseSoilNumber(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "boolean") return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Returns an error message, or null when the values are acceptable. */
+export function validateSoilNumbers(input: {
+  awcMmPerM?: number | null;
+  effectiveRootDepthM?: number | null;
+  allowedDepletionPercent?: number | null;
+}): string | null {
+  const checks: Array<[number | null | undefined, { min: number; max: number }, string]> = [
+    [input.awcMmPerM, SOIL_LIMITS.awcMmPerM, "Available water capacity must be between 0 and 400 mm/m."],
+    [input.effectiveRootDepthM, SOIL_LIMITS.rootDepthM, "Effective root depth must be between 0 and 5 m."],
+    [
+      input.allowedDepletionPercent,
+      SOIL_LIMITS.depletionPercent,
+      "Allowed depletion must be between 0 and 100%.",
+    ],
+  ];
+  for (const [value, range, message] of checks) {
+    if (value === null || value === undefined) continue;
+    if (!Number.isFinite(value) || value < range.min || value > range.max) return message;
+  }
+  return null;
+}
+
+// ---------- Writes ----------
 
 export interface UpsertPaddockSoilProfileInput {
   paddockId: string;
@@ -201,76 +227,109 @@ export interface UpsertPaddockSoilProfileInput {
   raw?: unknown;
 }
 
-function buildRow(input: UpsertPaddockSoilProfileInput) {
-  // Only columns that exist on the deployed paddock_soil_profiles table.
-  // allowed_depletion_percent and raw have no column and are not sent.
-  const row: Record<string, unknown> = {
-    paddock_id: input.paddockId,
-    irrigation_soil_class: input.irrigationSoilClass ?? null,
-    soil_landscape: input.soilLandscape ?? null,
-    soil_landscape_code: input.salisCode ?? null,
-    australian_soil_classification: input.australianSoilClassification ?? null,
-    land_soil_capability: input.landAndSoilCapability ?? null,
-    available_water_capacity_mm_per_m: input.awcMmPerM ?? null,
-    effective_root_depth_m: input.effectiveRootDepthM ?? null,
-    confidence: input.confidence ?? null,
-    source: input.source ?? "manual",
-    source_provider: input.provider ?? null,
-    is_manual_override: input.manualOverride ?? null,
-    manual_notes: input.manualNotes ?? null,
-  };
-  if (input.vineyardId) row.vineyard_id = input.vineyardId;
-  return row;
+export interface UpsertVineyardDefaultSoilProfileInput
+  extends Omit<UpsertPaddockSoilProfileInput, "paddockId" | "vineyardId"> {
+  vineyardId: string;
 }
 
 /**
- * The shared table's RLS check is scoped by vineyard (and, on the deployed
- * schema, by the writing user). Resolve the vineyard from the paddock when
- * the caller did not supply it, and stamp ownership columns when they exist.
+ * Fields the portal does not edit. They are re-sent from the stored row so
+ * an edit never blanks metadata written by a lookup or by mobile.
  */
-async function resolveVineyardId(
-  paddockId: string,
-  supplied?: string | null,
-): Promise<string | null> {
-  if (supplied) return supplied;
-  const { data } = await (supabase as any)
-    .from("paddocks")
-    .select("vineyard_id")
-    .eq("id", paddockId)
-    .maybeSingle();
-  return (data?.vineyard_id as string | undefined) ?? null;
+const PRESERVED_FIELDS = [
+  "australian_soil_classification_code",
+  "country_code",
+  "drainage_risk",
+  "infiltration_risk",
+  "land_soil_capability_class",
+  "lookup_latitude",
+  "lookup_longitude",
+  "model_version",
+  "region_code",
+  "soil_description",
+  "soil_texture_class",
+  "source_dataset",
+  "source_feature_id",
+  "source_name",
+  "waterlogging_risk",
+] as const;
+
+function preservedArgs(existing: PaddockSoilProfile | null): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const field of PRESERVED_FIELDS) {
+    out[`p_${field}`] = (existing as any)?.[field] ?? null;
+  }
+  return out;
 }
 
-const MISSING_COLUMN = "42703";
+function editedArgs(
+  input: Omit<UpsertPaddockSoilProfileInput, "paddockId" | "vineyardId">,
+  existing: PaddockSoilProfile | null,
+): Record<string, unknown> {
+  return {
+    p_irrigation_soil_class: input.irrigationSoilClass ?? null,
+    p_soil_landscape: input.soilLandscape ?? null,
+    p_soil_landscape_code: input.salisCode ?? null,
+    p_australian_soil_classification: input.australianSoilClassification ?? null,
+    p_land_soil_capability: input.landAndSoilCapability ?? null,
+    p_available_water_capacity_mm_per_m: parseSoilNumber(input.awcMmPerM),
+    p_effective_root_depth_m: parseSoilNumber(input.effectiveRootDepthM),
+    p_management_allowed_depletion_percent: parseSoilNumber(input.allowedDepletionPercent),
+    p_confidence: input.confidence ?? null,
+    p_source: input.source ?? existing?.source ?? "manual",
+    p_source_provider: input.provider ?? null,
+    p_is_manual_override: input.manualOverride ?? false,
+    p_manual_notes: input.manualNotes ?? null,
+    p_raw_source_json: (input.raw ?? existing?.raw ?? null) as unknown,
+  };
+}
+
+export function buildPaddockUpsertArgs(
+  input: UpsertPaddockSoilProfileInput,
+  existing: PaddockSoilProfile | null,
+): Record<string, unknown> {
+  return {
+    p_paddock_id: input.paddockId,
+    ...editedArgs(input, existing),
+    ...preservedArgs(existing),
+  };
+}
+
+export function buildVineyardDefaultUpsertArgs(
+  input: UpsertVineyardDefaultSoilProfileInput,
+  existing: PaddockSoilProfile | null,
+): Record<string, unknown> {
+  return {
+    p_vineyard_id: input.vineyardId,
+    ...editedArgs(input, existing),
+    ...preservedArgs(existing),
+  };
+}
+
+function invalidateSoil(qc: ReturnType<typeof useQueryClient>, args: {
+  paddockId?: string | null;
+  vineyardId?: string | null;
+}) {
+  if (args.paddockId) qc.invalidateQueries({ queryKey: PADDOCK_QK(args.paddockId) });
+  qc.invalidateQueries({ queryKey: ["soil", "vineyard-list"] });
+  qc.invalidateQueries({ queryKey: ["soil", "vineyard-default"] });
+  qc.invalidateQueries({ queryKey: ["irrigation"] });
+}
 
 export function useUpsertPaddockSoilProfile() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: UpsertPaddockSoilProfileInput) => {
-      const vineyardId = await resolveVineyardId(input.paddockId, input.vineyardId);
-      const base = buildRow({ ...input, vineyardId });
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData?.user?.id ?? null;
-
-      const attempt = async (row: Record<string, unknown>) =>
-        (supabase as any)
-          .from("paddock_soil_profiles")
-          .upsert(row, { onConflict: "paddock_id" });
-
-      let { error } = await attempt(
-        userId ? { ...base, created_by: userId, updated_by: userId } : base,
+      const invalid = validateSoilNumbers(input);
+      if (invalid) throw new Error(invalid);
+      const existing = await rpcGetPaddockProfile(input.paddockId);
+      const { error } = await (supabase as any).rpc(
+        "upsert_paddock_soil_profile",
+        buildPaddockUpsertArgs(input, existing),
       );
-      // Older deployments have no ownership columns — retry without them.
-      if (error && (error.code === MISSING_COLUMN || /created_by|updated_by/.test(error.message ?? ""))) {
-        ({ error } = await attempt(base));
-      }
       if (error) throw error;
     },
-
-    onSuccess: (_d, input) => {
-      qc.invalidateQueries({ queryKey: PADDOCK_QK(input.paddockId) });
-      qc.invalidateQueries({ queryKey: ["soil", "vineyard-list"] });
-    },
+    onSuccess: (_d, input) => invalidateSoil(qc, input),
   });
 }
 
@@ -278,46 +337,29 @@ export function useDeletePaddockSoilProfile() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (paddockId: string) => {
-      const { error } = await (supabase as any)
-        .from("paddock_soil_profiles")
-        .delete()
-        .eq("paddock_id", paddockId);
+      const { error } = await (supabase as any).rpc("delete_paddock_soil_profile", {
+        p_paddock_id: paddockId,
+      });
       if (error) throw error;
     },
-    onSuccess: (_d, paddockId) => {
-      qc.invalidateQueries({ queryKey: PADDOCK_QK(paddockId) });
-      qc.invalidateQueries({ queryKey: ["soil", "vineyard-list"] });
-    },
+    onSuccess: (_d, paddockId) => invalidateSoil(qc, { paddockId }),
   });
 }
 
 export function useUpsertVineyardDefaultSoilProfile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: {
-      vineyardId: string;
-      irrigationSoilClass?: string | null;
-      awcMmPerM?: number | null;
-      effectiveRootDepthM?: number | null;
-      allowedDepletionPercent?: number | null;
-      manualNotes?: string | null;
-    }) => {
+    mutationFn: async (input: UpsertVineyardDefaultSoilProfileInput) => {
+      const invalid = validateSoilNumbers(input);
+      if (invalid) throw new Error(invalid);
+      const existing = await rpcGetVineyardDefaultProfile(input.vineyardId);
       const { error } = await (supabase as any).rpc(
         "upsert_vineyard_default_soil_profile",
-        {
-          p_vineyard_id: args.vineyardId,
-          p_irrigation_soil_class: args.irrigationSoilClass ?? null,
-          p_awc_mm_per_m: args.awcMmPerM ?? null,
-          p_effective_root_depth_m: args.effectiveRootDepthM ?? null,
-          p_allowed_depletion_percent: args.allowedDepletionPercent ?? null,
-          p_manual_notes: args.manualNotes ?? null,
-        },
+        buildVineyardDefaultUpsertArgs(input, existing),
       );
       if (error) throw error;
     },
-    onSuccess: (_d, args) => {
-      qc.invalidateQueries({ queryKey: VINEYARD_DEFAULT_QK(args.vineyardId) });
-    },
+    onSuccess: (_d, input) => invalidateSoil(qc, { vineyardId: input.vineyardId }),
   });
 }
 
@@ -331,81 +373,9 @@ export function useDeleteVineyardDefaultSoilProfile() {
       );
       if (error) throw error;
     },
-    onSuccess: (_d, vineyardId) => {
-      qc.invalidateQueries({ queryKey: VINEYARD_DEFAULT_QK(vineyardId) });
-    },
+    onSuccess: (_d, vineyardId) => invalidateSoil(qc, { vineyardId }),
   });
 }
-
-/** NSW SEED lookup via the shared Edge Function. API key stays server-side. */
-export interface NswSeedLookupResult {
-  irrigation_soil_class?: string | null;
-  soil_landscape?: string | null;
-  salis_code?: string | null;
-  australian_soil_classification?: string | null;
-  land_and_soil_capability?: string | null;
-  awc_mm_per_m?: number | null;
-  effective_root_depth_m?: number | null;
-  allowed_depletion_percent?: number | null;
-  confidence?: string | null;
-  provider?: string | null;
-  source?: string | null;
-  raw?: unknown;
-  [k: string]: unknown;
-}
-
-export function useNswSeedLookup() {
-  return useMutation({
-    mutationFn: async (args: {
-      latitude: number;
-      longitude: number;
-      vineyardId?: string | null;
-      paddockId?: string | null;
-    }): Promise<NswSeedLookupResult> => {
-      const payload: Record<string, unknown> = {
-        latitude: args.latitude,
-        longitude: args.longitude,
-      };
-      if (args.vineyardId) payload.vineyardId = args.vineyardId;
-      if (args.paddockId) payload.paddockId = args.paddockId;
-      console.log("NSW SEED request payload", payload);
-      console.log("supabase.functions.invoke call", {
-        functionName: "nsw-seed-soil-lookup",
-        options: { body: payload },
-      });
-      const { data, error } = await (supabase as any).functions.invoke(
-        "nsw-seed-soil-lookup",
-        { body: payload },
-      );
-      if (error) {
-        console.warn("NSW SEED invoke error", {
-          message: (error as any)?.message,
-          name: (error as any)?.name,
-          context: (error as any)?.context,
-        });
-        // Surface structured error from the edge function body when available.
-        const ctx: any = (error as any)?.context;
-        try {
-          const text =
-            typeof ctx?.text === "function" ? await ctx.text() : null;
-          if (text) {
-            try {
-              const parsed = JSON.parse(text);
-              throw new Error(parsed?.error || parsed?.message || text);
-            } catch {
-              throw new Error(text);
-            }
-          }
-        } catch (inner: any) {
-          if (inner instanceof Error) throw inner;
-        }
-        throw error;
-      }
-      return (data ?? {}) as NswSeedLookupResult;
-    },
-  });
-}
-
 
 // ---------- Derived metrics ----------
 
@@ -438,19 +408,20 @@ export function deriveSoilBufferMm(profile: PaddockSoilProfile | null | undefine
     profile.awc_mm_per_m as number | null,
     profile.effective_root_depth_m as number | null,
   );
-  const raw = computeReadilyAvailableWaterMm(
+  return computeReadilyAvailableWaterMm(
     cap,
     profile.allowed_depletion_percent as number | null,
   );
-  return raw;
 }
 
-/** Conservative aggregate across paddock profiles for whole-vineyard mode.
- *  Picks the MIN AWC × MIN root depth × MIN allowed depletion across blocks. */
+/** Conservative aggregate across block profiles for whole-vineyard mode.
+ *  Picks the MIN AWC × MIN root depth × MIN allowed depletion across blocks.
+ *  Vineyard-wide rows (paddock_id null) are never included. */
 export function aggregateConservativeBuffer(
   profiles: PaddockSoilProfile[],
 ): number | null {
   const valid = profiles
+    .filter((p) => !!p.paddock_id)
     .map((p) => ({
       awc: Number(p.awc_mm_per_m),
       root: Number(p.effective_root_depth_m),

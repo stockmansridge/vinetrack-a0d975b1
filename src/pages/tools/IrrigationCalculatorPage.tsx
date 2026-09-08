@@ -56,6 +56,8 @@ import {
   deriveSoilBufferMm,
   aggregateConservativeBuffer,
 } from "@/lib/soilProfiles";
+import SoilProfileEditDialog from "@/components/soil/SoilProfileEditDialog";
+
 import { useGrapeVarieties } from "@/lib/varietyResolver";
 import { useVineyardGrapeVarieties } from "@/lib/varietyCatalog";
 import { buildWizardItems } from "@/lib/irrigationWizard";
@@ -131,7 +133,9 @@ function InfoTip({ text }: { text: string }) {
 }
 
 export default function IrrigationCalculatorPage() {
-  const { selectedVineyardId } = useVineyard();
+  const { selectedVineyardId, currentRole } = useVineyard();
+  const canEditSoil = currentRole === "owner" || currentRole === "manager";
+
   const { toast } = useToast();
   const [mode, setMode] = useState<"forecast" | "manual">("forecast");
   const [duration, setDuration] = useState<number>(5);
@@ -577,10 +581,26 @@ export default function IrrigationCalculatorPage() {
             </p>
           }
           soilProfile={
-            <p className="text-xs text-muted-foreground">
-              Soil profiles are managed per block in the Soil section of each Block detail page.
-            </p>
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                {selectedPaddockId === "__vineyard__"
+                  ? "Whole Vineyard uses the shared vineyard soil profile when one is saved, otherwise a conservative aggregate of the block profiles."
+                  : "Soil profiles are managed per block in the Soil section of each Block detail page."}
+              </p>
+              {selectedPaddockId === "__vineyard__" && selectedVineyardId && canEditSoil && (
+                <SoilProfileEditDialog
+                  wholeVineyard
+                  vineyardId={selectedVineyardId}
+                  trigger={
+                    <Button variant="outline" size="sm">
+                      {vineyardDefaultSoil ? "Edit" : "Add"} whole vineyard soil
+                    </Button>
+                  }
+                />
+              )}
+            </div>
           }
+
         />
       </div>
 

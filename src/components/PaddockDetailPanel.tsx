@@ -259,6 +259,8 @@ export function PaddockDetailContent({
         paddockId={paddock.id}
         paddockName={paddock.name}
         vineyardId={paddock.vineyard_id ?? null}
+        canEdit={canEdit}
+
         latitude={polygonCentroid(parsePolygonPoints(paddock.polygon_points))?.lat}
         longitude={polygonCentroid(parsePolygonPoints(paddock.polygon_points))?.lng}
       />
