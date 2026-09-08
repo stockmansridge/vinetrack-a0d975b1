@@ -293,12 +293,17 @@ export default function SprayTripWorksheet({
     },
     onSuccess: async () => {
       setError(null);
+      setErrorDiagnostic(null);
       setEditing(false);
       await qc.invalidateQueries();
       toast({ title: "Spray trip saved" });
     },
     // The draft is kept on screen so the user can retry.
-    onError: (e) => setError(describeTripDetailsError(e)),
+    onError: (e) => {
+      const { customer, diagnostic } = toCustomerError(describeTripDetailsError(e));
+      setError(customer);
+      setErrorDiagnostic(diagnostic);
+    },
   });
 
   if (query.isLoading) {
