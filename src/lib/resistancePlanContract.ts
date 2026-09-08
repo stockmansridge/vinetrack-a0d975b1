@@ -16,6 +16,7 @@
 // evaluation blob. The plan stores INTENT (which groups, in which order, for
 // which blocks) plus the ruleset provenance it was last saved against. The
 // result is always recomputed from current history.
+import { generateUuid } from "@/lib/uuid";
 import type { ResistanceDisease } from "@/lib/resistance/resistanceRuleset";
 import { normaliseGroupCode } from "@/lib/resistance/resistanceRuleset";
 
@@ -85,12 +86,7 @@ const asDisease = (v: unknown): ResistanceDisease | null => {
 };
 
 export function newPositionId(): string {
-  try {
-    if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  } catch {
-    /* fall through */
-  }
-  return `pos-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+  return generateUuid();
 }
 
 /** Normalise a mixed list of group inputs into ordered, deduplicated codes. */

@@ -12,6 +12,7 @@ import { Loader2, Plus, ShieldAlert } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { HelpHint } from "@/components/ui/HelpHint";
 import PruningActivityDialog from "@/components/pruning/PruningActivityDialog";
 
 /** Roles allowed to create a pruning activity — the same authority the
@@ -68,12 +69,17 @@ export default function NewPruningActivityButton({
   return (
     <>
       {disabled && !loading ? (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild><span className="inline-flex">{button}</span></TooltipTrigger>
-            <TooltipContent>{deniedReason}</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        // A disabled button cannot receive hover or focus, so the reason is
+        // also exposed through a tap/keyboard accessible help control.
+        <span className="inline-flex items-center gap-1">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild><span className="inline-flex">{button}</span></TooltipTrigger>
+              <TooltipContent>{deniedReason}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <HelpHint label="Why New Pruning Activity is unavailable">{deniedReason}</HelpHint>
+        </span>
       ) : (
         button
       )}

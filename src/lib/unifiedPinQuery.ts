@@ -1,4 +1,5 @@
 // Unified Add Pin / Action data layer (SQL 170) — shared VineTrack backend.
+import { generateUuid } from "@/lib/uuid";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { manualIssueErrorMessage, type RowSegment } from "@/lib/manualIssues";
@@ -16,9 +17,7 @@ import {
 import type { LatLng } from "@/lib/paddockGeometry";
 
 function newId(): string {
-  return typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return generateUuid();
 }
 
 async function rpc<T>(fn: string, args: Record<string, any>): Promise<T> {

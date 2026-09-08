@@ -4,6 +4,7 @@
 //   create -> record_pruning_activity(p_payload)
 //   edit   -> update_pruning_activity(p_activity_id, p_activity, p_allocations)
 // The legacy one-entry-per-block path is never used from here.
+import { generateUuid, tryGenerateUuid } from "@/lib/uuid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -158,7 +159,8 @@ export default function PruningActivityDialog({
   const skipEntryIds = useRef<Record<string, string>>({});
   const qc = useQueryClient();
   // Client uuid, generated once per dialog instance so a retry is idempotent.
-  const [newId] = useState(() => crypto.randomUUID());
+  const [{ id: generatedId, error: idError }] = useState(() => tryGenerateUuid());
+  const newId = generatedId ?? "";
 
   // SQL 200 — labour lives ONLY in Work Tasks. Tasks created before the
   // activity exists are linked immediately after the first successful save.
@@ -251,7 +253,7 @@ export default function PruningActivityDialog({
         const seasonId = alloc.seasonId
           ?? (await ensurePruningSeasonId(vineyardId, alloc.paddockId, seasonYear));
         const entryId = skipEntryIds.current[alloc.paddockId]
-          ?? (skipEntryIds.current[alloc.paddockId] = crypto.randomUUID());
+          ?? (skipEntryIds.current[alloc.paddockId] = generateUuid());
         await recordSkippedPruningEntry({
           entryId,
           vineyardId,
@@ -341,6 +343,11 @@ export default function PruningActivityDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[min(1200px,95vw)] max-h-[92vh] overflow-y-auto">
+        {idError && (
+          <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            {idError}
+          </div>
+        )}
         <DialogHeader>
           <div className="flex items-center justify-between gap-3">
             <div>

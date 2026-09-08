@@ -11,6 +11,7 @@
 // Ownership loading: quarters owned by THIS entry are preselected and
 // editable; quarters owned by OTHER entries stay locked (green); incomplete
 // quarters are available.
+import { generateUuid } from "@/lib/uuid";
 import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -341,7 +342,7 @@ export default function EditPruningDialog({
     }));
   };
   const addDraft = () => setLabourDrafts((prev) => [...prev, {
-    id: crypto.randomUUID(), isNew: true, workerTypeId: NONE, workerType: "",
+    id: generateUuid(), isNew: true, workerTypeId: NONE, workerType: "",
     workerCount: "1", hoursPerWorker: "", hourlyRate: "", notes: "", syncVersion: null,
   }]);
   const removeDraft = (id: string) => {

@@ -1,3 +1,4 @@
+import { generateUuid } from "@/lib/uuid";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -159,7 +160,7 @@ export default function FertiliserCalculatorPage() {
     // allocation ids because `existing` is null.
     const clone: FertiliserRecord = {
       ...r,
-      id: crypto.randomUUID(),
+      id: generateUuid(),
       record_status: "draft",
       sync_version: 0,
       created_at: "",

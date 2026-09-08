@@ -2,6 +2,7 @@
 // Owner/manager only. Reads from trip_cost_allocations (iOS Supabase),
 // which is RLS-restricted to owner/manager. We additionally gate the
 // query and the entire page behind useCanSeeCosts().
+import { HelpHint } from "@/components/ui/HelpHint";
 import { useMemo, useState, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Lock, Download, AlertTriangle, Info, BarChart3 } from "lucide-react";
@@ -1153,22 +1154,17 @@ export default function CostReportsPage() {
                     variety: (
                       <TableCell>
                         {g.variety ? g.variety : (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="inline-flex items-center gap-1">
-                                <Badge variant="outline" className="text-amber-700 border-amber-400">
-                                  Unassigned variety
-                                </Badge>
-                                <Info className="h-3 w-3 text-muted-foreground" />
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-xs">
+                          <span className="inline-flex items-center gap-1">
+                            <Badge variant="outline" className="text-amber-700 border-amber-400">
+                              Unassigned variety
+                            </Badge>
+                            <HelpHint label="Why the variety is unassigned">
                               This block has no variety allocation, or it could
                               not be matched. Fix it in{" "}
                               <Link to="/setup/paddocks" className="underline">Block settings</Link>{" "}
                               and recalculate.
-                            </TooltipContent>
-                          </Tooltip>
+                            </HelpHint>
+                          </span>
                         )}
                       </TableCell>
                     ),
@@ -1382,14 +1378,7 @@ function SummaryCard({ label, value, info }: { label: string; value: string; inf
     <Card className="p-3">
       <div className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-1">
         {label}
-        {info && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Info className="h-3 w-3 cursor-help" />
-            </TooltipTrigger>
-            <TooltipContent className="max-w-xs">{info}</TooltipContent>
-          </Tooltip>
-        )}
+        {info && <HelpHint label={`About ${label}`}>{info}</HelpHint>}
       </div>
       <div className="text-lg font-semibold mt-1">{value}</div>
     </Card>

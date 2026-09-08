@@ -1,5 +1,6 @@
 // Phase 2E — customer-facing Billing page for active Vineyard Owners.
 // All authority, money and seat values come from the SQL 152/153 RPCs.
+import { openDeferredTab, PopupBlockedError } from "@/lib/openExternalUrl";
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, CreditCard, ExternalLink, Download, RefreshCw } from "lucide-react";
@@ -158,15 +159,21 @@ export default function AccountBillingPage() {
   const handleInvoice = async (invoiceId: string, action: "view" | "download") => {
     if (!selectedId) return;
     setPendingInvoice(`${invoiceId}:${action}`);
+    // Open the tab synchronously inside the click, before awaiting the signed
+    // URL — Safari blocks a `window.open` that happens after an await.
+    const tab = openDeferredTab();
     try {
       const url = await invoiceLink.mutateAsync({
         vineyardId: selectedId,
         invoiceId,
         action,
       });
-      window.open(url, "_blank", "noopener,noreferrer");
+      await tab.settle(url);
     } catch (e) {
-      toast.error(billingErrorMessage(e));
+      tab.fail();
+      toast.error(
+        e instanceof PopupBlockedError ? e.message : billingErrorMessage(e),
+      );
     } finally {
       setPendingInvoice(null);
     }
