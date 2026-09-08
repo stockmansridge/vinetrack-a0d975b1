@@ -393,6 +393,15 @@ export default function SprayTripWorksheet({
           {error}
         </p>
       )}
+      <SystemAdminDiagnostics
+        details={[
+          errorDiagnostic,
+          editing ? ACTUALS_SAVE_UNAVAILABLE.diagnostic : null,
+          editing ? SPRAY_UNIT_MSG.diagnostic : null,
+          editing ? TRIP_FUEL_RATE_UNAVAILABLE.diagnostic : null,
+        ]}
+      />
+
       {!!notes.length && (
         <ul className="rounded-md border p-2 text-xs text-muted-foreground">
           {notes.map((n, i) => (
