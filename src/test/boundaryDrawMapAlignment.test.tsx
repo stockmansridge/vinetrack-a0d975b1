@@ -32,18 +32,20 @@ const mockState = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/mapkit", () => {
+  const mapMock = vi.fn().mockImplementation(() => {
+    console.log("Fake MapKit Map constructor called");
+    return {
+      addOverlays: vi.fn(),
+      removeOverlays: vi.fn(),
+      addAnnotations: vi.fn(),
+      removeAnnotations: vi.fn(),
+      addEventListener: vi.fn(),
+    };
+  });
+  (mapMock as any)._isMapMock = true;
   mockState.fakeMapKit = {
     _isMock: true,
-    Map: vi.fn().mockImplementation(() => {
-      console.log("Fake MapKit Map constructor called");
-      return {
-        addOverlays: vi.fn(),
-        removeOverlays: vi.fn(),
-        addAnnotations: vi.fn(),
-        removeAnnotations: vi.fn(),
-        addEventListener: vi.fn(),
-      };
-    }),
+    Map: mapMock,
     Coordinate: vi.fn().mockImplementation((lat: number, lng: number) => ({ latitude: lat, longitude: lng })),
     CoordinateRegion: vi.fn().mockImplementation((center: any, span: any) => ({ center, span })),
     CoordinateSpan: vi.fn().mockImplementation((latDelta: number, lngDelta: number) => ({ latDelta, lngDelta })),
