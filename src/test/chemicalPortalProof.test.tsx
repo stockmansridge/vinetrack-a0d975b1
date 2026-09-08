@@ -229,7 +229,9 @@ describe("a default rate whose identity disappeared", () => {
     );
     expect(editor).toContain("DEFAULT_RATE_NO_LONGER_ON_LABEL_MESSAGE");
     // Save is blocked by the composite gate, which includes the stale default.
-    expect(editor).toContain("const saveBlocked = staleDefaultRate || firstAddBlocked;");
+    expect(editor).toContain(
+      "const saveBlocked = staleDefaultRate || firstAddBlocked || manualBlocking.length > 0;",
+    );
     expect(editor).toContain("disabled={saveMut.isPending || saveBlocked}");
   });
 });

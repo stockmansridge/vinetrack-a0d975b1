@@ -31,10 +31,16 @@ export function ManualRateEditor({
   draft,
   onChange,
   onCancel,
+  provenanceMessage,
 }: {
   draft: ManualRateDraft;
   onChange: (next: ManualRateDraft) => void;
   onCancel: () => void;
+  /**
+   * Manual ENTRY uses its own wording: the registered-product recovery message
+   * ("VineTrack could not read this rate…") must never be shown there.
+   */
+  provenanceMessage?: string;
 }) {
   const patch = (p: Partial<ManualRateDraft>) => onChange({ ...draft, ...p });
   const validation = validateManualRate(draft);
@@ -160,7 +166,7 @@ export function ManualRateEditor({
         <p className="text-[11px] text-destructive" role="alert">{validation.message}</p>
       )}
 
-      <p className="text-[11px] text-muted-foreground">{MANUAL_RATE_PROVENANCE_MESSAGE}</p>
+      <p className="text-[11px] text-muted-foreground">{provenanceMessage ?? MANUAL_RATE_PROVENANCE_MESSAGE}</p>
 
       <label className="flex cursor-pointer items-start gap-2 text-[11px]">
         <Checkbox

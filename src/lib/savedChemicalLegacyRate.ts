@@ -56,6 +56,24 @@ export function legacyRatePerHa(input: LegacyRatePerHaInput): number | undefined
   return undefined;
 }
 
+/**
+ * SQL 222 write projection.
+ *
+ * When the operator has made a DELIBERATE new/changed structured rate decision
+ * the legacy scalar must be corrected, not left behind: a genuine confirmed
+ * per-hectare scalar is written, anything else writes explicit `null` (never
+ * zero, never a converted or midpoint value). Without such a decision the
+ * field is OMITTED so an unrelated edit preserves the stored value.
+ */
+export function legacyRatePerHaForWrite(
+  input: LegacyRatePerHaInput & { rateDecisionChanged?: boolean },
+): number | null | undefined {
+  const scalar = legacyRatePerHa(input);
+  if (scalar !== undefined) return scalar;
+  return input.rateDecisionChanged ? null : undefined;
+}
+
+
 /** True when a Postgres error is the legacy NOT NULL constraint on the column. */
 export function isLegacyRatePerHaViolation(error: unknown): boolean {
   const msg = String((error as any)?.message ?? error ?? "");
