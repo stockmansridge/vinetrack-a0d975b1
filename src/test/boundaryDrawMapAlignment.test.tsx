@@ -64,10 +64,7 @@ vi.mock("@/lib/mapkit", () => {
   (globalThis as any).window = (globalThis as any).window ?? {};
   (globalThis as any).window.mapkit = mockState.fakeMapKit;
   (globalThis as any).mapkit = mockState.fakeMapKit;
-  mockState.initMapKit.mockImplementation(() => {
-    console.log("initMapKit called");
-    return Promise.resolve(mockState.fakeMapKit);
-  });
+  mockState.initMapKit.mockImplementation(() => Promise.resolve(mockState.fakeMapKit));
   return {
     initMapKit: mockState.initMapKit,
   };
