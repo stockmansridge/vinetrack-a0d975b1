@@ -1062,7 +1062,7 @@ function TripSheet({
                 )}
               </Section>
             )}
-            {canSeeCosts && cost && (
+            {!sprayingTrip && canSeeCosts && cost && (
               <Section title="Estimated trip cost">
                 <Field label="Active hours" value={fmtHours(cost.activeHours)} />
                 <Field
