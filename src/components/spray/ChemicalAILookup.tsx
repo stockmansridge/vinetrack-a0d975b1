@@ -538,7 +538,7 @@ export function ChemicalAILookup({
 
       {/* Manual entry is a first-class starting point, always available —
           no search text, no vineyard country and no lookup call required. */}
-      {selectionMode !== "manual" && (
+      {selectionMode !== "manual" && !error && (
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
           <span>Product not listed, or entering it from the label?</span>
           <Button

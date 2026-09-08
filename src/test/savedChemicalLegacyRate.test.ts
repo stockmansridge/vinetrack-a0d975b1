@@ -124,10 +124,16 @@ vi.mock("@/integrations/ios-supabase/client", () => ({
 }));
 
 describe("saved_chemicals write payload", () => {
-  it("never sends a null rate_per_ha", async () => {
+  // SQL 222: the column is nullable, so an EXPLICIT null is a deliberate
+  // "there is no genuine per-hectare scalar" correction and is written; an
+  // omitted field still leaves the stored value alone.
+  it("writes an explicit null and omits an unsupplied rate_per_ha", async () => {
     writes.length = 0;
     const { createSavedChemical } = await import("@/lib/savedChemicalsQuery");
     await createSavedChemical("v1", { name: "SACOA Stifle", rate_per_ha: null });
+    expect(writes[0].rate_per_ha).toBeNull();
+    writes.length = 0;
+    await createSavedChemical("v1", { name: "SACOA Stifle" });
     expect("rate_per_ha" in writes[0]).toBe(false);
   });
 
