@@ -75,10 +75,18 @@ import {
   type VineyardMachine,
 } from "@/lib/vineyardMachinesQuery";
 
+import SystemAdminDiagnostics from "@/components/admin/SystemAdminDiagnostics";
+import {
+  ACTUALS_SAVE_UNAVAILABLE,
+  SPRAY_UNIT_EDIT_UNAVAILABLE as SPRAY_UNIT_MSG,
+  TRIP_FUEL_RATE_UNAVAILABLE,
+  toCustomerError,
+} from "@/lib/sprayReportMessaging";
+
 const NONE = "__none__";
 
-export const SPRAY_UNIT_EDIT_UNAVAILABLE =
-  "The spray unit is stored on the linked spray record. Correcting it here needs Rork's shared spray-record save path.";
+/** Practical wording; the technical reason lives in admin diagnostics. */
+export const SPRAY_UNIT_EDIT_UNAVAILABLE = SPRAY_UNIT_MSG.customer;
 
 export function sprayReportQueryKey(tripId: string) {
   return ["spray-report-v1", tripId] as const;
@@ -140,6 +148,29 @@ function numOrNull(v: string): number | null {
   return isFinite(n) ? n : NaN;
 }
 
+export interface SprayTripCoverage {
+  rowsCovered?: number | null;
+  completed?: number | null;
+  partial?: number | null;
+  skipped?: number | null;
+  manuallyMarkedComplete?: number | null;
+  totalDistance?: string | null;
+  pathPoints?: number | null;
+  pins?: number | null;
+  activeTank?: string | null;
+  totalTanks?: string | null;
+}
+
+export interface SprayTripSummary {
+  status?: string | null;
+  functionLabel?: string | null;
+  title?: string | null;
+  pattern?: string | null;
+  created?: string | null;
+  updated?: string | null;
+  recordId?: string | null;
+}
+
 export interface SprayTripWorksheetProps {
   tripId: string;
   /** The trip row, needed to correct its operational metadata. */
@@ -147,6 +178,12 @@ export interface SprayTripWorksheetProps {
   vineyardId?: string | null;
   /** Owners, managers and supervisors may correct this trip. */
   canEdit?: boolean;
+  /** Generic trip facts merged in so there is no duplicate spray summary. */
+  summary?: SprayTripSummary | null;
+  /** Counts calculated from the recorded path — always labelled as such. */
+  coverage?: SprayTripCoverage | null;
+  /** Extra trip sections (fuel estimate, manual corrections) rendered inline. */
+  extraSections?: React.ReactNode;
 }
 
 export default function SprayTripWorksheet({
@@ -154,6 +191,9 @@ export default function SprayTripWorksheet({
   trip = null,
   vineyardId = null,
   canEdit = false,
+  summary = null,
+  coverage = null,
+  extraSections = null,
 }: SprayTripWorksheetProps) {
   const formatters = useRegionFormatters();
   const { toast } = useToast();
@@ -177,6 +217,7 @@ export default function SprayTripWorksheet({
   const [endHours, setEndHours] = useState("");
   const [draft, setDraft] = useState<ActualsDraft>({ water: {}, chemicals: {} });
   const [error, setError] = useState<string | null>(null);
+  const [errorDiagnostic, setErrorDiagnostic] = useState<string | null>(null);
   const [openHistory, setOpenHistory] = useState<string | null>(null);
 
   const { data: machines = [] } = useQuery<VineyardMachine[]>({
@@ -252,12 +293,17 @@ export default function SprayTripWorksheet({
     },
     onSuccess: async () => {
       setError(null);
+      setErrorDiagnostic(null);
       setEditing(false);
       await qc.invalidateQueries();
       toast({ title: "Spray trip saved" });
     },
     // The draft is kept on screen so the user can retry.
-    onError: (e) => setError(describeTripDetailsError(e)),
+    onError: (e) => {
+      const { customer, diagnostic } = toCustomerError(describeTripDetailsError(e));
+      setError(customer);
+      setErrorDiagnostic(diagnostic);
+    },
   });
 
   if (query.isLoading) {
@@ -269,14 +315,17 @@ export default function SprayTripWorksheet({
   }
 
   if (query.isError || !payload) {
+    const loadError = toCustomerError(
+      (query.error as Error)?.message,
+      "Spray details could not be loaded. Please try again.",
+    );
     return (
       <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
-        <p className="text-destructive">
-          {(query.error as Error)?.message ?? "Spray details could not be loaded."}
-        </p>
+        <p className="text-destructive">{loadError.customer}</p>
         <Button size="sm" variant="outline" className="mt-2" onClick={() => query.refetch()}>
           <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Try again
         </Button>
+        <SystemAdminDiagnostics className="mt-3" details={[loadError.diagnostic]} />
       </div>
     );
   }
@@ -344,6 +393,15 @@ export default function SprayTripWorksheet({
           {error}
         </p>
       )}
+      <SystemAdminDiagnostics
+        details={[
+          errorDiagnostic,
+          editing ? ACTUALS_SAVE_UNAVAILABLE.diagnostic : null,
+          editing ? SPRAY_UNIT_MSG.diagnostic : null,
+          editing ? TRIP_FUEL_RATE_UNAVAILABLE.diagnostic : null,
+        ]}
+      />
+
       {!!notes.length && (
         <ul className="rounded-md border p-2 text-xs text-muted-foreground">
           {notes.map((n, i) => (
@@ -660,6 +718,59 @@ export default function SprayTripWorksheet({
           </TableBody>
         </Table>
       </Block>
+
+      {coverage && (
+        <Block title="Coverage (calculated from the recorded path)">
+          <p className="mb-2 text-xs text-muted-foreground">
+            Worked out from the recorded track and pins — not part of the signed
+            spray record above.
+          </p>
+          <Field label="Rows covered" value={String(coverage.rowsCovered ?? 0)} />
+          <Field label="Completed" value={String(coverage.completed ?? 0)} />
+          <Field label="Partial" value={String(coverage.partial ?? 0)} />
+          <Field label="Skipped" value={String(coverage.skipped ?? 0)} />
+          <Field
+            label="Manually marked complete"
+            value={String(coverage.manuallyMarkedComplete ?? 0)}
+          />
+          <Field label="Total distance" value={coverage.totalDistance || NOT_RECORDED} />
+          <Field
+            label="Path points"
+            value={coverage.pathPoints == null ? NOT_RECORDED : String(coverage.pathPoints)}
+          />
+          <Field
+            label="Pins"
+            value={coverage.pins == null ? NOT_RECORDED : String(coverage.pins)}
+          />
+          {(coverage.activeTank || coverage.totalTanks) && (
+            <>
+              <Field label="Active tank" value={coverage.activeTank || NOT_RECORDED} />
+              <Field label="Total tanks" value={coverage.totalTanks || NOT_RECORDED} />
+            </>
+          )}
+        </Block>
+      )}
+
+      {summary && (
+        <Block title="Trip record">
+          <Field label="Status" value={summary.status || NOT_RECORDED} />
+          <Field label="Trip type / function" value={summary.functionLabel || NOT_RECORDED} />
+          <Field label="Title / details" value={summary.title || NOT_RECORDED} />
+          <Field label="Pattern" value={summary.pattern || NOT_RECORDED} />
+          <Field label="Created" value={summary.created || NOT_RECORDED} />
+          <Field label="Updated" value={summary.updated || NOT_RECORDED} />
+          {summary.recordId && (
+            <Field
+              label="Record ID"
+              value={<span className="break-all font-mono text-xs">{summary.recordId}</span>}
+            />
+          )}
+        </Block>
+      )}
+
+      {extraSections}
+
+
 
       <Block title="Hourly weather">
         <Table>

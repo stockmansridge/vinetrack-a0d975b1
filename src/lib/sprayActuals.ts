@@ -18,7 +18,7 @@ import type {
 import { toDisplayAmount, unitLabel } from "@/lib/sprayReportQuantities";
 
 export const SPRAY_ACTUALS_SAVE_UNAVAILABLE =
-  "Recorded actual water and chemical quantities can't be saved yet: the shared save path for spray_tank_actuals (with its atomic audit history) hasn't been deployed. Your entries are kept on screen until then.";
+  "Editing actual quantities is temporarily unavailable. Your changes have not been saved.";
 
 /* ------------------------------------------------------------------ */
 /* Amendment history                                                    */

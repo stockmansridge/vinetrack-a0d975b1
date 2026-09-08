@@ -240,7 +240,7 @@ export async function updateTripTitle(params: {
 //   * spray unit / sprayer      → lives on `spray_records.spray_equipment_id`
 //   * trip-specific fuel rate   → no per-trip override column exists
 export const TRIP_FUEL_RATE_OVERRIDE_UNAVAILABLE =
-  "A trip-specific fuel consumption rate needs a per-trip override column on `trips` (for example `fuel_usage_l_per_hour_override`) plus mobile sync support. Until Rork adds it, the machine's default rate is used.";
+  "A fuel rate just for this trip can't be set yet — the machine's usual rate is used.";
 
 export interface TripDetailEdits {
   tractorId?: string | null;
