@@ -523,7 +523,7 @@ export default function NewPaddockPage() {
               <AlertTitle>Available after save</AlertTitle>
               <AlertDescription className="text-xs">
                 Once the block has been saved, open it from the Blocks list and use the Soil tab
-                to fetch NSW SEED soil data automatically (requires a boundary) or enter values manually.
+                to enter soil values manually.
               </AlertDescription>
             </Alert>
             <div className="flex justify-between gap-2 pt-2">

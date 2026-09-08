@@ -727,7 +727,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
           <Card>
             <CardHeader>
               <CardTitle>Soil profile</CardTitle>
-              <CardDescription>Linked to the shared soil profile / NSW SEED lookup.</CardDescription>
+              <CardDescription>Shared soil profile for this block.</CardDescription>
             </CardHeader>
             <CardContent>
               <SoilProfileSection

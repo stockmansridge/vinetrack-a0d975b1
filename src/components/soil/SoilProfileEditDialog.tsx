@@ -30,6 +30,7 @@ import {
 interface Props {
   paddockId: string;
   paddockName?: string | null;
+  vineyardId?: string | null;
   current: PaddockSoilProfile | null;
   trigger: React.ReactNode;
 }
@@ -37,6 +38,7 @@ interface Props {
 export default function SoilProfileEditDialog({
   paddockId,
   paddockName,
+  vineyardId,
   current,
   trigger,
 }: Props) {
@@ -81,6 +83,7 @@ export default function SoilProfileEditDialog({
     try {
       await upsert.mutateAsync({
         paddockId,
+        vineyardId: vineyardId ?? null,
         irrigationSoilClass: soilClass || null,
         awcMmPerM: awc ? Number(awc) : null,
         effectiveRootDepthM: rootDepth ? Number(rootDepth) : null,
@@ -177,7 +180,8 @@ export default function SoilProfileEditDialog({
                 type="number"
                 step="1"
                 value={depletion}
-                onChange={(e) => setDepletion(e.target.value)}
+                disabled
+                title="Set by the soil-class defaults"
               />
             </div>
           </div>
