@@ -33,11 +33,11 @@ export function HelpHint({ label, children, triggerText, className, contentClass
           type="button"
           aria-label={label}
           onClick={(e) => {
-            e.preventDefault();
+            // Stop only propagation — calling preventDefault would suppress
+            // Radix's own composed handler and the popover would never open.
             e.stopPropagation();
           }}
           onPointerDown={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
           className={cn(
             "inline-flex min-h-[24px] items-center gap-1 rounded text-left align-middle text-muted-foreground",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
