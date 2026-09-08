@@ -1,12 +1,16 @@
+// The portal never writes the route bucket or its metadata itself: generation
+// and registration go through the authenticated route-upload function, and the
+// canonical bytes it returns are what gets embedded.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const storage = { download: vi.fn(), upload: vi.fn() };
-const rpc = vi.fn();
+const invoke = vi.fn();
 
 vi.mock("@/integrations/ios-supabase/client", () => ({
   supabase: {
     storage: { from: () => storage },
-    rpc: (...args: unknown[]) => rpc(...args),
+    functions: { invoke: (...args: unknown[]) => invoke(...args) },
+    rpc: vi.fn(),
   },
 }));
 
@@ -17,12 +21,13 @@ vi.mock("@/lib/satelliteRouteMap", () => ({
 
 import {
   resolveSprayRoute,
-  routeObjectPath,
-  routeHashForPoints,
+  canonicalRouteHash,
+  ROUTE_WIDTH,
+  ROUTE_HEIGHT,
   ROUTE_NO_PATH_POINTS_MESSAGE,
   ROUTE_DOWNLOAD_FAILED_MESSAGE,
-  ROUTE_UPLOAD_FAILED_MESSAGE,
-  ROUTE_REGISTER_FAILED_MESSAGE,
+  ROUTE_LOCAL_ONLY_MESSAGE,
+  ROUTE_HASH_MISMATCH_MESSAGE,
 } from "@/lib/sprayReportRoute";
 import { SPRAY_REPORT_ASSET_BUCKET, SPRAY_ROUTE_STYLE_VERSION } from "@/lib/sprayReportV1";
 
@@ -43,10 +48,19 @@ const POINTS = [
 
 const PNG_DATA_URL = "data:image/png;base64,aGVsbG8=";
 
+function canonicalRoute(objectPath: string, sha256: string) {
+  return {
+    bucket: SPRAY_REPORT_ASSET_BUCKET,
+    objectPath,
+    sha256,
+    routeHash: "hash",
+    styleVersion: SPRAY_ROUTE_STYLE_VERSION,
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
-  compose.mockResolvedValue({ dataUrl: PNG_DATA_URL, width: 1100, height: 660 });
-  storage.upload.mockResolvedValue({ error: null, data: {} });
+  compose.mockResolvedValue({ dataUrl: PNG_DATA_URL, width: ROUTE_WIDTH, height: ROUTE_HEIGHT });
   (globalThis as any).FileReader = class {
     result = PNG_DATA_URL;
     onload: any = null;
@@ -60,148 +74,64 @@ beforeEach(() => {
 describe("spray report route asset", () => {
   it("reuses the saved private image identified by the payload", async () => {
     storage.download.mockResolvedValue({ data: new Blob(["x"]), error: null });
-    const res = await resolveSprayRoute(
-      payload({
-        bucket: SPRAY_REPORT_ASSET_BUCKET,
-        objectPath: `${TRIP}/existing.png`,
-        sha256: "a".repeat(64),
-        routeHash: "h",
-        styleVersion: SPRAY_ROUTE_STYLE_VERSION,
-      }),
-      POINTS,
-    );
+    const res = await resolveSprayRoute(payload(canonicalRoute(`${TRIP}/existing.png`, "")), POINTS);
     expect(res.image?.generated).toBe(false);
     expect(res.warning).toBeNull();
+    expect(invoke).not.toHaveBeenCalled();
     expect(storage.upload).not.toHaveBeenCalled();
-    expect(rpc).not.toHaveBeenCalled();
   });
 
   it("surfaces a download failure honestly for an existing image", async () => {
     storage.download.mockResolvedValue({ data: null, error: { message: "nope" } });
-    const res = await resolveSprayRoute(
-      payload({
-        bucket: SPRAY_REPORT_ASSET_BUCKET,
-        objectPath: `${TRIP}/existing.png`,
-        sha256: "a".repeat(64),
-        routeHash: "h",
-        styleVersion: SPRAY_ROUTE_STYLE_VERSION,
-      }),
-      POINTS,
-    );
+    const res = await resolveSprayRoute(payload(canonicalRoute(`${TRIP}/existing.png`, "")), POINTS);
     expect(res.image).toBeNull();
     expect(res.warning).toBe(ROUTE_DOWNLOAD_FAILED_MESSAGE);
   });
 
-  it("generates, uploads trip-scoped without overwrite, and registers through the RPC", async () => {
-    const objectPath = routeObjectPath(payload(), routeHashForPoints(POINTS));
-    rpc.mockImplementation((_fn: string, args: any) => Promise.resolve({
-      data: {
-        bucket: SPRAY_REPORT_ASSET_BUCKET,
-        objectPath,
-        sha256: args.p_sha256,
-        routeHash: routeHashForPoints(POINTS),
-        styleVersion: SPRAY_ROUTE_STYLE_VERSION,
-      },
-      error: null,
-    }));
-    const res = await resolveSprayRoute(payload(), POINTS);
-
-    expect(objectPath.startsWith(`${TRIP}/`)).toBe(true);
-    expect(storage.upload).toHaveBeenCalledWith(
-      objectPath,
-      expect.anything(),
-      expect.objectContaining({ upsert: false }),
+  it("refuses an existing image whose bytes do not match its checksum", async () => {
+    storage.download.mockResolvedValue({ data: new Blob(["x"]), error: null });
+    const res = await resolveSprayRoute(
+      payload(canonicalRoute(`${TRIP}/existing.png`, "a".repeat(64))),
+      POINTS,
     );
-    const [fn, args] = rpc.mock.calls[0] as [string, any];
-    expect(fn).toBe("register_spray_report_route_asset_v1");
-    expect(args.p_trip_id).toBe(TRIP);
-    expect(args.p_bucket).toBe("trip-report-assets");
-    expect(args.p_object_path).toBe(objectPath);
-    expect(args.p_style_version).toBe("spray-route-red-green-v1");
-    expect(args.p_route_hash).toBeTruthy();
-    expect(args.p_sha256).toMatch(/^[0-9a-f]{64}$/);
-    expect(res.image?.generated).toBe(true);
-    expect(res.warning).toBeNull();
+    expect(res.image).toBeNull();
+    expect(res.warning).toBe(ROUTE_HASH_MISMATCH_MESSAGE);
   });
 
-  it("adopts the stored object's real bytes after a duplicate upload", async () => {
-    storage.upload.mockResolvedValue({ error: { message: "The resource already exists" } });
+  it("sends the canonical route input to the authenticated upload function", async () => {
     storage.download.mockResolvedValue({ data: new Blob(["stored"]), error: null });
-    const objectPath = routeObjectPath(payload(), routeHashForPoints(POINTS));
-    rpc.mockResolvedValue({
-      data: {
-        bucket: SPRAY_REPORT_ASSET_BUCKET,
-        objectPath,
-        sha256: "b".repeat(64),
-        routeHash: routeHashForPoints(POINTS),
-        styleVersion: SPRAY_ROUTE_STYLE_VERSION,
-      },
-      error: null,
-    });
+    invoke.mockResolvedValue({ data: { route: canonicalRoute(`${TRIP}/canonical.png`, "") }, error: null });
     const res = await resolveSprayRoute(payload(), POINTS);
-    expect(storage.download).toHaveBeenCalledWith(objectPath);
-    expect(storage.upload).toHaveBeenCalledTimes(1);
-    expect(rpc).toHaveBeenCalled();
+
+    const [fn, opts] = invoke.mock.calls[0] as [string, any];
+    expect(fn).toBe("spray-report-route-upload");
+    expect(opts.body.tripId).toBe(TRIP);
+    expect(opts.body.routeHash).toBe(await canonicalRouteHash(POINTS));
+    expect(opts.body.width).toBe(1030);
+    expect(opts.body.height).toBe(700);
+    expect(opts.body.coordinates).toHaveLength(3);
+    expect(opts.body.coordinates[0]).toEqual({ latitude: -33.1, longitude: 149.1 });
+    // The registered bytes are embedded, never the local composition.
     expect(res.image?.generated).toBe(false);
+    expect(res.route?.objectPath).toBe(`${TRIP}/canonical.png`);
     expect(res.warning).toBeNull();
+    expect(storage.upload).not.toHaveBeenCalled();
   });
 
-  it("warns when a duplicate upload's stored object cannot be read back", async () => {
-    storage.upload.mockResolvedValue({ error: { message: "The resource already exists" } });
-    storage.download.mockResolvedValue({ data: null, error: { message: "nope" } });
-    const res = await resolveSprayRoute(payload(), POINTS);
-    expect(res.warning).toBe(ROUTE_DOWNLOAD_FAILED_MESSAGE);
-    expect(rpc).not.toHaveBeenCalled();
-  });
-
-  it("downloads the winner when the RPC reports a different canonical hash", async () => {
-    const objectPath = routeObjectPath(payload(), routeHashForPoints(POINTS));
-    rpc.mockResolvedValue({
-      data: {
-        bucket: SPRAY_REPORT_ASSET_BUCKET,
-        objectPath,
-        sha256: "d".repeat(64),
-        routeHash: routeHashForPoints(POINTS),
-        styleVersion: SPRAY_ROUTE_STYLE_VERSION,
-      },
-      error: null,
-    });
+  it("embeds the concurrent winner returned by the function", async () => {
     storage.download.mockResolvedValue({ data: new Blob(["winner"]), error: null });
-    const res = await resolveSprayRoute(payload(), POINTS);
-    expect(storage.download).toHaveBeenCalledWith(objectPath);
-    expect(res.image?.generated).toBe(false);
-    expect(res.warning).toBeNull();
-  });
-
-  it("embeds the concurrent winner returned by the RPC", async () => {
-    rpc.mockResolvedValue({
-      data: {
-        bucket: SPRAY_REPORT_ASSET_BUCKET,
-        objectPath: `${TRIP}/winner.png`,
-        sha256: "c".repeat(64),
-        routeHash: "other",
-        styleVersion: SPRAY_ROUTE_STYLE_VERSION,
-      },
-      error: null,
-    });
-    storage.download.mockResolvedValue({ data: new Blob(["y"]), error: null });
+    invoke.mockResolvedValue({ data: { route: canonicalRoute(`${TRIP}/winner.png`, "") }, error: null });
     const res = await resolveSprayRoute(payload(), POINTS);
     expect(res.route?.objectPath).toBe(`${TRIP}/winner.png`);
-    expect(res.image?.generated).toBe(false);
+    expect(storage.download).toHaveBeenCalledWith(`${TRIP}/winner.png`);
   });
 
-  it("reports authorization failures from the RPC", async () => {
-    rpc.mockResolvedValue({ data: null, error: { message: "not_authorized" } });
+  it("says plainly when only a local image could be shown", async () => {
+    invoke.mockResolvedValue({ data: null, error: { message: "not_authorized" } });
     const res = await resolveSprayRoute(payload(), POINTS);
-    expect(res.warning).toBe(ROUTE_REGISTER_FAILED_MESSAGE);
+    expect(res.warning).toBe(ROUTE_LOCAL_ONLY_MESSAGE);
     expect(res.image?.generated).toBe(true);
-  });
-
-  it("reports storage upload failures", async () => {
-    storage.upload.mockResolvedValue({ error: { message: "storage down" } });
-    const res = await resolveSprayRoute(payload(), POINTS);
-    expect(res.warning).toBe(ROUTE_UPLOAD_FAILED_MESSAGE);
-    expect(rpc).not.toHaveBeenCalled();
+    expect(res.route).toBeNull();
   });
 
   it("warns honestly when there are no recorded path points", async () => {
@@ -209,6 +139,6 @@ describe("spray report route asset", () => {
     expect(res.image).toBeNull();
     expect(res.warning).toBe(ROUTE_NO_PATH_POINTS_MESSAGE);
     expect(compose).not.toHaveBeenCalled();
-    expect(rpc).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
   });
 });

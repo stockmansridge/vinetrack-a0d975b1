@@ -11,15 +11,22 @@ export const SPRAY_REPORT_ASSET_BUCKET = "trip-report-assets";
 export const SPRAY_RECORD_UNAVAILABLE_MESSAGE =
   "Spray record not available yet—sync and retry";
 
-export type SprayRowStatus = "Complete" | "Partial" | "Skipped/Not complete";
+export type SprayRowStatus = "Complete" | "Partial" | "Skipped/Not complete" | "Not recorded";
 export type SprayChemicalUnit = "Litres" | "mL" | "Kg" | "g";
+export type SprayUsageKind = "planned" | "substitution" | "additional";
 export type SprayMatchSource =
   | "plannedChemicalId"
   | "savedChemicalId"
   | "nameUnit"
   | "notRecorded"
-  | "ambiguous";
+  | "ambiguous"
+  | "actualOnly";
 export type SprayWeatherSourceKind = "observed" | "modelled" | "manual" | "unavailable";
+export type SprayWeatherRetrievalMode =
+  | "live"
+  | "historical_archive"
+  | "legacy_snapshot"
+  | "unavailable";
 
 export interface SprayReportIdentity {
   tripId: string;
@@ -34,8 +41,12 @@ export interface SprayReportTrip {
   startUtc: string | null;
   endUtc: string | null;
   activeDurationSeconds: number | null;
+  elapsedDurationSeconds?: number | null;
+  pausedDurationSeconds?: number | null;
   distanceMetres: number | null;
+  operatorId?: string | null;
   operatorName: string | null;
+  operatorSource?: string;
   pinCount: number;
 }
 
@@ -47,36 +58,108 @@ export interface SprayReportBlock {
 }
 
 export interface SprayReportEquipment {
+  machineId?: string | null;
+  tractorId?: string | null;
   tractorName: string | null;
+  sprayEquipmentId?: string | null;
+  sprayUnitName: string | null;
+  equipmentSource?: string;
   startEngineHours: number | null;
   endEngineHours: number | null;
   engineHoursUsed: number | null;
-  sprayUnitName: string | null;
+  tractorGear?: string | null;
+  numberOfFansJets?: string | null;
+  averageSpeedKmh?: number | null;
+  fuelConsumptionLPerHour?: number | null;
+  fuelConsumptionSource?: string;
+  fuelHours?: number | null;
+  fuelHoursSource?: string;
+}
+
+/** Canonical application facts (schema 1.1). */
+export interface SprayReportApplication {
+  operationType: string | null;
+  applicationMode: string | null;
+  grossAreaHa: number | null;
+  treatedAreaHa: number | null;
+  treatedAreaMethod: string | null;
+  geometrySource: string | null;
+  geometryQuality: string | null;
+  carrierVolumeBasis: string | null;
+  totalCarrierLitres: number | null;
+  carrierLitresPerHectare: number | null;
+  diluteLitresPer100m: number | null;
+  appliedLitresPer100m: number | null;
+  concentrationFactor: number | null;
+  notes: string | null;
+}
+
+export interface SprayReportProgramStep {
+  linkState: "program_linked" | "linked_step_unavailable" | "not_recorded";
+  sprayJobId: string | null;
+  name: string | null;
+  status: string | null;
+  plannedDate: string | null;
+  operationType: string | null;
+  target: string | null;
+  notes: string | null;
 }
 
 export interface SprayReportRow {
-  rowNumber: number;
+  rowIdentity?: string | null;
+  rowNumber: number | null;
+  blockId?: string | null;
   blockName: string | null;
   status: SprayRowStatus;
   source: string;
+  confidence?: number | null;
+  isDerived?: boolean;
   tank: number | "Multiple" | null;
+  tankSessionId?: string | null;
+  originalEvidence?: Record<string, unknown> | null;
 }
 
 export interface SprayReportTankChemical {
-  plannedChemicalId: string;
+  actualChemicalId?: string | null;
+  plannedChemicalId: string | null;
   savedChemicalId: string | null;
+  replacesPlannedChemicalId?: string | null;
+  usageKind?: SprayUsageKind;
   name: string;
   unit: SprayChemicalUnit;
-  plannedAmountBase: number;
+  plannedAmountBase: number | null;
   actualAmountBase: number | null;
   matchSource: SprayMatchSource;
 }
 
 export interface SprayReportTank {
   tankNumber: number;
+  /** Existing actual row id, or null when no actual has been recorded yet. */
+  actualId?: string | null;
+  /** Optimistic-concurrency version; 0 means no actual row exists. */
+  actualVersion?: number;
   plannedWaterLitres: number;
   actualWaterLitres: number | null;
   chemicals: SprayReportTankChemical[];
+}
+
+export interface SprayReportTankSession {
+  tankSessionId: string | null;
+  tankNumber: number;
+  startedAt: string | null;
+  endedAt: string | null;
+  startRow: number | null;
+  endRow: number | null;
+  pathsCovered: number[];
+  status: "Complete" | "End not recorded" | "In progress";
+  assignmentSource: string;
+}
+
+export interface SprayReportChemicalTotal {
+  identityKey: string;
+  name: string;
+  unit: "Litres" | "Kg";
+  actualAmountBase: number;
 }
 
 export interface SprayReportWeather {
@@ -84,13 +167,18 @@ export interface SprayReportWeather {
   observedAt: string | null;
   source: string;
   sourceKind: SprayWeatherSourceKind;
+  stationId?: string | null;
   isStale: boolean;
   temperatureC: number | null;
   humidityPct: number | null;
   windSpeedKmh: number | null;
   windGustKmh: number | null;
   windDirectionDeg: number | null;
+  windDirectionText?: string | null;
   rainMm: number | null;
+  retrievalMode?: SprayWeatherRetrievalMode;
+  providerRecordId?: string | null;
+  retrievedAt?: string | null;
 }
 
 export interface SprayReportRoute {
@@ -101,26 +189,72 @@ export interface SprayReportRoute {
   styleVersion: string;
 }
 
+/** Server-authored audit entry for a corrected actual quantity. */
+export interface SprayReportActualAmendment {
+  id: string;
+  operationId: string;
+  tankNumber: number;
+  chemicalActualId?: string | null;
+  plannedChemicalId?: string | null;
+  savedChemicalId?: string | null;
+  field: string;
+  changeKind: string;
+  previousValue?: unknown;
+  newValue?: unknown;
+  previousUnit?: string | null;
+  newUnit?: string | null;
+  revision: number;
+  editedBy: string;
+  editorName: string;
+  editedAt: string;
+}
+
+/** Server-authored audit entry for a trip metadata correction. */
+export interface SprayReportMetadataAmendment {
+  id: string;
+  operationId: string;
+  revision: number;
+  previousValue: Record<string, unknown>;
+  newValue: Record<string, unknown>;
+  editedBy: string;
+  editorName: string;
+  editedAt: string;
+}
+
 export interface SprayReportPayloadV1 {
-  schemaVersion: "1.0";
+  schemaVersion: "1.1";
   identity: SprayReportIdentity;
   trip: SprayReportTrip;
   blocks: SprayReportBlock[] | null;
   equipment: SprayReportEquipment;
+  application?: SprayReportApplication | null;
+  programStep?: SprayReportProgramStep | null;
   rows: SprayReportRow[];
   tanks: SprayReportTank[];
+  tankSessions?: SprayReportTankSession[];
+  plannedChemicalTotals?: SprayReportChemicalTotal[];
+  actualChemicalTotals?: SprayReportChemicalTotal[];
   weather: SprayReportWeather[];
   route: SprayReportRoute | null;
   cost?: Record<string, unknown> | null;
+  amendments?: SprayReportActualAmendment[];
+  metadataCorrectionVersion?: number;
+  metadataAmendments?: SprayReportMetadataAmendment[];
   warnings: string[];
 }
+
 
 export interface SprayReportParseResult {
   payload: SprayReportPayloadV1 | null;
   errors: string[];
 }
 
-const ROW_STATUSES: SprayRowStatus[] = ["Complete", "Partial", "Skipped/Not complete"];
+const ROW_STATUSES: SprayRowStatus[] = [
+  "Complete",
+  "Partial",
+  "Skipped/Not complete",
+  "Not recorded",
+];
 const UNITS: SprayChemicalUnit[] = ["Litres", "mL", "Kg", "g"];
 const MATCH_SOURCES: SprayMatchSource[] = [
   "plannedChemicalId",
@@ -128,13 +262,16 @@ const MATCH_SOURCES: SprayMatchSource[] = [
   "nameUnit",
   "notRecorded",
   "ambiguous",
+  "actualOnly",
 ];
+const USAGE_KINDS: SprayUsageKind[] = ["planned", "substitution", "additional"];
 const SOURCE_KINDS: SprayWeatherSourceKind[] = [
   "observed",
   "modelled",
   "manual",
   "unavailable",
 ];
+const SESSION_STATUSES = ["Complete", "End not recorded", "In progress"];
 
 const isObj = (v: unknown): v is Record<string, any> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
@@ -147,7 +284,9 @@ const isObj = (v: unknown): v is Record<string, any> =>
 export function parseSprayReportPayload(raw: unknown): SprayReportParseResult {
   const errors: string[] = [];
   if (!isObj(raw)) return { payload: null, errors: ["Payload is not an object"] };
-  if (raw.schemaVersion !== "1.0") errors.push("Unsupported schemaVersion");
+  if (raw.schemaVersion !== "1.1") {
+    errors.push("Unsupported schemaVersion");
+  }
 
   const id = raw.identity;
   if (!isObj(id)) errors.push("Missing identity");
@@ -171,14 +310,22 @@ export function parseSprayReportPayload(raw: unknown): SprayReportParseResult {
   const eq = raw.equipment;
   if (!isObj(eq)) errors.push("Missing equipment");
 
+  if (raw.application != null && !isObj(raw.application))
+    errors.push("application must be an object or null");
+  if (raw.programStep != null && !isObj(raw.programStep))
+    errors.push("programStep must be an object or null");
+
   if (raw.blocks != null && !Array.isArray(raw.blocks)) errors.push("blocks must be an array or null");
   if (!Array.isArray(raw.rows)) errors.push("rows must be an array");
   else
     raw.rows.forEach((r: any, i: number) => {
       if (!isObj(r)) return errors.push(`rows[${i}] is not an object`);
-      if (typeof r.rowNumber !== "number") errors.push(`rows[${i}].rowNumber must be a number`);
+      if (!(r.rowNumber == null || typeof r.rowNumber === "number"))
+        errors.push(`rows[${i}].rowNumber must be a number`);
       if (!ROW_STATUSES.includes(r.status)) errors.push(`rows[${i}].status is invalid`);
       if (typeof r.source !== "string") errors.push(`rows[${i}].source must be a string`);
+      if (r.confidence != null && (typeof r.confidence !== "number" || r.confidence < 0 || r.confidence > 1))
+        errors.push(`rows[${i}].confidence is invalid`);
       if (!(r.tank == null || r.tank === "Multiple" || typeof r.tank === "number"))
         errors.push(`rows[${i}].tank is invalid`);
     });
@@ -188,14 +335,54 @@ export function parseSprayReportPayload(raw: unknown): SprayReportParseResult {
     raw.tanks.forEach((t: any, i: number) => {
       if (!isObj(t)) return errors.push(`tanks[${i}] is not an object`);
       if (typeof t.tankNumber !== "number") errors.push(`tanks[${i}].tankNumber must be a number`);
+      if (t.actualVersion != null && typeof t.actualVersion !== "number")
+        errors.push(`tanks[${i}].actualVersion must be a number`);
       if (!Array.isArray(t.chemicals)) return errors.push(`tanks[${i}].chemicals must be an array`);
       t.chemicals.forEach((c: any, ci: number) => {
         if (!isObj(c)) return errors.push(`tanks[${i}].chemicals[${ci}] is not an object`);
         if (!UNITS.includes(c.unit)) errors.push(`tanks[${i}].chemicals[${ci}].unit is invalid`);
         if (!MATCH_SOURCES.includes(c.matchSource))
           errors.push(`tanks[${i}].chemicals[${ci}].matchSource is invalid`);
+        if (c.usageKind != null && !USAGE_KINDS.includes(c.usageKind))
+          errors.push(`tanks[${i}].chemicals[${ci}].usageKind is invalid`);
       });
     });
+
+  if (raw.tankSessions != null) {
+    if (!Array.isArray(raw.tankSessions)) errors.push("tankSessions must be an array");
+    else
+      raw.tankSessions.forEach((s: any, i: number) => {
+        if (!isObj(s)) return errors.push(`tankSessions[${i}] is not an object`);
+        if (typeof s.tankNumber !== "number")
+          errors.push(`tankSessions[${i}].tankNumber must be a number`);
+        if (!SESSION_STATUSES.includes(s.status))
+          errors.push(`tankSessions[${i}].status is invalid`);
+      });
+  }
+
+  for (const key of ["plannedChemicalTotals", "actualChemicalTotals"] as const) {
+    const list = (raw as any)[key];
+    if (list == null) continue;
+    if (!Array.isArray(list)) {
+      errors.push(`${key} must be an array`);
+      continue;
+    }
+    list.forEach((t: any, i: number) => {
+      if (!isObj(t)) return errors.push(`${key}[${i}] is not an object`);
+      if (typeof t.identityKey !== "string" || !t.identityKey)
+        errors.push(`${key}[${i}].identityKey is required`);
+      if (t.unit !== "Litres" && t.unit !== "Kg") errors.push(`${key}[${i}].unit is invalid`);
+      if (typeof t.actualAmountBase !== "number")
+        errors.push(`${key}[${i}].actualAmountBase must be a number`);
+    });
+  }
+
+  if (raw.amendments != null && !Array.isArray(raw.amendments))
+    errors.push("amendments must be an array");
+  if (raw.metadataAmendments != null && !Array.isArray(raw.metadataAmendments))
+    errors.push("metadataAmendments must be an array");
+  if (raw.metadataCorrectionVersion != null && typeof raw.metadataCorrectionVersion !== "number")
+    errors.push("metadataCorrectionVersion must be a number");
 
   if (!Array.isArray(raw.weather)) errors.push("weather must be an array");
   else
@@ -204,6 +391,7 @@ export function parseSprayReportPayload(raw: unknown): SprayReportParseResult {
       if (typeof w.sampleSlot !== "string") errors.push(`weather[${i}].sampleSlot is required`);
       if (!SOURCE_KINDS.includes(w.sourceKind)) errors.push(`weather[${i}].sourceKind is invalid`);
     });
+
 
   if (raw.route != null) {
     if (!isObj(raw.route)) errors.push("route must be an object or null");

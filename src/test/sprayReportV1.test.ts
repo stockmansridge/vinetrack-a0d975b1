@@ -23,7 +23,11 @@ describe("Spray Report v1 — canonical fixture", () => {
     expect(payload).not.toBeNull();
     expect(payload!.identity.vineyardName).toBe("Stockmans Ridge");
     expect(payload!.rows).toHaveLength(2);
-    expect(payload!.tanks[0].chemicals[0].matchSource).toBe("plannedChemicalId");
+    expect(payload!.schemaVersion).toBe("1.1");
+    // No actual has been recorded on this fixture yet.
+    expect(payload!.tanks[0].chemicals[0].matchSource).toBe("notRecorded");
+    expect(payload!.tanks[0].chemicals[0].usageKind).toBe("planned");
+    expect(payload!.tankSessions?.[0].tankSessionId).toBe("tank-session-1");
     expect(payload!.route).toBeNull();
   });
 
@@ -62,9 +66,9 @@ describe("Spray Report v1 — canonical fixture", () => {
     expect(errors.join()).toContain("route.styleVersion");
   });
 
-  it("rejects a non-1.0 schema version", () => {
-    const { payload } = parseSprayReportPayload({ ...fixture, schemaVersion: "2.0" });
-    expect(payload).toBeNull();
+  it("rejects a schema version other than 1.1", () => {
+    expect(parseSprayReportPayload({ ...fixture, schemaVersion: "2.0" }).payload).toBeNull();
+    expect(parseSprayReportPayload({ ...fixture, schemaVersion: "1.0" }).payload).toBeNull();
   });
 });
 

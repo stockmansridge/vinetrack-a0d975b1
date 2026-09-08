@@ -57,18 +57,22 @@ import {
   overPlanNotes,
   payloadAmendments,
   saveSprayActuals,
+  SprayActualsConflictError,
   tankChemicalKey,
   type ActualsDraft,
 } from "@/lib/sprayActuals";
+import {
+  correctSprayTripMetadata,
+  TripMetadataConflictError,
+  validateFuelRate,
+} from "@/lib/sprayTripMetadata";
+import { recoverSprayWeather, weatherProvenanceLabel } from "@/lib/sprayWeatherRecovery";
+import { rowProvenanceLabel } from "@/lib/sprayRowRecovery";
 import { formatActiveDuration, formatDistance } from "@/lib/sprayReportPdf";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
-import {
-  describeTripDetailsError,
-  updateTripDetails,
-  validateTripEngineHours,
-  TRIP_FUEL_RATE_OVERRIDE_UNAVAILABLE,
-  type Trip,
-} from "@/lib/tripsQuery";
+import { validateTripEngineHours, type Trip } from "@/lib/tripsQuery";
+import { fetchList } from "@/lib/queries";
+import { fetchVineyardTeamMembers, memberLabel } from "@/lib/sprayJobsQuery";
 import {
   fetchAllVineyardMachines,
   machineTypeLabel,
@@ -77,16 +81,15 @@ import {
 
 import SystemAdminDiagnostics from "@/components/admin/SystemAdminDiagnostics";
 import {
-  ACTUALS_SAVE_UNAVAILABLE,
-  SPRAY_UNIT_EDIT_UNAVAILABLE as SPRAY_UNIT_MSG,
-  TRIP_FUEL_RATE_UNAVAILABLE,
+  ACTUALS_SAVE_FAILED,
+  ACTUALS_VERSION_CONFLICT,
+  TRIP_METADATA_SAVE_FAILED,
   toCustomerError,
 } from "@/lib/sprayReportMessaging";
 
+
 const NONE = "__none__";
 
-/** Practical wording; the technical reason lives in admin diagnostics. */
-export const SPRAY_UNIT_EDIT_UNAVAILABLE = SPRAY_UNIT_MSG.customer;
 
 export function sprayReportQueryKey(tripId: string) {
   return ["spray-report-v1", tripId] as const;
@@ -212,18 +215,32 @@ export default function SprayTripWorksheet({
 
   const [editing, setEditing] = useState(false);
   const [machineId, setMachineId] = useState<string>(NONE);
-  const [operator, setOperator] = useState("");
+  const [sprayUnitId, setSprayUnitId] = useState<string>(NONE);
+  const [operatorId, setOperatorId] = useState<string>(NONE);
+  const [fuelRate, setFuelRate] = useState("");
   const [startHours, setStartHours] = useState("");
   const [endHours, setEndHours] = useState("");
   const [draft, setDraft] = useState<ActualsDraft>({ water: {}, chemicals: {} });
   const [error, setError] = useState<string | null>(null);
   const [errorDiagnostic, setErrorDiagnostic] = useState<string | null>(null);
   const [openHistory, setOpenHistory] = useState<string | null>(null);
+  const [weatherNote, setWeatherNote] = useState<string | null>(null);
+  const [weatherDiagnostic, setWeatherDiagnostic] = useState<string | null>(null);
 
   const { data: machines = [] } = useQuery<VineyardMachine[]>({
     queryKey: ["worksheet-machines", vineyardId],
     enabled: editing && !!vineyardId,
     queryFn: () => fetchAllVineyardMachines(vineyardId!),
+  });
+  const { data: sprayUnits = [] } = useQuery<any[]>({
+    queryKey: ["worksheet-spray-equipment", vineyardId],
+    enabled: editing && !!vineyardId,
+    queryFn: () => fetchList("spray_equipment", vineyardId!) as Promise<any[]>,
+  });
+  const { data: members = [] } = useQuery<any[]>({
+    queryKey: ["worksheet-members", vineyardId],
+    enabled: editing && !!vineyardId,
+    queryFn: () => fetchVineyardTeamMembers(vineyardId!) as Promise<any[]>,
   });
 
   const payload = query.data ?? null;
@@ -234,8 +251,15 @@ export default function SprayTripWorksheet({
     if (!editing) return;
     if (!payload) return;
     setDraft(draftFromPayload(payload));
-    setMachineId(trip?.machine_id ?? trip?.tractor_id ?? NONE);
-    setOperator(trip?.person_name ?? payload.trip.operatorName ?? "");
+    setMachineId(payload.equipment.machineId ?? trip?.machine_id ?? NONE);
+    setSprayUnitId(payload.equipment.sprayEquipmentId ?? NONE);
+    setOperatorId(payload.trip.operatorId ?? NONE);
+    setFuelRate(
+      payload.equipment.fuelConsumptionSource === "explicit_correction" &&
+        payload.equipment.fuelConsumptionLPerHour != null
+        ? String(payload.equipment.fuelConsumptionLPerHour)
+        : "",
+    );
     setStartHours(
       payload.equipment.startEngineHours != null ? String(payload.equipment.startEngineHours) : "",
     );
@@ -261,50 +285,70 @@ export default function SprayTripWorksheet({
 
       const start = numOrNull(startHours);
       const end = numOrNull(endHours);
-      if (Number.isNaN(start) || Number.isNaN(end)) {
-        throw new Error("Engine hours must be numbers.");
+      const rate = numOrNull(fuelRate);
+      if (Number.isNaN(start) || Number.isNaN(end) || Number.isNaN(rate)) {
+        throw new Error("Engine hours and fuel use must be numbers.");
       }
-      const invalid = validateTripEngineHours(start, end);
-      if (invalid) throw new Error(invalid);
+      const invalidHours = validateTripEngineHours(start, end);
+      if (invalidHours) throw new Error(invalidHours);
+      const invalidRate = validateFuelRate(rate);
+      if (invalidRate) throw new Error(invalidRate);
 
-      if (trip) {
-        await updateTripDetails({
-          tripId: trip.id,
-          currentSyncVersion: trip.sync_version ?? null,
-          userId: user?.id ?? null,
-          edits: {
-            machineId: machineId === NONE ? null : machineId,
-            tractorId: null,
-            personName: operator.trim() || null,
-            startEngineHours: start,
-            endEngineHours: end,
-          },
-        });
-      }
-
-      // Actual usage goes through the shared save path, which commits the
-      // change and its audit history together.
-      await saveSprayActuals({
+      // Complete metadata snapshot: an explicit null clears an overlay.
+      const metadata = await correctSprayTripMetadata({
         tripId,
-        sprayRecordId: payload.identity.sprayRecordId ?? null,
-        vineyardId: payload.identity.vineyardId,
-        changes: diff.changes,
+        expectedVersion: payload.metadataCorrectionVersion ?? 0,
+        correction: {
+          machineId: machineId === NONE ? null : machineId,
+          tractorId: payload.equipment.tractorId ?? null,
+          sprayEquipmentId: sprayUnitId === NONE ? null : sprayUnitId,
+          operatorUserId: operatorId === NONE ? null : operatorId,
+          fuelConsumptionLPerHour: rate,
+          startEngineHours: start,
+          endEngineHours: end,
+        },
       });
+
+      // Actual usage: one audited correction per edited tank.
+      await saveSprayActuals({ payload, draft });
+      return metadata;
     },
     onSuccess: async () => {
       setError(null);
       setErrorDiagnostic(null);
       setEditing(false);
+      // The canonical report is re-read; nothing local is promoted.
+      await qc.invalidateQueries({ queryKey: sprayReportQueryKey(tripId) });
       await qc.invalidateQueries();
       toast({ title: "Spray trip saved" });
     },
     // The draft is kept on screen so the user can retry.
     onError: (e) => {
-      const { customer, diagnostic } = toCustomerError(describeTripDetailsError(e));
+      if (e instanceof SprayActualsConflictError || e instanceof TripMetadataConflictError) {
+        setError(ACTUALS_VERSION_CONFLICT.customer);
+        setErrorDiagnostic(ACTUALS_VERSION_CONFLICT.diagnostic);
+        return;
+      }
+      const { customer, diagnostic } = toCustomerError(
+        e instanceof Error ? e.message : String(e),
+        ACTUALS_SAVE_FAILED.customer,
+      );
       setError(customer);
-      setErrorDiagnostic(diagnostic);
+      setErrorDiagnostic(diagnostic ?? TRIP_METADATA_SAVE_FAILED.diagnostic);
     },
   });
+
+  const recoverWeather = useMutation({
+    mutationFn: () => recoverSprayWeather(tripId),
+    onSuccess: async (outcome) => {
+      setWeatherNote(outcome.message);
+      setWeatherDiagnostic(outcome.kind === "failed" ? outcome.diagnostic : null);
+      if (outcome.kind === "recovered") {
+        await qc.invalidateQueries({ queryKey: sprayReportQueryKey(tripId) });
+      }
+    },
+  });
+
 
   if (query.isLoading) {
     return (
@@ -393,14 +437,8 @@ export default function SprayTripWorksheet({
           {error}
         </p>
       )}
-      <SystemAdminDiagnostics
-        details={[
-          errorDiagnostic,
-          editing ? ACTUALS_SAVE_UNAVAILABLE.diagnostic : null,
-          editing ? SPRAY_UNIT_MSG.diagnostic : null,
-          editing ? TRIP_FUEL_RATE_UNAVAILABLE.diagnostic : null,
-        ]}
-      />
+      <SystemAdminDiagnostics details={[errorDiagnostic, weatherDiagnostic]} />
+
 
       {!!notes.length && (
         <ul className="rounded-md border p-2 text-xs text-muted-foreground">
@@ -429,18 +467,25 @@ export default function SprayTripWorksheet({
           label="Operator"
           value={
             editing ? (
-              <Input
-                aria-label="Operator"
-                className="h-8 w-56"
-                value={operator}
-                onChange={(e) => setOperator(e.target.value)}
-                placeholder="Not recorded"
-              />
+              <Select value={operatorId} onValueChange={setOperatorId}>
+                <SelectTrigger aria-label="Operator" className="h-8 w-56">
+                  <SelectValue placeholder="Not recorded" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>Not recorded</SelectItem>
+                  {members.map((m: any) => (
+                    <SelectItem key={m.user_id ?? m.id} value={m.user_id ?? m.id}>
+                      {memberLabel(m)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             ) : (
               p.trip.operatorName || NOT_RECORDED
             )
           }
         />
+
         <Field label="Pins recorded" value={String(p.trip.pinCount ?? 0)} />
       </Block>
 
@@ -471,23 +516,25 @@ export default function SprayTripWorksheet({
           label="Spray unit"
           value={
             editing ? (
-              <span className="flex flex-col items-end gap-1">
-                <Input
-                  aria-label="Spray unit"
-                  className="h-8 w-56"
-                  disabled
-                  value={p.equipment.sprayUnitName || ""}
-                  placeholder={NOT_RECORDED}
-                />
-                <span className="max-w-xs text-right text-xs font-normal text-muted-foreground">
-                  {SPRAY_UNIT_EDIT_UNAVAILABLE}
-                </span>
-              </span>
+              <Select value={sprayUnitId} onValueChange={setSprayUnitId}>
+                <SelectTrigger aria-label="Spray unit" className="h-8 w-56">
+                  <SelectValue placeholder="Not recorded" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>Not recorded</SelectItem>
+                  {sprayUnits.map((s: any) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name ?? s.equipment_name ?? "Spray unit"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             ) : (
               p.equipment.sprayUnitName || NOT_RECORDED
             )
           }
         />
+
         <Field
           label="Start engine hours"
           value={
@@ -523,30 +570,34 @@ export default function SprayTripWorksheet({
           }
         />
         <Field label="Engine hours used" value={p.equipment.engineHoursUsed ?? NOT_RECORDED} />
-        {editing && (
-          <Field
-            label="Fuel consumption for this trip (L/hr)"
-            value={
+        <Field
+          label="Fuel consumption for this trip (L/hr)"
+          value={
+            editing ? (
               <span className="flex flex-col items-end gap-1">
                 <Input
                   aria-label="Fuel consumption for this trip"
+                  inputMode="decimal"
                   className="h-8 w-32 text-right"
-                  disabled
-                  value={
+                  value={fuelRate}
+                  onChange={(e) => setFuelRate(e.target.value)}
+                  placeholder={
                     selectedMachine?.fuel_usage_l_per_hour != null
                       ? String(selectedMachine.fuel_usage_l_per_hour)
-                      : ""
+                      : NOT_RECORDED
                   }
-                  placeholder={NOT_RECORDED}
                 />
                 <span className="max-w-xs text-right text-xs font-normal text-muted-foreground">
-                  {TRIP_FUEL_RATE_OVERRIDE_UNAVAILABLE}
+                  Leave blank to use the tractor's usual rate. This applies to this trip only.
                 </span>
               </span>
-            }
-          />
-        )}
+            ) : (
+              (p.equipment.fuelConsumptionLPerHour ?? NOT_RECORDED)
+            )
+          }
+        />
       </Block>
+
 
       {p.tanks.map((t) => {
         const waterHistory = amendmentsForChemical(amendments, t.tankNumber, null);
@@ -698,16 +749,17 @@ export default function SprayTripWorksheet({
           </TableHeader>
           <TableBody>
             {p.rows.map((r, i) => (
-              <TableRow key={`${r.rowNumber}-${i}`}>
-                <TableCell>{r.rowNumber}</TableCell>
+              <TableRow key={`${r.rowNumber}-${r.blockId ?? i}`}>
+                <TableCell>{r.rowNumber ?? NOT_RECORDED}</TableCell>
                 <TableCell>{r.blockName ?? NOT_RECORDED}</TableCell>
                 <TableCell>{r.status}</TableCell>
                 <TableCell>{r.tank == null ? NOT_RECORDED : String(r.tank)}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">
-                  {rowSourceLabel(r.source)}
+                  {rowProvenanceLabel(r) || rowSourceLabel(r.source)}
                 </TableCell>
               </TableRow>
             ))}
+
             {!p.rows.length && (
               <TableRow>
                 <TableCell colSpan={5} className="text-muted-foreground">
@@ -773,6 +825,22 @@ export default function SprayTripWorksheet({
 
 
       <Block title="Hourly weather">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            Recorded observations are never overwritten; recovery only fills in
+            missing hours.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => recoverWeather.mutate()}
+            disabled={recoverWeather.isPending}
+          >
+            {recoverWeather.isPending ? "Retrieving…" : "Retrieve historical weather"}
+          </Button>
+        </div>
+        {weatherNote && <p className="mb-2 text-xs text-muted-foreground">{weatherNote}</p>}
+
         <Table>
           <TableHeader>
             <TableRow>
