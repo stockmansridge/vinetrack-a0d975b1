@@ -90,17 +90,33 @@ export function grapevineOnlyUses(
 }
 
 /**
+ * Mobile keeps PRODUCT-LEVEL rate carriers: rows with both crop and target
+ * blank that carry rates only. They do not establish a grapevine use (and are
+ * never counted as one), but they must survive a portal save.
+ */
+export function isProductRateCarrier(use: WriteRegisteredUse): boolean {
+  const crop = String((use as any).crop ?? "").trim();
+  const target = String((use as any).target_raw ?? "").trim();
+  return crop === "" && target === "" && ((use.rates ?? []).length > 0);
+}
+
+/**
  * Project a draft down to vineyard scope before it is encoded for save.
- * Other-crop directions are dropped, never rewritten or merged. Everything
- * else on the draft (identity, chemistry, WHP/REI, sources) is untouched.
+ * Other-crop directions are dropped, never rewritten or merged. Product-level
+ * rate carriers are preserved. Everything else on the draft (identity,
+ * chemistry, WHP/REI, sources) is untouched.
  */
 export function grapevineOnlyDraft(
   draft: ChemicalIntelligenceDraft,
 ): ChemicalIntelligenceDraft {
-  const grapevine = grapevineOnlyUses(draft.registeredUses);
-  if (grapevine.length === draft.registeredUses.length) return draft;
-  return { ...draft, registeredUses: grapevine };
+  const grapevine = new Set(grapevineOnlyUses(draft.registeredUses));
+  const kept = draft.registeredUses.filter(
+    (u) => grapevine.has(u) || isProductRateCarrier(u),
+  );
+  if (kept.length === draft.registeredUses.length) return draft;
+  return { ...draft, registeredUses: kept };
 }
+
 
 /* -------------------------------------------------------------- spray-ready */
 

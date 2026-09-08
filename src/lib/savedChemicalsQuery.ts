@@ -155,6 +155,16 @@ export interface SavedChemicalInput {
    * `saved_chemicals.unit` base unit, so `iosUnitFromAny` must never touch it.
    */
   default_rates?: PersistedDefaultRates | null;
+  /* ---- Shared mobile operational columns. Omitted = left untouched. ---- */
+  /** Physical form of the product as sold ("liquid" | "solid" | "unknown"). */
+  product_form?: string | null;
+  pack_size?: number | string | null;
+  pack_unit?: string | null;
+  price_per_pack?: number | null;
+  inventory_quantity?: number | null;
+  inventory_unit?: string | null;
+  application_notes?: string | null;
+  organic_certified?: boolean | null;
 }
 
 const ALLOWED_FIELDS: (keyof SavedChemicalInput)[] = [
@@ -164,7 +174,13 @@ const ALLOWED_FIELDS: (keyof SavedChemicalInput)[] = [
   "label_url", "product_url", "purchase",
   "master_chemical_id", "master_source_revision",
   "default_rates",
+  // Mobile operational fields. Without these the editor's controls would be
+  // shown and then silently dropped on save.
+  "product_form", "pack_size", "pack_unit", "price_per_pack",
+  "inventory_quantity", "inventory_unit", "application_notes",
+  "organic_certified",
 ];
+
 
 /**
  * `mode: "insert"` fills the shared schema's NOT NULL text columns with empty
@@ -176,10 +192,12 @@ function sanitize(input: SavedChemicalInput, mode: "insert" | "update" = "insert
   const out: Record<string, any> = {};
   for (const k of ALLOWED_FIELDS) {
     const v = input[k];
-    // Legacy per-hectare scalar: NEVER written as null (the shared column is
-    // NOT NULL) and never fabricated for a non-hectare rate. Omitting it keeps
-    // the existing/legacy value or the column default.
-    if (k === "rate_per_ha" && (v == null || !Number.isFinite(Number(v)))) continue;
+    // Legacy per-hectare scalar. An explicit `null` is a deliberate SQL 222
+    // correction ("there is no genuine per-hectare scalar") and is written as
+    // null; a non-numeric value is never coerced or fabricated, so it is
+    // omitted and the existing/legacy value survives.
+    if (k === "rate_per_ha" && v !== null && (v === undefined || !Number.isFinite(Number(v)))) continue;
+
     // Omitted means "leave the column alone" — critical for default_rates so a
     // commercial-only edit can never wipe a persisted operator default.
     if (v === undefined) continue;
@@ -274,10 +292,26 @@ function sanitize(input: SavedChemicalInput, mode: "insert" | "update" = "insert
   return out;
 }
 
+/**
+ * SQL 222 makes `rate_per_ha` nullable. Deployment of that migration is not
+ * verifiable from the portal, so an explicit null write degrades safely: if
+ * the column is still NOT NULL the row is retried without the field rather
+ * than losing the operator's save.
+ */
+const isRatePerHaNotNull = (error: unknown): boolean => {
+  const e = error as { code?: string; message?: string } | null;
+  if (!e) return false;
+  return (
+    (e.code === "23502" || /not[-\s]?null/i.test(String(e.message ?? ""))) &&
+    /rate_per_ha/i.test(String(e.message ?? ""))
+  );
+};
+
 export async function createSavedChemical(vineyardId: string, input: SavedChemicalInput) {
   const now = new Date().toISOString();
-  const payload = {
-    ...sanitize(input),
+  const base = sanitize(input);
+  const payload: Record<string, any> = {
+    ...base,
     vineyard_id: vineyardId,
     client_updated_at: now,
     sync_version: 1,
@@ -286,32 +320,36 @@ export async function createSavedChemical(vineyardId: string, input: SavedChemic
   if (import.meta.env.DEV) {
     console.debug("Sanitised saved chemical payload", payload);
   }
-  const { data, error } = await supabase
-    .from("saved_chemicals")
-    .insert(payload)
-    .select()
-    .single();
+  const insert = (body: Record<string, any>) =>
+    supabase.from("saved_chemicals").insert(body).select().single();
+  let { data, error } = await insert(payload);
+  if (error && payload.rate_per_ha === null && isRatePerHaNotNull(error)) {
+    const { rate_per_ha: _drop, ...retry } = payload;
+    ({ data, error } = await insert(retry));
+  }
   if (error) throw error;
   return data as SavedChemical;
 }
 
 export async function updateSavedChemical(id: string, input: SavedChemicalInput) {
-  const payload = {
+  const payload: Record<string, any> = {
     ...sanitize(input, "update"),
     client_updated_at: new Date().toISOString(),
   };
   if (import.meta.env.DEV) {
     console.debug("Sanitised saved chemical payload", payload);
   }
-  const { data, error } = await supabase
-    .from("saved_chemicals")
-    .update(payload)
-    .eq("id", id)
-    .select()
-    .single();
+  const patch = (body: Record<string, any>) =>
+    supabase.from("saved_chemicals").update(body).eq("id", id).select().single();
+  let { data, error } = await patch(payload);
+  if (error && payload.rate_per_ha === null && isRatePerHaNotNull(error)) {
+    const { rate_per_ha: _drop, ...retry } = payload;
+    ({ data, error } = await patch(retry));
+  }
   if (error) throw error;
   return data as SavedChemical;
 }
+
 
 export async function archiveSavedChemical(id: string) {
   // Canonical soft-delete RPC. iOS shares the same Supabase project and the

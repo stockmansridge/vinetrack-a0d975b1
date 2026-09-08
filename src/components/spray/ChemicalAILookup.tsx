@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sparkles, Loader2, AlertCircle, Library } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +45,7 @@ import {
 } from "@/lib/chemicalJurisdiction";
 
 import type { ProductType, RateBasis, ChemUnit } from "@/lib/rateBasis";
+import { ENTER_MANUALLY_LABEL } from "@/lib/chemicalManualEntry";
 
 export interface AppliedSuggestion {
   name?: string;
@@ -81,6 +82,8 @@ export interface AppliedSuggestion {
    * data and are never applied.
    */
   resolved?: ChemicalLookupResult;
+  /** Deliberate manual entry: no lookup evidence, no master link, unverified. */
+  manual?: boolean;
 }
 
 export interface ExistingLibraryItem {
@@ -192,6 +195,14 @@ export function ChemicalAILookup({
   const [name, setName] = useState(initialName);
 
   /**
+   * Lookup FLOW token. Choosing "Enter manually" invalidates every in-flight
+   * search/enrichment so a late response can never overwrite the operator's
+   * manual draft.
+   */
+  const flowRef = useRef(0);
+  const stale = (flow: number) => flowRef.current !== flow;
+
+  /**
    * SEARCH and ENRICHMENT are distinct user-visible phases. They never share a
    * spinner, a message or an error recovery action.
    */
@@ -268,6 +279,7 @@ export function ChemicalAILookup({
     setSelected(null);
     setPendingCandidate(null);
     setPhase("searching");
+    const flow = ++flowRef.current;
     // One correlation id per lookup FLOW: this search and any structured
     // lookup selected from it share it. Diagnostic only.
     const cid = newLookupCorrelationId();
@@ -279,6 +291,7 @@ export function ChemicalAILookup({
         "chemical-info-lookup",
         { body: searchRequestBody(q, countryCode, cid) },
       );
+      if (stale(flow)) return;
       if (!searchErr && isSearchEnvelope(data)) {
         const res = parseSearchCandidates(data);
         if (res.candidates.length === 0) {
@@ -304,6 +317,7 @@ export function ChemicalAILookup({
       console.warn("[chemical-info-lookup:search] failed", e);
       failure = await describeLookupFailure(e);
     }
+    if (stale(flow)) return;
     // BOUNDARY: a failed shortlist NEVER escalates into a full structured
     // free-text lookup (register + research + label work). The typed query is
     // preserved and the operator chooses: retry the search, or enter manually.
@@ -326,6 +340,7 @@ export function ChemicalAILookup({
     setSelectedIndex(candidate.index);
     setPendingCandidate(candidate);
     setPhase("enriching");
+    const flow = ++flowRef.current;
 
     // Master catalogue reuse — ONLY for the exact same registration identity.
     try {
@@ -333,6 +348,7 @@ export function ChemicalAILookup({
         candidate.productName ?? name.trim(),
         countryCode,
       );
+      if (stale(flow)) return;
       const exact = masterForCandidate(rows, candidate);
       if (exact) {
         applyMaster(exact);
@@ -349,6 +365,7 @@ export function ChemicalAILookup({
         "chemical-info-lookup",
         { body: structuredRequestBodyForCandidate(candidate, countryCode, flowId) },
       );
+      if (stale(flow)) return;
       if (!infoErr && isStructuredLookupEnvelope(data)) {
         const result = parseChemicalLookup(data, countryCode);
         if (result.jurisdiction.status !== "mismatch") {
@@ -368,6 +385,7 @@ export function ChemicalAILookup({
       console.warn("[chemical-info-lookup] failed", e);
       failure = await describeLookupFailure(e);
     }
+    if (stale(flow)) return;
     // Enrichment failed: keep the chosen identity on screen. No re-search.
     setSelected((prev) => prev ?? summaryFromCandidate(candidate));
     setError(enrichmentFailureMessage(failure));
@@ -453,9 +471,22 @@ export function ChemicalAILookup({
     });
   }
 
+  /**
+   * Deliberate manual entry. It performs NO network work, needs no search text
+   * and no vineyard country, and cancels anything already in flight so a late
+   * lookup response cannot overwrite the manual draft.
+   */
   function applyManual() {
+    flowRef.current += 1;
     const q = name.trim();
-    onApply({ name: q });
+    setPhase("idle");
+    setError(null);
+    setErrorAction(null);
+    setSearch(null);
+    setSelectedIndex(null);
+    setPendingCandidate(null);
+    setDuplicate(null);
+    onApply({ name: q, manual: true });
     setSelected({ name: q, source: "manual" });
   }
 
@@ -504,6 +535,23 @@ export function ChemicalAILookup({
           )}
         </Button>
       </div>
+
+      {/* Manual entry is a first-class starting point, always available —
+          no search text, no vineyard country and no lookup call required. */}
+      {selectionMode !== "manual" && (
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+          <span>Product not listed, or entering it from the label?</span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 px-2 text-[11px]"
+            onClick={applyManual}
+          >
+            {ENTER_MANUALLY_LABEL}
+          </Button>
+        </div>
+      )}
 
       {/* SEARCH and ENRICHMENT never share a message. */}
       {phase === "searching" && (

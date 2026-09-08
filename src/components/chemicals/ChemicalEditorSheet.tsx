@@ -45,6 +45,15 @@ import {
 } from "@/components/ui/collapsible";
 import { GrapevineUsesCard } from "@/components/chemicals/GrapevineUsesCard";
 import {
+  ADD_GRAPEVINE_USE_LABEL,
+  evaluateManualSaveContract,
+  MANUAL_ENTRY_HELPER,
+  MANUAL_PROVENANCE_BADGE,
+  MANUAL_RATE_ENTRY_MESSAGE,
+  newlyIntroducedViolations,
+  type ManualContractViolation,
+} from "@/lib/chemicalManualEntry";
+import {
   DEFAULT_RATE_NO_LONGER_ON_LABEL_MESSAGE,
   NO_GRAPEVINE_REGISTRATION_MESSAGE,
   RATE_CONFIRMATION_REQUIRED_MESSAGE,
@@ -99,6 +108,7 @@ import {
 } from "@/lib/savedChemicalsQuery";
 import {
   legacyRatePerHa,
+  legacyRatePerHaForWrite,
   describeSavedChemicalSaveError,
 } from "@/lib/savedChemicalLegacyRate";
 import { parseRestrictions, composeRestrictions } from "@/lib/chemicalCategories";
@@ -277,6 +287,12 @@ export function ChemicalEditor({
   // Recovery-only manual RATE draft. The product stays `registered`: this never
   // switches the selection mode and never clears the resolved identity.
   const [manualRate, setManualRate] = useState<ManualRateDraft>(emptyManualRateDraft());
+  /**
+   * Manual-contract violations the record ALREADY had when it was opened.
+   * Pre-existing incompleteness stays repairable — only violations introduced
+   * in this session can block a save.
+   */
+  const [manualBaseline, setManualBaseline] = useState<ManualContractViolation[]>([]);
   const showIntelEditor = !initial || upgraded || hasStructuredIntelligence(intel);
 
 
@@ -347,10 +363,20 @@ export function ChemicalEditor({
         });
         setRateStr(initial.rate_per_ha == null ? "" : String(initial.rate_per_ha));
         setExistingCost(purchaseCostPerUnit(initial.purchase));
-        setPackSizeStr("");
-        setPackPriceStr("");
+        // Rehydrate the stored pack only when BOTH halves exist — a half pack
+        // would make the cost calculation refuse the save.
+        const packSize = (initial as any).pack_size;
+        const packPrice = (initial as any).price_per_pack;
+        const packPair =
+          packSize != null && packSize !== "" && packPrice != null && packPrice !== "";
+        setPackSizeStr(packPair ? String(packSize) : "");
+        setPackPriceStr(packPair ? String(packPrice) : "");
         // No legacy "Litres" fallback: an unknown-form product keeps it unset.
-        setPackUnit(displayBaseUnit(initial.purchase?.unit ?? initial.unit) || "");
+        setPackUnit(
+          ((initial as any).pack_unit as string | null | undefined)?.trim() ||
+            displayBaseUnit(initial.purchase?.unit ?? initial.unit) ||
+            "",
+        );
         setCurrency(initial.purchase?.currency ?? "AUD");
         const p = parseRestrictions(initial.restrictions);
         setWhp(p.whpDays);
@@ -378,6 +404,16 @@ export function ChemicalEditor({
         setWhpLegalText("");
         setUnresolvedItems([]);
         setPhysicalForm(formFromInventoryUnit(normaliseUnit((initial as any).unit)));
+        setManualBaseline(
+          evaluateManualSaveContract({
+            name: initial.name,
+            category:
+              matchProductCategoryKey(initial.product_category) ??
+              matchProductCategoryKey(initial.use) ??
+              "",
+            uses: hydrated.registeredUses,
+          }).violations,
+        );
         setRateLife(
           hydrateDefaultRateLifecycle({
             storedDefaultRates: (initial as any).default_rates,
@@ -406,7 +442,7 @@ export function ChemicalEditor({
         setUpgraded(false);
         setMasterLink(null);
         setRateLife(newDefaultRateLifecycle());
-
+        setManualBaseline([]);
       }
       // Reopening reconstructs the EXACT saved manual rate (type, basis, unit,
       // amounts) together with its user-confirmed provenance.
@@ -437,10 +473,20 @@ export function ChemicalEditor({
           throw new Error("Enter both a pack size (> 0) and a pack price to calculate cost");
         }
       }
+      // Shared manual save contract (mobile `ChemicalSaveContract`). Enforced
+      // in the mutation as well as the UI so no path can persist a manual
+      // record that cannot be sprayed.
+      if (manualBlocking.length > 0) throw new Error(manualBlocking[0].message);
       const restrictions = composeRestrictions({ whpDays: whp, reiHours: rei, rest: restNotes });
       // Re-resolve trust before encoding: a hand-edited critical value can no
       // longer lean on the evidence that certified the previous value.
-      const reconciled = reconcileEditedDraft(intelBase, intel);
+      const reconciledBase = reconcileEditedDraft(intelBase, intel);
+      // A manually entered product is never verified by typing. Genuine
+      // conflicts are left exactly as reconciliation found them.
+      const reconciled =
+        manualMode && reconciledBase.claimedStatus !== "unverified"
+          ? { ...reconciledBase, claimedStatus: "unverified" as const }
+          : reconciledBase;
       // Vineyard scope: only grapevine registered uses are ever persisted.
       // Other-crop directions are dropped whole, never merged or rewritten.
       // Recovery path: append the user-entered rate as an explicitly
@@ -459,10 +505,13 @@ export function ChemicalEditor({
       // Category: the RAW shared key is the stored authority; `use` carries the
       // display label as a compatibility projection only.
       const categoryKey = matchProductCategoryKey(form.product_category);
-      const legacyRate = legacyRatePerHa({
+      const legacyRate = legacyRatePerHaForWrite({
         typed: rateStr,
         manual: manualRateConfirmed ? manualRate : null,
         defaults: defaultRates,
+        // A deliberate structured rate decision corrects the legacy scalar
+        // (SQL 222 null) instead of leaving a stale number behind.
+        rateDecisionChanged: rateLife.dirty || !!manualSelection,
       });
       const payload: SavedChemicalInput = {
         ...form,
@@ -470,8 +519,10 @@ export function ChemicalEditor({
         product_category: categoryKey,
         use: categoryKey ? productCategoryLabel(categoryKey) : (form.use ?? ""),
         intelligence: encoded,
-        master_chemical_id: masterLink?.id ?? null,
-        master_source_revision: masterLink?.revision ?? null,
+        // Manual records carry NO master link: typing a registration number
+        // never matches a Master product.
+        master_chemical_id: manualMode ? null : masterLink?.id ?? null,
+        master_source_revision: manualMode ? null : masterLink?.revision ?? null,
         // Legacy per-hectare scalar (compatibility projection only). Omitted
         // whenever there is no genuine per-hectare scalar — a per-100 L rate
         // is never converted, copied or fabricated into this column.
@@ -497,6 +548,17 @@ export function ChemicalEditor({
             }
           : {}),
 
+        // Shared mobile operational columns. Written only when the operator
+        // actually supplied them, so an unrelated edit never blanks a value
+        // that iOS/Android populated.
+        ...(physicalForm !== "unknown" ? { product_form: physicalForm } : {}),
+        ...(canSeeCosts && packSizeStr.trim() !== "" && packPriceStr.trim() !== ""
+          ? {
+              pack_size: Number(packSizeStr),
+              price_per_pack: Number(packPriceStr),
+              ...(packUnit ? { pack_unit: packUnit } : {}),
+            }
+          : {}),
         purchase: canSeeCosts && costNum != null
           ? {
               ...(form.purchase ?? {}),
@@ -548,6 +610,38 @@ export function ChemicalEditor({
 
 
   const applySuggestion = (s: AppliedSuggestion) => {
+    // ---- DELIBERATE MANUAL ENTRY. Terminal branch: every candidate, Master
+    // link, resolved evidence and rate state from an earlier lookup attempt is
+    // cleared, and only the typed name and the vineyard country are kept.
+    if (s.manual) {
+      setForm({ ...EMPTY, name: s.name?.trim() ?? "" });
+      setRateStr("");
+      setWhp("");
+      setRei("");
+      setRestNotes("");
+      setWhpLegalText("");
+      setUnresolvedItems([]);
+      setPhysicalForm("unknown");
+      setPackUnit("");
+      setPackSizeStr("");
+      setPackPriceStr("");
+      setExistingCost(null);
+      setMasterLink(null);
+      setManufacturerLabelUrl(undefined);
+      setRateLife(newDefaultRateLifecycle());
+      setManualRate(emptyManualRateDraft());
+      const blank = emptyDraft();
+      const manualDraft: ChemicalIntelligenceDraft = {
+        ...blank,
+        registration: currentCountry ? { country: currentCountry } : {},
+        claimedStatus: "unverified",
+      };
+      setIntel(manualDraft);
+      setIntelBase(manualDraft);
+      setUpgraded(true);
+      setManualBaseline([]);
+      return;
+    }
     // ---- Upgraded resolver result. This branch is TERMINAL: once a
     // structured resolver result has been handled, no legacy AI/lookup
     // fallback below may run or overwrite a canonical field.
@@ -767,15 +861,39 @@ export function ChemicalEditor({
   // whether uses were extracted: a lookup returning zero uses is still gated.
   // Manual entry stays exempt; existing records are never stranded.
   const lookupSelected = selectionMode === "registered" || selectionMode === "master";
+  /**
+   * MANUAL ENTRY. A deliberately operator-authored product: no lookup
+   * evidence, no Master link and never presented as verified. An existing row
+   * with neither a Master link nor a registration number is treated the same
+   * way so an edit keeps the manual workflow.
+   */
+  const manualRecord =
+    !!initial &&
+    !(initial as any).master_chemical_id &&
+    !String((initial as any).registration_number ?? "").trim();
+  const manualMode = selectionMode === "manual" || manualRecord;
+  const manualContract = evaluateManualSaveContract({
+    name: form.name,
+    category: form.product_category,
+    uses: intel.registeredUses,
+  });
+  const manualBlocking = !manualMode
+    ? []
+    : initial
+    ? newlyIntroducedViolations(manualBaseline, manualContract.violations)
+    : manualContract.violations;
   const grapevineRegistered = hasGrapevineRegistration(intel.registeredUses);
   const noGrapevineRegistration = !initial && lookupSelected && !grapevineRegistered;
   // A successful retry that resolves canonical options retires the manual
   // fallback entirely — derived, never an effect.
-  const manualRateActive =
-    !initial &&
-    lookupSelected &&
-    manualRate.open &&
-    !hasUsableRateOptions(canonicalRateOptions);
+  const manualRateActive = manualMode
+    // Manual entry: an operator-confirmed default rate is OPTIONAL and always
+    // available. It is never auto-created from a typed label rate.
+    ? manualRate.open
+    : !initial &&
+      lookupSelected &&
+      manualRate.open &&
+      !hasUsableRateOptions(canonicalRateOptions);
   const manualRateConfirmed = manualRateActive && manualRateSatisfiesGate(manualRate);
   const firstAddBlocked = lookupSaveBlocked({
     isExistingRecord: !!initial,
@@ -785,7 +903,7 @@ export function ChemicalEditor({
     staleDefaultRate,
     manualRateConfirmed,
   });
-  const saveBlocked = staleDefaultRate || firstAddBlocked;
+  const saveBlocked = staleDefaultRate || firstAddBlocked || manualBlocking.length > 0;
 
   /**
    * Rate-gate safeguard: a new registered lookup with a grapevine registration
@@ -811,6 +929,41 @@ export function ChemicalEditor({
 
 
 
+
+  /**
+   * Manual entry: start a grapevine use. Crop is prefilled because this is the
+   * vineyard workflow; everything else (target, rate, unit, WHP, REI) is the
+   * operator's to type from the label. No canonical identity is minted.
+   */
+  const handleAddGrapevineUse = () =>
+    handleIntelChange({
+      ...intel,
+      registeredUses: [
+        ...intel.registeredUses,
+        {
+          crop: "Grapevines",
+          target_raw: "",
+          rates: [{ label: "", basis: "per_hectare" as const, unit: "L/ha" }],
+        },
+      ],
+    });
+
+  /**
+   * A typed default rate must be re-confirmed after it is edited: changing an
+   * amount, basis, unit or type drops the previous confirmation.
+   */
+  const handleManualRateChange = (next: ManualRateDraft) => {
+    const changed =
+      next.kind !== manualRate.kind ||
+      next.basis !== manualRate.basis ||
+      next.unit !== manualRate.unit ||
+      next.value !== manualRate.value ||
+      next.min !== manualRate.min ||
+      next.max !== manualRate.max;
+    setManualRate(changed && next.confirmed === manualRate.confirmed
+      ? { ...next, confirmed: false }
+      : next);
+  };
 
   /** Operator click: copy the backend option and stamp provenance. */
   const handleSelectDefaultRate = (
@@ -953,6 +1106,12 @@ export function ChemicalEditor({
 
       {/* Jurisdiction suitability is computed, never stored. Chemistry is
           kept; only label authority changes. */}
+      {manualMode && (
+        <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 p-2 text-[11px]">
+          <Badge variant="outline" className="text-[10px]">{MANUAL_PROVENANCE_BADGE}</Badge>
+          <span className="text-muted-foreground">{MANUAL_ENTRY_HELPER}</span>
+        </div>
+      )}
       <JurisdictionNoticeBanner
         registrationCountry={intel.registration.country}
         vineyardCountry={currentCountry}
@@ -1331,9 +1490,30 @@ export function ChemicalEditor({
                   {showRateRecovery && manualRateActive && (
                     <ManualRateEditor
                       draft={manualRate}
-                      onChange={setManualRate}
+                      onChange={handleManualRateChange}
                       onCancel={() => setManualRate(emptyManualRateDraft())}
                     />
+                  )}
+                  {/* Manual entry: an OPTIONAL operator-confirmed default. */}
+                  {manualMode && !showRateRecovery && (
+                    manualRateActive ? (
+                      <ManualRateEditor
+                        draft={manualRate}
+                        onChange={handleManualRateChange}
+                        onCancel={() => setManualRate(emptyManualRateDraft())}
+                        provenanceMessage={MANUAL_RATE_ENTRY_MESSAGE}
+                      />
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="mb-2 h-7 px-2 text-[11px]"
+                        onClick={() => setManualRate((p) => ({ ...emptyManualRateDraft(), ...p, open: true }))}
+                      >
+                        Set a default rate (optional)
+                      </Button>
+                    )
                   )}
 
                   {rateLife.productChangedNotice && (
@@ -1371,7 +1551,33 @@ export function ChemicalEditor({
               <Section title="Grapevine uses & rates">
                 {/* Vineyard-first: other crops on the label are not part of the
                     normal add flow and are never shown here. */}
-                {structuredUses || lookupSelected ? (
+                {manualMode ? (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-muted-foreground">{MANUAL_ENTRY_HELPER}</p>
+                    <ChemicalIntelligenceEditor
+                      draft={intel}
+                      onChange={handleIntelChange}
+                      productName={form.name ?? ""}
+                      country={currentCountry}
+                      compact
+                      sections={{ actives: false, registration: false, uses: true, sources: false, audit: false }}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[11px]"
+                      onClick={handleAddGrapevineUse}
+                    >
+                      {ADD_GRAPEVINE_USE_LABEL}
+                    </Button>
+                    {manualBlocking.map((v) => (
+                      <p key={v.field} role="alert" className="text-[11px] text-destructive">
+                        {v.message}
+                      </p>
+                    ))}
+                  </div>
+                ) : structuredUses || lookupSelected ? (
                   <>
                     {!grapevineRegistered && (
                       <div
