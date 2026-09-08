@@ -570,10 +570,11 @@ function AppleDrawMap({
           () => {
             const el = document.createElement("div");
             el.style.cssText =
-              "width:10px;height:10px;border-radius:9999px;background:#fff;border:2px solid #34C759;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:translate(-50%,-50%);cursor:pointer;opacity:.85";
+              "width:14px;height:14px;box-sizing:border-box;border-radius:9999px;background:#fff;border:2px solid #34C759;box-shadow:0 1px 2px rgba(0,0,0,.4);cursor:pointer;opacity:.85";
             return el;
           },
         );
+        try { (ann as any).anchorOffset = new mapkit.Point(0, 7); } catch { /* noop */ }
         const insertAt = i + 1;
         ann.addEventListener("select", () => {
           const next = polygonRef.current.slice();
