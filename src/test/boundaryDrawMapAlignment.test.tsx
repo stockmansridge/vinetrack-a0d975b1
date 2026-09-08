@@ -133,16 +133,85 @@ describe("BoundaryDrawMap marker alignment", () => {
     expect(midpointAnnotations).toHaveLength(3);
 
     for (const ann of vertexAnnotations) {
+      // MapKit anchors at bottom-centre and positive Y moves UP; centring the
+      // 20px numbered handle on its vertex needs a NEGATIVE half-height offset.
       expect(ann.anchorOffset.x).toBe(0);
-      expect(ann.anchorOffset.y).toBe(10);
+      expect(ann.anchorOffset.y).toBe(-10);
       const el = ann._factory();
       expect(el.style.transform).toBe("");
     }
     for (const ann of midpointAnnotations) {
+      // 14px midpoint dot centred on its edge → -7.
       expect(ann.anchorOffset.x).toBe(0);
-      expect(ann.anchorOffset.y).toBe(7);
+      expect(ann.anchorOffset.y).toBe(-7);
       const el = ann._factory();
       expect(el.style.transform).toBe("");
+    }
+  });
+
+  it("dragging an edit-boundary vertex stores the exact dropped coordinate", async () => {
+    const polygon: LatLng[] = [
+      { lat: -34.5, lng: 138.7 },
+      { lat: -34.501, lng: 138.701 },
+      { lat: -34.502, lng: 138.699 },
+    ];
+    const setPolygon = vi.fn();
+
+    render(
+      <BoundaryDrawMap
+        polygon={polygon}
+        setPolygon={setPolygon}
+        readonly={false}
+        editingExistingBoundary
+      />,
+      { wrapper: wrapper() }
+    );
+
+    const { initMapKit } = await import("@/lib/mapkit");
+    await act(async () => { await initMapKit(); });
+    await waitFor(() => expect(createdAnnotations.length).toBeGreaterThan(0), { timeout: 10000 });
+
+    const ann = createdAnnotations[0];
+    const dragEnd = ann.addEventListener.mock.calls.find((c: any[]) => c[0] === "drag-end")?.[1];
+    expect(dragEnd).toBeDefined();
+
+    const dropped = { latitude: -34.5005, longitude: 138.7005 };
+    ann.coordinate = dropped;
+    act(() => { dragEnd(); });
+
+    expect(setPolygon).toHaveBeenCalledTimes(1);
+    const next = setPolygon.mock.calls[0][0] as LatLng[];
+    // Exact coordinate preserved — no geographic compensation applied.
+    expect(next[0]).toEqual({ lat: dropped.latitude, lng: dropped.longitude });
+    expect(next[1]).toEqual(polygon[1]);
+    expect(next[2]).toEqual(polygon[2]);
+  });
+
+  it("keeps create-block behaviour unchanged (CSS centring, zero offset)", async () => {
+    const polygon: LatLng[] = [
+      { lat: -34.5, lng: 138.7 },
+      { lat: -34.501, lng: 138.701 },
+      { lat: -34.502, lng: 138.699 },
+    ];
+
+    render(
+      <BoundaryDrawMap
+        polygon={polygon}
+        setPolygon={() => {}}
+        readonly={false}
+      />,
+      { wrapper: wrapper() }
+    );
+
+    const { initMapKit } = await import("@/lib/mapkit");
+    await act(async () => { await initMapKit(); });
+    await waitFor(() => expect(createdAnnotations.length).toBeGreaterThan(0), { timeout: 10000 });
+
+    for (const ann of createdAnnotations) {
+      expect(ann.anchorOffset.x).toBe(0);
+      expect(ann.anchorOffset.y).toBe(0);
+      const el = ann._factory();
+      expect(el.style.transform).toContain("translate(-50%,-50%)");
     }
   });
 
