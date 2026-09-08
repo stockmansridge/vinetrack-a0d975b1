@@ -312,6 +312,7 @@ function AppleDrawMap({
         showsCompass: mapkit.FeatureVisibility.Adaptive,
         showsScale: mapkit.FeatureVisibility.Adaptive,
         showsZoomControl: true,
+        showsUserLocationControl: false,
       });
       mapRef.current = map;
       setMapReady(true);
@@ -458,14 +459,14 @@ function AppleDrawMap({
         () => {
           const el = document.createElement("div");
           el.style.cssText =
-            "background:#FFD60A;color:#1f1f1f;font-size:11px;font-weight:700;height:20px;line-height:16px;padding:2px 6px;box-sizing:border-box;border-radius:9999px;box-shadow:0 1px 2px rgba(0,0,0,.5);white-space:nowrap;border:1px solid rgba(0,0,0,.25)";
+            "background:#FFD60A;color:#1f1f1f;font-size:11px;font-weight:700;height:20px;line-height:16px;padding:2px 6px;box-sizing:border-box;border-radius:9999px;box-shadow:0 1px 2px rgba(0,0,0,.5);white-space:nowrap;border:1px solid rgba(0,0,0,.25);transform:translate(-50%,-50%)";
           el.textContent = `Row ${lbl.n}`;
           return el;
         },
       );
-      // MapKit anchors custom elements by their bottom-centre; shift down half
-      // the element height so the label is centred on the coordinate.
-      try { (ann as any).anchorOffset = new mapkit.Point(0, 10); } catch { /* noop */ }
+      // Pin the element's top-left corner to the coordinate, then centre it
+      // with CSS translate so the label sits exactly on the point.
+      try { (ann as any).anchorOffset = new DOMPoint(0, 0); } catch { /* noop */ }
       try { (ann as any).selectable = false; } catch { /* noop */ }
       next.push(ann);
     }
@@ -527,13 +528,14 @@ function AppleDrawMap({
         () => {
           const el = document.createElement("div");
           el.style.cssText =
-            "background:#34C759;color:#fff;font-size:11px;font-weight:600;height:20px;line-height:16px;padding:2px 6px;box-sizing:border-box;border-radius:9999px;box-shadow:0 1px 2px rgba(0,0,0,.4);cursor:grab";
+            "background:#34C759;color:#fff;font-size:11px;font-weight:600;height:20px;line-height:16px;padding:2px 6px;box-sizing:border-box;border-radius:9999px;box-shadow:0 1px 2px rgba(0,0,0,.4);cursor:grab;transform:translate(-50%,-50%)";
           el.textContent = String(i + 1);
           return el;
         },
       );
-      // Centre the chip on the coordinate (MapKit anchors bottom-centre).
-      try { (ann as any).anchorOffset = new mapkit.Point(0, 10); } catch { /* noop */ }
+      // Pin the element's top-left corner to the coordinate, then centre it
+      // with CSS translate so the number sits exactly on the vertex.
+      try { (ann as any).anchorOffset = new DOMPoint(0, 0); } catch { /* noop */ }
       try { ann.draggable = true; } catch { /* noop */ }
       ann.addEventListener("drag-end", () => {
         try {
@@ -570,11 +572,12 @@ function AppleDrawMap({
           () => {
             const el = document.createElement("div");
             el.style.cssText =
-              "width:14px;height:14px;box-sizing:border-box;border-radius:9999px;background:#fff;border:2px solid #34C759;box-shadow:0 1px 2px rgba(0,0,0,.4);cursor:pointer;opacity:.85";
+              "width:14px;height:14px;box-sizing:border-box;border-radius:9999px;background:#fff;border:2px solid #34C759;box-shadow:0 1px 2px rgba(0,0,0,.4);cursor:pointer;opacity:.85;transform:translate(-50%,-50%)";
             return el;
           },
         );
-        try { (ann as any).anchorOffset = new mapkit.Point(0, 7); } catch { /* noop */ }
+        // Centre the midpoint dot exactly on the coordinate.
+        try { (ann as any).anchorOffset = new DOMPoint(0, 0); } catch { /* noop */ }
         const insertAt = i + 1;
         ann.addEventListener("select", () => {
           const next = polygonRef.current.slice();
