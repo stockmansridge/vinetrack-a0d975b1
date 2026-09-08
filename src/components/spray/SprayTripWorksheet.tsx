@@ -315,14 +315,17 @@ export default function SprayTripWorksheet({
   }
 
   if (query.isError || !payload) {
+    const loadError = toCustomerError(
+      (query.error as Error)?.message,
+      "Spray details could not be loaded. Please try again.",
+    );
     return (
       <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
-        <p className="text-destructive">
-          {(query.error as Error)?.message ?? "Spray details could not be loaded."}
-        </p>
+        <p className="text-destructive">{loadError.customer}</p>
         <Button size="sm" variant="outline" className="mt-2" onClick={() => query.refetch()}>
           <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Try again
         </Button>
+        <SystemAdminDiagnostics className="mt-3" details={[loadError.diagnostic]} />
       </div>
     );
   }
