@@ -9,6 +9,7 @@
 // The local resolver still ships an alias map (varietyResolver.ts) as a
 // FALLBACK only — used when the catalogue RPC is unreachable or the
 // allocation snapshot uses an old/free-text name.
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 
