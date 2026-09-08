@@ -122,45 +122,47 @@ describe("draft diffing", () => {
 });
 
 describe("saving actuals", () => {
-  beforeEach(() => configureSprayActualsSaver(null));
-
-  it("refuses to save until the shared save path is configured", async () => {
-    expect(sprayActualsSaveAvailable()).toBe(false);
-    await expect(
-      saveSprayActuals({
-        tripId: "t1",
-        sprayRecordId: "s1",
-        vineyardId: "v1",
-        changes: [
-          { tankNumber: 1, chemical: null, unit: "L", previousBase: null, newBase: 10, kind: "initial" },
-        ],
-      }),
-    ).rejects.toThrow(SPRAY_ACTUALS_SAVE_UNAVAILABLE);
+  beforeEach(() => {
+    rpcCalls.length = 0;
+    rpcError = null;
   });
 
   it("does nothing when there is nothing to save", async () => {
-    await expect(
-      saveSprayActuals({ tripId: "t1", sprayRecordId: null, vineyardId: "v1", changes: [] }),
-    ).resolves.toBeUndefined();
+    const p = payload();
+    await saveSprayActuals({ payload: p, draft: draftFromPayload(p) });
+    expect(rpcCalls).toHaveLength(0);
   });
 
-  it("delegates to the configured saver once available", async () => {
-    const calls: unknown[] = [];
-    configureSprayActualsSaver(async (req) => {
-      calls.push(req);
-    });
-    await saveSprayActuals({
-      tripId: "t1",
-      sprayRecordId: "s1",
-      vineyardId: "v1",
-      changes: [
-        { tankNumber: 1, chemical: null, unit: "L", previousBase: null, newBase: 10, kind: "initial" },
-      ],
-    });
-    expect(calls).toHaveLength(1);
-    configureSprayActualsSaver(null);
+  it("sends one complete audited snapshot per edited tank", async () => {
+    const p = payload();
+    const d = draftFromPayload(p);
+    d.water[1] = "900";
+    d.chemicals[Object.keys(d.chemicals)[0]] = "0";
+    await saveSprayActuals({ payload: p, draft: d, operationIds: { 1: "op-1" } });
+    expect(rpcCalls).toHaveLength(1);
+    const [name, args] = rpcCalls[0];
+    expect(name).toBe("correct_spray_tank_actual_v1");
+    expect(args.p_operation_id).toBe("op-1");
+    expect(args.p_expected_version).toBe(0);
+    expect(args.p_water_volume_l).toBe(900);
+    // A typed zero is an explicit observation, not a removed line.
+    expect(args.p_chemicals).toHaveLength(1);
+    expect(args.p_chemicals[0]).toMatchObject({ actualAmountBase: 0, usageKind: "planned" });
+  });
+
+  it("omits a blanked chemical line and reports a version conflict", async () => {
+    const p = payload();
+    p.tanks[0].chemicals[0].actualAmountBase = 1000;
+    const d = draftFromPayload(p);
+    d.chemicals[Object.keys(d.chemicals)[0]] = "";
+    rpcError = { code: "40001", message: "could not serialize access" };
+    await expect(saveSprayActuals({ payload: p, draft: d })).rejects.toBeInstanceOf(
+      SprayActualsConflictError,
+    );
+    expect(rpcCalls[0][1].p_chemicals).toEqual([]);
   });
 });
+
 
 describe("amendment history", () => {
   it("ignores malformed entries and sorts by time", () => {
