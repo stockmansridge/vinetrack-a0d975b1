@@ -568,9 +568,16 @@ export function parseTankSessions(sessions: any): TankSessionRow[] {
     const end = s?.end_time ?? s?.endTime;
     const fillStart = s?.fill_start_time ?? s?.fillStartTime;
     const fillEnd = s?.fill_end_time ?? s?.fillEndTime;
-    const rows = Array.isArray(s?.rows_covered ?? s?.rowsCovered)
-      ? (s.rows_covered ?? s.rowsCovered).length
-      : s?.rows_covered_count ?? s?.rowsCoveredCount ?? "—";
+    // GENERIC LEGACY PARSING ONLY. Some legacy tank sessions record the covered
+    // rows under `paths_covered` instead of `rows_covered`. This fallback exists
+    // for the generic trip report; the Spray Report must never use this path —
+    // it renders the canonical `get_spray_report_v1` payload instead.
+    const coveredList =
+      s?.rows_covered ?? s?.rowsCovered ?? s?.paths_covered ?? s?.pathsCovered;
+    const rows = Array.isArray(coveredList)
+      ? coveredList.length
+      : s?.rows_covered_count ?? s?.rowsCoveredCount ??
+        s?.paths_covered_count ?? s?.pathsCoveredCount ?? "—";
     return {
       number: String(num),
       status: isComplete ? "Complete" : "Active",
