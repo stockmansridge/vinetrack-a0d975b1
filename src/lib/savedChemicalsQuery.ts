@@ -224,6 +224,20 @@ function sanitize(input: SavedChemicalInput, mode: "insert" | "update" = "insert
       out[k] = v;
     }
   }
+  // Shared operational columns are typed in the deployed schema:
+  // pack_size / price_per_pack / inventory_quantity are numeric and
+  // organic_certified is boolean. A non-numeric value is never coerced to 0 —
+  // it is dropped so the stored value survives. Explicit null clears.
+  for (const key of ["pack_size", "price_per_pack", "inventory_quantity"] as const) {
+    if (!(key in out)) continue;
+    if (out[key] === null) continue;
+    const n = Number(out[key]);
+    if (Number.isFinite(n)) out[key] = n;
+    else delete out[key];
+  }
+  if ("organic_certified" in out && out.organic_certified !== null) {
+    out.organic_certified = Boolean(out.organic_certified);
+  }
   // iOS stores saved_chemicals.unit as the raw base unit enum
   // ("Litres" | "mL" | "Kg" | "g"), while spray job chemical lines store the
   // combined application unit (e.g. "Litres/ha", "mL/100L").
