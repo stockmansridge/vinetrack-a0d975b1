@@ -125,7 +125,7 @@ describe("rendering helpers", () => {
     expect(a).not.toBe(routeHashForPoints([...pts].reverse()));
     const { payload } = parseSprayReportPayload(fixture);
     expect(routeObjectPath(payload!, a)).toBe(
-      `${payload!.identity.vineyardId}/${payload!.identity.tripId}/spray-route-red-green-v1-${a}.png`,
+      `${payload!.identity.tripId}/spray-route-red-green-v1-${a}.png`,
     );
   });
 });

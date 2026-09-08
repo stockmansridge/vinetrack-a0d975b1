@@ -4,7 +4,7 @@
 import type { RegionFormatters } from "./regionFormatters";
 import { extractPathPoints } from "./tripReport";
 import { fetchSprayReportV1, SPRAY_RECORD_UNAVAILABLE_MESSAGE } from "./sprayReportV1";
-import { resolveSprayRouteImage } from "./sprayReportRoute";
+import { resolveSprayRoute, ROUTE_RENDER_FAILED_MESSAGE } from "./sprayReportRoute";
 import { saveSprayReportPdf } from "./sprayReportPdf";
 
 export interface DownloadSprayReportOptions {
@@ -29,15 +29,20 @@ export async function downloadSprayReport(
   if (!payload) return { ok: false, error: error ?? SPRAY_RECORD_UNAVAILABLE_MESSAGE };
 
   let routeImage = null;
+  let routeWarning: string | null = null;
   try {
-    routeImage = await resolveSprayRouteImage(payload, extractPathPoints(opts.pathPoints));
+    const resolved = await resolveSprayRoute(payload, extractPathPoints(opts.pathPoints));
+    routeImage = resolved.image;
+    routeWarning = resolved.warning;
   } catch {
     routeImage = null;
+    routeWarning = ROUTE_RENDER_FAILED_MESSAGE;
   }
 
   const filename = saveSprayReportPdf(payload, {
     formatters: opts.formatters,
     routeImage,
+    routeWarning,
   });
   return { ok: true, filename };
 }

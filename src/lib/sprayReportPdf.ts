@@ -83,6 +83,8 @@ function weatherRow(w: SprayReportWeather, fmt: RegionFormatters, tz: string): s
 export interface SprayReportPdfContext {
   formatters?: RegionFormatters;
   routeImage?: ResolvedRouteImage | null;
+  /** Honest reason shown in the Route section when no image can be embedded. */
+  routeWarning?: string | null;
   logoDataUrl?: string | null;
 }
 
@@ -265,7 +267,17 @@ export function buildSprayReportPdf(
     } catch {
       y += 6;
     }
+  } else if (ctx.routeWarning) {
+    section("Route", 60);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(110);
+    const lines = doc.splitTextToSize(ctx.routeWarning, pageWidth - margin * 2);
+    doc.text(lines, margin, y + 12);
+    doc.setTextColor(0);
+    y += 12 + lines.length * 12 + 10;
   }
+
 
   // Completeness warnings
   if (payload.warnings.length) {
