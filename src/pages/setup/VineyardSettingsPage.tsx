@@ -32,7 +32,6 @@ import {
 import { CreateVineyardDialog } from "@/components/vineyard/CreateVineyardDialog";
 import { PendingInvitationsSection } from "@/components/invites/PendingInvitesModal";
 import {
-  clearCountryReturnContext,
   readCountryReturnContext,
   VINEYARD_COUNTRY_FIELD_ID,
 } from "@/lib/vineyardCountryRecovery";
