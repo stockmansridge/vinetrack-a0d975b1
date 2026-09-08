@@ -248,3 +248,30 @@
   }
 }
 
+
+@layer components {
+  /* Shared popup sizing.
+     Radix centres dialogs with no intrinsic height limit, so long forms used to
+     run off screen on small viewports, in landscape and at high browser zoom —
+     the title, close button and Save/Cancel actions became unreachable.
+     `dvh` tracks the visible viewport on iOS Safari (URL bar / on-screen
+     keyboard); the `vh` line above it is the fallback for older engines.
+     Callers that already manage their own scrolling override these with
+     Tailwind utilities (utilities layer wins over components). */
+  .vt-dialog-fit {
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .vt-sheet-fit {
+    max-height: 100vh;
+    max-height: 100dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+  }
+}
