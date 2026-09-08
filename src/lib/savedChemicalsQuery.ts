@@ -336,13 +336,8 @@ export async function updateSavedChemical(id: string, input: SavedChemicalInput)
   if (import.meta.env.DEV) {
     console.debug("Sanitised saved chemical payload", payload);
   }
-  const patch = (body: Record<string, any>) =>
-    supabase.from("saved_chemicals").update(body).eq("id", id).select().single();
-  let { data, error } = await patch(payload);
-  if (error && payload.rate_per_ha === null && isRatePerHaNotNull(error)) {
-    const { rate_per_ha: _drop, ...retry } = payload;
-    ({ data, error } = await patch(retry));
-  }
+  const { data, error } = await supabase
+    .from("saved_chemicals").update(payload).eq("id", id).select().single();
   if (error) throw error;
   return data as SavedChemical;
 }
