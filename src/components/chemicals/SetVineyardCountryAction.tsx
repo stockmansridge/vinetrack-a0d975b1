@@ -1,7 +1,7 @@
 // Shared recovery action shown wherever chemical lookup is blocked because the
 // selected vineyard has no country. It never relaxes the guard — it only takes
 // Owners/Managers to the vineyard profile Country field and back again.
-import { useLocation, useNavigate } from "react-router-dom";
+import { useInRouterContext, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useVineyard } from "@/context/VineyardContext";
 import {
@@ -25,8 +25,11 @@ export function SetVineyardCountryAction({
   className?: string;
 }) {
   const { currentRole } = useVineyard();
-  const navigate = useNavigate();
-  const location = useLocation();
+  // Some chemical surfaces are embedded outside a router (dialogs rendered by
+  // hosts, tests). The prompt must still render; only the jump is unavailable.
+  const inRouter = useInRouterContext();
+  const navigate = inRouter ? useNavigate() : null;
+  const location = inRouter ? useLocation() : null;
   const canEdit = canEditVineyardCountry(currentRole);
 
   const go = () => {
@@ -36,6 +39,7 @@ export function SetVineyardCountryAction({
     } catch {
       state = undefined;
     }
+    if (!navigate || !location) return;
     saveCountryReturnContext({
       path: `${location.pathname}${location.search}`,
       label: returnLabel,
@@ -47,7 +51,7 @@ export function SetVineyardCountryAction({
   return (
     <div className={`space-y-1.5 ${className ?? ""}`}>
       <p className="text-[11px]">{VINEYARD_COUNTRY_PROMPT}</p>
-      {canEdit ? (
+      {canEdit && inRouter ? (
         <Button type="button" size="sm" variant="outline" onClick={go}>
           {SET_VINEYARD_COUNTRY_LABEL}
         </Button>
