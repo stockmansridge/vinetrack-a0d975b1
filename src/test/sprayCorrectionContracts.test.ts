@@ -148,7 +148,7 @@ describe("row assignment recovery", () => {
 
 describe("actual corrections fixture", () => {
   it("keeps zero distinct from not recorded and totals substitutions and additions", () => {
-    const tank = (fixture as any).tanks[0];
+    const tank = (fixture as any).tank;
     const oil = tank.chemicals.find((c: any) => /Oil/i.test(c.name));
     expect(oil.actualAmountBase).toBe(0);
     expect(toDisplayAmount(0, oil.unit)).toBe(0);
