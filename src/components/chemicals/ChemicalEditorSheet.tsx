@@ -369,7 +369,8 @@ export function ChemicalEditor({
         const packSize = initial.pack_size;
         const packPrice = initial.price_per_pack;
         const packPair =
-          packSize != null && packSize !== "" && packPrice != null && packPrice !== "";
+          Number.isFinite(Number(packSize)) && Number.isFinite(Number(packPrice)) &&
+          packSize != null && packPrice != null;
         setPackSizeStr(packPair ? String(packSize) : "");
         setPackPriceStr(packPair ? String(packPrice) : "");
         // No legacy "Litres" fallback: an unknown-form product keeps it unset.

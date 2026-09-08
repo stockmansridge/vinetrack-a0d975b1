@@ -303,19 +303,11 @@ function sanitize(input: SavedChemicalInput, mode: "insert" | "update" = "insert
 }
 
 /**
- * SQL 222 makes `rate_per_ha` nullable. Deployment of that migration is not
- * verifiable from the portal, so an explicit null write degrades safely: if
- * the column is still NOT NULL the row is retried without the field rather
- * than losing the operator's save.
+ * SQL 222 (deployed) makes `rate_per_ha` nullable. A deliberate rate change
+ * that replaces a per-hectare scalar with a range or a /100 L rate therefore
+ * persists an explicit `null`. There is NO silent retry-without-the-field: if
+ * the write fails the error surfaces so the draft is kept and shown.
  */
-const isRatePerHaNotNull = (error: unknown): boolean => {
-  const e = error as { code?: string; message?: string } | null;
-  if (!e) return false;
-  return (
-    (e.code === "23502" || /not[-\s]?null/i.test(String(e.message ?? ""))) &&
-    /rate_per_ha/i.test(String(e.message ?? ""))
-  );
-};
 
 export async function createSavedChemical(vineyardId: string, input: SavedChemicalInput) {
   const now = new Date().toISOString();
