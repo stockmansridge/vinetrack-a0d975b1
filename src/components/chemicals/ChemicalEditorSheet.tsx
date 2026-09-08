@@ -135,6 +135,7 @@ import {
   formFromInventoryUnit,
   inventoryUnitForForm,
   packUnitForForm,
+  parsePhysicalForm,
   type PhysicalForm,
 } from "@/lib/chemicalPhysicalForm";
 import { JurisdictionNoticeBanner } from "@/components/chemicals/JurisdictionNotice";
@@ -365,15 +366,15 @@ export function ChemicalEditor({
         setExistingCost(purchaseCostPerUnit(initial.purchase));
         // Rehydrate the stored pack only when BOTH halves exist — a half pack
         // would make the cost calculation refuse the save.
-        const packSize = (initial as any).pack_size;
-        const packPrice = (initial as any).price_per_pack;
+        const packSize = initial.pack_size;
+        const packPrice = initial.price_per_pack;
         const packPair =
           packSize != null && packSize !== "" && packPrice != null && packPrice !== "";
         setPackSizeStr(packPair ? String(packSize) : "");
         setPackPriceStr(packPair ? String(packPrice) : "");
         // No legacy "Litres" fallback: an unknown-form product keeps it unset.
         setPackUnit(
-          ((initial as any).pack_unit as string | null | undefined)?.trim() ||
+          initial.pack_unit?.trim() ||
             displayBaseUnit(initial.purchase?.unit ?? initial.unit) ||
             "",
         );
@@ -403,7 +404,16 @@ export function ChemicalEditor({
         setSelectionMode("existing");
         setWhpLegalText("");
         setUnresolvedItems([]);
-        setPhysicalForm(formFromInventoryUnit(normaliseUnit((initial as any).unit)));
+        // The stored shared `product_form` is authoritative when present; the
+        // base-unit inference is only a fallback for rows written before it.
+        {
+          const storedForm = parsePhysicalForm(initial.product_form);
+          setPhysicalForm(
+            storedForm !== "unknown"
+              ? storedForm
+              : formFromInventoryUnit(normaliseUnit((initial as any).unit)),
+          );
+        }
         setManualBaseline(
           evaluateManualSaveContract({
             name: initial.name,
