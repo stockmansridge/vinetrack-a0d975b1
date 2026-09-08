@@ -210,7 +210,7 @@ const EMPTY: SavedChemicalInput = {
 
 export function ChemicalEditor({
   open, onOpenChange, initial, vineyardId, existingLibrary, canSeeCosts, onSaved,
-  initialName, jurisdiction,
+  initialName, jurisdiction, restoredDraft,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -226,6 +226,11 @@ export function ChemicalEditor({
    * today, so this is normally undefined and the conservative rules apply.
    */
   jurisdiction?: string | null;
+  /**
+   * Unsaved draft restored after the operator left to set the vineyard
+   * country. New chemicals only — never used for an existing record.
+   */
+  restoredDraft?: Record<string, unknown> | null;
   /** Receives the persisted Saved Chemical row so callers can bind by identity. */
   onSaved: (saved: SavedChemical) => void;
 }) {
@@ -454,6 +459,26 @@ export function ChemicalEditor({
         setMasterLink(null);
         setRateLife(newDefaultRateLifecycle());
         setManualBaseline([]);
+        // Restore whatever the operator had typed before they were sent to
+        // vineyard settings to set the country. Draft only — no identity, no
+        // verification and no lookup evidence is restored.
+        const rd = restoredDraft as
+          | {
+              form?: Partial<SavedChemicalInput>;
+              rateStr?: string;
+              whp?: string;
+              rei?: string;
+              restNotes?: string;
+            }
+          | null
+          | undefined;
+        if (rd) {
+          setForm((f) => ({ ...f, ...(rd.form ?? {}) }));
+          if (typeof rd.rateStr === "string") setRateStr(rd.rateStr);
+          if (typeof rd.whp === "string") setWhp(rd.whp);
+          if (typeof rd.rei === "string") setRei(rd.rei);
+          if (typeof rd.restNotes === "string") setRestNotes(rd.restNotes);
+        }
       }
       // Reopening reconstructs the EXACT saved manual rate (type, basis, unit,
       // amounts) together with its user-confirmed provenance.
@@ -470,7 +495,7 @@ export function ChemicalEditor({
       setMasterUpdateOpen(false);
       setEditorReverifyOpen(false);
     }
-  }, [open, initial, initialName]);
+  }, [open, initial, initialName, restoredDraft]);
 
   const saveMut = useMutation({
     mutationFn: async () => {
@@ -1079,6 +1104,15 @@ export function ChemicalEditor({
           onApply={applySuggestion}
           onSelectionChange={handleSelectionChange}
           retryLabelRef={retryLabelRef}
+          returnLabel="the chemical you were adding"
+          captureDraft={() => ({
+            editor: "new",
+            form,
+            rateStr,
+            whp,
+            rei,
+            restNotes,
+          })}
         />
       )}
       {initial && (
