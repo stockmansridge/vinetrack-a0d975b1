@@ -3,15 +3,14 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import {
-  ACTUALS_SAVE_UNAVAILABLE,
-  SPRAY_UNIT_EDIT_UNAVAILABLE,
-  TRIP_FUEL_RATE_UNAVAILABLE,
+  ACTUALS_SAVE_FAILED,
+  ACTUALS_VERSION_CONFLICT,
+  TRIP_METADATA_SAVE_FAILED,
   WEATHER_RECOVERY_UNAVAILABLE,
   isTechnicalMessage,
   toCustomerError,
 } from "@/lib/sprayReportMessaging";
-import { SPRAY_ACTUALS_SAVE_UNAVAILABLE } from "@/lib/sprayActuals";
-import { TRIP_FUEL_RATE_OVERRIDE_UNAVAILABLE } from "@/lib/tripsQuery";
+import { SPRAY_ACTUALS_SAVE_FAILED } from "@/lib/sprayActuals";
 
 const adminState = { isAdmin: false, loading: false };
 vi.mock("@/lib/systemAdmin", () => ({
@@ -34,12 +33,11 @@ const BANNED = [
 ];
 
 const customerStrings = [
-  ACTUALS_SAVE_UNAVAILABLE.customer,
-  SPRAY_UNIT_EDIT_UNAVAILABLE.customer,
-  TRIP_FUEL_RATE_UNAVAILABLE.customer,
+  ACTUALS_SAVE_FAILED.customer,
+  ACTUALS_VERSION_CONFLICT.customer,
+  TRIP_METADATA_SAVE_FAILED.customer,
   WEATHER_RECOVERY_UNAVAILABLE.customer,
-  SPRAY_ACTUALS_SAVE_UNAVAILABLE,
-  TRIP_FUEL_RATE_OVERRIDE_UNAVAILABLE,
+  SPRAY_ACTUALS_SAVE_FAILED,
 ];
 
 describe("customer-facing spray messages", () => {
@@ -51,14 +49,11 @@ describe("customer-facing spray messages", () => {
     }
   });
 
-  it("uses the practical unavailable wording", () => {
-    expect(SPRAY_ACTUALS_SAVE_UNAVAILABLE).toContain(
-      "Editing actual quantities is temporarily unavailable",
-    );
-    expect(SPRAY_ACTUALS_SAVE_UNAVAILABLE).toContain(
-      "Your changes have not been saved",
-    );
+  it("tells the customer plainly that nothing was saved", () => {
+    expect(ACTUALS_SAVE_FAILED.customer).toContain("have not been saved");
+    expect(ACTUALS_VERSION_CONFLICT.customer).toContain("changed by someone else");
   });
+
 
   it("recognises and replaces technical failures", () => {
     expect(isTechnicalMessage("violates row-level security policy")).toBe(true);
