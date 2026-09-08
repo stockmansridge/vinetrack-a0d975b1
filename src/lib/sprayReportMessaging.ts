@@ -14,32 +14,30 @@ export interface SprayMessagePair {
   diagnostic: string;
 }
 
-export const ACTUALS_SAVE_UNAVAILABLE: SprayMessagePair = {
-  customer:
-    "Editing actual quantities is temporarily unavailable. Your changes have not been saved.",
-  diagnostic:
-    "No actual-usage saver is configured: the shared spray_tank_actuals save path (atomic quantity + audit-history write) has not been wired into the portal yet.",
+export const ACTUALS_SAVE_FAILED: SprayMessagePair = {
+  customer: "Your changes have not been saved. Please try again.",
+  diagnostic: "correct_spray_tank_actual_v1 rejected or failed for at least one edited tank.",
 };
 
-export const SPRAY_UNIT_EDIT_UNAVAILABLE: SprayMessagePair = {
-  customer: "The spray unit can't be changed here yet.",
+export const ACTUALS_VERSION_CONFLICT: SprayMessagePair = {
+  customer:
+    "This spray was changed by someone else while you were editing. Reload the trip and re-enter your changes.",
   diagnostic:
-    "Spray unit lives on spray_records.spray_equipment_id; no shared spray-record correction path is available to the portal.",
+    "SQLSTATE 40001 from correct_spray_tank_actual_v1: expected version no longer current; reload and reconcile.",
 };
 
-export const TRIP_FUEL_RATE_UNAVAILABLE: SprayMessagePair = {
-  customer:
-    "A fuel rate just for this trip can't be set yet — the machine's usual rate is used.",
-  diagnostic:
-    "No per-trip fuel override column exists on trips (e.g. fuel_usage_l_per_hour_override) and mobile sync support is required before one can be written.",
+export const TRIP_METADATA_SAVE_FAILED: SprayMessagePair = {
+  customer: "The trip details have not been saved. Please try again.",
+  diagnostic: "correct_spray_trip_metadata_v1 rejected or failed.",
 };
 
 export const WEATHER_RECOVERY_UNAVAILABLE: SprayMessagePair = {
   customer:
-    "Retrieving historical weather isn't available yet. Recorded observations are unchanged.",
+    "Historical weather couldn't be retrieved just now. Recorded observations are unchanged.",
   diagnostic:
-    "No authorised weather-recovery action is exposed to the portal; observations must not be fabricated or written directly.",
+    "spray-weather-recovery function unavailable or errored; missing slots stay missing for retry and are never fabricated.",
 };
+
 
 /** A save that failed for an unknown reason. */
 export const SAVE_FAILED_CUSTOMER =

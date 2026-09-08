@@ -5,20 +5,26 @@
 // renames a planned product, or prefills a missing actual with the plan. A
 // blank actual means "Not recorded"; a typed zero means "Not added".
 //
-// The write itself belongs to Rork's shared save path (the existing
-// `spray_tank_actuals` / actual-chemical contract, committed atomically with
-// its audit history). Until that path is published the portal refuses to save
-// actuals rather than writing to some other table behind the contract's back.
+// Writes go ONLY through the shared, audited RPC `correct_spray_tank_actual_v1`
+// (SQL 227). The portal never touches `spray_tank_actuals` or its amendment
+// table directly, and never updates worksheet state before the RPC succeeded
+// and the canonical report was refreshed.
+import { supabase } from "@/integrations/ios-supabase/client";
 import type {
   SprayChemicalUnit,
+  SprayReportActualAmendment,
   SprayReportPayloadV1,
   SprayReportTank,
   SprayReportTankChemical,
+  SprayUsageKind,
 } from "@/lib/sprayReportV1";
 import { toDisplayAmount, unitLabel } from "@/lib/sprayReportQuantities";
+import { generateUuid } from "@/lib/uuid";
 
-export const SPRAY_ACTUALS_SAVE_UNAVAILABLE =
-  "Editing actual quantities is temporarily unavailable. Your changes have not been saved.";
+export const SPRAY_ACTUALS_VERSION_CONFLICT =
+  "This spray was changed by someone else while you were editing. Reload the trip and re-enter your changes.";
+export const SPRAY_ACTUALS_SAVE_FAILED =
+  "Your changes have not been saved. Please try again.";
 
 /* ------------------------------------------------------------------ */
 /* Amendment history                                                    */
@@ -39,17 +45,76 @@ export interface SprayAmendment {
   previousUnit: SprayChemicalUnit | "L" | null;
   newValue: number | null;
   newUnit: SprayChemicalUnit | "L" | null;
-  kind?: "initial" | "correction" | "substitution" | "addition" | "cleared";
+  kind?: string;
+  /** Identity used to attach the entry to a worksheet line. */
+  chemicalActualId?: string | null;
+  plannedChemicalId?: string | null;
+  savedChemicalId?: string | null;
+  revision?: number;
 }
 
 function num(v: unknown): number | null {
   return typeof v === "number" && isFinite(v) ? v : null;
 }
 
+/** Amount carried by a server amendment value (scalar, or `{ actualAmountBase }`). */
+function amendmentAmount(value: unknown, field: string): number | null {
+  if (value == null) return null;
+  if (typeof value === "number") return isFinite(value) ? value : null;
+  if (typeof value === "object") {
+    const v = value as Record<string, unknown>;
+    return (
+      num(v.actualAmountBase) ??
+      num(v.waterVolumeL) ??
+      num(v.water_volume_l) ??
+      num(v.value) ??
+      null
+    );
+  }
+  if (typeof value === "string" && field) {
+    const n = Number(value);
+    return isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function amendmentUnit(unit: unknown, value: unknown, field: string): SprayAmendment["newUnit"] {
+  const fromValue =
+    value && typeof value === "object" ? (value as Record<string, unknown>).unit : null;
+  const raw = (typeof unit === "string" && unit) || (typeof fromValue === "string" && fromValue);
+  if (raw === "Litres" || raw === "mL" || raw === "Kg" || raw === "g" || raw === "L") return raw;
+  return field.toLowerCase().includes("water") ? "L" : null;
+}
+
+function chemicalNameFor(
+  payload: SprayReportPayloadV1,
+  a: Record<string, unknown>,
+): string | null {
+  const field = String(a.field ?? "");
+  if (field.toLowerCase().includes("water")) return null;
+  const ids = [a.chemicalActualId, a.plannedChemicalId, a.savedChemicalId].filter(
+    (x) => typeof x === "string" && x,
+  ) as string[];
+  for (const tank of payload.tanks) {
+    for (const c of tank.chemicals) {
+      if (
+        ids.includes(c.actualChemicalId ?? "") ||
+        ids.includes(c.plannedChemicalId ?? "") ||
+        ids.includes(c.savedChemicalId ?? "")
+      ) {
+        return c.name;
+      }
+    }
+  }
+  const nested = a.newValue && typeof a.newValue === "object"
+    ? (a.newValue as Record<string, unknown>).name
+    : null;
+  return typeof nested === "string" ? nested : null;
+}
+
 /**
- * Amendments carried by the canonical report payload. Read defensively: the
- * exact field names come from Rork's contract, and an older payload simply has
- * no history yet.
+ * Amendments carried by the canonical report payload (schema 1.1
+ * `amendments[]`). Read defensively — an older payload simply has no history.
  */
 export function payloadAmendments(payload: SprayReportPayloadV1): SprayAmendment[] {
   const raw = (payload as unknown as { amendments?: unknown }).amendments;
@@ -57,21 +122,28 @@ export function payloadAmendments(payload: SprayReportPayloadV1): SprayAmendment
   const out: SprayAmendment[] = [];
   for (const r of raw) {
     if (!r || typeof r !== "object") continue;
-    const a = r as Record<string, unknown>;
-    const changedAtUtc = typeof a.changedAtUtc === "string" ? a.changedAtUtc : null;
+    const a = r as Record<string, unknown> & Partial<SprayReportActualAmendment>;
+    const changedAtUtc =
+      (typeof a.editedAt === "string" && a.editedAt) ||
+      (typeof (a as any).changedAtUtc === "string" ? ((a as any).changedAtUtc as string) : null);
     if (!changedAtUtc) continue;
+    const field = typeof a.field === "string" ? a.field : "Actual quantity";
     out.push({
       changedAtUtc,
-      editorId: typeof a.editorId === "string" ? a.editorId : null,
+      editorId: typeof a.editedBy === "string" ? a.editedBy : null,
       editorName: typeof a.editorName === "string" ? a.editorName : null,
       tankNumber: num(a.tankNumber),
-      chemicalName: typeof a.chemicalName === "string" ? a.chemicalName : null,
-      field: typeof a.field === "string" ? a.field : "Actual quantity",
-      previousValue: num(a.previousValue),
-      previousUnit: (a.previousUnit as SprayAmendment["previousUnit"]) ?? null,
-      newValue: num(a.newValue),
-      newUnit: (a.newUnit as SprayAmendment["newUnit"]) ?? null,
-      kind: (a.kind as SprayAmendment["kind"]) ?? undefined,
+      chemicalName: chemicalNameFor(payload, a),
+      field,
+      previousValue: amendmentAmount(a.previousValue, field),
+      previousUnit: amendmentUnit(a.previousUnit, a.previousValue, field),
+      newValue: amendmentAmount(a.newValue, field),
+      newUnit: amendmentUnit(a.newUnit, a.newValue, field),
+      kind: typeof a.changeKind === "string" ? a.changeKind : undefined,
+      chemicalActualId: (a.chemicalActualId as string) ?? null,
+      plannedChemicalId: (a.plannedChemicalId as string) ?? null,
+      savedChemicalId: (a.savedChemicalId as string) ?? null,
+      revision: num(a.revision) ?? undefined,
     });
   }
   return out.sort((x, y) => x.changedAtUtc.localeCompare(y.changedAtUtc));
@@ -116,7 +188,7 @@ export function amendmentValueLabel(
 /** "Actual updated by Jonathan Hambrook on 9 September 2026 at 10:15 (Australia/Sydney)". */
 export function formatAmendmentMarker(a: SprayAmendment, tz: string): string {
   const who = a.editorName || "an authorised user";
-  const verb = a.kind === "initial" ? "recorded" : "updated";
+  const verb = a.kind === "initial" || a.kind === "created" ? "recorded" : "updated";
   return `Actual ${verb} by ${who} on ${formatAmendmentTime(a.changedAtUtc, tz)} (${tz})`;
 }
 
@@ -186,7 +258,7 @@ export function waterInputValue(t: SprayReportTank): string {
 }
 
 export function tankChemicalKey(tankNumber: number, c: SprayReportTankChemical, i: number) {
-  return `${tankNumber}::${c.plannedChemicalId ?? c.savedChemicalId ?? `${c.name}-${i}`}`;
+  return `${tankNumber}::${c.plannedChemicalId ?? c.actualChemicalId ?? c.savedChemicalId ?? `${c.name}-${i}`}`;
 }
 
 export interface ActualsDraft {
@@ -302,36 +374,134 @@ export function overPlanNotes(payload: SprayReportPayloadV1, draft: ActualsDraft
 }
 
 /* ------------------------------------------------------------------ */
-/* Save path (Rork's shared contract)                                   */
+/* Save path — `correct_spray_tank_actual_v1` (SQL 227)                 */
 /* ------------------------------------------------------------------ */
 
-export interface SaveActualsRequest {
-  tripId: string;
-  sprayRecordId: string | null;
-  vineyardId: string;
-  /** Version the draft was based on, for stale-write detection. */
-  expectedVersion?: number | null;
-  changes: ActualChange[];
+export interface ActualChemicalSnapshotLine {
+  id: string;
+  plannedChemicalId: string | null;
+  savedChemicalId: string | null;
+  replacesPlannedChemicalId: string | null;
+  usageKind: SprayUsageKind;
+  name: string;
+  actualAmountBase: number;
+  unit: SprayChemicalUnit;
 }
 
-export type SprayActualsSaver = (req: SaveActualsRequest) => Promise<void>;
+export interface TankActualSnapshot {
+  tankNumber: number;
+  actualId: string;
+  expectedVersion: number;
+  tankSessionId: string | null;
+  waterVolumeL: number | null;
+  chemicals: ActualChemicalSnapshotLine[];
+}
 
-let saver: SprayActualsSaver | null = null;
+function sessionIdForTank(payload: SprayReportPayloadV1, tankNumber: number): string | null {
+  const s = (payload.tankSessions ?? []).find((x) => x.tankNumber === tankNumber);
+  return s?.tankSessionId ?? null;
+}
 
 /**
- * Wire the shared save path once Rork publishes it. One call site, so the
- * portal never grows a competing actuals store.
+ * Complete saved snapshot per edited tank. A blank quantity omits the line
+ * (clearing that observation); a typed zero keeps the line at 0.
  */
-export function configureSprayActualsSaver(fn: SprayActualsSaver | null) {
-  saver = fn;
+export function tankSnapshotsForDraft(
+  payload: SprayReportPayloadV1,
+  draft: ActualsDraft,
+): TankActualSnapshot[] {
+  const diff = diffActualsDraft(payload, draft);
+  const touched = new Set(diff.changes.map((c) => c.tankNumber));
+  const out: TankActualSnapshot[] = [];
+
+  for (const t of payload.tanks) {
+    if (!touched.has(t.tankNumber)) continue;
+    const waterParsed = parseActualWater(draft.water[t.tankNumber] ?? "");
+    const chemicals: ActualChemicalSnapshotLine[] = [];
+    t.chemicals.forEach((c, i) => {
+      const parsed = parseActualAmount(draft.chemicals[tankChemicalKey(t.tankNumber, c, i)] ?? "", c.unit);
+      if (parsed.kind !== "value") return; // blank removes the actual line
+      chemicals.push({
+        id: c.actualChemicalId ?? generateUuid(),
+        plannedChemicalId: c.plannedChemicalId ?? null,
+        savedChemicalId: c.savedChemicalId ?? null,
+        replacesPlannedChemicalId: c.replacesPlannedChemicalId ?? null,
+        usageKind:
+          c.usageKind ??
+          (c.plannedChemicalId
+            ? "planned"
+            : c.replacesPlannedChemicalId
+              ? "substitution"
+              : "additional"),
+        name: c.name,
+        actualAmountBase: parsed.base,
+        unit: c.unit,
+      });
+    });
+    out.push({
+      tankNumber: t.tankNumber,
+      actualId: t.actualId ?? generateUuid(),
+      expectedVersion: t.actualVersion ?? 0,
+      tankSessionId: sessionIdForTank(payload, t.tankNumber),
+      waterVolumeL: waterParsed.kind === "value" ? waterParsed.base : null,
+      chemicals,
+    });
+  }
+  return out;
 }
 
-export function sprayActualsSaveAvailable(): boolean {
-  return saver != null;
+export class SprayActualsConflictError extends Error {
+  constructor() {
+    super(SPRAY_ACTUALS_VERSION_CONFLICT);
+    this.name = "SprayActualsConflictError";
+  }
 }
 
+function isConflict(error: any): boolean {
+  return (
+    error?.code === "40001" ||
+    /40001|serialization|version conflict/i.test(String(error?.message ?? ""))
+  );
+}
+
+export interface SaveActualsRequest {
+  payload: SprayReportPayloadV1;
+  draft: ActualsDraft;
+  /** One UUID per Save attempt per tank; reuse only when retrying that save. */
+  operationIds?: Record<number, string>;
+}
+
+/**
+ * Save every edited tank through the audited RPC. Each tank is a separate
+ * operation with its own operation UUID; a version conflict aborts the save so
+ * the user reloads rather than overwriting someone else's correction.
+ */
 export async function saveSprayActuals(req: SaveActualsRequest): Promise<void> {
-  if (!req.changes.length) return;
-  if (!saver) throw new Error(SPRAY_ACTUALS_SAVE_UNAVAILABLE);
-  await saver(req);
+  const { payload, draft } = req;
+  const snapshots = tankSnapshotsForDraft(payload, draft);
+  if (!snapshots.length) return;
+
+  for (const snap of snapshots) {
+    const operationId = req.operationIds?.[snap.tankNumber] ?? generateUuid();
+    const { error } = await (supabase as any).rpc("correct_spray_tank_actual_v1", {
+      p_operation_id: operationId,
+      p_actual_id: snap.actualId,
+      p_trip_id: payload.identity.tripId,
+      p_spray_record_id: payload.identity.sprayRecordId,
+      p_tank_session_id: snap.tankSessionId,
+      p_tank_number: snap.tankNumber,
+      p_expected_version: snap.expectedVersion,
+      p_water_volume_l: snap.waterVolumeL,
+      p_chemicals: snap.chemicals,
+    });
+    if (error) {
+      if (isConflict(error)) throw new SprayActualsConflictError();
+      throw new Error(error.message || SPRAY_ACTUALS_SAVE_FAILED);
+    }
+  }
+}
+
+/** Actual corrections are available through the shared audited contract. */
+export function sprayActualsSaveAvailable(): boolean {
+  return true;
 }

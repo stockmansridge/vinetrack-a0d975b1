@@ -155,9 +155,35 @@ function normaliseRoute(raw: unknown): SprayReportRoute | null {
   } as SprayReportRoute;
 }
 
+export const ROUTE_WIDTH = 1030;
+export const ROUTE_HEIGHT = 700;
+export const ROUTE_LOCAL_ONLY_MESSAGE =
+  "Route shown from a locally generated image — it is not the saved route for this trip.";
+export const ROUTE_HASH_MISMATCH_MESSAGE =
+  "Route unavailable — the saved route image did not match its recorded checksum.";
+
+/**
+ * Canonical shared route-input hash: SHA-256 over
+ * `spray-route-red-green-v1|1030x700|lat,lon|...` in oldest-to-newest order,
+ * each coordinate at exactly six decimal places.
+ */
+export async function canonicalRouteHash(points: LatLng[]): Promise<string> {
+  const parts = [
+    SPRAY_ROUTE_STYLE_VERSION,
+    `${ROUTE_WIDTH}x${ROUTE_HEIGHT}`,
+    ...points.map((p) => `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`),
+  ];
+  const bytes = new TextEncoder().encode(parts.join("|"));
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return await sha256Hex(buffer);
+}
+
 /**
  * Returns the embeddable route image for a spray report plus an honest warning
- * when one cannot be produced.
+ * when one cannot be produced. Upload/registration happens only through the
+ * authenticated `spray-report-route-upload` function; the portal never writes
+ * the bucket or the metadata itself.
  */
 export async function resolveSprayRoute(
   payload: SprayReportPayloadV1,
@@ -165,106 +191,86 @@ export async function resolveSprayRoute(
 ): Promise<RouteResolution> {
   if (payload.route) {
     const existing = await downloadRouteObject(payload.route.bucket, payload.route.objectPath);
-    if (existing) return { image: existing.image, warning: null, route: payload.route };
-    return { image: null, warning: ROUTE_DOWNLOAD_FAILED_MESSAGE, route: payload.route };
+    if (!existing) return { image: null, warning: ROUTE_DOWNLOAD_FAILED_MESSAGE, route: payload.route };
+    if (payload.route.sha256 && existing.sha256 && existing.sha256 !== payload.route.sha256) {
+      return { image: null, warning: ROUTE_HASH_MISMATCH_MESSAGE, route: payload.route };
+    }
+    return { image: existing.image, warning: null, route: payload.route };
   }
 
   if (!pathPoints || pathPoints.length < 2) {
     return { image: null, warning: ROUTE_NO_PATH_POINTS_MESSAGE, route: null };
   }
 
-  const composed = await composeSatelliteRouteImage(pathPoints, 1100, 660, {
+  const routeHash = await canonicalRouteHash(pathPoints);
+
+  // A locally composed image is only ever a fallback for display; the canonical
+  // bytes are whatever the trusted function stores and returns.
+  const composed = await composeSatelliteRouteImage(pathPoints, ROUTE_WIDTH, ROUTE_HEIGHT, {
     chronology: true,
   });
-  if (!composed) {
-    return { image: null, warning: ROUTE_RENDER_FAILED_MESSAGE, route: null };
-  }
-
-  const local: ResolvedRouteImage = {
-    dataUrl: composed.dataUrl,
-    width: composed.width,
-    height: composed.height,
-    generated: true,
-  };
-
-  const routeHash = routeHashForPoints(pathPoints);
-  const objectPath = routeObjectPath(payload, routeHash);
-
-  // What we will register and embed. A duplicate upload is NOT proof that the
-  // stored object matches our bytes, so in that case the stored object is
-  // downloaded and its real hash and image are used instead.
-  let sha256: string;
-  let embed: ResolvedRouteImage = local;
-  try {
-    const bytes = dataUrlToBytes(composed.dataUrl);
-    const buffer = new ArrayBuffer(bytes.byteLength);
-    new Uint8Array(buffer).set(bytes);
-    sha256 = await sha256Hex(buffer);
-
-    const upload = await supabase.storage
-      .from(SPRAY_REPORT_ASSET_BUCKET)
-      .upload(objectPath, new Blob([buffer], { type: "image/png" }), {
-        contentType: "image/png",
-        upsert: false,
-      });
-
-    const duplicate =
-      !!upload.error &&
-      /exist|duplicate|409/i.test(
-        `${(upload.error as any).message ?? ""} ${(upload.error as any).statusCode ?? ""}`,
-      );
-    if (upload.error && !duplicate) {
-      return { image: local, warning: ROUTE_UPLOAD_FAILED_MESSAGE, route: null };
-    }
-    if (duplicate) {
-      // Never overwrite the existing private object; adopt its actual bytes.
-      const stored = await downloadRouteObject(SPRAY_REPORT_ASSET_BUCKET, objectPath);
-      if (!stored) {
-        return { image: local, warning: ROUTE_DOWNLOAD_FAILED_MESSAGE, route: null };
+  const local: ResolvedRouteImage | null = composed
+    ? {
+        dataUrl: composed.dataUrl,
+        width: composed.width,
+        height: composed.height,
+        generated: true,
       }
-      embed = stored.image;
-      if (stored.sha256) sha256 = stored.sha256;
-    }
-  } catch {
-    return { image: local, warning: ROUTE_UPLOAD_FAILED_MESSAGE, route: null };
-  }
+    : null;
 
   let canonical: SprayReportRoute | null = null;
   try {
-    const { data, error } = await (supabase as any).rpc("register_spray_report_route_asset_v1", {
-      p_trip_id: payload.identity.tripId,
-      p_bucket: SPRAY_REPORT_ASSET_BUCKET,
-      p_object_path: objectPath,
-      p_sha256: sha256,
-      p_route_hash: routeHash,
-      p_style_version: SPRAY_ROUTE_STYLE_VERSION,
+    const pngBase64 = composed ? composed.dataUrl.slice(composed.dataUrl.indexOf(",") + 1) : undefined;
+    const { data, error } = await supabase.functions.invoke("spray-report-route-upload", {
+      body: {
+        tripId: payload.identity.tripId,
+        routeHash,
+        ...(pngBase64 ? { pngBase64 } : {}),
+        coordinates: pathPoints.map((p) => ({ latitude: p.lat, longitude: p.lng })),
+        width: ROUTE_WIDTH,
+        height: ROUTE_HEIGHT,
+      },
     });
     if (error) {
-      return { image: embed, warning: ROUTE_REGISTER_FAILED_MESSAGE, route: null };
+      return {
+        image: local,
+        warning: local ? ROUTE_LOCAL_ONLY_MESSAGE : ROUTE_UPLOAD_FAILED_MESSAGE,
+        route: null,
+      };
     }
-    canonical = normaliseRoute(data);
+    canonical = normaliseRoute((data as any)?.route ?? data);
   } catch {
-    return { image: embed, warning: ROUTE_REGISTER_FAILED_MESSAGE, route: null };
+    return {
+      image: local,
+      warning: local ? ROUTE_LOCAL_ONLY_MESSAGE : ROUTE_UPLOAD_FAILED_MESSAGE,
+      route: null,
+    };
   }
 
   if (!canonical) {
-    return { image: embed, warning: ROUTE_REGISTER_FAILED_MESSAGE, route: null };
+    return {
+      image: local,
+      warning: local ? ROUTE_LOCAL_ONLY_MESSAGE : ROUTE_REGISTER_FAILED_MESSAGE,
+      route: null,
+    };
   }
 
-  // Another export may have registered first: the RPC returns that immutable
-  // winner, which must be embedded instead of the local alternative. A
-  // different canonical hash for the same path means the same thing.
-  const differentObject =
-    canonical.objectPath !== objectPath || canonical.bucket !== SPRAY_REPORT_ASSET_BUCKET;
-  const differentBytes = !!canonical.sha256 && !!sha256 && canonical.sha256 !== sha256;
-  if (differentObject || differentBytes) {
-    const winner = await downloadRouteObject(canonical.bucket, canonical.objectPath);
-    if (winner) return { image: winner.image, warning: null, route: canonical };
-    return { image: embed, warning: ROUTE_DOWNLOAD_FAILED_MESSAGE, route: canonical };
+  // Always embed the registered bytes — they may belong to a concurrent
+  // immutable winner — and verify them against the recorded checksum.
+  const stored = await downloadRouteObject(canonical.bucket, canonical.objectPath);
+  if (!stored) {
+    return {
+      image: local,
+      warning: local ? ROUTE_LOCAL_ONLY_MESSAGE : ROUTE_DOWNLOAD_FAILED_MESSAGE,
+      route: canonical,
+    };
   }
-
-  return { image: embed, warning: null, route: canonical };
+  if (canonical.sha256 && stored.sha256 && stored.sha256 !== canonical.sha256) {
+    return { image: local, warning: ROUTE_HASH_MISMATCH_MESSAGE, route: canonical };
+  }
+  return { image: stored.image, warning: null, route: canonical };
 }
+
 
 
 /** Back-compatible helper used by callers that only need the image. */
