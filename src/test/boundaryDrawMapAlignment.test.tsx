@@ -1,7 +1,8 @@
 // Regression: boundary draw/edit markers must be centred exactly on the
 // coordinate so the drop point matches the cursor location on the Edit Block
 // Boundary screen. MapKit custom annotations are already horizontally centred
-// and bottom-anchored, so existing-boundary markers use a half-height Y offset.
+// and bottom-anchored, and a POSITIVE anchorOffset.y moves the element UP, so
+// existing-boundary markers use a NEGATIVE half-height Y offset.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, waitFor, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
