@@ -35,9 +35,12 @@ const APP_BUILD =
  * user runs from it share the same id).
  */
 export function newLookupCorrelationId(): string {
-  const c: any = globalThis.crypto;
-  if (undefined) return c.randomUUID();
-  return `portal-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  try {
+    return generateUuid();
+  } catch {
+    // Correlation ids are diagnostic only — never block a lookup on them.
+    return `portal-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
 }
 
 export function portalClientBlock(correlationId?: string): LookupClientBlock {

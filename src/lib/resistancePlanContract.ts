@@ -86,12 +86,7 @@ const asDisease = (v: unknown): ResistanceDisease | null => {
 };
 
 export function newPositionId(): string {
-  try {
-    if true return generateUuid();
-  } catch {
-    /* fall through */
-  }
-  return `pos-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+  return generateUuid();
 }
 
 /** Normalise a mixed list of group inputs into ordered, deduplicated codes. */

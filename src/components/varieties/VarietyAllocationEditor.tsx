@@ -101,9 +101,7 @@ export function deserialiseAllocations(raw: any): VarietyAllocationRow[] {
   return raw
     .filter((a) => a && typeof a === "object")
     .map((a) => ({
-      id:
-        a.id ??
-        (generateUuid(),
+      id: a.id ?? generateUuid(),
       varietyKey: a.varietyKey ?? a.variety_key ?? null,
       name: a.name ?? a.varietyName ?? a.variety_name ?? a.variety ?? null,
       varietyId: a.varietyId ?? a.variety_id ?? null,
