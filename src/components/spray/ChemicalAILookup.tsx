@@ -113,6 +113,13 @@ interface Props {
    * for the already-selected registration. Never a new search.
    */
   retryLabelRef?: { current: (() => void) | null };
+  /**
+   * Host state to preserve when the operator leaves to set the vineyard
+   * country (unsaved editor draft, originating spray/program context).
+   */
+  captureDraft?: () => Record<string, unknown>;
+  /** Label for the "return to…" action on the vineyard settings page. */
+  returnLabel?: string;
 }
 
 
@@ -506,7 +513,13 @@ export function ChemicalAILookup({
       {!countryCode && (
         <div className="flex items-start gap-1.5 rounded border border-warning/50 bg-warning/10 p-2 text-[11px]">
           <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-          <span>{MISSING_VINEYARD_COUNTRY_MESSAGE}</span>
+          <div className="space-y-1.5">
+            <span className="block">{MISSING_VINEYARD_COUNTRY_MESSAGE}</span>
+            <SetVineyardCountryAction
+              returnLabel={returnLabel}
+              capture={() => ({ ...(captureDraft?.() ?? {}), searchText: name })}
+            />
+          </div>
         </div>
       )}
       <div className="flex gap-2">
