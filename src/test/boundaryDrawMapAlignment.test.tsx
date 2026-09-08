@@ -90,11 +90,15 @@ describe("BoundaryDrawMap marker alignment", () => {
   beforeEach(() => {
     createdAnnotations.length = 0;
     vi.clearAllMocks();
+    // BoundaryDrawMap reads the MapKit global from window after init.
+    (globalThis as any).window = (globalThis as any).window ?? {};
+    (globalThis as any).window.mapkit = mockState.fakeMapKit;
+    (globalThis as any).mapkit = mockState.fakeMapKit;
   });
 
-  afterAll(() => {
+  afterEach(() => {
     // Avoid leaking the fake MapKit global into other test files.
-    delete (globalThis as any).window?.mapkit;
+    delete (globalThis as any).window.mapkit;
     delete (globalThis as any).mapkit;
   });
 
