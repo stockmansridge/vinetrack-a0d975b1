@@ -37,8 +37,12 @@ vi.mock("@/lib/mapkit", () => {
     return {
       addOverlays: vi.fn(),
       removeOverlays: vi.fn(),
+      addOverlay: vi.fn(),
+      removeOverlay: vi.fn(),
       addAnnotations: vi.fn(),
       removeAnnotations: vi.fn(),
+      addAnnotation: vi.fn(),
+      removeAnnotation: vi.fn(),
       addEventListener: vi.fn(),
     };
   });
