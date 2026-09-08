@@ -24,6 +24,8 @@ import {
   type SprayEquipmentLookups,
 } from "@/lib/sprayRecordEquipment";
 import { exportSprayRecordPdf } from "@/lib/sprayRecordPdf";
+import { downloadSprayReport } from "@/lib/sprayReportExport";
+
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import {
   exportYearlySprayProgramPdf,
@@ -185,10 +187,28 @@ export default function SprayReportsPage() {
     [jobs, effectiveYear],
   );
 
-  const handleExportRecord = () => {
+  const handleExportRecord = async () => {
     if (!selectedRecord) return;
     try {
+      // Linked spray records are spraying trips → canonical Spray Report.
+      if (selectedRecord.trip_id) {
+        const trip = (costTrips?.trips ?? []).find((t) => t.id === selectedRecord.trip_id) ?? null;
+        const res = await downloadSprayReport({
+          tripId: selectedRecord.trip_id,
+          formatters,
+          pathPoints: trip?.path_points,
+        });
+        if (!res.ok) {
+          toast({
+            title: "Spray Report unavailable",
+            description: res.error,
+            variant: "destructive",
+          });
+        }
+        return;
+      }
       // Build linked-trip cost (owner/manager only).
+
       let cost = null as ReturnType<typeof computeTripCost> | null;
       if (canSeeCosts && selectedRecord.trip_id) {
         const trip = (costTrips?.trips ?? []).find((t) => t.id === selectedRecord.trip_id) ?? null;

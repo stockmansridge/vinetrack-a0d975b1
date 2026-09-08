@@ -20,6 +20,13 @@ import { fetchList } from "@/lib/queries";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
 import { fetchSprayJobs, type SprayJob } from "@/lib/sprayJobsQuery";
 import { downloadTripPdf } from "@/lib/tripReport";
+import {
+  isSprayingTrip,
+  SPRAY_RECORD_UNAVAILABLE_MESSAGE,
+} from "@/lib/sprayReportV1";
+import { downloadSprayReport } from "@/lib/sprayReportExport";
+import { useSprayLinkedTripIds } from "@/lib/sprayLinkedTrips";
+
 import { countTripPins } from "@/lib/tripPinCount";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
@@ -99,6 +106,8 @@ const tripDisplay = (t: Trip): string => {
 
 export default function DocumentsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
+  const { data: sprayLinkedTripIds } = useSprayLinkedTripIds(selectedVineyardId);
+
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ??
     "Vineyard";
@@ -159,9 +168,13 @@ export default function DocumentsPage() {
       const blockNames = padIds
         .map((id) => paddockMap.get(id))
         .filter(Boolean) as string[];
+      const spraying = isSprayingTrip({
+        tripFunction: t.trip_function,
+        hasLinkedSprayRecord: sprayLinkedTripIds?.has(t.id),
+      });
       out.push({
         id: `trip:${t.id}`,
-        name: tripDisplay(t),
+        name: spraying ? `Spray Report — ${tripDisplay(t)}` : tripDisplay(t),
         type: "trip",
         typeLabel: TYPE_LABELS.trip,
         vineyardName,
@@ -171,6 +184,16 @@ export default function DocumentsPage() {
         source: "portal",
         formats: ["pdf"],
         onDownload: async () => {
+          // Spraying trips always export the canonical Spray Report.
+          if (spraying) {
+            const res = await downloadSprayReport({
+              tripId: t.id,
+              formatters,
+              pathPoints: t.path_points,
+            });
+            if (!res.ok) throw new Error(res.error ?? SPRAY_RECORD_UNAVAILABLE_MESSAGE);
+            return;
+          }
           const pinCount = await countTripPins(t);
           await downloadTripPdf(t, {
             paddockName: padName ?? null,
@@ -184,6 +207,7 @@ export default function DocumentsPage() {
           });
         },
       });
+
     }
 
     // Spray Jobs → individual Spray Job PDFs (route to Spray Jobs page for export with full lookups)
@@ -230,7 +254,7 @@ export default function DocumentsPage() {
       });
 
     return out;
-  }, [trips, sprayJobs, paddockMap, vineyardName, vineyardLogoUrl, formatters]);
+  }, [trips, sprayJobs, paddockMap, vineyardName, vineyardLogoUrl, formatters, sprayLinkedTripIds]);
 
   // Distinct trip functions present in current items (for filter dropdown).
   const tripFnOptions = useMemo(() => {

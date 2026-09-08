@@ -61,6 +61,10 @@ import {
   downloadCsv,
   downloadTripPdf,
 } from "@/lib/tripReport";
+import { isSprayingTrip } from "@/lib/sprayReportV1";
+import { downloadSprayReport } from "@/lib/sprayReportExport";
+import { useSprayLinkedTripIds } from "@/lib/sprayLinkedTrips";
+
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { countTripPins } from "@/lib/tripPinCount";
@@ -589,7 +593,9 @@ function TripSheet({
   const formatters = useRegionFormatters();
   const canSeeCosts = useCanSeeCosts();
   // Deletion/completion are restricted to owners, managers and supervisors.
-  const { currentRole } = useVineyard();
+  const { currentRole, selectedVineyardId: sprayScopeVineyardId } = useVineyard();
+  const { data: sprayLinkedTripIds } = useSprayLinkedTripIds(sprayScopeVineyardId);
+
   const canDeleteTrip =
     currentRole === "owner" || currentRole === "manager" || currentRole === "supervisor";
   const { user } = useAuth();
@@ -883,6 +889,26 @@ function TripSheet({
                 size="sm"
                 variant="outline"
                 onClick={async () => {
+                  // Spraying trips (by function or by linked spray record) are
+                  // always exported as the canonical Spray Report.
+                  if (isSprayingTrip({
+                    tripFunction: trip.trip_function,
+                    hasLinkedSprayRecord: sprayLinkedTripIds?.has(trip.id),
+                  })) {
+                    const res = await downloadSprayReport({
+                      tripId: trip.id,
+                      formatters,
+                      pathPoints: trip.path_points,
+                    });
+                    if (!res.ok) {
+                      toast({
+                        title: "Spray Report unavailable",
+                        description: res.error,
+                        variant: "destructive",
+                      });
+                    }
+                    return;
+                  }
                   const pinCount = await countTripPins(trip);
                   await downloadTripPdf(trip, {
                     paddockName: padName ?? null,
@@ -899,8 +925,14 @@ function TripSheet({
                   });
                 }}
               >
-                Download Trip Report PDF
+                {isSprayingTrip({
+                  tripFunction: trip.trip_function,
+                  hasLinkedSprayRecord: sprayLinkedTripIds?.has(trip.id),
+                })
+                  ? "Download Spray Report PDF"
+                  : "Download Trip Report PDF"}
               </Button>
+
             </div>
             <Section title="Route map">
               <TripRouteAppleMap pathPoints={trip.path_points} height={280} />
