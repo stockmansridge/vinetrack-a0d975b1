@@ -62,6 +62,9 @@ import {
   downloadTripPdf,
 } from "@/lib/tripReport";
 import { isSprayingTrip } from "@/lib/sprayReportV1";
+import SprayTripWorksheet from "@/components/spray/SprayTripWorksheet";
+import EditTripDetailsDialog from "@/components/trips/EditTripDetailsDialog";
+
 import { downloadSprayReport } from "@/lib/sprayReportExport";
 import { useSprayLinkedTripIds } from "@/lib/sprayLinkedTrips";
 
@@ -703,8 +706,10 @@ function TripSheet({
       setDeleting(false);
     }
   };
+  const [editDetailsOpen, setEditDetailsOpen] = useState(false);
 
   const padName = trip?.paddock_name ?? (trip?.paddock_id ? paddockNameById.get(trip.paddock_id) ?? null : null);
+
   const points = arrayLen(trip?.path_points);
   const completed = arrayLen(trip?.completed_paths);
   const skipped = arrayLen(trip?.skipped_paths);
@@ -864,8 +869,14 @@ function TripSheet({
         </SheetHeader>
         {trip && (
           <div className="mt-4 space-y-4 text-sm">
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              {canDeleteTrip && (
+                <Button size="sm" variant="outline" onClick={() => setEditDetailsOpen(true)}>
+                  Edit trip details
+                </Button>
+              )}
               {canDeleteTrip && isCompletable && (
+
                 <Button
                   size="sm"
                   variant="default"
@@ -934,9 +945,24 @@ function TripSheet({
               </Button>
 
             </div>
+            <EditTripDetailsDialog
+              trip={trip}
+              vineyardId={vineyardId ?? null}
+              open={editDetailsOpen}
+              onOpenChange={setEditDetailsOpen}
+            />
             <Section title="Route map">
               <TripRouteAppleMap pathPoints={trip.path_points} height={280} />
             </Section>
+            {isSprayingTrip({
+              tripFunction: trip.trip_function,
+              hasLinkedSprayRecord: sprayLinkedTripIds?.has(trip.id),
+            }) && (
+              <Section title="Spray worksheet">
+                <SprayTripWorksheet tripId={trip.id} />
+              </Section>
+            )}
+
             <Section title="Schedule">
               <Field label="Date" value={fmtDate(trip.start_time)} />
               <Field label="Start time" value={trip.start_time ? new Date(trip.start_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"} />

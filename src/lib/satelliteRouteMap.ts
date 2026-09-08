@@ -36,8 +36,9 @@ export interface SatelliteRouteResult {
 
 /**
  * Spray Report route style `spray-route-red-green-v1`: hybrid (satellite)
- * background, red → orange → yellow → green chronology, red start, green
- * finish. Defined once here so every exporter draws the identical style.
+ * background, red → orange → yellow → lime → green chronology, red start
+ * (oldest), green finish (newest). Defined once here so every exporter and the
+ * interactive Trips / Live Dashboard map draw the identical style.
  */
 export const SPRAY_ROUTE_CHRONOLOGY_STOPS = [
   "#D7263D",
@@ -46,6 +47,61 @@ export const SPRAY_ROUTE_CHRONOLOGY_STOPS = [
   "#8DBF3F",
   "#2E9B4F",
 ] as const;
+
+/** Red = oldest / Start. */
+export const SPRAY_ROUTE_START_COLOUR = SPRAY_ROUTE_CHRONOLOGY_STOPS[0];
+/** Green = newest / Finish. */
+export const SPRAY_ROUTE_FINISH_COLOUR =
+  SPRAY_ROUTE_CHRONOLOGY_STOPS[SPRAY_ROUTE_CHRONOLOGY_STOPS.length - 1];
+
+/**
+ * Chronology colour for segment `i` (the leg ending at points[i]) of a route
+ * with `count` points. Shared by the PNG renderer and the interactive map so
+ * both show the same ordering semantics.
+ */
+export function chronologyStopIndex(i: number, count: number): number {
+  const stops = SPRAY_ROUTE_CHRONOLOGY_STOPS.length;
+  const t = (i - 1) / Math.max(count - 2, 1);
+  return Math.max(0, Math.min(stops - 1, Math.floor(t * stops)));
+}
+
+export interface RouteChronologySegment {
+  /** Index of the first point of this contiguous same-colour run. */
+  startIndex: number;
+  /** Index of the last point of this run. */
+  endIndex: number;
+  colour: string;
+}
+
+/**
+ * Split an ordered route into contiguous runs sharing one chronology colour.
+ * Segments always cover the whole route (no gaps) and are time-ordered.
+ */
+export function routeChronologySegments(count: number): RouteChronologySegment[] {
+  if (count < 2) return [];
+  const out: RouteChronologySegment[] = [];
+  let runStart = 0;
+  let runStop = chronologyStopIndex(1, count);
+  for (let i = 2; i < count; i++) {
+    const stop = chronologyStopIndex(i, count);
+    if (stop !== runStop) {
+      out.push({
+        startIndex: runStart,
+        endIndex: i - 1,
+        colour: SPRAY_ROUTE_CHRONOLOGY_STOPS[runStop],
+      });
+      runStart = i - 1;
+      runStop = stop;
+    }
+  }
+  out.push({
+    startIndex: runStart,
+    endIndex: count - 1,
+    colour: SPRAY_ROUTE_CHRONOLOGY_STOPS[runStop],
+  });
+  return out;
+}
+
 
 export interface RouteImageOptions {
   /** Draw the five-stop red→green chronology instead of the flat blue line. */
@@ -149,12 +205,10 @@ export async function composeSatelliteRouteImage(
 
   if (options?.chronology) {
     // Five-stop chronology: each segment is coloured by its position in time.
-    const stops = SPRAY_ROUTE_CHRONOLOGY_STOPS;
     ctx.lineWidth = 3;
     for (let i = 1; i < points.length; i++) {
-      const t = (i - 1) / Math.max(points.length - 2, 1);
-      const stop = Math.min(stops.length - 1, Math.floor(t * stops.length));
-      ctx.strokeStyle = stops[stop];
+      ctx.strokeStyle =
+        SPRAY_ROUTE_CHRONOLOGY_STOPS[chronologyStopIndex(i, points.length)];
       const [px, py] = toCanvas(points[i - 1]);
       const [x, y] = toCanvas(points[i]);
       ctx.beginPath();
@@ -162,6 +216,7 @@ export async function composeSatelliteRouteImage(
       ctx.lineTo(x, y);
       ctx.stroke();
     }
+
   } else {
     ctx.strokeStyle = "#1E5AC8";
     ctx.lineWidth = 3;
