@@ -1,4 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
+import { consumeCountryReturnContext } from "@/lib/vineyardCountryRecovery";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
 import { Card } from "@/components/ui/card";
@@ -144,6 +146,18 @@ export default function SavedChemicalsPage() {
   const [confirmRestore, setConfirmRestore] = useState<SavedChemical | null>(null);
   const [confirmHardDelete, setConfirmHardDelete] = useState<SavedChemical | null>(null);
   const [detailRow, setDetailRow] = useState<SavedChemical | null>(null);
+  // Coming back from "Set vineyard country": reopen the chemical the operator
+  // was adding, with their unsaved draft and search text intact.
+  const location = useLocation();
+  const [restoredDraft, setRestoredDraft] = useState<Record<string, unknown> | null>(null);
+  useEffect(() => {
+    const ctx = consumeCountryReturnContext(location.pathname);
+    const state = ctx?.state as Record<string, unknown> | undefined;
+    if (!state) return;
+    setRestoredDraft(state);
+    if (state.editor === "new") setEditing("new");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["saved_chemicals", selectedVineyardId, "active"],
@@ -660,14 +674,26 @@ export default function SavedChemicalsPage() {
 
       <ChemicalEditor
         open={!!editing}
-        onOpenChange={(o) => !o && setEditing(null)}
+        onOpenChange={(o) => {
+          if (!o) {
+            setEditing(null);
+            setRestoredDraft(null);
+          }
+        }}
         initial={editing && editing !== "new" ? editing : null}
+        initialName={
+          editing === "new" && typeof restoredDraft?.searchText === "string"
+            ? (restoredDraft.searchText as string)
+            : undefined
+        }
+        restoredDraft={editing === "new" ? restoredDraft : null}
         vineyardId={selectedVineyardId!}
         existingLibrary={chemicals}
         canSeeCosts={canSeeCosts}
         onSaved={() => {
           invalidate();
           setEditing(null);
+          setRestoredDraft(null);
         }}
       />
 

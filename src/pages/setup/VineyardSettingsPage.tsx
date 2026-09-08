@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -32,6 +32,10 @@ import {
 import { CreateVineyardDialog } from "@/components/vineyard/CreateVineyardDialog";
 import { PendingInvitationsSection } from "@/components/invites/PendingInvitesModal";
 import {
+  readCountryReturnContext,
+  VINEYARD_COUNTRY_FIELD_ID,
+} from "@/lib/vineyardCountryRecovery";
+import {
   archiveVineyard,
   describeVineyardError,
   fetchVineyard,
@@ -49,6 +53,10 @@ export default function VineyardSettingsPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const countryRef = useRef<HTMLInputElement>(null);
+  const location = useLocation();
+  // Where to send the operator back to after setting the country.
+  const [returnCtx] = useState(() => readCountryReturnContext());
 
   const vQuery = useQuery({
     queryKey: ["vineyard-settings", selectedVineyardId],
@@ -66,6 +74,20 @@ export default function VineyardSettingsPage() {
     setName(vQuery.data.name ?? "");
     setCountry(vQuery.data.country ?? "");
   }, [vQuery.data]);
+
+  // Deep link from the chemical screens: reveal and focus the Country field
+  // once the settings data has loaded (and the field is actually rendered).
+  const focusedRef = useRef(false);
+  useEffect(() => {
+    if (focusedRef.current) return;
+    if (!vQuery.data) return;
+    if (location.hash !== `#${VINEYARD_COUNTRY_FIELD_ID}`) return;
+    const el = countryRef.current;
+    if (!el) return;
+    focusedRef.current = true;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    el.focus();
+  }, [vQuery.data, location.hash]);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -192,6 +214,22 @@ export default function VineyardSettingsPage() {
         </div>
       )}
 
+      {returnCtx && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs">
+          <span>
+            Set the country below, then go back to {returnCtx.label}. Your unsaved
+            details were kept.
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => navigate(returnCtx.path)}
+          >
+            Return to {returnCtx.label}
+          </Button>
+        </div>
+      )}
+
       <PendingInvitationsSection
         title="Pending invitations"
         description="If you were invited to another vineyard, you can accept it here later."
@@ -273,6 +311,7 @@ export default function VineyardSettingsPage() {
               <div className="space-y-1.5">
                 <Label htmlFor="vcountry">Country</Label>
                 <Input
+                  ref={countryRef}
                   id="vcountry"
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}

@@ -46,6 +46,7 @@ import {
 
 import type { ProductType, RateBasis, ChemUnit } from "@/lib/rateBasis";
 import { ENTER_MANUALLY_LABEL } from "@/lib/chemicalManualEntry";
+import { SetVineyardCountryAction } from "@/components/chemicals/SetVineyardCountryAction";
 
 export interface AppliedSuggestion {
   name?: string;
@@ -113,6 +114,13 @@ interface Props {
    * for the already-selected registration. Never a new search.
    */
   retryLabelRef?: { current: (() => void) | null };
+  /**
+   * Host state to preserve when the operator leaves to set the vineyard
+   * country (unsaved editor draft, originating spray/program context).
+   */
+  captureDraft?: () => Record<string, unknown>;
+  /** Label for the "return to…" action on the vineyard settings page. */
+  returnLabel?: string;
 }
 
 
@@ -187,7 +195,8 @@ export function ChemicalAILookup({
   onApply,
   onSelectionChange,
   retryLabelRef,
-
+  captureDraft,
+  returnLabel,
 }: Props) {
   // Jurisdiction is the selected vineyard's country. There is no locale,
   // browser or IP fallback — when it is missing, lookup is blocked.
@@ -228,6 +237,24 @@ export function ChemicalAILookup({
       : selected.source === "pending"
       ? "none"
       : (selected.source as ChemicalSelectionMode);
+  // Jurisdiction context changed (vineyard switch, country saved/cleared):
+  // discard stale results and invalidate any in-flight response so a late
+  // reply from the previous context can never be shown or applied.
+  const contextRef = useRef<string | null>(countryCode);
+  useEffect(() => {
+    if (contextRef.current === countryCode) return;
+    contextRef.current = countryCode;
+    flowRef.current += 1;
+    setPhase("idle");
+    setSearch(null);
+    setSelectedIndex(null);
+    setPendingCandidate(null);
+    setSelected(null);
+    setError(null);
+    setErrorAction(null);
+    setDuplicate(null);
+  }, [countryCode]);
+
   const notifySelection = onSelectionChange;
   useEffect(() => {
     notifySelection?.(selectionMode);
@@ -506,7 +533,13 @@ export function ChemicalAILookup({
       {!countryCode && (
         <div className="flex items-start gap-1.5 rounded border border-warning/50 bg-warning/10 p-2 text-[11px]">
           <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-          <span>{MISSING_VINEYARD_COUNTRY_MESSAGE}</span>
+          <div className="space-y-1.5">
+            <span className="block">{MISSING_VINEYARD_COUNTRY_MESSAGE}</span>
+            <SetVineyardCountryAction
+              returnLabel={returnLabel}
+              capture={() => ({ ...(captureDraft?.() ?? {}), searchText: name })}
+            />
+          </div>
         </div>
       )}
       <div className="flex gap-2">

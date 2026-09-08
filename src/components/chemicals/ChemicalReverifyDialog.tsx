@@ -28,6 +28,7 @@ import {
   MISSING_VINEYARD_COUNTRY_MESSAGE,
 } from "@/lib/chemicalJurisdiction";
 import { JurisdictionNoticeBanner } from "@/components/chemicals/JurisdictionNotice";
+import { SetVineyardCountryAction } from "@/components/chemicals/SetVineyardCountryAction";
 
 const SECTIONS: ReverifySection[] = ["chemistry", "registration", "uses"];
 
@@ -94,8 +95,9 @@ export function ChemicalReverifyDialog({
 
         <div className="space-y-3 text-sm">
           {!vineyardCountry && (
-            <div className="rounded-md border border-warning/50 bg-warning/10 p-2 text-xs">
-              {MISSING_VINEYARD_COUNTRY_MESSAGE}
+            <div className="space-y-1.5 rounded-md border border-warning/50 bg-warning/10 p-2 text-xs">
+              <div>{MISSING_VINEYARD_COUNTRY_MESSAGE}</div>
+              <SetVineyardCountryAction returnLabel="re-verifying this chemical" />
             </div>
           )}
           <JurisdictionNoticeBanner
