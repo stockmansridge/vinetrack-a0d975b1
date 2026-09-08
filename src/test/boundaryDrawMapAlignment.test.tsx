@@ -43,6 +43,8 @@ vi.mock("@/lib/mapkit", () => {
     };
   });
   (mapMock as any)._isMapMock = true;
+  // Make Map constructible via `new` explicitly.
+  (mapMock as any).prototype = Object.prototype;
   mockState.fakeMapKit = {
     _isMock: true,
     Map: mapMock,
