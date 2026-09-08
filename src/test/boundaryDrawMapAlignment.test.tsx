@@ -15,7 +15,6 @@ function makeFakeAnnotation(coord: any, factory: () => HTMLElement, options?: an
     coordinate: coord,
     _factory: factory,
     _options: options,
-    _anchorOffset: undefined as any,
     get draggable() { return false; },
     set draggable(v: boolean) { (this as any)._draggable = v; },
     addEventListener: vi.fn(),
