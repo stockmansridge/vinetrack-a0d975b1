@@ -276,8 +276,6 @@ describe("BoundaryDrawMap marker alignment", () => {
     }
   });
 
-  it("keeps row-label annotations unchanged (CSS centring, zero offset)", async () => {
-
   it("centres row-label annotations exactly on their coordinates", async () => {
     const rows = [
       {
