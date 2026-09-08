@@ -66,9 +66,9 @@ describe("Spray Report v1 — canonical fixture", () => {
     expect(errors.join()).toContain("route.styleVersion");
   });
 
-  it("rejects a non-1.0 schema version", () => {
-    const { payload } = parseSprayReportPayload({ ...fixture, schemaVersion: "2.0" });
-    expect(payload).toBeNull();
+  it("rejects a schema version other than 1.1", () => {
+    expect(parseSprayReportPayload({ ...fixture, schemaVersion: "2.0" }).payload).toBeNull();
+    expect(parseSprayReportPayload({ ...fixture, schemaVersion: "1.0" }).payload).toBeNull();
   });
 });
 
