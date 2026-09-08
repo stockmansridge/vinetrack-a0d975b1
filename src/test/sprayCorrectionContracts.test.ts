@@ -159,7 +159,9 @@ describe("actual corrections fixture", () => {
 
     const totals = chemicalTotals([tank] as any);
     const names = totals.map((t: any) => t.name);
-    expect(names).toContain("Sulphur");
+    expect(names).toContain("Substitute Sulphur");
+    expect(names).toContain("Wetting Agent");
     expect(tank.actualVersion).toBe(4);
+    expect((fixture as any).expectedDisplay.join(" ")).toContain("Not added");
   });
 });
