@@ -217,6 +217,7 @@ export default function SprayTripWorksheet({
   const [endHours, setEndHours] = useState("");
   const [draft, setDraft] = useState<ActualsDraft>({ water: {}, chemicals: {} });
   const [error, setError] = useState<string | null>(null);
+  const [errorDiagnostic, setErrorDiagnostic] = useState<string | null>(null);
   const [openHistory, setOpenHistory] = useState<string | null>(null);
 
   const { data: machines = [] } = useQuery<VineyardMachine[]>({
