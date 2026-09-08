@@ -52,17 +52,28 @@ export default function SoilProfileEditDialog({
   const { toast } = useToast();
   const { data: defaults = [] } = useSoilClassDefaults();
   const [open, setOpen] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  // Timestamp of the current opening; only data fetched after it may hydrate.
+  const [openedAt, setOpenedAt] = useState(0);
 
   // Always read the latest stored profile when the editor opens.
   const paddockQuery = usePaddockSoilProfile(
     !wholeVineyard && open ? paddockId : null,
+    { freshOnMount: true },
   );
   const vineyardQuery = useVineyardDefaultSoilProfile(
     wholeVineyard && open ? vineyardId : null,
+    { freshOnMount: true },
   );
-  const current = (wholeVineyard ? vineyardQuery.data : paddockQuery.data) ?? null;
-  const loading = wholeVineyard ? vineyardQuery.isLoading : paddockQuery.isLoading;
-  const loadError = wholeVineyard ? vineyardQuery.error : paddockQuery.error;
+  const activeQuery = wholeVineyard ? vineyardQuery : paddockQuery;
+  const current = (activeQuery.data as any) ?? null;
+  const loadError = activeQuery.error;
+  const isFetching = activeQuery.isFetching;
+  const freshRead =
+    activeQuery.isSuccess && !isFetching && activeQuery.dataUpdatedAt >= openedAt;
+  // "Loaded" also covers a successful read that confirms no profile exists.
+  const loaded = freshRead && hydrated;
+  const loading = open && !freshRead && !loadError;
 
   const upsertPaddock = useUpsertPaddockSoilProfile();
   const upsertVineyard = useUpsertVineyardDefaultSoilProfile();
@@ -70,6 +81,7 @@ export default function SoilProfileEditDialog({
   const deleteVineyard = useDeleteVineyardDefaultSoilProfile();
   const saving = upsertPaddock.isPending || upsertVineyard.isPending;
   const deleting = deletePaddock.isPending || deleteVineyard.isPending;
+  const busy = saving || deleting;
 
   const [soilClass, setSoilClass] = useState("");
   const [awc, setAwc] = useState("");
@@ -78,9 +90,18 @@ export default function SoilProfileEditDialog({
   const [override, setOverride] = useState(false);
   const [notes, setNotes] = useState("");
 
-  // Hydrate from the freshly loaded profile whenever it changes.
   useEffect(() => {
-    if (!open) return;
+    if (open) setOpenedAt((t) => (t === 0 ? Date.now() : t));
+    else {
+      setOpenedAt(0);
+      setHydrated(false);
+    }
+  }, [open]);
+
+  // Hydrate exactly once per opening, after a fresh read succeeds. Background
+  // refetches must never overwrite what the user has typed.
+  useEffect(() => {
+    if (!open || hydrated || !freshRead) return;
     setSoilClass((current?.irrigation_soil_class as string) ?? "");
     setAwc(current?.awc_mm_per_m != null ? String(current.awc_mm_per_m) : "");
     setRootDepth(
@@ -93,7 +114,11 @@ export default function SoilProfileEditDialog({
     );
     setOverride(!!current?.manual_override);
     setNotes((current?.manual_notes as string) ?? "");
-  }, [open, current]);
+    setHydrated(true);
+  }, [open, hydrated, freshRead, current]);
+
+
+
 
   /** Soil-class defaults only fill blank fields — saved values are kept. */
   function applyClassDefaults(cls: string) {
@@ -192,11 +217,22 @@ export default function SoilProfileEditDialog({
           <p className="text-xs text-muted-foreground">Loading saved soil profile…</p>
         )}
         {loadError && (
-          <p className="text-xs text-destructive">
-            Could not load the saved soil profile: {(loadError as any)?.message ?? "unknown error"}
-          </p>
+          <div className="space-y-2">
+            <p className="text-xs text-destructive">
+              Could not load the saved soil profile: {(loadError as any)?.message ?? "unknown error"}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isFetching}
+              onClick={() => activeQuery.refetch()}
+            >
+              Retry
+            </Button>
+          </div>
         )}
-        <div className="space-y-3">
+        <fieldset disabled={!loaded || busy} className="space-y-3">
           <div className="space-y-1">
             <Label className="text-xs">Irrigation soil class</Label>
             <Select value={soilClass} onValueChange={applyClassDefaults}>
@@ -262,22 +298,23 @@ export default function SoilProfileEditDialog({
               rows={3}
             />
           </div>
-        </div>
+        </fieldset>
         <DialogFooter className="gap-2 sm:gap-2">
           {current && (
             <Button
               variant="destructive"
               type="button"
               onClick={handleDelete}
-              disabled={deleting}
+              disabled={!loaded || busy}
             >
               Delete
             </Button>
           )}
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={!loaded || busy}>
             Save
           </Button>
         </DialogFooter>
+
       </DialogContent>
     </Dialog>
   );

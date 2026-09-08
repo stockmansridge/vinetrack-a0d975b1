@@ -130,21 +130,38 @@ async function rpcGetVineyardDefaultProfile(
   return row ? fromRow(row) : null;
 }
 
-export function usePaddockSoilProfile(paddockId?: string | null) {
+export interface SoilQueryOptions {
+  /** Force a network read on every mount (used when the editor opens). */
+  freshOnMount?: boolean;
+}
+
+function freshness(opts?: SoilQueryOptions) {
+  return opts?.freshOnMount
+    ? { staleTime: 0, refetchOnMount: "always" as const }
+    : { staleTime: 30_000 };
+}
+
+export function usePaddockSoilProfile(
+  paddockId?: string | null,
+  opts?: SoilQueryOptions,
+) {
   return useQuery({
     queryKey: PADDOCK_QK(paddockId),
     enabled: !!paddockId,
-    staleTime: 30_000,
+    ...freshness(opts),
     queryFn: () => rpcGetPaddockProfile(paddockId as string),
   });
 }
 
 /** Block profiles for a vineyard. Vineyard-wide rows are excluded. */
-export function useVineyardSoilProfiles(vineyardId?: string | null) {
+export function useVineyardSoilProfiles(
+  vineyardId?: string | null,
+  opts?: SoilQueryOptions,
+) {
   return useQuery({
     queryKey: VINEYARD_LIST_QK(vineyardId),
     enabled: !!vineyardId,
-    staleTime: 30_000,
+    ...freshness(opts),
     queryFn: async (): Promise<PaddockSoilProfile[]> => {
       const { data, error } = await (supabase as any).rpc(
         "list_vineyard_soil_profiles",
@@ -158,14 +175,18 @@ export function useVineyardSoilProfiles(vineyardId?: string | null) {
   });
 }
 
-export function useVineyardDefaultSoilProfile(vineyardId?: string | null) {
+export function useVineyardDefaultSoilProfile(
+  vineyardId?: string | null,
+  opts?: SoilQueryOptions,
+) {
   return useQuery({
     queryKey: VINEYARD_DEFAULT_QK(vineyardId),
     enabled: !!vineyardId,
-    staleTime: 30_000,
+    ...freshness(opts),
     queryFn: () => rpcGetVineyardDefaultProfile(vineyardId as string),
   });
 }
+
 
 // ---------- Validation ----------
 
