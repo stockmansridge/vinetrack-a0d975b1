@@ -1160,7 +1160,7 @@ function TripSheet({
                 ))}
               </Section>
             )}
-            {(trip.total_tanks != null || trip.active_tank_number != null) && (
+            {!sprayingTrip && (trip.total_tanks != null || trip.active_tank_number != null) && (
               <Section title="Tanks">
                 <Field label="Active tank" value={fmt(trip.active_tank_number)} />
                 <Field label="Total tanks" value={fmt(trip.total_tanks)} />
