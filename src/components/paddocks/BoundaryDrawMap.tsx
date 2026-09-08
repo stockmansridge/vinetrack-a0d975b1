@@ -314,7 +314,6 @@ function AppleDrawMap({
         showsZoomControl: true,
         showsUserLocationControl: false,
       });
-      console.log("map created", typeof map, "addOverlays:", typeof map.addOverlays, "removeOverlays:", typeof map.removeOverlays);
       mapRef.current = map;
       setMapReady(true);
       try {
