@@ -60,10 +60,6 @@ vi.mock("@/lib/mapkit", () => {
     Style: vi.fn().mockImplementation((opts: any) => ({ ...opts })),
     Point: vi.fn().mockImplementation((x: number, y: number) => ({ x, y })),
   };
-  // BoundaryDrawMap reads the mapkit global from window after init.
-  (globalThis as any).window = (globalThis as any).window ?? {};
-  (globalThis as any).window.mapkit = mockState.fakeMapKit;
-  (globalThis as any).mapkit = mockState.fakeMapKit;
   mockState.initMapKit.mockImplementation(() => Promise.resolve(mockState.fakeMapKit));
   return {
     initMapKit: mockState.initMapKit,
