@@ -749,16 +749,17 @@ export default function SprayTripWorksheet({
           </TableHeader>
           <TableBody>
             {p.rows.map((r, i) => (
-              <TableRow key={`${r.rowNumber}-${i}`}>
-                <TableCell>{r.rowNumber}</TableCell>
+              <TableRow key={`${r.rowNumber}-${r.blockId ?? i}`}>
+                <TableCell>{r.rowNumber ?? NOT_RECORDED}</TableCell>
                 <TableCell>{r.blockName ?? NOT_RECORDED}</TableCell>
                 <TableCell>{r.status}</TableCell>
                 <TableCell>{r.tank == null ? NOT_RECORDED : String(r.tank)}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">
-                  {rowSourceLabel(r.source)}
+                  {rowProvenanceLabel(r) || rowSourceLabel(r.source)}
                 </TableCell>
               </TableRow>
             ))}
+
             {!p.rows.length && (
               <TableRow>
                 <TableCell colSpan={5} className="text-muted-foreground">
