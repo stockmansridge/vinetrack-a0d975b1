@@ -25,6 +25,16 @@ import {
   rowSourceLabel,
   waterTotals,
 } from "./sprayReportQuantities";
+import { EMPTY_BRANDING, type SprayReportBranding } from "./sprayReportBranding";
+import {
+  amendmentValueLabel,
+  formatAmendmentTime,
+  payloadAmendments,
+  type SprayAmendment,
+} from "./sprayActuals";
+import { dataUrlImageFormat, fitWithin } from "./imageDimensions";
+
+
 
 
 const NR = "Not recorded";
@@ -99,8 +109,17 @@ export interface SprayReportPdfContext {
   routeImage?: ResolvedRouteImage | null;
   /** Honest reason shown in the Route section when no image can be embedded. */
   routeWarning?: string | null;
-  logoDataUrl?: string | null;
+  /** Trip-vineyard logo (top left) and the VineTrack mark (bottom left). */
+  branding?: SprayReportBranding;
+  /** Correction history; defaults to whatever the canonical payload carries. */
+  amendments?: SprayAmendment[];
 }
+
+/** Space reserved at the top of every page so tables never reach the logo. */
+const FIRST_PAGE_CONTENT_TOP = 96;
+const CONTINUATION_CONTENT_TOP = 74;
+/** Space reserved at the bottom for the VineTrack mark and footer text. */
+const FOOTER_RESERVED = 62;
 
 export function buildSprayReportPdf(
   payload: SprayReportPayloadV1,
@@ -108,28 +127,58 @@ export function buildSprayReportPdf(
 ): jsPDF {
   const fmt = ctx.formatters ?? AU_FORMATTERS;
   const tz = payload.identity.vineyardTimeZone;
+  const branding = ctx.branding ?? EMPTY_BRANDING;
+  const amendments = ctx.amendments ?? payloadAmendments(payload);
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 40;
 
+  // Top-left vineyard logo, fitted inside a fixed box so a wide or a tall
+  // logo both stay undistorted and inside the reserved header band.
+  const logo = branding.vineyardLogo;
+  const logoBox = { w: 96, h: 44 };
+  const logoSize = logo ? fitWithin(logo.size, logoBox.w, logoBox.h) : null;
+  const drawVineyardLogo = (top: number, box: { w: number; h: number }): number => {
+    if (!logo) return 0;
+    const size = fitWithin(logo.size, box.w, box.h);
+    try {
+      doc.addImage(
+        logo.dataUrl,
+        dataUrlImageFormat(logo.dataUrl),
+        margin,
+        top + (box.h - size.height) / 2,
+        size.width,
+        size.height,
+      );
+      return size.width;
+    } catch {
+      return 0;
+    }
+  };
+
+  const usedLogoWidth = drawVineyardLogo(24, logoBox);
+  const textLeft = usedLogoWidth ? margin + usedLogoWidth + 14 : margin;
+
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
-  doc.text("Spray Report", margin, 50);
+  doc.text("Spray Report", textLeft, 44);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(90);
   doc.text(
     `${txt(payload.identity.vineyardName)} · ${txt(payload.identity.reference)}`,
-    margin,
-    68,
+    textLeft,
+    62,
   );
-  doc.text(`Generated: ${fmt.dateTime(new Date())}`, pageWidth - margin, 68, {
+  doc.text(`Generated: ${fmt.dateTime(new Date())}`, pageWidth - margin, 62, {
     align: "right",
   });
   doc.setDrawColor(200);
-  doc.line(margin, 78, pageWidth - margin, 78);
+  doc.line(margin, 82, pageWidth - margin, 82);
   doc.setTextColor(0);
+  void logoSize;
+
 
   const blockNames =
     payload.blocks && payload.blocks.length
@@ -145,7 +194,7 @@ export function buildSprayReportPdf(
   }, null);
 
   autoTable(doc, {
-    startY: 90,
+    startY: FIRST_PAGE_CONTENT_TOP,
     head: [["Field", "Value"]],
     body: [
       ["Start", timeInZone(payload.trip.startUtc, tz)],
@@ -167,14 +216,14 @@ export function buildSprayReportPdf(
     styles: { fontSize: 9, cellPadding: 5, valign: "top" },
     headStyles: { fillColor: [60, 90, 60], textColor: 255 },
     columnStyles: { 0: { cellWidth: 150, fontStyle: "bold" }, 1: { cellWidth: "auto" } },
-    margin: { left: margin, right: margin },
+    margin: { left: margin, right: margin, top: CONTINUATION_CONTENT_TOP, bottom: FOOTER_RESERVED },
   });
   let y = (doc as any).lastAutoTable.finalY + 18;
 
   const section = (title: string, need = 120) => {
-    if (y > pageHeight - need) {
+    if (y > pageHeight - FOOTER_RESERVED - need) {
       doc.addPage();
-      y = 50;
+      y = CONTINUATION_CONTENT_TOP;
     }
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
@@ -198,7 +247,7 @@ export function buildSprayReportPdf(
     theme: "striped",
     styles: { fontSize: 9, cellPadding: 4 },
     headStyles: { fillColor: [60, 90, 60], textColor: 255 },
-    margin: { left: margin, right: margin },
+    margin: { left: margin, right: margin, top: CONTINUATION_CONTENT_TOP, bottom: FOOTER_RESERVED },
   });
   y = (doc as any).lastAutoTable.finalY + 18;
 
@@ -230,7 +279,7 @@ export function buildSprayReportPdf(
         2: { cellWidth: 90, halign: "right" },
         3: { cellWidth: "auto" },
       },
-      margin: { left: margin, right: margin },
+      margin: { left: margin, right: margin, top: CONTINUATION_CONTENT_TOP, bottom: FOOTER_RESERVED },
     });
     y = (doc as any).lastAutoTable.finalY + 14;
   });
@@ -264,7 +313,7 @@ export function buildSprayReportPdf(
         1: { halign: "right" },
         2: { halign: "right" },
       },
-      margin: { left: margin, right: margin },
+      margin: { left: margin, right: margin, top: CONTINUATION_CONTENT_TOP, bottom: FOOTER_RESERVED },
     });
     y = (doc as any).lastAutoTable.finalY + 18;
   }
@@ -292,7 +341,7 @@ export function buildSprayReportPdf(
     theme: "striped",
     styles: { fontSize: 8, cellPadding: 3 },
     headStyles: { fillColor: [60, 90, 60], textColor: 255 },
-    margin: { left: margin, right: margin },
+    margin: { left: margin, right: margin, top: CONTINUATION_CONTENT_TOP, bottom: FOOTER_RESERVED },
   });
   y = (doc as any).lastAutoTable.finalY + 18;
 
@@ -324,15 +373,19 @@ export function buildSprayReportPdf(
 
 
 
-  // Completeness warnings
-  if (payload.warnings.length) {
+  // Completeness warnings (including an honest branding failure).
+  const allWarnings = branding.warning
+    ? [...payload.warnings, branding.warning]
+    : payload.warnings;
+  if (allWarnings.length) {
     section("Completeness warnings", 100);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(110);
     const lines = doc.splitTextToSize(
-      payload.warnings.map((w) => `• ${w}`).join("\n"),
+      allWarnings.map((w) => `• ${w}`).join("\n"),
       pageWidth - margin * 2,
+
     );
     doc.text(lines, margin, y + 12);
     y += lines.length * 11 + 20;
@@ -367,26 +420,93 @@ export function buildSprayReportPdf(
       styles: { fontSize: 9, cellPadding: 5 },
       headStyles: { fillColor: [60, 90, 60], textColor: 255 },
       columnStyles: { 0: { cellWidth: 170, fontStyle: "bold" } },
-      margin: { left: margin, right: margin },
+      margin: { left: margin, right: margin, top: CONTINUATION_CONTENT_TOP, bottom: FOOTER_RESERVED },
     });
     y = (doc as any).lastAutoTable.finalY + 16;
   }
 
-  // Footer
+  // Amendment history — who corrected a recorded actual, when, and from what
+  // to what. Only present once corrections exist; the original entry is never
+  // erased by a later one.
+  if (amendments.length) {
+    section("Amendment history", 140);
+    autoTable(doc, {
+      startY: y,
+      head: [["When", "Who", "Tank", "Item", "Was", "Now"]],
+      body: amendments.map((a) => [
+        formatAmendmentTime(a.changedAtUtc, tz),
+        a.editorName || NR,
+        a.tankNumber == null ? NR : String(a.tankNumber),
+        a.chemicalName || "Water",
+        amendmentValueLabel(a.previousValue, a.previousUnit),
+        amendmentValueLabel(a.newValue, a.newUnit),
+      ]),
+      theme: "striped",
+      styles: { fontSize: 8, cellPadding: 4 },
+      headStyles: { fillColor: [60, 90, 60], textColor: 255 },
+      margin: { left: margin, right: margin, top: CONTINUATION_CONTENT_TOP, bottom: FOOTER_RESERVED },
+    });
+    y = (doc as any).lastAutoTable.finalY + 8;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(110);
+    doc.text(`Times shown in the vineyard timezone (${tz}).`, margin, y + 8);
+    doc.setTextColor(0);
+    y += 20;
+  }
+
+  // Per-page branding: compact vineyard header on continuation pages, and the
+  // official VineTrack mark bottom left with the footer text clear of it.
+  const mark = branding.vineTrackMark;
+  const markBox = { w: 78, h: 20 };
+  const markSize = mark ? fitWithin(mark.size, markBox.w, markBox.h) : null;
+  const footerTextLeft = markSize ? margin + markSize.width + 12 : margin;
   const pageCount = (doc as any).internal.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
+
+    if (i > 1) {
+      const w = drawVineyardLogo(20, { w: 60, h: 26 });
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(90);
+      doc.text(
+        `${txt(payload.identity.vineyardName)} · Spray Report`,
+        w ? margin + w + 10 : margin,
+        38,
+      );
+      doc.setDrawColor(230);
+      doc.line(margin, 52, pageWidth - margin, 52);
+      doc.setTextColor(0);
+    }
+
     doc.setDrawColor(220);
     doc.line(margin, pageHeight - 50, pageWidth - margin, pageHeight - 50);
+
+    if (mark && markSize) {
+      try {
+        doc.addImage(
+          mark.dataUrl,
+          dataUrlImageFormat(mark.dataUrl),
+          margin,
+          pageHeight - 42,
+          markSize.width,
+          markSize.height,
+        );
+      } catch {
+        /* branding is never allowed to break an export */
+      }
+    }
+
     doc.setFont("helvetica", "italic");
     doc.setFontSize(8);
     doc.setTextColor(110);
     doc.text(
       doc.splitTextToSize(
         `Spray Report · trip ${payload.identity.tripId} · record ${payload.identity.sprayRecordId}. Review against local compliance requirements before submission.`,
-        pageWidth - margin * 2,
+        pageWidth - footerTextLeft - margin - 70,
       ),
-      margin,
+      footerTextLeft,
       pageHeight - 36,
     );
     doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 20, {
@@ -394,6 +514,7 @@ export function buildSprayReportPdf(
     });
     doc.setTextColor(0);
   }
+
 
   return doc;
 }

@@ -3,10 +3,24 @@
 // Renders ONLY `get_spray_report_v1` facts, so the on-screen trip detail, the
 // worksheet and the exported Spray Report PDF always agree. Nothing here
 // re-derives rows, tank attribution, weather or costs from raw trip columns.
-import { useQuery } from "@tanstack/react-query";
-import { Loader2, RefreshCw } from "lucide-react";
+//
+// Edit turns the permitted values into inline controls in their existing
+// positions — there is no separate edit modal, and nothing is saved on blur.
+// Planned quantities and calculated totals stay read-only; Cancel writes
+// nothing; only a confirmed save changes the worksheet or a new export.
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { History, Loader2, Pencil, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -15,6 +29,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
 import { fetchSprayReportV1, type SprayReportPayloadV1 } from "@/lib/sprayReportV1";
 import {
   chemicalTotals,
@@ -27,11 +43,42 @@ import {
   formatWaterLitres,
   matchSourceLabel,
   rowSourceLabel,
+  unitLabel,
   waterTotals,
   NOT_RECORDED,
 } from "@/lib/sprayReportQuantities";
+import {
+  amendmentsForChemical,
+  amendmentValueLabel,
+  diffActualsDraft,
+  draftFromPayload,
+  formatAmendmentMarker,
+  formatAmendmentTime,
+  overPlanNotes,
+  payloadAmendments,
+  saveSprayActuals,
+  tankChemicalKey,
+  type ActualsDraft,
+} from "@/lib/sprayActuals";
 import { formatActiveDuration, formatDistance } from "@/lib/sprayReportPdf";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import {
+  describeTripDetailsError,
+  updateTripDetails,
+  validateTripEngineHours,
+  TRIP_FUEL_RATE_OVERRIDE_UNAVAILABLE,
+  type Trip,
+} from "@/lib/tripsQuery";
+import {
+  fetchAllVineyardMachines,
+  machineTypeLabel,
+  type VineyardMachine,
+} from "@/lib/vineyardMachinesQuery";
+
+const NONE = "__none__";
+
+export const SPRAY_UNIT_EDIT_UNAVAILABLE =
+  "The spray unit is stored on the linked spray record. Correcting it here needs Rork's shared spray-record save path.";
 
 export function sprayReportQueryKey(tripId: string) {
   return ["spray-report-v1", tripId] as const;
@@ -46,11 +93,22 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function Block({ title, children }: { title: string; children: React.ReactNode }) {
+function Block({
+  title,
+  children,
+  action,
+}: {
+  title: string;
+  children: React.ReactNode;
+  action?: React.ReactNode;
+}) {
   return (
     <div className="rounded-md border p-3">
-      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {title}
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-xs font-semibold tracking-wide text-muted-foreground">
+          {title}
+        </div>
+        {action}
       </div>
       {children}
     </div>
@@ -75,8 +133,33 @@ function timeIn(iso: string | null, tz: string): string {
   }
 }
 
-export default function SprayTripWorksheet({ tripId }: { tripId: string }) {
+function numOrNull(v: string): number | null {
+  const t = v.trim();
+  if (!t) return null;
+  const n = Number(t);
+  return isFinite(n) ? n : NaN;
+}
+
+export interface SprayTripWorksheetProps {
+  tripId: string;
+  /** The trip row, needed to correct its operational metadata. */
+  trip?: Trip | null;
+  vineyardId?: string | null;
+  /** Owners, managers and supervisors may correct this trip. */
+  canEdit?: boolean;
+}
+
+export default function SprayTripWorksheet({
+  tripId,
+  trip = null,
+  vineyardId = null,
+  canEdit = false,
+}: SprayTripWorksheetProps) {
   const formatters = useRegionFormatters();
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const qc = useQueryClient();
+
   const query = useQuery({
     queryKey: sprayReportQueryKey(tripId),
     queryFn: async () => {
@@ -87,6 +170,96 @@ export default function SprayTripWorksheet({ tripId }: { tripId: string }) {
     staleTime: 0,
   });
 
+  const [editing, setEditing] = useState(false);
+  const [machineId, setMachineId] = useState<string>(NONE);
+  const [operator, setOperator] = useState("");
+  const [startHours, setStartHours] = useState("");
+  const [endHours, setEndHours] = useState("");
+  const [draft, setDraft] = useState<ActualsDraft>({ water: {}, chemicals: {} });
+  const [error, setError] = useState<string | null>(null);
+  const [openHistory, setOpenHistory] = useState<string | null>(null);
+
+  const { data: machines = [] } = useQuery<VineyardMachine[]>({
+    queryKey: ["worksheet-machines", vineyardId],
+    enabled: editing && !!vineyardId,
+    queryFn: () => fetchAllVineyardMachines(vineyardId!),
+  });
+
+  const payload = query.data ?? null;
+
+  // Leaving edit mode (or reloading) always discards the draft. Nothing is
+  // hydrated while editing, so a background refetch cannot overwrite typing.
+  useEffect(() => {
+    if (!editing) return;
+    if (!payload) return;
+    setDraft(draftFromPayload(payload));
+    setMachineId(trip?.machine_id ?? trip?.tractor_id ?? NONE);
+    setOperator(trip?.person_name ?? payload.trip.operatorName ?? "");
+    setStartHours(
+      payload.equipment.startEngineHours != null ? String(payload.equipment.startEngineHours) : "",
+    );
+    setEndHours(
+      payload.equipment.endEngineHours != null ? String(payload.equipment.endEngineHours) : "",
+    );
+    setError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, tripId]);
+
+  const selectedMachine = useMemo(
+    () => machines.find((m) => m.id === machineId) ?? null,
+    [machines, machineId],
+  );
+
+  const amendments = useMemo(() => (payload ? payloadAmendments(payload) : []), [payload]);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      if (!payload) return;
+      const diff = diffActualsDraft(payload, draft);
+      if (diff.errors.length) throw new Error(diff.errors.join(" "));
+
+      const start = numOrNull(startHours);
+      const end = numOrNull(endHours);
+      if (Number.isNaN(start) || Number.isNaN(end)) {
+        throw new Error("Engine hours must be numbers.");
+      }
+      const invalid = validateTripEngineHours(start, end);
+      if (invalid) throw new Error(invalid);
+
+      if (trip) {
+        await updateTripDetails({
+          tripId: trip.id,
+          currentSyncVersion: trip.sync_version ?? null,
+          userId: user?.id ?? null,
+          edits: {
+            machineId: machineId === NONE ? null : machineId,
+            tractorId: null,
+            personName: operator.trim() || null,
+            startEngineHours: start,
+            endEngineHours: end,
+          },
+        });
+      }
+
+      // Actual usage goes through the shared save path, which commits the
+      // change and its audit history together.
+      await saveSprayActuals({
+        tripId,
+        sprayRecordId: payload.identity.sprayRecordId ?? null,
+        vineyardId: payload.identity.vineyardId,
+        changes: diff.changes,
+      });
+    },
+    onSuccess: async () => {
+      setError(null);
+      setEditing(false);
+      await qc.invalidateQueries();
+      toast({ title: "Spray trip saved" });
+    },
+    // The draft is kept on screen so the user can retry.
+    onError: (e) => setError(describeTripDetailsError(e)),
+  });
+
   if (query.isLoading) {
     return (
       <div className="flex items-center gap-2 rounded-md border p-4 text-sm text-muted-foreground">
@@ -95,7 +268,7 @@ export default function SprayTripWorksheet({ tripId }: { tripId: string }) {
     );
   }
 
-  if (query.isError || !query.data) {
+  if (query.isError || !payload) {
     return (
       <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
         <p className="text-destructive">
@@ -108,7 +281,7 @@ export default function SprayTripWorksheet({ tripId }: { tripId: string }) {
     );
   }
 
-  const p: SprayReportPayloadV1 = query.data;
+  const p: SprayReportPayloadV1 = payload;
   const tz = p.identity.vineyardTimeZone;
   const water = waterTotals(p.tanks);
   const totals = chemicalTotals(p.tanks);
@@ -120,9 +293,65 @@ export default function SprayTripWorksheet({ tripId }: { tripId: string }) {
     );
   const treated = sum((b) => b.treatedAreaHa);
   const gross = sum((b) => b.grossAreaHa);
+  const notes = editing ? overPlanNotes(p, draft) : [];
+
+  const setWater = (tankNumber: number, value: string) =>
+    setDraft((d) => ({ ...d, water: { ...d.water, [tankNumber]: value } }));
+  const setChemical = (key: string, value: string) =>
+    setDraft((d) => ({ ...d, chemicals: { ...d.chemicals, [key]: value } }));
 
   return (
     <div className="space-y-3 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          {editing
+            ? "Editing. Planned quantities stay as recorded — only actual usage and the trip's operational details can change."
+            : "Recorded facts for this spray. Exports use these saved values."}
+        </p>
+        {canEdit && !editing && (
+          <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+            <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
+          </Button>
+        )}
+        {editing && (
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
+              {save.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Save changes
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={save.isPending}
+              onClick={() => {
+                setEditing(false);
+                setError(null);
+              }}
+            >
+              <X className="mr-1.5 h-3.5 w-3.5" /> Cancel
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {editing && (
+        <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-xs">
+          Unsaved changes are not exported. A report downloaded now uses the last saved record.
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-sm text-destructive">
+          {error}
+        </p>
+      )}
+      {!!notes.length && (
+        <ul className="rounded-md border p-2 text-xs text-muted-foreground">
+          {notes.map((n, i) => (
+            <li key={i}>{n}</li>
+          ))}
+        </ul>
+      )}
+
       <Block title="Application">
         <Field label="Reference / program step" value={p.identity.reference || NOT_RECORDED} />
         <Field label={formatters.blocksLabel} value={blocks} />
@@ -138,64 +367,228 @@ export default function SprayTripWorksheet({ tripId }: { tripId: string }) {
           value={formatActiveDuration(p.trip.activeDurationSeconds)}
         />
         <Field label="Distance" value={formatDistance(p.trip.distanceMetres, formatters)} />
-        <Field label="Operator" value={p.trip.operatorName || NOT_RECORDED} />
+        <Field
+          label="Operator"
+          value={
+            editing ? (
+              <Input
+                aria-label="Operator"
+                className="h-8 w-56"
+                value={operator}
+                onChange={(e) => setOperator(e.target.value)}
+                placeholder="Not recorded"
+              />
+            ) : (
+              p.trip.operatorName || NOT_RECORDED
+            )
+          }
+        />
         <Field label="Pins recorded" value={String(p.trip.pinCount ?? 0)} />
       </Block>
 
       <Block title="Equipment">
-        <Field label="Tractor" value={p.equipment.tractorName || NOT_RECORDED} />
-        <Field label="Spray unit" value={p.equipment.sprayUnitName || NOT_RECORDED} />
+        <Field
+          label="Tractor"
+          value={
+            editing ? (
+              <Select value={machineId} onValueChange={setMachineId}>
+                <SelectTrigger aria-label="Tractor" className="h-8 w-56">
+                  <SelectValue placeholder="Not recorded" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>Not recorded</SelectItem>
+                  {machines.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name} · {machineTypeLabel(m.machine_type)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              p.equipment.tractorName || NOT_RECORDED
+            )
+          }
+        />
+        <Field
+          label="Spray unit"
+          value={
+            editing ? (
+              <span className="flex flex-col items-end gap-1">
+                <Input
+                  aria-label="Spray unit"
+                  className="h-8 w-56"
+                  disabled
+                  value={p.equipment.sprayUnitName || ""}
+                  placeholder={NOT_RECORDED}
+                />
+                <span className="max-w-xs text-right text-xs font-normal text-muted-foreground">
+                  {SPRAY_UNIT_EDIT_UNAVAILABLE}
+                </span>
+              </span>
+            ) : (
+              p.equipment.sprayUnitName || NOT_RECORDED
+            )
+          }
+        />
         <Field
           label="Start engine hours"
-          value={p.equipment.startEngineHours ?? NOT_RECORDED}
+          value={
+            editing ? (
+              <Input
+                aria-label="Start engine hours"
+                inputMode="decimal"
+                className="h-8 w-32 text-right"
+                value={startHours}
+                onChange={(e) => setStartHours(e.target.value)}
+                placeholder={NOT_RECORDED}
+              />
+            ) : (
+              (p.equipment.startEngineHours ?? NOT_RECORDED)
+            )
+          }
         />
-        <Field label="End engine hours" value={p.equipment.endEngineHours ?? NOT_RECORDED} />
+        <Field
+          label="End engine hours"
+          value={
+            editing ? (
+              <Input
+                aria-label="End engine hours"
+                inputMode="decimal"
+                className="h-8 w-32 text-right"
+                value={endHours}
+                onChange={(e) => setEndHours(e.target.value)}
+                placeholder={NOT_RECORDED}
+              />
+            ) : (
+              (p.equipment.endEngineHours ?? NOT_RECORDED)
+            )
+          }
+        />
         <Field label="Engine hours used" value={p.equipment.engineHoursUsed ?? NOT_RECORDED} />
+        {editing && (
+          <Field
+            label="Fuel consumption for this trip (L/hr)"
+            value={
+              <span className="flex flex-col items-end gap-1">
+                <Input
+                  aria-label="Fuel consumption for this trip"
+                  className="h-8 w-32 text-right"
+                  disabled
+                  value={
+                    selectedMachine?.fuel_usage_l_per_hour != null
+                      ? String(selectedMachine.fuel_usage_l_per_hour)
+                      : ""
+                  }
+                  placeholder={NOT_RECORDED}
+                />
+                <span className="max-w-xs text-right text-xs font-normal text-muted-foreground">
+                  {TRIP_FUEL_RATE_OVERRIDE_UNAVAILABLE}
+                </span>
+              </span>
+            }
+          />
+        )}
       </Block>
 
-      {p.tanks.map((t) => (
-        <Block key={t.tankNumber} title={`Tank ${t.tankNumber}`}>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Item</TableHead>
-                <TableHead className="text-right">Planned</TableHead>
-                <TableHead className="text-right">Actual</TableHead>
-                <TableHead>Match</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow>
-                <TableCell>Water</TableCell>
-                <TableCell className="text-right">
-                  {formatWaterLitres(t.plannedWaterLitres)}
-                </TableCell>
-                <TableCell className="text-right">
-                  {formatWaterLitres(t.actualWaterLitres)}
-                </TableCell>
-                <TableCell />
-              </TableRow>
-              {t.chemicals.map((c, i) => (
-                <TableRow key={`${c.name}-${i}`}>
-                  <TableCell>{c.name}</TableCell>
-                  <TableCell className="text-right">{formatPlanned(c)}</TableCell>
-                  <TableCell className="text-right">{formatActual(c)}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {matchSourceLabel(c.matchSource)}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!t.chemicals.length && (
+      {p.tanks.map((t) => {
+        const waterHistory = amendmentsForChemical(amendments, t.tankNumber, null);
+        return (
+          <Block key={t.tankNumber} title={`Tank ${t.tankNumber}`}>
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={4} className="text-muted-foreground">
-                    No chemicals recorded for this tank.
+                  <TableHead>Item</TableHead>
+                  <TableHead className="text-right">Planned</TableHead>
+                  <TableHead className="text-right">Actual</TableHead>
+                  <TableHead>Match</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow>
+                  <TableCell>Water</TableCell>
+                  <TableCell className="text-right text-muted-foreground">
+                    {formatWaterLitres(t.plannedWaterLitres)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {editing ? (
+                      <span className="flex items-center justify-end gap-1">
+                        <Input
+                          aria-label={`Tank ${t.tankNumber} actual water (L)`}
+                          inputMode="decimal"
+                          className="h-8 w-24 text-right"
+                          value={draft.water[t.tankNumber] ?? ""}
+                          onChange={(e) => setWater(t.tankNumber, e.target.value)}
+                          placeholder="Not recorded"
+                        />
+                        <span className="text-xs text-muted-foreground">L</span>
+                      </span>
+                    ) : (
+                      formatWaterLitres(t.actualWaterLitres)
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <HistoryCell
+                      id={`water-${t.tankNumber}`}
+                      history={waterHistory}
+                      tz={tz}
+                      open={openHistory}
+                      setOpen={setOpenHistory}
+                    />
                   </TableCell>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </Block>
-      ))}
+                {t.chemicals.map((c, i) => {
+                  const key = tankChemicalKey(t.tankNumber, c, i);
+                  const history = amendmentsForChemical(amendments, t.tankNumber, c.name);
+                  return (
+                    <TableRow key={key}>
+                      <TableCell>{c.name}</TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {formatPlanned(c)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {editing ? (
+                          <span className="flex items-center justify-end gap-1">
+                            <Input
+                              aria-label={`Tank ${t.tankNumber} ${c.name} actual`}
+                              inputMode="decimal"
+                              className="h-8 w-24 text-right"
+                              value={draft.chemicals[key] ?? ""}
+                              onChange={(e) => setChemical(key, e.target.value)}
+                              placeholder="Not recorded"
+                            />
+                            <span className="text-xs text-muted-foreground">
+                              {unitLabel(c.unit)}
+                            </span>
+                          </span>
+                        ) : (
+                          formatActual(c)
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {matchSourceLabel(c.matchSource)}
+                        <HistoryCell
+                          id={key}
+                          history={history}
+                          tz={tz}
+                          open={openHistory}
+                          setOpen={setOpenHistory}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {!t.chemicals.length && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-muted-foreground">
+                      No chemicals recorded for this tank.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </Block>
+        );
+      })}
 
       {!!p.tanks.length && (
         <Block title="Totals for this application">
@@ -226,6 +619,11 @@ export default function SprayTripWorksheet({ tripId }: { tripId: string }) {
               ))}
             </TableBody>
           </Table>
+          {editing && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Totals refresh from the saved record after you save.
+            </p>
+          )}
         </Block>
       )}
 
@@ -310,6 +708,20 @@ export default function SprayTripWorksheet({ tripId }: { tripId: string }) {
         </Table>
       </Block>
 
+      {!!amendments.length && (
+        <Block title="Amendment history">
+          <ul className="space-y-1 text-xs text-muted-foreground">
+            {amendments.map((a, i) => (
+              <li key={i}>
+                Tank {a.tankNumber ?? NOT_RECORDED} · {a.chemicalName || "Water"} —{" "}
+                {amendmentValueLabel(a.previousValue, a.previousUnit)} →{" "}
+                {amendmentValueLabel(a.newValue, a.newUnit)} · {formatAmendmentMarker(a, tz)}
+              </li>
+            ))}
+          </ul>
+        </Block>
+      )}
+
       {p.cost && typeof p.cost === "object" && (
         <Block title="Estimated trip cost">
           {Object.entries(p.cost).map(([k, v]) => (
@@ -344,6 +756,49 @@ export default function SprayTripWorksheet({ tripId }: { tripId: string }) {
             ))}
           </ul>
         </Block>
+      )}
+    </div>
+  );
+}
+
+/** Marker plus expandable previous/new history for one changed actual. */
+function HistoryCell({
+  id,
+  history,
+  tz,
+  open,
+  setOpen,
+}: {
+  id: string;
+  history: ReturnType<typeof payloadAmendments>;
+  tz: string;
+  open: string | null;
+  setOpen: (v: string | null) => void;
+}) {
+  if (!history.length) return null;
+  const latest = history[history.length - 1];
+  const expanded = open === id;
+  return (
+    <div className="mt-0.5">
+      <button
+        type="button"
+        className="inline-flex items-center gap-1 text-xs underline underline-offset-2"
+        aria-expanded={expanded}
+        onClick={() => setOpen(expanded ? null : id)}
+      >
+        <History className="h-3 w-3" />
+        {formatAmendmentMarker(latest, tz)}
+      </button>
+      {expanded && (
+        <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+          {history.map((a, i) => (
+            <li key={i}>
+              {formatAmendmentTime(a.changedAtUtc, tz)} · {a.editorName || "Unknown editor"} ·{" "}
+              {amendmentValueLabel(a.previousValue, a.previousUnit)} →{" "}
+              {amendmentValueLabel(a.newValue, a.newUnit)}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
