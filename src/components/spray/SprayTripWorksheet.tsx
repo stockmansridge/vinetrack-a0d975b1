@@ -570,30 +570,34 @@ export default function SprayTripWorksheet({
           }
         />
         <Field label="Engine hours used" value={p.equipment.engineHoursUsed ?? NOT_RECORDED} />
-        {editing && (
-          <Field
-            label="Fuel consumption for this trip (L/hr)"
-            value={
+        <Field
+          label="Fuel consumption for this trip (L/hr)"
+          value={
+            editing ? (
               <span className="flex flex-col items-end gap-1">
                 <Input
                   aria-label="Fuel consumption for this trip"
+                  inputMode="decimal"
                   className="h-8 w-32 text-right"
-                  disabled
-                  value={
+                  value={fuelRate}
+                  onChange={(e) => setFuelRate(e.target.value)}
+                  placeholder={
                     selectedMachine?.fuel_usage_l_per_hour != null
                       ? String(selectedMachine.fuel_usage_l_per_hour)
-                      : ""
+                      : NOT_RECORDED
                   }
-                  placeholder={NOT_RECORDED}
                 />
                 <span className="max-w-xs text-right text-xs font-normal text-muted-foreground">
-                  {TRIP_FUEL_RATE_OVERRIDE_UNAVAILABLE}
+                  Leave blank to use the tractor's usual rate. This applies to this trip only.
                 </span>
               </span>
-            }
-          />
-        )}
+            ) : (
+              (p.equipment.fuelConsumptionLPerHour ?? NOT_RECORDED)
+            )
+          }
+        />
       </Block>
+
 
       {p.tanks.map((t) => {
         const waterHistory = amendmentsForChemical(amendments, t.tankNumber, null);
