@@ -1,3 +1,4 @@
+import { openDeferredTab, PopupBlockedError } from "@/lib/openExternalUrl";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -125,17 +126,27 @@ function AttachmentLink({ path }: { path: string }) {
   const [loading, setLoading] = useState(false);
   const open = async () => {
     setLoading(true);
+    // Opened during the click so Safari does not block it; the signed URL is
+    // pushed into the tab when it arrives.
+    const tab = openDeferredTab();
     try {
       const { data, error } = await iosSupabase.storage
         .from("support-attachments")
         .createSignedUrl(path, 600);
       if (error || !data?.signedUrl) {
+        tab.fail();
         toast.error(
           `Cannot sign attachment URL — admin policy missing on support-attachments bucket. (${error?.message ?? "no url"})`,
         );
         return;
       }
-      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      try {
+        await tab.settle(data.signedUrl);
+      } catch (e) {
+        toast.error(
+          e instanceof PopupBlockedError ? e.message : String(e),
+        );
+      }
     } finally {
       setLoading(false);
     }
