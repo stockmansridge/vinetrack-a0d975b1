@@ -57,6 +57,7 @@ import {
   aggregateConservativeBuffer,
 } from "@/lib/soilProfiles";
 import SoilProfileEditDialog from "@/components/soil/SoilProfileEditDialog";
+import SoilProfileStatus from "@/components/soil/SoilProfileStatus";
 
 import { useGrapeVarieties } from "@/lib/varietyResolver";
 import { useVineyardGrapeVarieties } from "@/lib/varietyCatalog";
@@ -174,8 +175,14 @@ export default function IrrigationCalculatorPage() {
   const [rateSource, setRateSource] = useState<IrrigationRateSource>("none");
 
   // Shared soil profiles (iOS Supabase)
-  const { data: vineyardSoilProfiles = [] } = useVineyardSoilProfiles(selectedVineyardId);
-  const { data: vineyardDefaultSoil } = useVineyardDefaultSoilProfile(selectedVineyardId);
+  const soilListQuery = useVineyardSoilProfiles(selectedVineyardId);
+  const soilDefaultQuery = useVineyardDefaultSoilProfile(selectedVineyardId);
+  const vineyardSoilProfiles = soilListQuery.data ?? [];
+  const vineyardDefaultSoil = soilDefaultQuery.data ?? null;
+  const soilLoading = soilListQuery.isLoading || soilDefaultQuery.isLoading;
+  const soilError = (soilListQuery.error ?? soilDefaultQuery.error) as any;
+  // A failed read must never be treated as "no profile saved".
+  const soilReadsOk = soilListQuery.isSuccess && soilDefaultQuery.isSuccess;
   const { data: grapeVarieties } = useGrapeVarieties(selectedVineyardId);
   const { data: varietyCatalog } = useVineyardGrapeVarieties(selectedVineyardId);
   const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
@@ -305,6 +312,9 @@ export default function IrrigationCalculatorPage() {
   }, [vineyardSoilProfiles]);
 
   useEffect(() => {
+    // Only derive a buffer once both soil reads have actually succeeded —
+    // a failed read must not fall back as if absence were confirmed.
+    if (!soilReadsOk) return;
     if (selectedPaddockId === "__vineyard__") {
       const buf =
         deriveSoilBufferMm(vineyardDefaultSoil ?? null) ??
@@ -319,7 +329,8 @@ export default function IrrigationCalculatorPage() {
         setSettings((s) => ({ ...s, soilMoistureBufferMm: Number(buf.toFixed(1)) }));
       }
     }
-  }, [selectedPaddockId, vineyardDefaultSoil, vineyardSoilProfiles, soilByPaddock]);
+  }, [selectedPaddockId, soilReadsOk, vineyardDefaultSoil, vineyardSoilProfiles, soilByPaddock]);
+
 
   const wizardItems = useMemo(() => {
     return buildWizardItems({
@@ -582,6 +593,15 @@ export default function IrrigationCalculatorPage() {
           }
           soilProfile={
             <div className="space-y-2">
+              <SoilProfileStatus
+                loading={soilLoading}
+                error={soilError}
+                onRetry={() => {
+                  soilListQuery.refetch();
+                  soilDefaultQuery.refetch();
+                }}
+              />
+
               <p className="text-xs text-muted-foreground">
                 {selectedPaddockId === "__vineyard__"
                   ? "Whole Vineyard uses the shared vineyard soil profile when one is saved, otherwise a conservative aggregate of the block profiles."
@@ -592,7 +612,7 @@ export default function IrrigationCalculatorPage() {
                   wholeVineyard
                   vineyardId={selectedVineyardId}
                   trigger={
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" disabled={!!soilError}>
                       {vineyardDefaultSoil ? "Edit" : "Add"} whole vineyard soil
                     </Button>
                   }
@@ -600,6 +620,7 @@ export default function IrrigationCalculatorPage() {
               )}
             </div>
           }
+
 
         />
       </div>
