@@ -308,7 +308,7 @@ function AppleDrawMap({
     initMapKit().then((mapkit) => {
       console.log("initMapKit resolved", { cancelled, container: !!containerRef.current, map: !!mapRef.current });
       if (cancelled || !containerRef.current || mapRef.current) return;
-      console.log("about to create map", typeof mapkit, typeof mapkit.Map, "is window.mapkit:", mapkit === (window as any).mapkit, "has _isMock:", !!(mapkit as any)._isMock);
+      console.log("about to create map", typeof mapkit, typeof mapkit.Map, "is window.mapkit:", mapkit === (window as any).mapkit, "has _isMock:", !!(mapkit as any)._isMock, "Map is mock fn:", (mapkit.Map as any)._isMockFunction);
       const map = new mapkit.Map(containerRef.current, {
         mapType: mapkit.Map.MapTypes.Hybrid,
         isRotationEnabled: true,
