@@ -12,6 +12,20 @@ import {
   type SprayReportWeather,
 } from "./sprayReportV1";
 import type { ResolvedRouteImage } from "./sprayReportRoute";
+import {
+  chemicalTotals,
+  costFieldLabel,
+  costValueKind,
+  formatActual,
+  formatPlanned,
+  formatTotalActual,
+  formatTotalPlanned,
+  formatWaterLitres,
+  matchSourceLabel,
+  rowSourceLabel,
+  waterTotals,
+} from "./sprayReportQuantities";
+
 
 const NR = "Not recorded";
 const NOT_ADDED = "Not added";
@@ -179,7 +193,7 @@ export function buildSprayReportPdf(
       txt(r.blockName),
       r.status,
       r.tank == null ? NR : String(r.tank),
-      r.source,
+      rowSourceLabel(r.source),
     ]),
     theme: "striped",
     styles: { fontSize: 9, cellPadding: 4 },
@@ -188,45 +202,73 @@ export function buildSprayReportPdf(
   });
   y = (doc as any).lastAutoTable.finalY + 18;
 
-  // Tanks & chemistry
-  section("Tanks and chemistry");
-  const tankBody: string[][] = [];
+  // Tanks and chemistry — one readable table per tank, water first, then a
+  // canonical totals table. Amounts are converted from the frozen base units
+  // exactly once, here, for display only.
   payload.tanks.forEach((t) => {
-    const water = `${fmt.volume(t.plannedWaterLitres)} planned / ${
-      t.actualWaterLitres != null ? fmt.volume(t.actualWaterLitres) : NR
-    } actual`;
-    if (t.chemicals.length === 0) {
-      tankBody.push([`Tank ${t.tankNumber}`, water, NR, NR, NR, NR]);
-      return;
-    }
-    t.chemicals.forEach((c, i) => {
-      // A confirmed zero is a real zero ("Not added"); a null is unrecorded.
-      const actual =
-        c.actualAmountBase == null
-          ? NR
-          : c.actualAmountBase === 0
-            ? NOT_ADDED
-            : `${c.actualAmountBase} ${c.unit}`;
-      tankBody.push([
-        i === 0 ? `Tank ${t.tankNumber}` : "",
-        i === 0 ? water : "",
+    section(`Tank ${t.tankNumber}`, 120);
+    const body: string[][] = [
+      ["Water", formatWaterLitres(t.plannedWaterLitres), formatWaterLitres(t.actualWaterLitres), ""],
+      ...t.chemicals.map((c) => [
         c.name,
-        `${c.plannedAmountBase} ${c.unit}`,
-        actual,
-        c.matchSource,
-      ]);
+        formatPlanned(c),
+        formatActual(c),
+        matchSourceLabel(c.matchSource),
+      ]),
+    ];
+    if (!t.chemicals.length) body.push(["No chemicals recorded", NR, NR, ""]);
+    autoTable(doc, {
+      startY: y,
+      head: [["Item", "Planned", "Actual", "Match"]],
+      body,
+      theme: "striped",
+      styles: { fontSize: 9, cellPadding: 4 },
+      headStyles: { fillColor: [60, 90, 60], textColor: 255 },
+      columnStyles: {
+        0: { cellWidth: 170 },
+        1: { cellWidth: 90, halign: "right" },
+        2: { cellWidth: 90, halign: "right" },
+        3: { cellWidth: "auto" },
+      },
+      margin: { left: margin, right: margin },
     });
+    y = (doc as any).lastAutoTable.finalY + 14;
   });
-  autoTable(doc, {
-    startY: y,
-    head: [["Tank", "Water", "Chemical", "Planned", "Actual", "Match"]],
-    body: tankBody,
-    theme: "striped",
-    styles: { fontSize: 9, cellPadding: 4 },
-    headStyles: { fillColor: [60, 90, 60], textColor: 255 },
-    margin: { left: margin, right: margin },
-  });
-  y = (doc as any).lastAutoTable.finalY + 18;
+
+  if (payload.tanks.length) {
+    section("Totals for this application", 120);
+    const water = waterTotals(payload.tanks);
+    const totalsBody: string[][] = [
+      [
+        "Water",
+        formatWaterLitres(water.planned),
+        water.actual == null
+          ? NR
+          : `${formatWaterLitres(water.actual)}${water.actualIncomplete ? " (partial)" : ""}`,
+      ],
+      ...chemicalTotals(payload.tanks).map((t) => [
+        t.name,
+        formatTotalPlanned(t),
+        formatTotalActual(t),
+      ]),
+    ];
+    autoTable(doc, {
+      startY: y,
+      head: [["Item", "Planned total", "Actual total"]],
+      body: totalsBody,
+      theme: "grid",
+      styles: { fontSize: 9, cellPadding: 5 },
+      headStyles: { fillColor: [60, 90, 60], textColor: 255 },
+      columnStyles: {
+        0: { cellWidth: 200, fontStyle: "bold" },
+        1: { halign: "right" },
+        2: { halign: "right" },
+      },
+      margin: { left: margin, right: margin },
+    });
+    y = (doc as any).lastAutoTable.finalY + 18;
+  }
+
 
   // Hourly weather (append-only, ordered by sampleSlot)
   section("Hourly weather");
@@ -254,21 +296,23 @@ export function buildSprayReportPdf(
   });
   y = (doc as any).lastAutoTable.finalY + 18;
 
-  // Route image
+  // Route image. A warning is always shown when present, even if a fallback
+  // image was embedded, so persistence problems are never hidden.
   if (ctx.routeImage?.dataUrl) {
     const maxW = pageWidth - margin * 2;
     const ratio = ctx.routeImage.height / Math.max(ctx.routeImage.width, 1);
     const w = maxW;
     const h = Math.min(maxW * ratio, 320);
-    section("Route", h + 40);
+    section("Route", h + 60);
     try {
       doc.addImage(ctx.routeImage.dataUrl, "PNG", margin, y + 6, w, h);
-      y += h + 20;
+      y += h + 14;
     } catch {
       y += 6;
     }
-  } else if (ctx.routeWarning) {
-    section("Route", 60);
+  }
+  if (ctx.routeWarning) {
+    if (!ctx.routeImage?.dataUrl) section("Route", 60);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(110);
@@ -277,6 +321,7 @@ export function buildSprayReportPdf(
     doc.setTextColor(0);
     y += 12 + lines.length * 12 + 10;
   }
+
 
 
   // Completeness warnings
@@ -297,10 +342,23 @@ export function buildSprayReportPdf(
   // Cost is optional and only returned by the backend to owners and managers.
   if (payload.cost && typeof payload.cost === "object") {
     section("Estimated trip cost", 140);
-    const body = Object.entries(payload.cost).map(([k, v]) => [
-      k,
-      v == null ? NR : typeof v === "number" ? fmt.currency(v) : String(v),
-    ]);
+    const body = Object.entries(payload.cost).map(([k, v]) => {
+      if (v == null) return [costFieldLabel(k), NR];
+      if (typeof v !== "number") return [costFieldLabel(k), String(v)];
+      switch (costValueKind(k)) {
+        case "currency":
+          return [costFieldLabel(k), fmt.currency(v)];
+        case "hours":
+          return [costFieldLabel(k), `${v.toFixed(2)} h`];
+        case "litres":
+          return [costFieldLabel(k), `${v.toFixed(1)} L`];
+        case "area":
+          return [costFieldLabel(k), fmt.area(v)];
+        default:
+          return [costFieldLabel(k), String(v)];
+      }
+    });
+
     autoTable(doc, {
       startY: y,
       head: [["Field", "Value"]],

@@ -227,6 +227,95 @@ export async function updateTripTitle(params: {
   if (error) throw error;
 }
 
+// ------------------- Edit trip details -------------------
+//
+// Corrects the operational metadata of an already-recorded trip: which
+// tractor/machine did the work, who drove it, and the engine-hour readings.
+// Only columns that exist on `trips` are written; tracking data, tank
+// sessions, frozen spray quantities and global equipment defaults are never
+// touched. The write is version-checked so a concurrent mobile sync cannot be
+// silently overwritten.
+//
+// NOT WRITABLE HERE (no column exists on `trips` — Rork dependency):
+//   * spray unit / sprayer      → lives on `spray_records.spray_equipment_id`
+//   * trip-specific fuel rate   → no per-trip override column exists
+export const TRIP_FUEL_RATE_OVERRIDE_UNAVAILABLE =
+  "A trip-specific fuel consumption rate needs a per-trip override column on `trips` (for example `fuel_usage_l_per_hour_override`) plus mobile sync support. Until Rork adds it, the machine's default rate is used.";
+
+export interface TripDetailEdits {
+  tractorId?: string | null;
+  machineId?: string | null;
+  operatorUserId?: string | null;
+  personName?: string | null;
+  startEngineHours?: number | null;
+  endEngineHours?: number | null;
+}
+
+export class TripDetailsConflictError extends Error {
+  constructor() {
+    super(
+      "This trip changed on another device while you were editing. Reload the trip and reapply your changes.",
+    );
+    this.name = "TripDetailsConflictError";
+  }
+}
+
+export function validateTripEngineHours(
+  start: number | null | undefined,
+  end: number | null | undefined,
+): string | null {
+  const bad = (v: number | null | undefined) =>
+    v != null && (!isFinite(v) || v < 0);
+  if (bad(start)) return "Start engine hours must be zero or greater.";
+  if (bad(end)) return "End engine hours must be zero or greater.";
+  if (start != null && end != null && end < start) {
+    return "End engine hours cannot be lower than start engine hours.";
+  }
+  return null;
+}
+
+export async function updateTripDetails(params: {
+  tripId: string;
+  edits: TripDetailEdits;
+  currentSyncVersion?: number | null;
+  userId?: string | null;
+}): Promise<void> {
+  const { tripId, edits, currentSyncVersion, userId } = params;
+  const invalid = validateTripEngineHours(edits.startEngineHours, edits.endEngineHours);
+  if (invalid) throw new Error(invalid);
+
+  const patch: Record<string, unknown> = {
+    updated_by: userId ?? null,
+    client_updated_at: tripsNowIso(),
+    sync_version: (currentSyncVersion ?? 0) + 1,
+  };
+  if ("tractorId" in edits) patch.tractor_id = edits.tractorId ?? null;
+  if ("machineId" in edits) patch.machine_id = edits.machineId ?? null;
+  if ("operatorUserId" in edits) patch.operator_user_id = edits.operatorUserId ?? null;
+  if ("personName" in edits) patch.person_name = edits.personName ?? null;
+  if ("startEngineHours" in edits) patch.start_engine_hours = edits.startEngineHours ?? null;
+  if ("endEngineHours" in edits) patch.end_engine_hours = edits.endEngineHours ?? null;
+
+  let q = supabase.from("trips").update(patch).eq("id", tripId).is("deleted_at", null);
+  if (currentSyncVersion != null) q = q.eq("sync_version", currentSyncVersion);
+  const { data, error } = await (q.select("id") as any);
+  if (error) throw error;
+  if (currentSyncVersion != null && Array.isArray(data) && data.length === 0) {
+    throw new TripDetailsConflictError();
+  }
+}
+
+export function describeTripDetailsError(err: unknown): string {
+  if (err instanceof TripDetailsConflictError) return err.message;
+  const e = err as { message?: string } | null;
+  const msg = e?.message ?? String(err ?? "");
+  if (/row-level security|permission denied|RLS|42501/i.test(msg)) {
+    return "You don't have permission to edit this trip. Only owners, managers, or supervisors can update trip details.";
+  }
+  return msg || "Something went wrong. Please try again.";
+}
+
+
 export function describeTripTitleError(err: unknown): string {
   const e = err as { message?: string } | null;
   const msg = e?.message ?? String(err ?? "");

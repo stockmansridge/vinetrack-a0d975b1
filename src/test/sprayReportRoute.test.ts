@@ -94,16 +94,16 @@ describe("spray report route asset", () => {
 
   it("generates, uploads trip-scoped without overwrite, and registers through the RPC", async () => {
     const objectPath = routeObjectPath(payload(), routeHashForPoints(POINTS));
-    rpc.mockResolvedValue({
+    rpc.mockImplementation((_fn: string, args: any) => Promise.resolve({
       data: {
         bucket: SPRAY_REPORT_ASSET_BUCKET,
         objectPath,
-        sha256: "b".repeat(64),
+        sha256: args.p_sha256,
         routeHash: routeHashForPoints(POINTS),
         styleVersion: SPRAY_ROUTE_STYLE_VERSION,
       },
       error: null,
-    });
+    }));
     const res = await resolveSprayRoute(payload(), POINTS);
 
     expect(objectPath.startsWith(`${TRIP}/`)).toBe(true);
@@ -124,8 +124,9 @@ describe("spray report route asset", () => {
     expect(res.warning).toBeNull();
   });
 
-  it("retries registration after a duplicate upload rather than overwriting", async () => {
+  it("adopts the stored object's real bytes after a duplicate upload", async () => {
     storage.upload.mockResolvedValue({ error: { message: "The resource already exists" } });
+    storage.download.mockResolvedValue({ data: new Blob(["stored"]), error: null });
     const objectPath = routeObjectPath(payload(), routeHashForPoints(POINTS));
     rpc.mockResolvedValue({
       data: {
@@ -138,7 +139,37 @@ describe("spray report route asset", () => {
       error: null,
     });
     const res = await resolveSprayRoute(payload(), POINTS);
+    expect(storage.download).toHaveBeenCalledWith(objectPath);
+    expect(storage.upload).toHaveBeenCalledTimes(1);
     expect(rpc).toHaveBeenCalled();
+    expect(res.image?.generated).toBe(false);
+    expect(res.warning).toBeNull();
+  });
+
+  it("warns when a duplicate upload's stored object cannot be read back", async () => {
+    storage.upload.mockResolvedValue({ error: { message: "The resource already exists" } });
+    storage.download.mockResolvedValue({ data: null, error: { message: "nope" } });
+    const res = await resolveSprayRoute(payload(), POINTS);
+    expect(res.warning).toBe(ROUTE_DOWNLOAD_FAILED_MESSAGE);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("downloads the winner when the RPC reports a different canonical hash", async () => {
+    const objectPath = routeObjectPath(payload(), routeHashForPoints(POINTS));
+    rpc.mockResolvedValue({
+      data: {
+        bucket: SPRAY_REPORT_ASSET_BUCKET,
+        objectPath,
+        sha256: "d".repeat(64),
+        routeHash: routeHashForPoints(POINTS),
+        styleVersion: SPRAY_ROUTE_STYLE_VERSION,
+      },
+      error: null,
+    });
+    storage.download.mockResolvedValue({ data: new Blob(["winner"]), error: null });
+    const res = await resolveSprayRoute(payload(), POINTS);
+    expect(storage.download).toHaveBeenCalledWith(objectPath);
+    expect(res.image?.generated).toBe(false);
     expect(res.warning).toBeNull();
   });
 

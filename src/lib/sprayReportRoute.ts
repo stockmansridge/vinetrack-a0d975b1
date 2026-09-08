@@ -87,19 +87,57 @@ function dataUrlToBytes(dataUrl: string): Uint8Array {
   return out;
 }
 
+/** Real pixel size from PNG IHDR bytes; null when the bytes are not a PNG. */
+export function pngDimensions(bytes: Uint8Array): { width: number; height: number } | null {
+  if (bytes.length < 24) return null;
+  const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+  for (let i = 0; i < sig.length; i++) if (bytes[i] !== sig[i]) return null;
+  const read = (o: number) =>
+    ((bytes[o] << 24) | (bytes[o + 1] << 16) | (bytes[o + 2] << 8) | bytes[o + 3]) >>> 0;
+  const width = read(16);
+  const height = read(20);
+  if (!width || !height) return null;
+  return { width, height };
+}
+
+interface DownloadedRoute {
+  image: ResolvedRouteImage;
+  /** SHA-256 of the canonical object's actual bytes. */
+  sha256: string;
+}
+
+/**
+ * Download a private route object and describe it from its ACTUAL bytes:
+ * real pixel dimensions (so the PDF keeps the true aspect ratio) and the real
+ * content hash (never a locally assumed one).
+ */
 async function downloadRouteObject(
   bucket: string,
   objectPath: string,
-): Promise<ResolvedRouteImage | null> {
+): Promise<DownloadedRoute | null> {
   try {
     const { data, error } = await supabase.storage.from(bucket).download(objectPath);
     if (error || !data) return null;
     const dataUrl = await blobToDataUrl(data);
-    return { dataUrl, width: 1100, height: 660, generated: false };
+    const bytes = dataUrlToBytes(dataUrl);
+    const buffer = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(buffer).set(bytes);
+    let sha256 = "";
+    try {
+      sha256 = await sha256Hex(buffer);
+    } catch {
+      sha256 = "";
+    }
+    const size = pngDimensions(bytes) ?? { width: 1100, height: 660 };
+    return {
+      image: { dataUrl, width: size.width, height: size.height, generated: false },
+      sha256,
+    };
   } catch {
     return null;
   }
 }
+
 
 function normaliseRoute(raw: unknown): SprayReportRoute | null {
   if (!raw || typeof raw !== "object") return null;
@@ -127,7 +165,7 @@ export async function resolveSprayRoute(
 ): Promise<RouteResolution> {
   if (payload.route) {
     const existing = await downloadRouteObject(payload.route.bucket, payload.route.objectPath);
-    if (existing) return { image: existing, warning: null, route: payload.route };
+    if (existing) return { image: existing.image, warning: null, route: payload.route };
     return { image: null, warning: ROUTE_DOWNLOAD_FAILED_MESSAGE, route: payload.route };
   }
 
@@ -152,7 +190,11 @@ export async function resolveSprayRoute(
   const routeHash = routeHashForPoints(pathPoints);
   const objectPath = routeObjectPath(payload, routeHash);
 
+  // What we will register and embed. A duplicate upload is NOT proof that the
+  // stored object matches our bytes, so in that case the stored object is
+  // downloaded and its real hash and image are used instead.
   let sha256: string;
+  let embed: ResolvedRouteImage = local;
   try {
     const bytes = dataUrlToBytes(composed.dataUrl);
     const buffer = new ArrayBuffer(bytes.byteLength);
@@ -166,8 +208,6 @@ export async function resolveSprayRoute(
         upsert: false,
       });
 
-    // A duplicate means the identical object already exists — never overwrite it,
-    // and continue to registration so the canonical winner is resolved.
     const duplicate =
       !!upload.error &&
       /exist|duplicate|409/i.test(
@@ -175,6 +215,15 @@ export async function resolveSprayRoute(
       );
     if (upload.error && !duplicate) {
       return { image: local, warning: ROUTE_UPLOAD_FAILED_MESSAGE, route: null };
+    }
+    if (duplicate) {
+      // Never overwrite the existing private object; adopt its actual bytes.
+      const stored = await downloadRouteObject(SPRAY_REPORT_ASSET_BUCKET, objectPath);
+      if (!stored) {
+        return { image: local, warning: ROUTE_DOWNLOAD_FAILED_MESSAGE, route: null };
+      }
+      embed = stored.image;
+      if (stored.sha256) sha256 = stored.sha256;
     }
   } catch {
     return { image: local, warning: ROUTE_UPLOAD_FAILED_MESSAGE, route: null };
@@ -191,27 +240,32 @@ export async function resolveSprayRoute(
       p_style_version: SPRAY_ROUTE_STYLE_VERSION,
     });
     if (error) {
-      return { image: local, warning: ROUTE_REGISTER_FAILED_MESSAGE, route: null };
+      return { image: embed, warning: ROUTE_REGISTER_FAILED_MESSAGE, route: null };
     }
     canonical = normaliseRoute(data);
   } catch {
-    return { image: local, warning: ROUTE_REGISTER_FAILED_MESSAGE, route: null };
+    return { image: embed, warning: ROUTE_REGISTER_FAILED_MESSAGE, route: null };
   }
 
   if (!canonical) {
-    return { image: local, warning: ROUTE_REGISTER_FAILED_MESSAGE, route: null };
+    return { image: embed, warning: ROUTE_REGISTER_FAILED_MESSAGE, route: null };
   }
 
   // Another export may have registered first: the RPC returns that immutable
-  // winner, which must be embedded instead of the local alternative.
-  if (canonical.objectPath !== objectPath || canonical.bucket !== SPRAY_REPORT_ASSET_BUCKET) {
+  // winner, which must be embedded instead of the local alternative. A
+  // different canonical hash for the same path means the same thing.
+  const differentObject =
+    canonical.objectPath !== objectPath || canonical.bucket !== SPRAY_REPORT_ASSET_BUCKET;
+  const differentBytes = !!canonical.sha256 && !!sha256 && canonical.sha256 !== sha256;
+  if (differentObject || differentBytes) {
     const winner = await downloadRouteObject(canonical.bucket, canonical.objectPath);
-    if (winner) return { image: winner, warning: null, route: canonical };
-    return { image: local, warning: ROUTE_DOWNLOAD_FAILED_MESSAGE, route: canonical };
+    if (winner) return { image: winner.image, warning: null, route: canonical };
+    return { image: embed, warning: ROUTE_DOWNLOAD_FAILED_MESSAGE, route: canonical };
   }
 
-  return { image: local, warning: null, route: canonical };
+  return { image: embed, warning: null, route: canonical };
 }
+
 
 /** Back-compatible helper used by callers that only need the image. */
 export async function resolveSprayRouteImage(
