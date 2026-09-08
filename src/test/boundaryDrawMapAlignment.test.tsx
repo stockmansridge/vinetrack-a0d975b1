@@ -33,6 +33,7 @@ const mockState = vi.hoisted(() => ({
 
 vi.mock("@/lib/mapkit", () => {
   mockState.fakeMapKit = {
+    _isMock: true,
     Map: vi.fn().mockImplementation(() => {
       console.log("Fake MapKit Map constructor called");
       return {
