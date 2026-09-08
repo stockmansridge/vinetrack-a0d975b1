@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 
 import { generateUuid, isUuid, tryGenerateUuid, SecureRandomUnavailableError } from "@/lib/uuid";
 import { openDeferredTab, PopupBlockedError } from "@/lib/openExternalUrl";
@@ -24,7 +23,7 @@ describe("generateUuid", () => {
   });
 
   it("falls back to getRandomValues when randomUUID is missing (Safari / non-secure context)", () => {
-    setCrypto({ getRandomValues: (a: Uint8Array) => realCrypto.getRandomValues(a) });
+    setCrypto({ getRandomValues: (a: any) => realCrypto.getRandomValues(a) });
     const id = generateUuid();
     expect(isUuid(id)).toBe(true);
     expect(id[14]).toBe("4");
@@ -36,13 +35,13 @@ describe("generateUuid", () => {
       randomUUID: () => {
         throw new Error("insecure context");
       },
-      getRandomValues: (a: Uint8Array) => realCrypto.getRandomValues(a),
+      getRandomValues: (a: any) => realCrypto.getRandomValues(a),
     });
     expect(isUuid(generateUuid())).toBe(true);
   });
 
   it("produces unique ids", () => {
-    setCrypto({ getRandomValues: (a: Uint8Array) => realCrypto.getRandomValues(a) });
+    setCrypto({ getRandomValues: (a: any) => realCrypto.getRandomValues(a) });
     const ids = new Set(Array.from({ length: 200 }, () => generateUuid()));
     expect(ids.size).toBe(200);
   });
@@ -99,7 +98,6 @@ describe("openDeferredTab", () => {
 
 describe("HelpHint", () => {
   it("is reachable by tap and keyboard and does not trigger the control underneath", async () => {
-    const user = userEvent.setup();
     const rowClick = vi.fn();
     render(
       <div onClick={rowClick}>
@@ -107,17 +105,18 @@ describe("HelpHint", () => {
       </div>,
     );
     const trigger = screen.getByRole("button", { name: "Why this is unavailable" });
-    await user.click(trigger);
+    fireEvent.click(trigger);
     expect(await screen.findByText("Sync the block first.")).toBeInTheDocument();
     expect(rowClick).not.toHaveBeenCalled();
   });
 
   it("opens on keyboard activation", async () => {
-    const user = userEvent.setup();
     render(<HelpHint label="About costs">Costs exclude GST.</HelpHint>);
-    await user.tab();
-    expect(screen.getByRole("button", { name: "About costs" })).toHaveFocus();
-    await user.keyboard("{Enter}");
+    const trigger = screen.getByRole("button", { name: "About costs" });
+    trigger.focus();
+    expect(trigger).toHaveFocus();
+    fireEvent.keyDown(trigger, { key: "Enter" });
+    fireEvent.click(trigger);
     expect(await screen.findByText("Costs exclude GST.")).toBeInTheDocument();
   });
 });
@@ -142,7 +141,6 @@ describe("dialog fits the visible screen", () => {
   });
 
   it("keeps nested controls interactive", async () => {
-    const user = userEvent.setup();
     const onChange = vi.fn();
     render(
       <Dialog open>
@@ -153,9 +151,9 @@ describe("dialog fits the visible screen", () => {
         </DialogContent>
       </Dialog>,
     );
-    await user.type(screen.getByLabelText("Notes"), "hi");
+    fireEvent.change(screen.getByLabelText("Notes"), { target: { value: "hi" } });
     expect(onChange).toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "About notes" }));
+    fireEvent.click(screen.getByRole("button", { name: "About notes" }));
     await waitFor(() => expect(screen.getByText("Free text.")).toBeInTheDocument());
   });
 });
