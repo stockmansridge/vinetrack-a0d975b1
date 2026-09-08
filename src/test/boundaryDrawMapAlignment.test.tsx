@@ -43,6 +43,8 @@ vi.mock("@/lib/mapkit", () => {
     };
   });
   (mapMock as any)._isMapMock = true;
+  (mapMock as any).MapTypes = { Hybrid: "hybrid" };
+  (mapMock as any).FeatureVisibility = { Adaptive: "adaptive" };
   // Make Map constructible via `new` explicitly.
   (mapMock as any).prototype = Object.prototype;
   mockState.fakeMapKit = {
