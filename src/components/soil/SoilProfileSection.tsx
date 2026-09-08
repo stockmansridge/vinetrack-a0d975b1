@@ -40,9 +40,9 @@ export default function SoilProfileSection({
   paddockId,
   paddockName,
   vineyardId,
-  canEdit = true,
+  canEdit,
 }: Props) {
-  const { data: profile, isLoading } = usePaddockSoilProfile(paddockId);
+  const { data: profile, isLoading, error } = usePaddockSoilProfile(paddockId);
 
   const showRawDiagnostics = useDiagnosticPanel("show_raw_json_panels");
   const [rawOpen, setRawOpen] = useState(false);
@@ -66,7 +66,6 @@ export default function SoilProfileSection({
               paddockId={paddockId}
               paddockName={paddockName}
               vineyardId={vineyardId ?? null}
-              current={profile ?? null}
               trigger={
                 <Button variant="ghost" size="sm">
                   <Pencil className="h-3 w-3 mr-1" /> Edit
@@ -81,11 +80,18 @@ export default function SoilProfileSection({
         <div className="text-xs text-muted-foreground">Loading soil profile…</div>
       )}
 
-      {!isLoading && !profile && (
+      {!isLoading && error && (
+        <div className="text-xs text-destructive">
+          Could not load the soil profile: {(error as any)?.message ?? "unknown error"}
+        </div>
+      )}
+
+      {!isLoading && !error && !profile && (
         <div className="text-xs text-muted-foreground">
           No soil profile set.{canEdit ? " Use Edit to add soil details." : ""}
         </div>
       )}
+
 
       {profile && (
         <div className="space-y-1 text-sm">
