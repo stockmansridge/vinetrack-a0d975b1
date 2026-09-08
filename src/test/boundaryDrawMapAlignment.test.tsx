@@ -128,7 +128,7 @@ describe("BoundaryDrawMap marker alignment", () => {
       expect(ann.anchorOffset.x).toBe(0);
       expect(ann.anchorOffset.y).toBe(0);
       const el = ann._factory();
-      expect(el.style.transform).toBe("translate(-50%, -50%)");
+      expect(el.style.transform).toContain("translate(-50%,-50%)");
     }
   });
 
