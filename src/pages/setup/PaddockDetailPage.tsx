@@ -502,6 +502,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
                   setPolygon={canEdit ? setPolygon : undefined}
                   readonly={!canEdit}
                   excludePaddockId={paddock.id}
+                  editingExistingBoundary
                 />
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
