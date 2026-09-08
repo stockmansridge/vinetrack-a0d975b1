@@ -350,7 +350,7 @@ function AppleDrawMap({
         } catch { /* noop */ }
       };
       map.addEventListener("single-tap", onTap);
-    }).catch((err: any) => { console.log("AppleDrawMap initMapKit catch:", err?.message || err); });
+    }).catch(() => { /* parent already handled unavailable */ });
     return () => {
       cancelled = true;
       setMapReady(false);
