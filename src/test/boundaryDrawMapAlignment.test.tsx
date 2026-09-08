@@ -32,24 +32,20 @@ const mockState = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/mapkit", () => {
-  const mapMock = vi.fn().mockImplementation(() => {
-    console.log("Fake MapKit Map constructor called");
-    return {
-      addOverlays: vi.fn(),
-      removeOverlays: vi.fn(),
-      addOverlay: vi.fn(),
-      removeOverlay: vi.fn(),
-      addAnnotations: vi.fn(),
-      removeAnnotations: vi.fn(),
-      addAnnotation: vi.fn(),
-      removeAnnotation: vi.fn(),
-      addEventListener: vi.fn(),
-    };
-  });
-  (mapMock as any)._isMapMock = true;
+  const mapMock = vi.fn().mockImplementation(() => ({
+    addOverlays: vi.fn(),
+    removeOverlays: vi.fn(),
+    addOverlay: vi.fn(),
+    removeOverlay: vi.fn(),
+    addAnnotations: vi.fn(),
+    removeAnnotations: vi.fn(),
+    addAnnotation: vi.fn(),
+    removeAnnotation: vi.fn(),
+    addEventListener: vi.fn(),
+  }));
+  // MapKit accesses static members on the Map constructor itself.
   (mapMock as any).MapTypes = { Hybrid: "hybrid" };
   (mapMock as any).FeatureVisibility = { Adaptive: "adaptive" };
-  // Make Map constructible via `new` explicitly.
   (mapMock as any).prototype = Object.prototype;
   mockState.fakeMapKit = {
     _isMock: true,
