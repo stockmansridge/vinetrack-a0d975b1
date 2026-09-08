@@ -437,6 +437,11 @@ export default function FertiliserCalculatorDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        {idError && (
+          <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            {idError}
+          </div>
+        )}
         <DialogHeader>
           <DialogTitle>{existing ? "Edit Fertiliser Record" : "New Fertiliser Calculation"}</DialogTitle>
           <DialogDescription>

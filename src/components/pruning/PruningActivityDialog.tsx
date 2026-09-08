@@ -343,6 +343,11 @@ export default function PruningActivityDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[min(1200px,95vw)] max-h-[92vh] overflow-y-auto">
+        {idError && (
+          <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            {idError}
+          </div>
+        )}
         <DialogHeader>
           <div className="flex items-center justify-between gap-3">
             <div>
