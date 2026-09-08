@@ -14,12 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { PortalNotice } from "@/components/ui/PortalNotice";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { HelpHint } from "@/components/ui/HelpHint";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   blockCoveragePercent,
   emitterBasisLabel,
@@ -32,15 +28,12 @@ import {
 
 
 function Unavailable({ tip, label = "Not available" }: { tip: string; label?: string }) {
+  // Tap- and keyboard-accessible: this explains why a figure is missing, so it
+  // must not be hover-only.
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="cursor-help text-muted-foreground underline decoration-dotted underline-offset-2">
-          {label}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent className="max-w-xs">{tip}</TooltipContent>
-    </Tooltip>
+    <HelpHint label={`Why ${label.toLowerCase()}`} triggerText={label} className="text-muted-foreground">
+      {tip}
+    </HelpHint>
   );
 }
 
@@ -72,12 +65,9 @@ function CountCell({
   }
   const tip = basisText ?? (isEstimated ? "Estimated by the vineyard backend." : "Exact value.");
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="cursor-help underline decoration-dotted underline-offset-2">{text}</span>
-      </TooltipTrigger>
-      <TooltipContent className="max-w-xs">{tip}</TooltipContent>
-    </Tooltip>
+    <HelpHint label={`How this ${noun.toLowerCase()} figure was produced`} triggerText={text} className="text-foreground">
+      {tip}
+    </HelpHint>
   );
 }
 
