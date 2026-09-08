@@ -152,7 +152,7 @@ describe("BoundaryDrawMap marker alignment", () => {
     await waitFor(() => expect(createdAnnotations.length).toBeGreaterThan(0), { timeout: 10000 });
 
     for (const ann of createdAnnotations) {
-      expect(ann._anchorOffset).toEqual({ x: 0, y: 0 });
+      expect(ann.anchorOffset).toEqual({ x: 0, y: 0 });
       const el = ann._factory();
       expect(el.style.transform).toBe("translate(-50%, -50%)");
     }
