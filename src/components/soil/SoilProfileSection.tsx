@@ -18,9 +18,10 @@ interface Props {
   latitude?: number | null;
   longitude?: number | null;
   vineyardId?: string | null;
-  /** Owners/managers can edit. If unknown, pass undefined to allow. */
-  canEdit?: boolean;
+  /** Owners/managers only. Callers must pass the real permission. */
+  canEdit: boolean;
 }
+
 
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
