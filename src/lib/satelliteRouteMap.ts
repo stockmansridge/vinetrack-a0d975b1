@@ -34,11 +34,34 @@ export interface SatelliteRouteResult {
   height: number;
 }
 
+/**
+ * Spray Report route style `spray-route-red-green-v1`: hybrid (satellite)
+ * background, red → orange → yellow → green chronology, red start, green
+ * finish. Defined once here so every exporter draws the identical style.
+ */
+export const SPRAY_ROUTE_CHRONOLOGY_STOPS = [
+  "#D7263D",
+  "#F46036",
+  "#F4C542",
+  "#8DBF3F",
+  "#2E9B4F",
+] as const;
+
+export interface RouteImageOptions {
+  /** Draw the five-stop red→green chronology instead of the flat blue line. */
+  chronology?: boolean;
+  /** Start marker colour (chronology style uses red start / green finish). */
+  startColour?: string;
+  endColour?: string;
+}
+
 export async function composeSatelliteRouteImage(
   points: LatLng[],
   targetW = 900,
   targetH = 540,
+  options?: RouteImageOptions,
 ): Promise<SatelliteRouteResult | null> {
+
   if (!points || points.length < 2) return null;
 
   // Bounds with padding
@@ -124,15 +147,32 @@ export async function composeSatelliteRouteImage(
   }
   ctx.stroke();
 
-  ctx.strokeStyle = "#1E5AC8";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(sx0, sy0);
-  for (let i = 1; i < points.length; i++) {
-    const [x, y] = toCanvas(points[i]);
-    ctx.lineTo(x, y);
+  if (options?.chronology) {
+    // Five-stop chronology: each segment is coloured by its position in time.
+    const stops = SPRAY_ROUTE_CHRONOLOGY_STOPS;
+    ctx.lineWidth = 3;
+    for (let i = 1; i < points.length; i++) {
+      const t = (i - 1) / Math.max(points.length - 2, 1);
+      const stop = Math.min(stops.length - 1, Math.floor(t * stops.length));
+      ctx.strokeStyle = stops[stop];
+      const [px, py] = toCanvas(points[i - 1]);
+      const [x, y] = toCanvas(points[i]);
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+  } else {
+    ctx.strokeStyle = "#1E5AC8";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(sx0, sy0);
+    for (let i = 1; i < points.length; i++) {
+      const [x, y] = toCanvas(points[i]);
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
   }
-  ctx.stroke();
 
   const drawMarker = (cx: number, cy: number, fill: string) => {
     ctx.beginPath();
@@ -147,8 +187,11 @@ export async function composeSatelliteRouteImage(
 
   const [sx, sy] = toCanvas(points[0]);
   const [ex, ey] = toCanvas(points[points.length - 1]);
-  drawMarker(sx, sy, "#22A046");
-  drawMarker(ex, ey, "#D23232");
+  const startColour = options?.startColour ?? (options?.chronology ? "#D7263D" : "#22A046");
+  const endColour = options?.endColour ?? (options?.chronology ? "#2E9B4F" : "#D23232");
+  drawMarker(sx, sy, startColour);
+  drawMarker(ex, ey, endColour);
+
 
   // Attribution strip
   const attrH = 16;

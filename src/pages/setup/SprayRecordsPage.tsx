@@ -39,6 +39,8 @@ import {
   type SprayRecord,
 } from "@/lib/sprayRecordsQuery";
 import { exportSprayRecordPdf } from "@/lib/sprayRecordPdf";
+import { downloadSprayReport } from "@/lib/sprayReportExport";
+import { useToast } from "@/hooks/use-toast";
 import {
   resolveSprayTractorName,
   resolveSprayEquipmentName,
@@ -320,6 +322,7 @@ function SprayRecordSheet({
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
+  const { toast } = useToast();
   const resolvedTractor = record ? resolveSprayTractorName(record, lookups) : null;
   const resolvedEquipment = record ? resolveSprayEquipmentName(record, lookups) : null;
   return (
@@ -336,17 +339,34 @@ function SprayRecordSheet({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() =>
+                onClick={async () => {
+                  // Linked records are spraying trips → canonical Spray Report.
+                  if (record.trip_id) {
+                    const res = await downloadSprayReport({
+                      tripId: record.trip_id,
+                      formatters,
+                    });
+                    if (!res.ok) {
+                      toast({
+                        title: "Spray Report unavailable",
+                        description: res.error,
+                        variant: "destructive",
+                      });
+                    }
+                    return;
+                  }
                   exportSprayRecordPdf(record, vineyardName, {
                     formatters,
                     tractorName: resolvedTractor,
                     equipmentName: resolvedEquipment,
-                  })
-                }
+                  });
+                }}
                 className="gap-1.5"
               >
-                <FileDown className="h-3.5 w-3.5" /> Export PDF
+                <FileDown className="h-3.5 w-3.5" />{" "}
+                {record.trip_id ? "Download Spray Report" : "Export PDF"}
               </Button>
+
             </div>
             <Section title="Schedule">
               <Field label="Date" value={fmtDate(record.date)} />

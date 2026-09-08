@@ -214,54 +214,11 @@ export function exportSprayRecordPdf(
   doc.text(notesLines, margin, y + 12);
   y += notesLines.length * 12 + 20;
 
-  // Tank breakdown if multiple tanks
-  const tanksArr = Array.isArray(record.tanks)
-    ? record.tanks
-    : record.tanks
-      ? [record.tanks]
-      : [];
-  if (tanksArr.length > 0) {
-    if (y > pageHeight - 160) {
-      doc.addPage();
-      y = 50;
-    }
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text("Tank breakdown", margin, y);
-    const tankRows: string[][] = [];
-    tanksArr.forEach((t: any, i: number) => {
-      const chems = Array.isArray(t?.chemicals) ? t.chemicals : [];
-      if (chems.length === 0) {
-        tankRows.push([
-          `Tank ${i + 1}${t?.tank_number ? ` (#${t.tank_number})` : ""}`,
-          t?.water_volume != null ? fmt.volume(t.water_volume) : NR,
-          NR,
-          NR,
-        ]);
-      } else {
-        chems.forEach((c: any, ci: number) => {
-          tankRows.push([
-            ci === 0
-              ? `Tank ${i + 1}${t?.tank_number ? ` (#${t.tank_number})` : ""}`
-              : "",
-            ci === 0 && t?.water_volume != null ? fmt.volume(t.water_volume) : "",
-            String(c?.name ?? c?.chemical_name ?? "Chemical"),
-            `${c?.dose ?? c?.rate ?? c?.amount ?? ""} ${c?.unit ?? ""}`.trim() || NR,
-          ]);
-        });
-      }
-    });
-    autoTable(doc, {
-      startY: y + 6,
-      head: [["Tank", "Water", "Chemical", "Rate"]],
-      body: tankRows,
-      theme: "striped",
-      styles: { fontSize: 9, cellPadding: 4 },
-      headStyles: { fillColor: [60, 90, 60], textColor: 255 },
-      margin: { left: margin, right: margin },
-    });
-    y = (doc as any).lastAutoTable.finalY + 16;
-  }
+  // Tank breakdown is NOT parsed from legacy tank keys here. Tank attribution
+  // and tank chemistry belong to the canonical Spray Report v1 payload
+  // (`get_spray_report_v1`), rendered by sprayReportPdf.ts. This legacy sheet is
+  // only used for spray records with no linked trip.
+
 
   // Estimated trip cost — owner/manager only (caller gates).
   if (context?.cost) {

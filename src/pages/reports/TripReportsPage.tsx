@@ -21,6 +21,10 @@ import {
   rowsToCsv,
   downloadCsv,
 } from "@/lib/tripReport";
+import { isSprayingTrip } from "@/lib/sprayReportV1";
+import { downloadSprayReport } from "@/lib/sprayReportExport";
+import { useSprayLinkedTripIds } from "@/lib/sprayLinkedTrips";
+
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { useCanSeeCosts } from "@/lib/permissions";
@@ -88,6 +92,8 @@ function tripStatus(t: Trip): "active" | "paused" | "completed" {
 
 export default function TripReportsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
+  const { data: sprayLinkedTripIds } = useSprayLinkedTripIds(selectedVineyardId);
+
   const { toast } = useToast();
   const { data: vineyardLogoUrl } = useVineyardLogo();
   const formatters = useRegionFormatters();
@@ -301,9 +307,31 @@ export default function TripReportsPage() {
     return t.paddock_name ?? null;
   };
 
+  const isSprayRow = (t: Trip) =>
+    isSprayingTrip({
+      tripFunction: t.trip_function,
+      hasLinkedSprayRecord: sprayLinkedTripIds?.has(t.id),
+    });
+
   const handleExportPdf = async (t: Trip) => {
     setExportingId(t.id);
     try {
+      // Spraying rows download the canonical Spray Report, never a Trip Report.
+      if (isSprayRow(t)) {
+        const res = await downloadSprayReport({
+          tripId: t.id,
+          formatters,
+          pathPoints: t.path_points,
+        });
+        if (!res.ok) {
+          toast({
+            title: "Spray Report unavailable",
+            description: res.error,
+            variant: "destructive",
+          });
+        }
+        return;
+      }
       const pinCount = await countTripPins(t);
       await downloadTripPdf(t, {
         paddockName: padNameFor(t),
@@ -317,6 +345,7 @@ export default function TripReportsPage() {
         formatters,
         linkedTaskLabel: t.work_task_id ? workTaskLabelById.get(t.work_task_id) ?? "Task linked" : null,
       });
+
     } catch (e: any) {
       toast({ title: "PDF export failed", description: e.message, variant: "destructive" });
     } finally {
@@ -362,10 +391,12 @@ export default function TripReportsPage() {
       <div>
         <h1 className="text-2xl font-semibold">Trip Reports</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Export per-trip reports (PDF) for every trip type — Maintenance, Spray, Seeding,
+          Export per-trip reports (PDF) for non-spray work — Maintenance, Seeding,
           Mowing, Harrowing, Canopy Work and Custom jobs. Each PDF includes trip details,
-          rows/paths covered, pins logged, route map and VineTrack branding.
+          rows/paths covered, pins logged, route map and VineTrack branding. Spraying
+          rows download a Spray Report instead.
         </p>
+
       </div>
 
       <Card className="p-4 space-y-3">
@@ -503,14 +534,14 @@ export default function TripReportsPage() {
         <Info className="h-4 w-4 mt-0.5 text-muted-foreground" />
         <div className="text-xs text-muted-foreground space-y-1">
           <div>
-            Trip Reports cover every trip/job type recorded in VineTrack. Each PDF
-            includes Trip Details, Rows / Paths, Pins, Route Map and a VineTrack
-            footer.
+            Trip Reports mean non-spray reports. Each PDF includes Trip Details,
+            Rows / Paths, Pins, Route Map and a VineTrack footer.
           </div>
           <div>
-            For spray-specific compliance reports (chemicals, rates, WHP/REI, tank mix)
-            and yearly spray programs, use <strong>Spray Records</strong>.
+            Spraying rows download a <strong>Spray Report</strong> — chemicals, rates,
+            tanks, hourly weather and route — instead of a Trip Report.
           </div>
+
         </div>
       </Card>
     </div>
