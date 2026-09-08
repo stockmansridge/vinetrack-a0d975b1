@@ -96,6 +96,12 @@ describe("BoundaryDrawMap marker alignment", () => {
     vi.clearAllMocks();
   });
 
+  afterAll(() => {
+    // Avoid leaking the fake MapKit global into other test files.
+    delete (globalThis as any).window?.mapkit;
+    delete (globalThis as any).mapkit;
+  });
+
   it("centres vertex and midpoint annotations exactly on their coordinates", async () => {
     const polygon: LatLng[] = [
       { lat: -34.5, lng: 138.7 },
