@@ -447,11 +447,27 @@ function SprayRecordSheet({
             <TanksSection record={record} />
 
             <Section title="Meta">
+              <Field label="Origin" value={isManual ? "Manual entry" : fmt(record.entry_source ?? null)} />
               <Field label="Trip ID" value={fmt(record.trip_id)} />
               <Field label="Created" value={fmtDate(record.created_at)} />
               <Field label="Updated" value={fmtDate(record.updated_at)} />
               <Field label="Record ID" value={record.id} mono />
             </Section>
+
+            {canEditThis && record.trip_id && (
+              <ManualSprayDeleteDialog
+                open={confirmDelete}
+                onOpenChange={setConfirmDelete}
+                applicationName={applicationName}
+                identities={{
+                  vineyardId: record.vineyard_id,
+                  manualEntryId: record.manual_entry_id ?? record.id,
+                  sprayRecordId: record.id,
+                  tripId: record.trip_id,
+                }}
+                onDeleted={() => onDeleted?.()}
+              />
+            )}
           </div>
         )}
       </SheetContent>
