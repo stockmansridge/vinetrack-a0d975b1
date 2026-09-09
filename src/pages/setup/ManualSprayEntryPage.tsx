@@ -7,7 +7,7 @@
 // contract. Until that function is deployed the Save action stays unavailable
 // and the exact contract gaps are shown.
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Copy, Plus, Trash2 } from "lucide-react";
 
@@ -44,6 +44,7 @@ import {
   freezeManualSprayAttempt,
   type ManualSprayAttempt, type ManualSprayIdentities, type ManualSpraySaveOutcome,
 } from "@/lib/manualSpray/contract";
+import { loadManualSprayDraft } from "@/lib/manualSpray/load";
 import { recoverSprayWeather } from "@/lib/sprayWeatherRecovery";
 import { useCanEnterManualSpray, MANUAL_SPRAY_DENIED_MESSAGE } from "@/lib/manualSpray/permissions";
 
@@ -76,8 +77,32 @@ export default function ManualSprayEntryPage() {
   const { toast } = useToast();
   const vineyardId = selectedVineyardId ?? "";
 
+  // Edit mode: /spray-records/manual/:sprayRecordId/edit. The saved
+  // application is reloaded with ALL of its identities — never a fresh draft.
+  const { sprayRecordId: editRecordId } = useParams<{ sprayRecordId: string }>();
+  const isEdit = !!editRecordId;
+
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<ManualSprayDraft>(() => emptyManualSprayDraft(vineyardId));
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(!editRecordId);
+
+  useEffect(() => {
+    if (!editRecordId) return;
+    let cancelled = false;
+    setLoaded(false);
+    setLoadError(null);
+    void loadManualSprayDraft(editRecordId).then((res) => {
+      if (cancelled) return;
+      if (res.draft) setDraft(res.draft);
+      else setLoadError(res.error ?? "This manual spray could not be loaded.");
+      setLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [editRecordId]);
+
   const [showErrors, setShowErrors] = useState(false);
   const [saving, setSaving] = useState(false);
   /** The frozen, unresolved save attempt. Retry re-sends exactly this. */
@@ -225,14 +250,39 @@ export default function ManualSprayEntryPage() {
     );
   }
 
+  if (isEdit && !loaded) {
+    return (
+      <div className="space-y-4">
+        <PageHead path="/spray-records" title="Edit manual spray" description="Edit a completed manual spray application." />
+        <p className="text-sm text-muted-foreground">Loading this manual spray…</p>
+      </div>
+    );
+  }
+
+  if (isEdit && loadError) {
+    return (
+      <div className="space-y-4">
+        <PageHead path="/spray-records" title="Edit manual spray" description="Edit a completed manual spray application." />
+        <PortalNotice variant="warning" title="This manual spray couldn't be opened" description={loadError} />
+        <Button variant="outline" onClick={() => navigate("/spray-records")}>
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back to spray records
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 pb-16">
-      <PageHead path="/spray-records/manual/new" title="Add manual spray | VineTrack" description="Record a completed spray application with actual water and chemical amounts." />
+      <PageHead
+        path={isEdit ? "/spray-records" : "/spray-records/manual/new"}
+        title={`${isEdit ? "Edit" : "Add"} manual spray | VineTrack`}
+        description="Record a completed spray application with actual water and chemical amounts."
+      />
 
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold">Add manual spray</h1>
+            <h1 className="text-2xl font-semibold">{isEdit ? "Edit manual spray" : "Add manual spray"}</h1>
             <ManualEntryBadge />
           </div>
           <p className="text-sm text-muted-foreground">

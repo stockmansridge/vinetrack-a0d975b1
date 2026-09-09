@@ -8,8 +8,9 @@ import { cn } from "@/lib/utils";
 export const MANUAL_ENTRY_LABEL = "Manual entry";
 export const MANUAL_ENTRY_STATUS_LABEL = "Completed · Manual entry";
 
+/** Deployed contract: `entry_source === "manual"`. Never inferred. */
 export function isManualSpraySource(source: unknown): boolean {
-  return String(source ?? "") === "manual_entry";
+  return String(source ?? "") === "manual";
 }
 
 export function ManualEntryBadge({ className }: { className?: string }) {

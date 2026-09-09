@@ -33,7 +33,11 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ChevronDown, FileDown } from "lucide-react";
+import { ChevronDown, FileDown, Pencil, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ManualEntryBadge, isManualSpraySource } from "@/components/spray/ManualEntryBadge";
+import { ManualSprayDeleteDialog } from "@/components/spray/ManualSprayDeleteDialog";
+import { useCanEnterManualSpray } from "@/lib/manualSpray/permissions";
 import { Button } from "@/components/ui/button";
 import {
   fetchSprayRecordsForVineyard,
@@ -87,7 +91,7 @@ export default function SprayRecordsPage() {
   const vintageFilter = useVintageFilter({ table: "spray_records", dateColumn: "date" });
   const vintageScopeValue = vintageFilter.scope;
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["spray_records", selectedVineyardId, vintageFilter.vintage ?? "all"],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchSprayRecordsForVineyard(selectedVineyardId!, vintageScopeValue),
@@ -188,7 +192,7 @@ export default function SprayRecordsPage() {
       <PortalNotice
         variant="warning"
         compact
-        description="Production data — read-only view. No edits, archives, or deletions are possible from this page."
+        description="Production data. Manual entries can be edited or deleted by owners, managers and supervisors; all other spray records stay read-only here."
       />
 
       <div className="flex flex-wrap items-end gap-2">
@@ -279,7 +283,12 @@ export default function SprayRecordsPage() {
                 <TableCell>
                   {r.operation_type ? <Badge variant="secondary">{r.operation_type}</Badge> : "—"}
                 </TableCell>
-                <TableCell>{fmt(r.spray_reference)}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <span>{fmt(r.spray_reference)}</span>
+                    {isManualSpraySource(r.entry_source) && <ManualEntryBadge />}
+                  </div>
+                </TableCell>
                 <TableCell>{fmt(resolveSprayTractorName(r, lookups))}</TableCell>
                 <TableCell>{fmt(resolveSprayEquipmentName(r, lookups))}</TableCell>
                 <TableCell>{fmt(r.temperature)}</TableCell>
@@ -303,6 +312,10 @@ export default function SprayRecordsPage() {
         lookups={lookups}
         open={!!selected}
         onOpenChange={(o) => !o && setSelected(null)}
+        onDeleted={() => {
+          setSelected(null);
+          void refetch();
+        }}
       />
     </div>
   );
@@ -316,6 +329,7 @@ function SprayRecordSheet({
   lookups,
   open,
   onOpenChange,
+  onDeleted,
 }: {
   record: SprayRecord | null;
   vineyardName?: string | null;
@@ -323,21 +337,52 @@ function SprayRecordSheet({
   lookups: SprayEquipmentLookups;
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  onDeleted?: () => void;
 }) {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const canManageManual = useCanEnterManualSpray();
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const resolvedTractor = record ? resolveSprayTractorName(record, lookups) : null;
   const resolvedEquipment = record ? resolveSprayEquipmentName(record, lookups) : null;
+  // Manual origin is explicit only. It is never inferred from a missing trip.
+  const isManual = isManualSpraySource(record?.entry_source);
+  const canEditThis = isManual && canManageManual && !!record?.trip_id;
+  const applicationName = (record?.spray_reference ?? "").trim() || (record?.id ?? "");
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle>
-            Spray record — {fmtDate(record?.date)} {fmtTime(record?.start_time)}
+            <span className="flex items-center gap-2 flex-wrap">
+              Spray record — {fmtDate(record?.date)} {fmtTime(record?.start_time)}
+              {isManual && <ManualEntryBadge />}
+            </span>
           </SheetTitle>
         </SheetHeader>
         {record && (
           <div className="mt-4 space-y-4 text-sm">
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2 flex-wrap">
+              {canEditThis && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={() => navigate(`/spray-records/manual/${record.id}/edit`)}
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Edit manual spray
+                </Button>
+              )}
+              {canEditThis && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 text-destructive"
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="outline"
@@ -402,11 +447,27 @@ function SprayRecordSheet({
             <TanksSection record={record} />
 
             <Section title="Meta">
+              <Field label="Origin" value={isManual ? "Manual entry" : fmt(record.entry_source ?? null)} />
               <Field label="Trip ID" value={fmt(record.trip_id)} />
               <Field label="Created" value={fmtDate(record.created_at)} />
               <Field label="Updated" value={fmtDate(record.updated_at)} />
               <Field label="Record ID" value={record.id} mono />
             </Section>
+
+            {canEditThis && record.trip_id && (
+              <ManualSprayDeleteDialog
+                open={confirmDelete}
+                onOpenChange={setConfirmDelete}
+                applicationName={applicationName}
+                identities={{
+                  vineyardId: record.vineyard_id,
+                  manualEntryId: record.manual_entry_id ?? record.id,
+                  sprayRecordId: record.id,
+                  tripId: record.trip_id,
+                }}
+                onDeleted={() => onDeleted?.()}
+              />
+            )}
           </div>
         )}
       </SheetContent>
