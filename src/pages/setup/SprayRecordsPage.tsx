@@ -192,7 +192,7 @@ export default function SprayRecordsPage() {
       <PortalNotice
         variant="warning"
         compact
-        description="Production data — read-only view. No edits, archives, or deletions are possible from this page."
+        description="Production data. Manual entries can be edited or deleted by owners, managers and supervisors; all other spray records stay read-only here."
       />
 
       <div className="flex flex-wrap items-end gap-2">
