@@ -6,11 +6,17 @@ import { PencilLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCanEnterManualSpray } from "@/lib/manualSpray/permissions";
 
-export function ManualSprayEntryButton({ variant = "outline" as const }) {
+export function ManualSprayEntryButton({
+  variant = "outline" as const,
+  size = "sm" as const,
+}: {
+  variant?: "outline" | "default" | "secondary" | "ghost" | "destructive" | "link";
+  size?: "default" | "sm" | "lg" | "icon";
+}) {
   const canEnter = useCanEnterManualSpray();
   if (!canEnter) return null;
   return (
-    <Button asChild variant={variant} size="sm">
+    <Button asChild variant={variant} size={size}>
       <Link to="/spray-records/manual/new">
         <PencilLine className="h-4 w-4 mr-1" /> Add manual spray
       </Link>
