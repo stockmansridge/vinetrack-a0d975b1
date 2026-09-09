@@ -1,5 +1,5 @@
 import SecureExternalLink from "@/components/SecureExternalLink";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { iosSupabase } from "@/integrations/ios-supabase/client";

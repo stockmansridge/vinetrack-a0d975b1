@@ -1,6 +1,6 @@
 // Phase 2E — customer-facing Billing page for active Vineyard Owners.
 // All authority, money and seat values come from the SQL 152/153 RPCs.
-import { openDeferredTab, PopupBlockedError } from "@/lib/openExternalUrl";
+import SecureExternalLink from "@/components/SecureExternalLink";
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, CreditCard, ExternalLink, Download, RefreshCw } from "lucide-react";
