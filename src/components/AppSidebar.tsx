@@ -1,57 +1,13 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { BrandName } from "@/components/BrandName";
-import {
-  LayoutDashboard,
-  Activity,
-  Map,
-  Tractor,
-  Gauge,
-  Users,
-  FileBarChart,
-  CloudRain,
-  FolderOpen,
-  Route,
-  Cloud,
-  MapPin,
-  Wrench,
-  ClipboardList,
-  Beaker,
-  Layers,
-  Satellite,
-  UserCog,
-  Sprout,
-  Database,
-  Droplet,
-  Grape,
-  AlertTriangle,
-  Fuel,
-  LifeBuoy,
-  BookOpen,
-  Images,
-
-  DollarSign,
-  ShieldCheck,
-  LayoutDashboard as AdminDashIcon,
-  Bell,
-  Flag,
-  ChevronDown,
-  Globe2,
-  Settings2,
-  Scissors,
-  FlaskConical,
-  Mail,
-  Upload,
-  CreditCard,
-  Plug,
-} from "lucide-react";
+import { ChevronDown, LifeBuoy, ShieldCheck, Settings2 } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useVineyard } from "@/context/VineyardContext";
-import { canAccessRoute } from "@/lib/rolePermissions";
 import { useIsSystemAdmin, useIsSystemAdminRaw } from "@/lib/systemAdmin";
 import { useDemoMode } from "@/context/DemoModeContext";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
@@ -71,218 +27,81 @@ import {
 } from "@/components/ui/sidebar";
 import { SupportRequestSheet } from "@/components/support/SupportRequestSheet";
 import { useUnresolvedSupportCount } from "@/lib/supportRequestsCount";
-import { useIrrigationCapabilities } from "@/lib/irrigationQuery";
-import { useBillingVineyards } from "@/lib/customerBillingQuery";
+import { useNavViewer } from "@/hooks/useNavViewer";
+import {
+  ACTIVITIES,
+  SYSTEM_ADMIN_ITEMS,
+  accessibleViews,
+  defaultPathFor,
+  resolveLocation,
+  type NavActivity,
+  type NavGroup,
+} from "@/lib/navigationConfig";
 
-
-type NavItem = { title: string; url: string; icon: any; soon?: boolean; admin?: boolean };
-
-const dashboard: NavItem[] = [
-  { title: "Overview", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Live Dashboard", url: "/dashboard/live", icon: Activity },
-];
-
-// System Admin-only guide (internal preview). Access is enforced by the route
-// guard — this entry only controls navigation visibility.
-const dashboardSystemAdmin: NavItem[] = [
-  { title: "How VineTrack Works", url: "/dashboard/how-vinetrack-works", icon: BookOpen, admin: true },
-];
-
-
-// "Work" — day-to-day operational records
-const work: NavItem[] = [
-  { title: "Pins / Repairs / Observations", url: "/pins", icon: MapPin },
-  { title: "Field Trips", url: "/trips", icon: Sprout },
-  { title: "Spray Program & Jobs", url: "/spray-jobs", icon: Layers },
-  { title: "Work Tasks", url: "/work-tasks", icon: ClipboardList },
-  { title: "Pruning Tracker", url: "/tools/pruning-tracker", icon: Scissors },
-  { title: "Maintenance Logs", url: "/maintenance", icon: Wrench },
-  { title: "Yields", url: "/yield", icon: Grape },
-  { title: "Damage Records", url: "/damage-records", icon: AlertTriangle },
-];
-
-// Irrigation Records — Phase 1 is gated server-side (System Admins only).
-const irrigationWork: NavItem[] = [
-  { title: "Irrigation Records", url: "/irrigation", icon: Droplet },
-];
-const irrigationReports: NavItem[] = [
-  { title: "Irrigation Reports", url: "/reports/irrigation", icon: Droplet },
-
-];
-
-// "Equipment" — physical assets and fuel
-const equipment: NavItem[] = [
-  { title: "Tractors", url: "/setup/tractors", icon: Tractor },
-  { title: "Spray Equipment", url: "/setup/spray-equipment", icon: Droplet },
-  { title: "Vineyard Machines", url: "/setup/vineyard-machines", icon: Tractor },
-  { title: "Other Equipment & Assets", url: "/setup/equipment-other", icon: Wrench },
-  { title: "Fuel", url: "/fuel", icon: Fuel },
-];
-
-// "Reports" — exports & compliance
-const reports: NavItem[] = [
-  { title: "Cost Reports", url: "/reports/costs", icon: DollarSign },
-  { title: "Trip Reports", url: "/reports/trips", icon: Route },
-  { title: "Work Task Reports", url: "/reports/work-tasks", icon: ClipboardList },
-  { title: "Pruning Activity", url: "/reports/pruning-activity", icon: Scissors },
-  { title: "Spray Records", url: "/reports/spray", icon: FileBarChart },
-  { title: "Rainfall Reports", url: "/reports/rainfall", icon: CloudRain },
-  { title: "Growth Stage Records", url: "/reports/growth-stage", icon: Sprout },
-  { title: "Yield Analytics", url: "/reports/yield", icon: Grape },
-  { title: "Documents & Exports", url: "/reports/documents", icon: FolderOpen },
-];
-
-// Owner/manager-only reports (non-financial)
-const reportsAdmin: NavItem[] = [
-  { title: "Data Coverage", url: "/reports/data-coverage", icon: Database },
-];
-
-// "Setup" — vineyard configuration
-const setup: NavItem[] = [
-  { title: "Region & Units", url: "/setup/region-units", icon: Globe2 },
-  { title: "Vineyard Settings", url: "/setup/vineyard", icon: Grape },
-  { title: "Vineyard Location", url: "/setup/vineyard-location", icon: MapPin },
-  { title: "Blocks", url: "/setup/paddocks", icon: Map },
-  { title: "Growing Season", url: "/setup/operational-preferences", icon: Sprout },
-  { title: "Grape Varieties", url: "/setup/grape-varieties", icon: Grape },
-  { title: "Chemicals", url: "/setup/chemicals", icon: Beaker },
-  { title: "Saved Inputs", url: "/setup/saved-inputs", icon: Sprout },
-  { title: "Weather Settings", url: "/setup/weather", icon: Cloud },
-  { title: "Irrigation Setup", url: "/irrigation/setup", icon: Droplet },
-  { title: "Team", url: "/team", icon: Users },
-  { title: "Worker Types", url: "/setup/operator-categories", icon: UserCog },
-  { title: "Billing", url: "/billing", icon: DollarSign },
-];
-
-
-// "Tools" — calculators / helpers
-const tools: NavItem[] = [
-  { title: "Irrigation Advisor", url: "/tools/irrigation", icon: Droplet },
-];
-
-// Available to all vineyard roles; listed last in the Tools group.
-const toolsGeneral: NavItem[] = [
-  { title: "Resistance Planner", url: "/tools/resistance-planner", icon: ShieldCheck },
-  { title: "Pruning Yield Calculator", url: "/tools/yield-estimation", icon: Grape },
-];
-
-// System-admin-only tools (visibility gated in render).
-const toolsSystemAdmin: NavItem[] = [
-  { title: "Crop Health Maps", url: "/tools/satellite-mapping", icon: Satellite, admin: true },
-  { title: "Fertiliser Calculator", url: "/tools/fertiliser-calculator", icon: FlaskConical, admin: true },
-];
-
-
-
-
-// "Account" — customer-facing, Owner-only billing (Phase 2E).
-const account: NavItem[] = [
-  { title: "Billing", url: "/account/billing", icon: CreditCard },
-  { title: "Integrations & API", url: "/settings/integrations", icon: Plug },
-];
-
-const systemAdmin: NavItem[] = [
-  { title: "Admin Dashboard", url: "/admin/dashboard", icon: AdminDashIcon, admin: true },
-  { title: "User Activity", url: "/admin/user-activity", icon: Activity, admin: true },
-  { title: "Vineyards", url: "/admin/vineyards", icon: Grape, admin: true },
-  { title: "Integrations", url: "/admin/integrations", icon: Plug, admin: true },
-  { title: "Master Catalogue", url: "/admin/master-catalogue", icon: FlaskConical, admin: true },
-  { title: "Block Troubleshooter", url: "/admin/block-troubleshooter", icon: ShieldCheck, admin: true },
-  { title: "Support Requests", url: "/admin/support-requests", icon: LifeBuoy, admin: true },
-  { title: "System Admins", url: "/admin/system-admins", icon: ShieldCheck, admin: true },
-  { title: "Access & Entitlements", url: "/admin/access-entitlements", icon: ShieldCheck, admin: true },
-  { title: "Billing Grants", url: "/admin/billing-grants", icon: DollarSign, admin: true },
-  { title: "App Notices", url: "/admin/notices", icon: Bell, admin: true },
-  { title: "Maintenance Mode", url: "/admin/maintenance", icon: Settings2, admin: true },
-  { title: "Feature Flags", url: "/admin/feature-flags", icon: Flag, admin: true },
-  { title: "Canopy Reference Images", url: "/admin/canopy-images", icon: Images, admin: true },
-  { title: "Guide Content", url: "/admin/guide-content", icon: BookOpen, admin: true },
-  { title: "Email Test", url: "/admin/email-diagnostics", icon: Mail, admin: true },
-  { title: "Data Coverage", url: "/settings/data-coverage", icon: Database, admin: true },
-];
-
+const CUSTOMER_GROUPS: NavGroup[] = ["Overview", "Vineyard", "Work", "Resources"];
 
 export function AppSidebar() {
   const { pathname } = useLocation();
   const [supportOpen, setSupportOpen] = useState(false);
-  const { currentRole, memberships, selectedVineyardId } = useVineyard();
-  const { isAdmin: isSystemAdmin, loading: systemAdminLoading } = useIsSystemAdmin();
+  const { memberships, selectedVineyardId } = useVineyard();
+  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
   const { isAdmin: isSystemAdminRaw } = useIsSystemAdminRaw();
   const { demoMode } = useDemoMode();
-  // Highlight System Admin-gated menu items only for real admins with demo
-  // mode off, so they can tell internal surfaces apart from customer ones.
   const highlightAdminItems = isSystemAdminRaw && !demoMode;
-  const { capabilities: irrigation } = useIrrigationCapabilities(selectedVineyardId);
   const { data: logoUrl } = useVineyardLogo();
+  const viewer = useNavViewer();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
-  const isAdmin = currentRole === "owner" || currentRole === "manager";
   const { data: unresolvedSupport = 0 } = useUnresolvedSupportCount();
-  const { data: billingVineyards = [] } = useBillingVineyards();
-  const showAccountBilling = billingVineyards.length > 0;
-  const isActive = (p: string) => pathname === p;
-  const visible = (items: NavItem[]) =>
-    items.filter((i) => canAccessRoute(i.url, currentRole));
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
 
+  const active = resolveLocation(pathname);
 
-  const renderItems = (items: NavItem[]) =>
-    items.map((item) => (
-      <SidebarMenuItem key={item.url}>
-        <SidebarMenuButton
-          asChild
-          isActive={isActive(item.url)}
-          className={`rounded-lg text-[13px] font-medium hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:font-semibold data-[active=true]:shadow-[inset_2px_0_0_hsl(var(--sidebar-primary))] data-[active=true]:hover:bg-sidebar-accent data-[active=true]:hover:text-sidebar-accent-foreground [&_svg]:text-current ${
-            item.admin && highlightAdminItems
-              ? "text-amber-600 dark:text-amber-400"
-              : "text-sidebar-foreground"
-          }`}
-        >
-          <NavLink to={item.url} className="flex items-center gap-2.5">
-            <item.icon className="h-4 w-4" />
-            <span className="flex-1 truncate">{item.title}</span>
-            {item.url === "/admin/support-requests" && unresolvedSupport > 0 && (
-              <span className="ml-auto inline-flex min-w-[20px] items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white dark:bg-amber-400 dark:text-amber-950">
-                {unresolvedSupport}
-              </span>
-            )}
-            {item.url === "/tools/satellite-mapping" && (
-              <span className="ml-auto rounded-sm bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
-                System Admin
-              </span>
-            )}
-            {item.soon && (
-              <span className="ml-auto rounded-sm bg-muted px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
-                Soon
-              </span>
-            )}
+  const buttonClass = (isActive: boolean, admin = false) =>
+    `rounded-lg text-[13px] font-medium hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:font-semibold data-[active=true]:shadow-[inset_2px_0_0_hsl(var(--sidebar-primary))] [&_svg]:text-current ${
+      admin && highlightAdminItems ? "text-amber-600 dark:text-amber-400" : "text-sidebar-foreground"
+    }${isActive ? "" : ""}`;
+
+  const renderActivity = (activity: NavActivity) => {
+    const views = accessibleViews(activity, viewer);
+    if (views.length === 0) return null;
+    const target = defaultPathFor(activity, viewer);
+    if (!target) return null;
+    const isActive = active.activity?.id === activity.id;
+    const Icon = activity.icon;
+    return (
+      <SidebarMenuItem key={activity.id}>
+        <SidebarMenuButton asChild isActive={isActive} tooltip={activity.label} className={buttonClass(isActive)}>
+          <NavLink to={target} className="flex items-center gap-2.5">
+            <Icon className="h-4 w-4" />
+            <span className="flex-1 truncate">{activity.label}</span>
           </NavLink>
         </SidebarMenuButton>
       </SidebarMenuItem>
-    ));
-
-  const renderGroup = (label: string, items: NavItem[], defaultOpen = true) => {
-    if (items.length === 0) return null;
-    const hasActive = items.some((i) => isActive(i.url));
-    return (
-      <Collapsible defaultOpen={defaultOpen || hasActive} className="group/collapsible">
-        <SidebarGroup>
-          <SidebarGroupLabel asChild>
-            <CollapsibleTrigger className="flex w-full items-center justify-between text-[10.5px] font-semibold uppercase tracking-[0.08em] text-sidebar-foreground/55 hover:text-sidebar-foreground">
-              {label}
-              <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
-            </CollapsibleTrigger>
-          </SidebarGroupLabel>
-          <CollapsibleContent>
-            <SidebarGroupContent>
-              <SidebarMenu>{renderItems(items)}</SidebarMenu>
-            </SidebarGroupContent>
-          </CollapsibleContent>
-        </SidebarGroup>
-      </Collapsible>
     );
   };
+
+  const renderGroup = (label: NavGroup) => {
+    const items = ACTIVITIES.filter((a) => a.group === label)
+      .map(renderActivity)
+      .filter(Boolean);
+    if (items.length === 0) return null;
+    return (
+      <SidebarGroup key={label}>
+        <SidebarGroupLabel className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-sidebar-foreground/55">
+          {label}
+        </SidebarGroupLabel>
+        <SidebarGroupContent>
+          <SidebarMenu>{items}</SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    );
+  };
+
+  const settingsActivity = ACTIVITIES.find((a) => a.id === "settings")!;
+  const settingsTarget = defaultPathFor(settingsActivity, viewer);
+  const settingsActive = active.activity?.id === "settings";
 
   return (
     <Sidebar collapsible="icon">
@@ -313,64 +132,75 @@ export function AppSidebar() {
           </>
         )}
       </SidebarHeader>
+
       <SidebarContent>
-        {renderGroup(
-          "Dashboard",
-          visible(
-            isSystemAdmin && !systemAdminLoading
-              ? [...dashboard, ...dashboardSystemAdmin]
-              : dashboard,
-          ),
-        )}
+        {CUSTOMER_GROUPS.map(renderGroup)}
 
-        {renderGroup(
-          "Work",
-          visible(
-            irrigation.can_view_irrigation_records ? [...work, ...irrigationWork] : work,
-          ),
+        {isSystemAdmin && (
+          <Collapsible defaultOpen={pathname.startsWith("/admin")} className="group/collapsible">
+            <SidebarGroup>
+              <SidebarGroupLabel asChild>
+                <CollapsibleTrigger className="flex w-full items-center justify-between text-[10.5px] font-semibold uppercase tracking-[0.08em] text-amber-600 hover:text-amber-500 dark:text-amber-400">
+                  System Admin
+                  <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
+                </CollapsibleTrigger>
+              </SidebarGroupLabel>
+              <CollapsibleContent>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {SYSTEM_ADMIN_ITEMS.map((item) => {
+                      const Icon = item.icon ?? ShieldCheck;
+                      const isActive = pathname === item.path;
+                      return (
+                        <SidebarMenuItem key={item.path}>
+                          <SidebarMenuButton
+                            asChild
+                            isActive={isActive}
+                            tooltip={item.label}
+                            className={buttonClass(isActive, true)}
+                          >
+                            <NavLink to={item.path} className="flex items-center gap-2.5">
+                              <Icon className="h-4 w-4" />
+                              <span className="flex-1 truncate">{item.label}</span>
+                              {item.path === "/admin/support-requests" && unresolvedSupport > 0 && (
+                                <span className="ml-auto inline-flex min-w-[20px] items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white dark:bg-amber-400 dark:text-amber-950">
+                                  {unresolvedSupport}
+                                </span>
+                              )}
+                            </NavLink>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </CollapsibleContent>
+            </SidebarGroup>
+          </Collapsible>
         )}
-        {renderGroup("Equipment", visible(equipment), false)}
-        {renderGroup(
-          "Tools",
-          visible(isSystemAdmin ? [...tools, ...toolsSystemAdmin, ...toolsGeneral] : [...tools, ...toolsGeneral]),
-          false,
-        )}
-        {renderGroup(
-          "Reports",
-          visible([
-            ...reports,
-            ...(isAdmin ? reportsAdmin : []),
-            ...(irrigation.can_view_irrigation_reports ? irrigationReports : []),
-          ]),
-          false,
-        )}
-
-        {renderGroup(
-          "Setup",
-          visible(
-            irrigation.can_manage_irrigation_setup
-              ? setup
-              : setup.filter((i) => i.url !== "/irrigation/setup"),
-          ),
-          false,
-        )}
-
-
-        {renderGroup(
-          "Account",
-          visible(showAccountBilling ? account : account.filter((i) => i.url !== "/account/billing")),
-          false,
-        )}
-
-        {isSystemAdmin && renderGroup("System Admin", systemAdmin, false)}
-
       </SidebarContent>
 
       <SidebarFooter className="px-2 pb-3">
         <SidebarMenu>
+          {settingsTarget && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={settingsActive}
+                tooltip="Vineyard Settings"
+                className={buttonClass(settingsActive)}
+              >
+                <NavLink to={settingsTarget} className="flex items-center gap-2.5">
+                  <Settings2 className="h-4 w-4" />
+                  <span>Vineyard Settings</span>
+                </NavLink>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           <SidebarMenuItem>
             <SidebarMenuButton
               onClick={() => setSupportOpen(true)}
+              tooltip="Contact support"
               className="rounded-lg text-[13px] font-medium text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground [&_svg]:text-current"
             >
               <LifeBuoy className="h-4 w-4" />

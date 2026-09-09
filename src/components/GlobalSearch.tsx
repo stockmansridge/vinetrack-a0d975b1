@@ -2,136 +2,45 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { useVineyard } from "@/context/VineyardContext";
-import { useIsSystemAdmin } from "@/lib/systemAdmin";
-import { canAccessRoute } from "@/lib/rolePermissions";
+import { useNavViewer } from "@/hooks/useNavViewer";
+import { searchDestinations, type SearchDestination } from "@/lib/navigationConfig";
 
-type SearchItem = {
-  title: string;
-  url: string;
-  group: string;
-  keywords?: string[];
-  adminOnly?: boolean;
-  systemAdminOnly?: boolean;
-};
-
-const ITEMS: SearchItem[] = [
-  // Dashboard
-  { title: "Overview", url: "/dashboard", group: "Dashboard", keywords: ["home", "summary"] },
-  { title: "Live Dashboard", url: "/dashboard/live", group: "Dashboard", keywords: ["live", "realtime", "weather"] },
-
-  // Work
-  { title: "Spray Program & Jobs", url: "/spray-jobs", group: "Work", keywords: ["spray", "chemicals", "templates", "program"] },
-  { title: "Work Tasks", url: "/work-tasks", group: "Work", keywords: ["tasks", "jobs"] },
-  { title: "Field Trips", url: "/trips", group: "Work", keywords: ["trip", "route", "tractor"] },
-  { title: "Pins / Repairs / Observations", url: "/pins", group: "Work", keywords: ["pin", "repair", "observation", "issue"] },
-  { title: "Maintenance Logs", url: "/maintenance", group: "Work", keywords: ["maintenance", "service", "repair"] },
-  { title: "Yields", url: "/yield", group: "Work", keywords: ["yield", "harvest", "tonnes"] },
-  { title: "Yield Analytics", url: "/reports/yield", group: "Reports", keywords: ["yield", "analytics", "charts", "price", "revenue", "variety", "block", "vintage"] },
-  { title: "Damage Records", url: "/damage-records", group: "Work", keywords: ["damage", "loss", "frost", "hail"] },
-
-  // Equipment
-  { title: "Tractors", url: "/setup/tractors", group: "Equipment", keywords: ["tractor", "machine"] },
-  { title: "Spray Equipment", url: "/setup/spray-equipment", group: "Equipment", keywords: ["sprayer", "nozzle", "boom"] },
-  { title: "Vineyard Machines", url: "/setup/vineyard-machines", group: "Equipment", keywords: ["machine", "implement"] },
-  { title: "Other Equipment & Assets", url: "/setup/equipment-other", group: "Equipment", keywords: ["assets", "tools"] },
-  { title: "Fuel", url: "/fuel", group: "Equipment", keywords: ["fuel", "diesel", "petrol", "purchases"] },
-  { title: "Fuel Purchases", url: "/fuel/purchases", group: "Equipment", keywords: ["fuel", "purchase", "receipt"] },
-  { title: "Tractor Fuel Logs", url: "/fuel/tractor-logs", group: "Equipment", keywords: ["fuel", "tractor", "logs", "hours"] },
-
-  // Tools
-  { title: "Irrigation Advisor", url: "/tools/irrigation", group: "Tools", keywords: ["irrigation", "water", "calculator"] },
-  { title: "Resistance Planner", url: "/tools/resistance-planner", group: "Tools", keywords: ["resistance", "planner", "frac", "strategy", "powdery", "downy"] },
-  { title: "Pruning Yield Calculator", url: "/tools/yield-estimation", group: "Tools", keywords: ["pruning", "yield", "calculator", "buds", "bunch", "estimate"] },
-
-  // Reports
-  { title: "Trip Reports", url: "/reports/trips", group: "Reports", keywords: ["trip", "reports"] },
-  { title: "Work Task Reports", url: "/reports/work-tasks", group: "Reports", keywords: ["work", "reports"] },
-  { title: "Spray Records", url: "/reports/spray", group: "Reports", keywords: ["spray", "records", "compliance"] },
-  { title: "Rainfall Reports", url: "/reports/rainfall", group: "Reports", keywords: ["rain", "rainfall", "weather"] },
-  { title: "Growth Stage Records", url: "/reports/growth-stage", group: "Reports", keywords: ["growth", "stage", "phenology"] },
-  { title: "Documents & Exports", url: "/reports/documents", group: "Reports", keywords: ["documents", "exports", "files"] },
-  { title: "Cost Reports", url: "/reports/costs", group: "Reports", keywords: ["cost", "money", "expenses"], adminOnly: true },
-  { title: "Data Coverage", url: "/reports/data-coverage", group: "Reports", keywords: ["coverage", "data"], adminOnly: true },
-
-  // Setup
-  { title: "Team", url: "/team", group: "Setup", keywords: ["team", "users", "members", "invite"] },
-  { title: "Billing", url: "/billing", group: "Setup", keywords: ["billing", "subscription", "payment", "stripe"] },
-  { title: "Vineyard Settings", url: "/setup/vineyard", group: "Setup", keywords: ["vineyard", "settings", "logo", "name"] },
-  { title: "Vineyard Location", url: "/setup/vineyard-location", group: "Setup", keywords: ["location", "map", "coordinates", "address"] },
-  { title: "Region & Units", url: "/setup/region-units", group: "Setup", keywords: ["region", "units", "metric", "imperial", "timezone", "season"] },
-  { title: "Blocks", url: "/setup/paddocks", group: "Setup", keywords: ["blocks", "paddocks", "rows"] },
-  { title: "Grape Varieties", url: "/setup/grape-varieties", group: "Setup", keywords: ["grapes", "varieties", "clones"] },
-  { title: "Chemicals", url: "/setup/chemicals", group: "Setup", keywords: ["chemicals", "saved", "products"] },
-  { title: "Worker Types", url: "/setup/operator-categories", group: "Setup", keywords: ["operators", "categories", "labels"] },
-  { title: "Saved Inputs", url: "/setup/saved-inputs", group: "Setup", keywords: ["inputs", "presets", "saved"] },
-  { title: "Weather Settings", url: "/setup/weather", group: "Setup", keywords: ["weather", "station", "davis", "willyweather", "wunderground"] },
-
-  // System admin
-  { title: "Admin Dashboard", url: "/admin/dashboard", group: "System Admin", systemAdminOnly: true },
-  { title: "Admin — Users", url: "/admin/users", group: "System Admin", systemAdminOnly: true, keywords: ["users"] },
-  { title: "Admin — Vineyards", url: "/admin/vineyards", group: "System Admin", systemAdminOnly: true, keywords: ["vineyards"] },
-  { title: "Admin — Blocks", url: "/admin/blocks", group: "System Admin", systemAdminOnly: true, keywords: ["blocks", "paddocks"] },
-  { title: "Admin — Pins", url: "/admin/pins", group: "System Admin", systemAdminOnly: true },
-  { title: "Admin — Spray Records", url: "/admin/spray-records", group: "System Admin", systemAdminOnly: true },
-  { title: "Admin — Work Tasks", url: "/admin/work-tasks", group: "System Admin", systemAdminOnly: true },
-  { title: "Admin — Invitations", url: "/admin/invitations", group: "System Admin", systemAdminOnly: true },
-  { title: "User Activity", url: "/admin/user-activity", group: "System Admin", systemAdminOnly: true },
-  { title: "Block Troubleshooter", url: "/admin/block-troubleshooter", group: "System Admin", systemAdminOnly: true },
-  { title: "Support Requests", url: "/admin/support-requests", group: "System Admin", systemAdminOnly: true, keywords: ["support", "tickets"] },
-  { title: "System Admins", url: "/admin/system-admins", group: "System Admin", systemAdminOnly: true },
-  { title: "Billing Grants", url: "/admin/billing-grants", group: "System Admin", systemAdminOnly: true },
-  { title: "App Notices", url: "/admin/notices", group: "System Admin", systemAdminOnly: true, keywords: ["notice", "banner"] },
-  { title: "Feature Flags", url: "/admin/feature-flags", group: "System Admin", systemAdminOnly: true, keywords: ["flags", "features"] },
-];
-
-export function GlobalSearch() {
+export function GlobalSearch({ autoFocus = false }: { autoFocus?: boolean }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const navigate = useNavigate();
-  const { currentRole } = useVineyard();
-  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
+  const viewer = useNavViewer();
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const isAdmin = currentRole === "owner" || currentRole === "manager";
-
-  const visibleItems = useMemo(
-    () =>
-      ITEMS.filter((i) => {
-        if (i.systemAdminOnly && !isSystemAdmin) return false;
-        if (i.adminOnly && !isAdmin) return false;
-        return canAccessRoute(i.url, currentRole);
-      }),
-    [currentRole, isAdmin, isSystemAdmin],
-  );
+  const visibleItems = useMemo(() => searchDestinations(viewer), [viewer]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return [] as SearchItem[];
-    const scored = visibleItems
+    if (!q) return [] as SearchDestination[];
+    return visibleItems
       .map((item) => {
-        const hay = [item.title, item.group, ...(item.keywords ?? [])]
-          .join(" ")
-          .toLowerCase();
+        const hay = [item.title, item.group, ...item.keywords].join(" ").toLowerCase();
         const idx = hay.indexOf(q);
         if (idx === -1) return null;
-        // Prefer title matches
         const titleIdx = item.title.toLowerCase().indexOf(q);
         const score = titleIdx === 0 ? 0 : titleIdx > -1 ? 1 : 2 + idx;
         return { item, score };
       })
-      .filter((x): x is { item: SearchItem; score: number } => x !== null)
+      .filter((x): x is { item: SearchDestination; score: number } => x !== null)
       .sort((a, b) => a.score - b.score)
       .slice(0, 12)
       .map((x) => x.item);
-    return scored;
   }, [query, visibleItems]);
 
   useEffect(() => {
     setActiveIdx(0);
   }, [query]);
+
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -169,10 +78,11 @@ export function GlobalSearch() {
     } else if (e.key === "Enter") {
       if (results[activeIdx]) {
         e.preventDefault();
-        go(results[activeIdx].url);
+        go(results[activeIdx].path);
       }
     } else if (e.key === "Escape") {
       setOpen(false);
+      inputRef.current?.blur();
     }
   };
 
@@ -183,6 +93,7 @@ export function GlobalSearch() {
         ref={inputRef}
         type="search"
         value={query}
+        aria-label="Search pages and reports"
         onChange={(e) => {
           setQuery(e.target.value);
           setOpen(true);
@@ -201,13 +112,13 @@ export function GlobalSearch() {
           ) : (
             <ul className="max-h-[60vh] overflow-y-auto py-1">
               {results.map((item, idx) => (
-                <li key={item.url}>
+                <li key={`${item.group}:${item.path}`}>
                   <button
                     type="button"
                     onMouseEnter={() => setActiveIdx(idx)}
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      go(item.url);
+                      go(item.path);
                     }}
                     className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-left text-sm ${
                       idx === activeIdx ? "bg-accent text-accent-foreground" : ""
