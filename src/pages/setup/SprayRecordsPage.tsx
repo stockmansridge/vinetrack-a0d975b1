@@ -329,6 +329,7 @@ function SprayRecordSheet({
   lookups,
   open,
   onOpenChange,
+  onDeleted,
 }: {
   record: SprayRecord | null;
   vineyardName?: string | null;
@@ -336,16 +337,27 @@ function SprayRecordSheet({
   lookups: SprayEquipmentLookups;
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  onDeleted?: () => void;
 }) {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const canManageManual = useCanEnterManualSpray();
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const resolvedTractor = record ? resolveSprayTractorName(record, lookups) : null;
   const resolvedEquipment = record ? resolveSprayEquipmentName(record, lookups) : null;
+  // Manual origin is explicit only. It is never inferred from a missing trip.
+  const isManual = isManualSpraySource(record?.entry_source);
+  const canEditThis = isManual && canManageManual && !!record?.trip_id;
+  const applicationName = (record?.spray_reference ?? "").trim() || (record?.id ?? "");
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle>
-            Spray record — {fmtDate(record?.date)} {fmtTime(record?.start_time)}
+            <span className="flex items-center gap-2 flex-wrap">
+              Spray record — {fmtDate(record?.date)} {fmtTime(record?.start_time)}
+              {isManual && <ManualEntryBadge />}
+            </span>
           </SheetTitle>
         </SheetHeader>
         {record && (
