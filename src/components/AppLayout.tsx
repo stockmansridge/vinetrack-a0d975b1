@@ -180,6 +180,7 @@ export default function AppLayout() {
               <GlobalSearch autoFocus />
             </div>
           )}
+          <PortalNoticesBanner />
           <PortalInfoBanner />
           <PendingInvitesBanner />
           <main className="relative flex-1 bg-transparent min-w-0 w-full max-w-full overflow-x-hidden">
