@@ -250,14 +250,39 @@ export default function ManualSprayEntryPage() {
     );
   }
 
+  if (isEdit && !loaded) {
+    return (
+      <div className="space-y-4">
+        <PageHead path="/spray-records" title="Edit manual spray" description="Edit a completed manual spray application." />
+        <p className="text-sm text-muted-foreground">Loading this manual spray…</p>
+      </div>
+    );
+  }
+
+  if (isEdit && loadError) {
+    return (
+      <div className="space-y-4">
+        <PageHead path="/spray-records" title="Edit manual spray" description="Edit a completed manual spray application." />
+        <PortalNotice variant="warning" title="This manual spray couldn't be opened" description={loadError} />
+        <Button variant="outline" onClick={() => navigate("/spray-records")}>
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back to spray records
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 pb-16">
-      <PageHead path="/spray-records/manual/new" title="Add manual spray | VineTrack" description="Record a completed spray application with actual water and chemical amounts." />
+      <PageHead
+        path={isEdit ? "/spray-records" : "/spray-records/manual/new"}
+        title={`${isEdit ? "Edit" : "Add"} manual spray | VineTrack`}
+        description="Record a completed spray application with actual water and chemical amounts."
+      />
 
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold">Add manual spray</h1>
+            <h1 className="text-2xl font-semibold">{isEdit ? "Edit manual spray" : "Add manual spray"}</h1>
             <ManualEntryBadge />
           </div>
           <p className="text-sm text-muted-foreground">
