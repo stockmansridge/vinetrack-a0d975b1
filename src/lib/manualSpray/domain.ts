@@ -14,7 +14,8 @@ import {
   type WireUnit,
 } from "@/lib/manualSpray/units";
 
-export const MANUAL_SPRAY_SOURCE = "manual_entry" as const;
+/** Deployed contract value of `spray_records.entry_source` for a manual entry. */
+export const MANUAL_SPRAY_SOURCE = "manual" as const;
 
 /** One chemical actually put in one tank. */
 export interface ManualChemicalLine {
