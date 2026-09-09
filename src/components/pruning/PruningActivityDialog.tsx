@@ -166,6 +166,9 @@ export default function PruningActivityDialog({
   // activity exists are linked immediately after the first successful save.
   const [pendingTaskIds, setPendingTaskIds] = useState<string[]>([]);
 
+  // Three-step wizard: 1 Details · 2 Blocks & allocation · 3 Work Tasks & notes.
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+
 
 
   const loaded = detailQ.data ?? null;
