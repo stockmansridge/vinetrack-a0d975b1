@@ -203,12 +203,12 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ManualSprayEntryButton />
           {canEdit && effectiveTab === "templates" && (
             <>
               <Button onClick={() => setEditing({ job: null, isTemplate: true })}>
                 <Plus className="h-4 w-4 mr-1" /> Add Program Step
               </Button>
+              <ManualSprayEntryButton size="default" />
               <Button variant="outline" onClick={() => setImportOpen(true)} disabled={!selectedVineyardId}>
                 <Upload className="h-4 w-4 mr-1" /> Import Program
               </Button>
