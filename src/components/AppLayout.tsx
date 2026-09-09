@@ -1,4 +1,5 @@
-import { Link, Outlet } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
+import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import { Helmet } from "react-helmet-async";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
@@ -202,7 +203,9 @@ export default function AppLayout() {
             <div className="relative z-10 p-4 md:p-6 lg:p-8">
               <VineyardAccessGate>
                 <ActivityNavigation />
-                <Outlet />
+                <PageErrorBoundary resetKey={location.pathname}>
+                  <Outlet />
+                </PageErrorBoundary>
               </VineyardAccessGate>
             </div>
 
