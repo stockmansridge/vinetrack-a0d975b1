@@ -64,12 +64,12 @@ function isEmbeddedContext() {
 }
 
 async function copyAndNotify(url: string, message: string, reason: CopiedReason): Promise<ExternalMapOpenResult> {
-  await copyTextToClipboard(url).catch(() => {
-    /* noop */
-  });
+  const copied = await copyTextToClipboard(url).catch(() => false);
 
-  toast("Map link copied", {
-    description: message,
+  toast(copied ? "Map link copied" : "Map link could not be copied", {
+    description: copied
+      ? message
+      : "Copying was blocked by your browser. Select the address shown and copy it manually.",
   });
 
   return {
