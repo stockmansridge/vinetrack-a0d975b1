@@ -226,6 +226,8 @@ export default function SprayTripWorksheet({
   const [openHistory, setOpenHistory] = useState<string | null>(null);
   const [weatherNote, setWeatherNote] = useState<string | null>(null);
   const [weatherDiagnostic, setWeatherDiagnostic] = useState<string | null>(null);
+  const [rowNote, setRowNote] = useState<string | null>(null);
+  const [rowDiagnostic, setRowDiagnostic] = useState<string | null>(null);
 
   const { data: machines = [] } = useQuery<VineyardMachine[]>({
     queryKey: ["worksheet-machines", vineyardId],
