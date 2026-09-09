@@ -91,7 +91,7 @@ export default function SprayRecordsPage() {
   const vintageFilter = useVintageFilter({ table: "spray_records", dateColumn: "date" });
   const vintageScopeValue = vintageFilter.scope;
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["spray_records", selectedVineyardId, vintageFilter.vintage ?? "all"],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchSprayRecordsForVineyard(selectedVineyardId!, vintageScopeValue),
