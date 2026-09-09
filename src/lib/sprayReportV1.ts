@@ -92,7 +92,11 @@ export interface SprayReportApplication {
   appliedLitresPer100m: number | null;
   concentrationFactor: number | null;
   notes: string | null;
+  /** Schema 1.2: "manually_recorded_actual_use" for a manual entry. */
+  actualUseBasis?: string | null;
 }
+
+export const MANUAL_ACTUAL_USE_BASIS = "manually_recorded_actual_use";
 
 export interface SprayReportProgramStep {
   linkState: "program_linked" | "linked_step_unavailable" | "not_recorded";
@@ -138,7 +142,8 @@ export interface SprayReportTank {
   actualId?: string | null;
   /** Optimistic-concurrency version; 0 means no actual row exists. */
   actualVersion?: number;
-  plannedWaterLitres: number;
+  /** Null for a manual entry: there is no plan, and null must never become 0. */
+  plannedWaterLitres: number | null;
   actualWaterLitres: number | null;
   chemicals: SprayReportTankChemical[];
 }
@@ -221,8 +226,25 @@ export interface SprayReportMetadataAmendment {
   editedAt: string;
 }
 
+/**
+ * Explicit application provenance (schema 1.2). Origin is NEVER inferred:
+ * a manual application is exactly `source === "manual"`.
+ */
+export interface SprayReportProvenance {
+  source: "manual" | "tracked" | null;
+  manualEntryId: string | null;
+  isManualEntry: boolean;
+  label: string;
+}
+
+/** Manual applications carry explicit absence labels instead of a sync error. */
+export interface SprayReportRecordingEvidence {
+  route: string | null;
+  rows: string | null;
+}
+
 export interface SprayReportPayloadV1 {
-  schemaVersion: "1.1";
+  schemaVersion: SprayReportSchemaVersion;
   identity: SprayReportIdentity;
   trip: SprayReportTrip;
   blocks: SprayReportBlock[] | null;
@@ -240,7 +262,37 @@ export interface SprayReportPayloadV1 {
   amendments?: SprayReportActualAmendment[];
   metadataCorrectionVersion?: number;
   metadataAmendments?: SprayReportMetadataAmendment[];
+  /** Present from schema 1.2 onwards. */
+  provenance?: SprayReportProvenance | null;
+  recordingEvidence?: SprayReportRecordingEvidence | null;
   warnings: string[];
+}
+
+/** Explicitly recognised canonical schema versions. Never disable validation. */
+export const SUPPORTED_SPRAY_REPORT_SCHEMA_VERSIONS = ["1.1", "1.2"] as const;
+export type SprayReportSchemaVersion =
+  (typeof SUPPORTED_SPRAY_REPORT_SCHEMA_VERSIONS)[number];
+
+const PROVENANCE_SOURCES = ["manual", "tracked"];
+
+/** Canonical manual test — never inferred from missing GPS, rows or chemicals. */
+export function isManualEntryReport(
+  payload: Pick<SprayReportPayloadV1, "provenance"> | null | undefined,
+): boolean {
+  return payload?.provenance?.isManualEntry === true;
+}
+
+export const MANUAL_ACTUAL_USE_LABEL = "Manually recorded actual use";
+export const MANUAL_NOT_RECORDED_LABEL = "Not recorded — manual application";
+
+/** CSV / mixed-export source column value. */
+export function sprayReportSourceLabel(
+  payload: Pick<SprayReportPayloadV1, "provenance"> | null | undefined,
+): string {
+  const source = payload?.provenance?.source ?? null;
+  if (source === "manual") return "Manual entry";
+  if (source === "tracked") return "Tracked application";
+  return "Origin not recorded";
 }
 
 
@@ -284,8 +336,36 @@ const isObj = (v: unknown): v is Record<string, any> =>
 export function parseSprayReportPayload(raw: unknown): SprayReportParseResult {
   const errors: string[] = [];
   if (!isObj(raw)) return { payload: null, errors: ["Payload is not an object"] };
-  if (raw.schemaVersion !== "1.1") {
+  if (!SUPPORTED_SPRAY_REPORT_SCHEMA_VERSIONS.includes(raw.schemaVersion)) {
     errors.push("Unsupported schemaVersion");
+  }
+
+  // Schema 1.2 provenance. Validated, never defaulted: an unreadable
+  // provenance block must block the export rather than be guessed at.
+  if (raw.provenance != null) {
+    if (!isObj(raw.provenance)) errors.push("provenance must be an object or null");
+    else {
+      const p = raw.provenance;
+      if (!(p.source === null || PROVENANCE_SOURCES.includes(p.source)))
+        errors.push("provenance.source is invalid");
+      if (typeof p.isManualEntry !== "boolean")
+        errors.push("provenance.isManualEntry must be a boolean");
+      if (typeof p.label !== "string" || !p.label) errors.push("provenance.label is required");
+      if (!(p.manualEntryId === null || typeof p.manualEntryId === "string"))
+        errors.push("provenance.manualEntryId is invalid");
+      if (p.isManualEntry === true && !p.manualEntryId)
+        errors.push("provenance.manualEntryId is required for a manual entry");
+      if (p.isManualEntry === true && p.source !== "manual")
+        errors.push("provenance.source must be manual for a manual entry");
+    }
+  }
+  if (raw.recordingEvidence != null) {
+    if (!isObj(raw.recordingEvidence)) errors.push("recordingEvidence must be an object or null");
+    else
+      for (const k of ["route", "rows"]) {
+        const v = raw.recordingEvidence[k];
+        if (!(v === null || typeof v === "string")) errors.push(`recordingEvidence.${k} is invalid`);
+      }
   }
 
   const id = raw.identity;
@@ -337,6 +417,9 @@ export function parseSprayReportPayload(raw: unknown): SprayReportParseResult {
       if (typeof t.tankNumber !== "number") errors.push(`tanks[${i}].tankNumber must be a number`);
       if (t.actualVersion != null && typeof t.actualVersion !== "number")
         errors.push(`tanks[${i}].actualVersion must be a number`);
+      // Manual entries have no plan: null stays null and is never read as zero.
+      if (!(t.plannedWaterLitres === null || typeof t.plannedWaterLitres === "number"))
+        errors.push(`tanks[${i}].plannedWaterLitres is invalid`);
       if (!Array.isArray(t.chemicals)) return errors.push(`tanks[${i}].chemicals must be an array`);
       t.chemicals.forEach((c: any, ci: number) => {
         if (!isObj(c)) return errors.push(`tanks[${i}].chemicals[${ci}] is not an object`);
@@ -345,6 +428,10 @@ export function parseSprayReportPayload(raw: unknown): SprayReportParseResult {
           errors.push(`tanks[${i}].chemicals[${ci}].matchSource is invalid`);
         if (c.usageKind != null && !USAGE_KINDS.includes(c.usageKind))
           errors.push(`tanks[${i}].chemicals[${ci}].usageKind is invalid`);
+        for (const k of ["plannedAmountBase", "actualAmountBase"]) {
+          if (!(c[k] === null || typeof c[k] === "number"))
+            errors.push(`tanks[${i}].chemicals[${ci}].${k} is invalid`);
+        }
       });
     });
 

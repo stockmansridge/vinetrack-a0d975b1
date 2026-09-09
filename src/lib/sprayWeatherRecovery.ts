@@ -21,8 +21,14 @@ export type WeatherRecoveryOutcome =
   | { kind: "failed"; message: string; diagnostic: string };
 
 export interface WeatherRecoveryResponse {
+  /** Deployed contract field (SQL 232). `filled` is the older alias. */
+  captured?: number;
   filled?: number;
   pending?: number;
+  unavailable?: number;
+  provider?: string | null;
+  stationId?: string | null;
+  errors?: unknown[];
   supported?: boolean;
   status?: string;
 }
@@ -47,7 +53,9 @@ export async function recoverSprayWeather(
     if (res.supported === false || res.status === "unsupported_provider") {
       return { kind: "unsupported", message: WEATHER_RECOVERY_UNSUPPORTED };
     }
-    const filled = typeof res.filled === "number" ? res.filled : 0;
+    // `captured` is the deployed field name; `filled` is the older alias.
+    const filled =
+      typeof res.captured === "number" ? res.captured : typeof res.filled === "number" ? res.filled : 0;
     if (filled > 0) {
       return {
         kind: "recovered",

@@ -37,6 +37,8 @@ export interface ManualChemicalLine {
 export interface ManualTank {
   /** Stable client identity, allocated once and reused on retry. */
   id: string;
+  /** Stable tank-actual row identity, allocated once and reused on retry. */
+  actualId: string;
   /** Sequential display number, recomputed from position. */
   displayNumber: number;
   /** Water actually used in this tank, in litres. Null means not entered. */
@@ -59,6 +61,14 @@ export interface ManualWeather {
 export interface ManualSprayDraft {
   /** Stable application identity, allocated once for the draft. */
   id: string;
+  /** Canonical manual identity shared by the record and its backing trip. */
+  manualEntryId: string;
+  sprayRecordId: string;
+  tripId: string;
+  /** Optimistic-concurrency version: 0 (or null) for a brand new entry. */
+  syncVersion: number | null;
+  /** IANA zone the entered local times belong to. */
+  vineyardTimeZone: string | null;
   vineyardId: string;
   name: string;
   /** ISO instants in the vineyard timezone; end may cross midnight. */
@@ -70,6 +80,8 @@ export interface ManualSprayDraft {
   startEngineHours: number | null;
   endEngineHours: number | null;
   blockIds: string[];
+  /** Recorded block names by id, preserved alongside the ids. */
+  blockNames?: Record<string, string>;
   tanks: ManualTank[];
   weather: ManualWeather[];
   notes: string;
@@ -97,7 +109,7 @@ export function newChemicalLine(over: Partial<ManualChemicalLine> = {}): ManualC
 }
 
 export function newTank(displayNumber: number): ManualTank {
-  return { id: newId(), displayNumber, waterLitres: null, chemicals: [] };
+  return { id: newId(), actualId: newId(), displayNumber, waterLitres: null, chemicals: [] };
 }
 
 /** Renumber tanks so display numbers stay 1..n after add/remove. */
@@ -122,6 +134,7 @@ export function copyPreviousTank(tanks: ManualTank[]): ManualTank[] {
   if (!prev) return addTank(tanks);
   const copy: ManualTank = {
     id: newId(),
+    actualId: newId(),
     displayNumber: tanks.length + 1,
     waterLitres: prev.waterLitres,
     chemicals: prev.chemicals.map((c) => ({ ...c, id: newId() })),
@@ -129,9 +142,19 @@ export function copyPreviousTank(tanks: ManualTank[]): ManualTank[] {
   return renumberTanks([...tanks, copy]);
 }
 
-export function emptyManualSprayDraft(vineyardId: string): ManualSprayDraft {
+export function emptyManualSprayDraft(
+  vineyardId: string,
+  vineyardTimeZone: string | null = null,
+): ManualSprayDraft {
   return {
     id: newId(),
+    // Allocated ONCE. Every retry of the same save reuses these identities, so
+    // a repeated request can never create a second application.
+    manualEntryId: newId(),
+    sprayRecordId: newId(),
+    tripId: newId(),
+    syncVersion: 0,
+    vineyardTimeZone,
     vineyardId,
     name: "",
     startAt: null,

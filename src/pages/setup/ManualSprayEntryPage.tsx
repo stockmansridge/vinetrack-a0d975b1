@@ -6,9 +6,9 @@
 // The production save runs through Rork's shared completed-application
 // contract. Until that function is deployed the Save action stays unavailable
 // and the exact contract gaps are shown.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Copy, Plus, Trash2 } from "lucide-react";
 
 import { PageHead } from "@/components/PageHead";
@@ -41,11 +41,23 @@ import { validateManualSpray } from "@/lib/manualSpray/validate";
 import { parseAmountText, unitsForForm, UNIT_DISPLAY_LABEL, WIRE_UNITS, type WireUnit } from "@/lib/manualSpray/units";
 import {
   MANUAL_SPRAY_UNAVAILABLE_MESSAGE, probeManualSprayContract, saveManualSpray,
-  toManualSprayPayload,
+  freezeManualSprayAttempt,
+  type ManualSprayAttempt, type ManualSprayIdentities, type ManualSpraySaveOutcome,
 } from "@/lib/manualSpray/contract";
+import { recoverSprayWeather } from "@/lib/sprayWeatherRecovery";
 import { useCanEnterManualSpray, MANUAL_SPRAY_DENIED_MESSAGE } from "@/lib/manualSpray/permissions";
 
 interface NamedRow { id: string; name: string | null }
+
+/**
+ * Save outcomes are kept apart. "Saved but the list didn't reload" is NEVER
+ * reported as unsaved, and an uncertain response is never reported as failed.
+ */
+type SaveState =
+  | null
+  | { kind: "saved" }
+  | { kind: "refresh-failed" }
+  | Exclude<ManualSpraySaveOutcome, { kind: "saved" }>;
 
 const fetchNamed = async (table: string, vineyardId: string): Promise<NamedRow[]> => {
   const { data, error } = await supabase
@@ -64,11 +76,25 @@ export default function ManualSprayEntryPage() {
   const { toast } = useToast();
   const vineyardId = selectedVineyardId ?? "";
 
+  const queryClient = useQueryClient();
   const [draft, setDraft] = useState<ManualSprayDraft>(() => emptyManualSprayDraft(vineyardId));
   const [showErrors, setShowErrors] = useState(false);
   const [saving, setSaving] = useState(false);
+  /** The frozen, unresolved save attempt. Retry re-sends exactly this. */
+  const [attempt, setAttempt] = useState<ManualSprayAttempt | null>(null);
+  const [saved, setSaved] = useState<ManualSprayIdentities | null>(null);
+  const [outcome, setOutcome] = useState<SaveState>(null);
 
   const patch = (p: Partial<ManualSprayDraft>) => setDraft((d) => ({ ...d, ...p, vineyardId }));
+
+  /**
+   * Any edit to the draft discards the frozen attempt: a later save is a new
+   * operation at the latest version, never a re-send of a superseded request.
+   */
+  useEffect(() => {
+    setAttempt(null);
+    setOutcome((o) => (o?.kind === "saved" || o?.kind === "refresh-failed" ? o : null));
+  }, [draft]);
 
   const tractorsQ = useQuery({ queryKey: ["ms-tractors", vineyardId], enabled: !!vineyardId, queryFn: () => fetchNamed("tractors", vineyardId) });
   const sprayQ = useQuery({ queryKey: ["ms-spray-equipment", vineyardId], enabled: !!vineyardId, queryFn: () => fetchNamed("spray_equipment", vineyardId) });
@@ -143,27 +169,51 @@ export default function ManualSprayEntryPage() {
     });
   }
 
-  async function handleSave() {
+  /**
+   * One logical save. The attempt — operation id, expected version and the
+   * whole payload including every identity and snapshot time — is frozen the
+   * first time and re-sent unchanged by Retry. Editing the draft afterwards
+   * discards it, so the next save is a new operation at the latest version.
+   */
+  async function runSave(existing?: ManualSprayAttempt) {
     setShowErrors(true);
     if (!validation.ok) {
+      setOutcome({ kind: "refused", message: validation.violations[0]?.message ?? "Check the highlighted fields." });
       toast({ title: "Check the highlighted fields", description: validation.violations[0]?.message, variant: "destructive" });
       return;
     }
+    const frozen = existing ?? freezeManualSprayAttempt({ ...draft, vineyardId });
+    setAttempt(frozen);
     setSaving(true);
-    // The payload is frozen once: a retry re-sends exactly this request.
-    const payload = toManualSprayPayload({ ...draft, vineyardId });
-    const out = await saveManualSpray(payload);
+    const out = await saveManualSpray(frozen);
     setSaving(false);
-    if (out.kind === "saved") {
-      toast({ title: "Manual spray saved" });
-      navigate("/spray-records");
+
+    if (out.kind !== "saved") {
+      setOutcome(out);
       return;
     }
-    toast({
-      title: out.kind === "unavailable" ? "Saving isn't available yet" : "Not saved",
-      description: out.message,
-      variant: "destructive",
-    });
+    // Confirmed by the server. The attempt is resolved and must not be re-sent.
+    setAttempt(null);
+    setSaved(out.identities);
+    setDraft((d) => ({ ...d, ...out.identities }));
+    const refreshed = await refreshAfterSave(out.identities.tripId);
+    setOutcome(refreshed ? { kind: "saved" } : { kind: "refresh-failed" });
+    // Weather recovery is a courtesy after the fact: it can never block or
+    // undo a save, and manually entered conditions are always kept.
+    void recoverSprayWeather(out.identities.tripId, draft.endAt ?? new Date().toISOString());
+  }
+
+  async function refreshAfterSave(tripId: string): Promise<boolean> {
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["spray-records"] }),
+        queryClient.invalidateQueries({ queryKey: ["spray-report", tripId] }),
+        queryClient.invalidateQueries({ queryKey: ["trips"] }),
+      ]);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   if (!canEnter) {
@@ -269,7 +319,11 @@ export default function ManualSprayEntryPage() {
               <Checkbox
                 checked={draft.blockIds.includes(b.id)}
                 onCheckedChange={(c) =>
-                  patch({ blockIds: c ? [...draft.blockIds, b.id] : draft.blockIds.filter((x) => x !== b.id) })
+                  patch({
+                    blockIds: c ? [...draft.blockIds, b.id] : draft.blockIds.filter((x) => x !== b.id),
+                    // The recorded name travels with the id.
+                    blockNames: { ...(draft.blockNames ?? {}), [b.id]: b.name ?? "" },
+                  })
                 }
               />
               {b.name ?? "Block"}
@@ -385,8 +439,9 @@ export default function ManualSprayEntryPage() {
       <Card className="p-4 space-y-2">
         <h2 className="font-medium">Weather</h2>
         <p className="text-sm text-muted-foreground">
-          Station retrieval for a past application needs Rork's historical lookup contract, which isn't settled yet.
-          Enter the conditions you recorded instead — manual values are always kept and labelled as manually entered.
+          Enter the conditions you recorded. Anything you type here is always kept and labelled as manually entered.
+          After saving, we also ask the weather station for the hours it holds for this period — that never changes
+          what you entered, and it can't stop the spray being saved.
         </p>
         <div className="grid gap-3 sm:grid-cols-4">
           <Field label="Temperature (°C)"><Input inputMode="decimal" value={draft.weather[0]?.temperature ?? ""} onChange={(e) => setWeather(setDraft, { temperature: numOrNull(e.target.value) })} /></Field>
@@ -417,9 +472,51 @@ export default function ManualSprayEntryPage() {
         <Field label="Notes (optional)">
           <Textarea rows={2} value={draft.notes} onChange={(e) => patch({ notes: e.target.value })} />
         </Field>
-        <div className="flex items-center gap-2">
-          <Button onClick={handleSave} disabled={saving || !contractAvailable}>Save manual spray</Button>
-          <Button variant="outline" onClick={() => navigate("/spray-records")}>Cancel</Button>
+        {outcome?.kind === "saved" && (
+          <PortalNotice variant="success" title="Manual spray saved" description="It's recorded as a manual entry and appears in your spray records." />
+        )}
+        {outcome?.kind === "refresh-failed" && (
+          <PortalNotice
+            variant="warning"
+            title="Saved — but the list didn't reload"
+            description="Your spray was saved. Only the on-screen refresh failed, so nothing needs saving again."
+          />
+        )}
+        {outcome?.kind === "uncertain" && (
+          <PortalNotice variant="warning" title="We didn't get an answer from the server" description={outcome.message} />
+        )}
+        {outcome?.kind === "conflict" && (
+          <PortalNotice variant="warning" title="Changed somewhere else" description={outcome.message} />
+        )}
+        {(outcome?.kind === "refused" || outcome?.kind === "denied" || outcome?.kind === "unavailable") && (
+          <PortalNotice variant="warning" title="Not saved" description={outcome.message} />
+        )}
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {!saved && (
+            <Button onClick={() => runSave()} disabled={saving || !contractAvailable}>
+              {saving ? "Saving…" : "Save manual spray"}
+            </Button>
+          )}
+          {attempt && !saved && (
+            <Button variant="outline" disabled={saving} onClick={() => runSave(attempt)}>
+              Retry (sends the same entry)
+            </Button>
+          )}
+          {saved && outcome?.kind === "refresh-failed" && (
+            <Button
+              variant="outline"
+              onClick={async () => setOutcome((await refreshAfterSave(saved.tripId)) ? { kind: "saved" } : { kind: "refresh-failed" })}
+            >
+              Retry refresh
+            </Button>
+          )}
+          {saved && (
+            <Button onClick={() => navigate(`/spray-records?trip=${saved.tripId}`)}>View spray record</Button>
+          )}
+          <Button variant="outline" onClick={() => navigate("/spray-records")}>
+            {saved ? "Done" : "Cancel"}
+          </Button>
           {!contractAvailable && <span className="text-xs text-muted-foreground">{MANUAL_SPRAY_UNAVAILABLE_MESSAGE}</span>}
         </div>
       </Card>
