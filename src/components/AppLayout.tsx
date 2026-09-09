@@ -54,6 +54,7 @@ export default function AppLayout() {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const displayName = displayNameFor(profile, user?.email);
   const navViewer = useNavViewer();
+  const location = useLocation();
   const billingViews = accessibleViews(ACCOUNT_ACTIVITY, navViewer);
 
   // Per-vineyard access state (Phase 2F) — display only; the gate below
