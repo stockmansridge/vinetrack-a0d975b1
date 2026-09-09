@@ -21,11 +21,11 @@ import {
 } from "@/lib/sprayTripMetadata";
 import { recoverSprayWeather } from "@/lib/sprayWeatherRecovery";
 import {
-  isSubmittableAssignment,
   recoverSprayRowAssignments,
   rowProvenanceLabel,
   ROW_RECOVERY_NO_EVIDENCE,
-  type RowAssignmentEvidence,
+  ROW_RECOVERY_FAILED,
+  ROW_RECOVERY_NOT_PERMITTED,
 } from "@/lib/sprayRowRecovery";
 import { chemicalTotals, toDisplayAmount } from "@/lib/sprayReportQuantities";
 
