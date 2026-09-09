@@ -33,7 +33,11 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ChevronDown, FileDown } from "lucide-react";
+import { ChevronDown, FileDown, Pencil, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ManualEntryBadge, isManualSpraySource } from "@/components/spray/ManualEntryBadge";
+import { ManualSprayDeleteDialog } from "@/components/spray/ManualSprayDeleteDialog";
+import { useCanEnterManualSpray } from "@/lib/manualSpray/permissions";
 import { Button } from "@/components/ui/button";
 import {
   fetchSprayRecordsForVineyard,
