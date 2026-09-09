@@ -1,10 +1,9 @@
 // Row/block recovery for a spray trip.
 //
-// The shared action ACCEPTS evidence-backed assignments — it does not generate
-// them. The portal therefore submits only assignments that already carry a
-// stable block id plus a row identity and their original evidence, exactly as
-// supplied. It never invents a block assignment, a row identity or a
-// confidence score, and it never rewrites `originalEvidence`.
+// All matching, precedence and confidence rules live in the authorised
+// `spray-row-recovery` action. The portal never derives a block assignment,
+// a row identity or a confidence score, and never rewrites evidence: it asks
+// the action to run for a trip and reports the outcome plainly.
 import { supabase } from "@/integrations/ios-supabase/client";
 import { generateUuid } from "@/lib/uuid";
 import type { SprayReportRow } from "@/lib/sprayReportV1";
@@ -15,42 +14,74 @@ export type RowAssignmentSource =
   | "session_boundary_order"
   | "gps_geometry_intersection";
 
-export interface RowAssignmentEvidence {
-  blockId: string;
-  blockName: string;
-  rowIdentity: string;
-  rowNumber: number | null;
-  tankSessionId: string | null;
-  tankNumber: number | null;
-  status: "Complete" | "Partial" | "Skipped/Not complete" | "Not recorded";
-  assignmentSource: RowAssignmentSource;
-  confidence: number;
-  originalEvidence: Record<string, unknown>;
-}
-
 export const ROW_RECOVERY_NO_EVIDENCE =
   "There isn't enough recorded evidence to work out which rows belong to which block.";
+export const ROW_RECOVERY_FAILED =
+  "Row and block recovery couldn't run just now. Recorded rows are unchanged — try again shortly.";
+export const ROW_RECOVERY_NOT_PERMITTED =
+  "You don't have permission to recover row and block assignments for this trip.";
 
-/** GPS/geometry evidence below 0.90 confidence is never submitted. */
-export function isSubmittableAssignment(a: RowAssignmentEvidence): boolean {
-  if (!a.blockId || !a.rowIdentity) return false;
-  if (a.assignmentSource === "gps_geometry_intersection" && a.confidence < 0.9) return false;
-  return true;
+export type RowRecoveryOutcome =
+  | { kind: "recovered"; assigned: number; message: string }
+  | { kind: "none"; message: string }
+  | { kind: "not_permitted"; message: string }
+  | { kind: "failed"; message: string; diagnostic: string };
+
+export interface RowRecoveryResponse {
+  assigned?: number;
+  recovered?: number;
+  unresolved?: number;
+  status?: string;
 }
 
+/**
+ * Ask the authorised recovery action to attribute rows to blocks for a trip.
+ * The action derives and validates the evidence; nothing is generated here.
+ */
 export async function recoverSprayRowAssignments(input: {
   tripId: string;
-  assignments: RowAssignmentEvidence[];
   operationId?: string;
-}): Promise<void> {
-  const assignments = input.assignments.filter(isSubmittableAssignment);
-  if (!assignments.length) throw new Error(ROW_RECOVERY_NO_EVIDENCE);
-  const { error } = await (supabase as any).rpc("recover_spray_row_assignments_v1", {
-    p_operation_id: input.operationId ?? generateUuid(),
-    p_trip_id: input.tripId,
-    p_assignments: assignments,
-  });
-  if (error) throw new Error(error.message);
+}): Promise<RowRecoveryOutcome> {
+  try {
+    const { data, error } = await supabase.functions.invoke("spray-row-recovery", {
+      body: { tripId: input.tripId, operationId: input.operationId ?? generateUuid() },
+    });
+    if (error) {
+      const msg = error.message ?? "";
+      if (/403|forbidden|not_authori[sz]ed|permission/i.test(msg)) {
+        return { kind: "not_permitted", message: ROW_RECOVERY_NOT_PERMITTED };
+      }
+      return {
+        kind: "failed",
+        message: ROW_RECOVERY_FAILED,
+        diagnostic: `spray-row-recovery invoke failed: ${msg}`,
+      };
+    }
+    const res = (data ?? {}) as RowRecoveryResponse;
+    if (res.status === "not_authorized" || res.status === "forbidden") {
+      return { kind: "not_permitted", message: ROW_RECOVERY_NOT_PERMITTED };
+    }
+    const assigned =
+      typeof res.assigned === "number"
+        ? res.assigned
+        : typeof res.recovered === "number"
+          ? res.recovered
+          : 0;
+    if (assigned > 0) {
+      return {
+        kind: "recovered",
+        assigned,
+        message: `${assigned} ${assigned === 1 ? "row was" : "rows were"} matched to a block.`,
+      };
+    }
+    return { kind: "none", message: ROW_RECOVERY_NO_EVIDENCE };
+  } catch (e) {
+    return {
+      kind: "failed",
+      message: ROW_RECOVERY_FAILED,
+      diagnostic: `spray-row-recovery threw: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
 }
 
 /** Plain-English provenance for a canonical row. */
