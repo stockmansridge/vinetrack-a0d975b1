@@ -25,6 +25,7 @@ import {
   useDeleteAppNotice,
   type AppNotice,
 } from "@/lib/appNotices";
+import PortalNoticesSection from "@/components/admin/PortalNoticesSection";
 
 interface FormState {
   id?: string;
@@ -125,7 +126,10 @@ export default function AppNoticesPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
+      <PortalNoticesSection />
+
+      <div className="space-y-4">
       <div className="flex items-start justify-between gap-2">
         <div>
           <h1 className="text-2xl font-semibold">App Notices</h1>
@@ -276,6 +280,7 @@ export default function AppNoticesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }
