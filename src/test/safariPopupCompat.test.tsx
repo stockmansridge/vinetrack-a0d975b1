@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 
 import { generateUuid, isUuid, tryGenerateUuid, SecureRandomUnavailableError } from "@/lib/uuid";
-import { openDeferredTab, PopupBlockedError } from "@/lib/openExternalUrl";
+import SecureExternalLink from "@/components/SecureExternalLink";
 import { HelpHint } from "@/components/ui/HelpHint";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
@@ -55,44 +55,76 @@ describe("generateUuid", () => {
   });
 });
 
-describe("openDeferredTab", () => {
+describe("SecureExternalLink", () => {
   beforeEach(() => {
     Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
   });
 
-  it("opens the tab synchronously and navigates it once the URL resolves", async () => {
-    const replace = vi.fn();
-    const tab = {
-      closed: false,
-      opener: {},
-      location: { replace },
-      document: { write: vi.fn(), close: vi.fn() },
-      close: vi.fn(),
-    };
-    const openSpy = vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
+  it("never opens a tab before the URL exists, then presents a user-clicked link", async () => {
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
+    const resolve = vi.fn().mockResolvedValue("https://example.com/invoice.pdf");
+    render(
+      <SecureExternalLink resolve={resolve} prepareLabel="View invoice" openLabel="Open invoice" />,
+    );
 
-    const deferred = openDeferredTab();
-    expect(openSpy).toHaveBeenCalledTimes(1); // before any await
-    expect(deferred.blocked).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: /view invoice/i }));
 
-    await deferred.settle("https://example.com/invoice.pdf");
-    expect(replace).toHaveBeenCalledWith("https://example.com/invoice.pdf");
-    expect(openSpy).toHaveBeenCalledTimes(1); // no second, blockable open
+    const link = await screen.findByRole("link", { name: /open invoice/i });
+    expect(link).toHaveAttribute("href", "https://example.com/invoice.pdf");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link.getAttribute("rel")).toContain("noopener");
+    expect(link.getAttribute("rel")).toContain("noreferrer");
+    // No programmatic tab was ever opened — so there is no orphan blank tab
+    // and no unreliable `window.open` return value to interpret.
+    expect(openSpy).not.toHaveBeenCalled();
   });
 
-  it("closes the placeholder tab when the URL cannot be produced", () => {
-    const tab = { closed: false, close: vi.fn(), document: { write: vi.fn(), close: vi.fn() } };
-    vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
-    openDeferredTab().fail();
-    expect(tab.close).toHaveBeenCalled();
+  it("shows a failure message and retries when the URL cannot be fetched", async () => {
+    const resolve = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Invoice service unavailable"))
+      .mockResolvedValueOnce("https://example.com/invoice.pdf");
+    render(
+      <SecureExternalLink resolve={resolve} prepareLabel="View invoice" openLabel="Open invoice" />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /view invoice/i }));
+    expect(await screen.findByText("Invoice service unavailable")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+    expect(await screen.findByRole("link", { name: /open invoice/i })).toBeInTheDocument();
+    expect(resolve).toHaveBeenCalledTimes(2);
   });
 
-  it("copies the link and reports a usable fallback when popups are blocked", async () => {
-    vi.spyOn(window, "open").mockReturnValue(null);
-    const deferred = openDeferredTab();
-    expect(deferred.blocked).toBe(true);
-    await expect(deferred.settle("https://example.com/x.pdf")).rejects.toBeInstanceOf(PopupBlockedError);
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith("https://example.com/x.pdf");
+  it("only claims the link was copied when copying succeeded", async () => {
+    const resolve = vi.fn().mockResolvedValue("https://example.com/invoice.pdf");
+    render(
+      <SecureExternalLink resolve={resolve} prepareLabel="View invoice" openLabel="Open invoice" />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /view invoice/i }));
+    await screen.findByRole("link", { name: /open invoice/i });
+
+    fireEvent.click(screen.getByRole("button", { name: /copy link/i }));
+    expect(await screen.findByText("Link copied.")).toBeInTheDocument();
+  });
+
+  it("keeps the Open link and offers manual copy when copying is refused", async () => {
+    (navigator.clipboard.writeText as any).mockRejectedValue(new Error("denied"));
+    Object.defineProperty(document, "execCommand", {
+      value: vi.fn().mockReturnValue(false),
+      configurable: true,
+      writable: true,
+    });
+    const resolve = vi.fn().mockResolvedValue("https://example.com/invoice.pdf");
+    render(
+      <SecureExternalLink resolve={resolve} prepareLabel="View invoice" openLabel="Open invoice" />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /view invoice/i }));
+    await screen.findByRole("link", { name: /open invoice/i });
+
+    fireEvent.click(screen.getByRole("button", { name: /copy link/i }));
+    expect(await screen.findByText(/could not be copied automatically/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /open invoice/i })).toBeInTheDocument();
   });
 });
 

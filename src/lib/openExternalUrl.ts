@@ -1,87 +1,78 @@
-import { copyTextToClipboard } from "@/components/OpenExternalMapButton";
-
 /**
- * Safari-safe "open a URL we don't have yet" helper.
+ * Secure external links (invoices, private attachments).
  *
- * Safari only allows `window.open` while the user's tap/click is still being
- * handled. Awaiting a signed URL first breaks that link, and the tab is
- * silently blocked. So we open a placeholder tab synchronously during the
- * click, then point it at the signed URL once it arrives.
+ * Previous approach: open a placeholder tab during the click, then navigate it
+ * once the signed URL arrived. That is unreliable — `window.open(..., "noopener")`
+ * returns `null` even on success, so we could neither detect a blocked popup nor
+ * navigate or close the placeholder, and the retry `window.open` after the await
+ * was exactly the call Safari blocks.
+ *
+ * Current approach: fetch the URL first, then render a real, user-clicked
+ * anchor (`target="_blank" rel="noopener noreferrer"`). The user's click on that
+ * anchor is a genuine user gesture, so no browser blocks it and no orphan blank
+ * tab is ever created.
  */
-export interface DeferredTab {
-  /** True when the browser refused the placeholder tab. */
-  readonly blocked: boolean;
-  /** Send the resolved URL to the tab (or fall back when blocked). */
-  settle: (url: string) => Promise<void>;
-  /** Close the placeholder tab because the URL could not be produced. */
-  fail: () => void;
+import { useCallback, useRef, useState } from "react";
+
+export const SECURE_LINK_FAILED =
+  "The secure link could not be prepared. Please try again.";
+
+export type SecureLinkState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready"; url: string }
+  | { status: "error"; message: string };
+
+export function secureLinkErrorMessage(
+  error: unknown,
+  fallback: string = SECURE_LINK_FAILED,
+): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error) return error;
+  return fallback;
 }
 
-const LOADING_DOC =
-  "<!doctype html><meta charset=utf-8><title>Opening…</title>" +
-  "<body style=\"font:16px system-ui;padding:2rem;color:#333\">Preparing your secure link…</body>";
+export interface UseSecureLinkOptions {
+  /** Produces the secure URL. Rejects or returns null/empty on failure. */
+  resolve: () => Promise<string | null | undefined>;
+  /** Message used when the resolver fails without a usable message. */
+  fallbackMessage?: string;
+}
 
-export function openDeferredTab(): DeferredTab {
-  let tab: Window | null = null;
-  try {
-    tab = window.open("", "_blank", "noopener,noreferrer");
-  } catch {
-    tab = null;
-  }
+export interface UseSecureLink {
+  state: SecureLinkState;
+  /** Fetch (or re-fetch) the URL. Safe to call from a click handler. */
+  request: () => Promise<void>;
+  /** Return to the idle state, discarding any prepared URL. */
+  reset: () => void;
+}
 
-  if (tab) {
+export function useSecureLink({
+  resolve,
+  fallbackMessage = SECURE_LINK_FAILED,
+}: UseSecureLinkOptions): UseSecureLink {
+  const [state, setState] = useState<SecureLinkState>({ status: "idle" });
+  const inFlight = useRef(false);
+
+  const request = useCallback(async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setState({ status: "loading" });
     try {
-      tab.opener = null;
-      tab.document.write(LOADING_DOC);
-      tab.document.close();
-    } catch {
-      /* cross-origin about:blank quirks — harmless */
-    }
-  }
-
-  return {
-    blocked: !tab,
-    async settle(url: string) {
-      if (tab && !tab.closed) {
-        try {
-          tab.location.replace(url);
-          return;
-        } catch {
-          /* fall through to the blocked path */
-        }
-      }
-      // No tab: try one direct open (some browsers still allow it), then copy.
-      const direct = window.open(url, "_blank", "noopener,noreferrer");
-      if (direct) {
-        try {
-          direct.opener = null;
-        } catch {
-          /* noop */
-        }
+      const url = await resolve();
+      if (!url) {
+        setState({ status: "error", message: fallbackMessage });
         return;
       }
-      await copyTextToClipboard(url).catch(() => {
-        /* noop */
-      });
-      throw new PopupBlockedError();
-    },
-    fail() {
-      if (tab && !tab.closed) {
-        try {
-          tab.close();
-        } catch {
-          /* noop */
-        }
-      }
-    },
-  };
-}
+      setState({ status: "ready", url });
+    } catch (e) {
+      setState({ status: "error", message: secureLinkErrorMessage(e, fallbackMessage) });
+    } finally {
+      inFlight.current = false;
+    }
+  }, [resolve, fallbackMessage]);
 
-export class PopupBlockedError extends Error {
-  constructor() {
-    super(
-      "Your browser blocked the new tab. The link has been copied — paste it into a new tab to continue.",
-    );
-    this.name = "PopupBlockedError";
-  }
+  const reset = useCallback(() => setState({ status: "idle" }), []);
+
+  return { state, request, reset };
 }

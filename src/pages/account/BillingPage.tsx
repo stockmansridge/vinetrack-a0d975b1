@@ -1,6 +1,6 @@
 // Phase 2E — customer-facing Billing page for active Vineyard Owners.
 // All authority, money and seat values come from the SQL 152/153 RPCs.
-import { openDeferredTab, PopupBlockedError } from "@/lib/openExternalUrl";
+import SecureExternalLink from "@/components/SecureExternalLink";
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, CreditCard, ExternalLink, Download, RefreshCw } from "lucide-react";
@@ -99,7 +99,7 @@ export default function AccountBillingPage() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
-  const [pendingInvoice, setPendingInvoice] = useState<string | null>(null);
+  
 
   // Auto-select, validated against the server list every time.
   useEffect(() => {
@@ -156,26 +156,18 @@ export default function AccountBillingPage() {
     }
   };
 
-  const handleInvoice = async (invoiceId: string, action: "view" | "download") => {
-    if (!selectedId) return;
-    setPendingInvoice(`${invoiceId}:${action}`);
-    // Open the tab synchronously inside the click, before awaiting the signed
-    // URL — Safari blocks a `window.open` that happens after an await.
-    const tab = openDeferredTab();
+  // Invoice links are fetched first, then presented as a real link the user
+  // clicks — no tab is opened before the URL exists.
+  const resolveInvoice = (invoiceId: string, action: "view" | "download") => async () => {
+    if (!selectedId) throw new Error("Select a vineyard first.");
     try {
-      const url = await invoiceLink.mutateAsync({
+      return await invoiceLink.mutateAsync({
         vineyardId: selectedId,
         invoiceId,
         action,
       });
-      await tab.settle(url);
     } catch (e) {
-      tab.fail();
-      toast.error(
-        e instanceof PopupBlockedError ? e.message : billingErrorMessage(e),
-      );
-    } finally {
-      setPendingInvoice(null);
+      throw new Error(billingErrorMessage(e));
     }
   };
 
@@ -526,36 +518,25 @@ export default function AccountBillingPage() {
                                 {formatMinorUnits(row.amount_due, row.currency)}
                               </TableCell>
                               <TableCell className="text-right whitespace-nowrap">
-                                <div className="flex justify-end gap-1">
+                                <div className="flex flex-wrap justify-end gap-1">
                                   {row.can_view_invoice && row.invoice_id && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      disabled={pendingInvoice === `${row.invoice_id}:view`}
-                                      onClick={() => handleInvoice(row.invoice_id!, "view")}
-                                    >
-                                      {pendingInvoice === `${row.invoice_id}:view` ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <ExternalLink className="h-4 w-4" />
-                                      )}
-                                      <span className="sr-only">View invoice</span>
-                                    </Button>
+                                    <SecureExternalLink
+                                      resolve={resolveInvoice(row.invoice_id, "view")}
+                                      prepareLabel="View invoice"
+                                      openLabel="Open invoice"
+                                      fallbackMessage="This invoice link could not be prepared."
+                                      icon={<ExternalLink className="h-4 w-4" aria-hidden="true" />}
+                                    />
                                   )}
                                   {row.can_download_invoice && row.invoice_id && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      disabled={pendingInvoice === `${row.invoice_id}:download`}
-                                      onClick={() => handleInvoice(row.invoice_id!, "download")}
-                                    >
-                                      {pendingInvoice === `${row.invoice_id}:download` ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <Download className="h-4 w-4" />
-                                      )}
-                                      <span className="sr-only">Download invoice</span>
-                                    </Button>
+                                    <SecureExternalLink
+                                      resolve={resolveInvoice(row.invoice_id, "download")}
+                                      prepareLabel="Download invoice"
+                                      openLabel="Open invoice PDF"
+                                      fallbackMessage="This invoice download could not be prepared."
+                                      downloadName={`invoice-${row.invoice_id}.pdf`}
+                                      icon={<Download className="h-4 w-4" aria-hidden="true" />}
+                                    />
                                   )}
                                 </div>
                               </TableCell>

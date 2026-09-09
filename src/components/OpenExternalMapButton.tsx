@@ -22,10 +22,19 @@ export type ExternalMapOpenResult =
 
 type CopiedReason = Extract<ExternalMapOpenResult, { status: "copied" }>["reason"];
 
-export async function copyTextToClipboard(text: string) {
+/**
+ * Copy text to the clipboard.
+ * Returns true only when the copy actually succeeded, so callers never claim
+ * "copied" after a rejected clipboard write or a failed execCommand fallback.
+ */
+export async function copyTextToClipboard(text: string): Promise<boolean> {
   if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      /* fall through to the legacy path */
+    }
   }
 
   const textarea = document.createElement("textarea");
@@ -38,7 +47,9 @@ export async function copyTextToClipboard(text: string) {
   textarea.select();
 
   try {
-    document.execCommand("copy");
+    return document.execCommand("copy") === true;
+  } catch {
+    return false;
   } finally {
     document.body.removeChild(textarea);
   }
@@ -53,12 +64,12 @@ function isEmbeddedContext() {
 }
 
 async function copyAndNotify(url: string, message: string, reason: CopiedReason): Promise<ExternalMapOpenResult> {
-  await copyTextToClipboard(url).catch(() => {
-    /* noop */
-  });
+  const copied = await copyTextToClipboard(url).catch(() => false);
 
-  toast("Map link copied", {
-    description: message,
+  toast(copied ? "Map link copied" : "Map link could not be copied", {
+    description: copied
+      ? message
+      : "Copying was blocked by your browser. Select the address shown and copy it manually.",
   });
 
   return {
