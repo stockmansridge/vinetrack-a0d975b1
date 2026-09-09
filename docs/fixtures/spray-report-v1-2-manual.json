@@ -1,0 +1,192 @@
+{
+  "schemaVersion": "1.2",
+  "identity": {
+    "tripId": "a1b2c3d4-0000-4000-8000-000000000001",
+    "sprayRecordId": "a1b2c3d4-0000-4000-8000-000000000002",
+    "vineyardId": "a1b2c3d4-0000-4000-8000-000000000003",
+    "vineyardName": "Stockmans Ridge",
+    "reference": "Late Woolly Bud E-L Stage 2-3",
+    "vineyardTimeZone": "Australia/Sydney"
+  },
+  "trip": {
+    "startUtc": "2026-09-03T21:00:00Z",
+    "endUtc": "2026-09-04T00:35:00Z",
+    "activeDurationSeconds": 10860,
+    "elapsedDurationSeconds": 12900,
+    "pausedDurationSeconds": 2040,
+    "distanceMetres": 12439.15,
+    "operatorId": "a1b2c3d4-0000-4000-8000-000000000010",
+    "operatorName": "Sanitized Operator",
+    "operatorSource": "recorded_identity",
+    "pinCount": 50
+  },
+  "blocks": [
+    {
+      "blockId": "a1b2c3d4-0000-4000-8000-000000000004",
+      "name": "North Block",
+      "grossAreaHa": 1.7,
+      "treatedAreaHa": null
+    },
+    {
+      "blockId": "a1b2c3d4-0000-4000-8000-000000000014",
+      "name": "South Block",
+      "grossAreaHa": 1.2,
+      "treatedAreaHa": null
+    }
+  ],
+  "equipment": {
+    "machineId": "a1b2c3d4-0000-4000-8000-000000000011",
+    "tractorId": null,
+    "tractorName": "Sanitized Tractor",
+    "sprayEquipmentId": "a1b2c3d4-0000-4000-8000-000000000012",
+    "sprayUnitName": "Sanitized Spray Unit",
+    "equipmentSource": "trip_recorded_identity",
+    "startEngineHours": 1200,
+    "endEngineHours": 1203.1,
+    "engineHoursUsed": 3.1,
+    "tractorGear": "B2",
+    "numberOfFansJets": "12",
+    "averageSpeedKmh": 5.6,
+    "fuelConsumptionLPerHour": 6.8,
+    "fuelConsumptionSource": "equipment_default",
+    "fuelHours": 3.1,
+    "fuelHoursSource": "engine_hours"
+  },
+  "application": {
+    "operationType": "Foliar Spray",
+    "applicationMode": "whole_block",
+    "grossAreaHa": 2.9,
+    "treatedAreaHa": 0.41,
+    "treatedAreaMethod": "canonical_row_length",
+    "geometrySource": "mapped_rows",
+    "geometryQuality": "authoritative",
+    "carrierVolumeBasis": "manual_actual_total",
+    "totalCarrierLitres": 1843.9,
+    "carrierLitresPerHectare": 450,
+    "diluteLitresPer100m": null,
+    "appliedLitresPer100m": null,
+    "concentrationFactor": 1,
+    "notes": "Sanitized acceptance fixture",
+    "actualUseBasis": "manually_recorded_actual_use"
+  },
+  "programStep": {
+    "linkState": "program_linked",
+    "sprayJobId": "a1b2c3d4-0000-4000-8000-000000000013",
+    "name": "Late Woolly Bud",
+    "status": "completed",
+    "plannedDate": "2026-09-04",
+    "operationType": "Foliar Spray",
+    "target": "Powdery mildew",
+    "notes": null
+  },
+  "rows": [],
+  "tanks": [
+    {
+      "tankNumber": 1,
+      "actualId": "b0000000-0000-4000-8000-000000000001",
+      "actualVersion": 0,
+      "plannedWaterLitres": null,
+      "actualWaterLitres": 2000,
+      "chemicals": [
+        {
+          "actualChemicalId": "c0000000-0000-4000-8000-000000000001",
+          "plannedChemicalId": null,
+          "savedChemicalId": "d0000000-0000-4000-8000-000000000001",
+          "replacesPlannedChemicalId": null,
+          "usageKind": "additional",
+          "name": "Example Liquid Fungicide",
+          "unit": "Litres",
+          "plannedAmountBase": null,
+          "actualAmountBase": 2500,
+          "matchSource": "actualOnly",
+          "productCategory": "fungicide",
+          "physicalForm": "liquid",
+          "snapshotAt": "2026-09-09T01:18:00Z"
+        }
+      ]
+    },
+    {
+      "tankNumber": 2,
+      "actualId": "b0000000-0000-4000-8000-000000000002",
+      "actualVersion": 0,
+      "plannedWaterLitres": null,
+      "actualWaterLitres": 1500,
+      "chemicals": [
+        {
+          "actualChemicalId": "c0000000-0000-4000-8000-000000000002",
+          "plannedChemicalId": null,
+          "savedChemicalId": "d0000000-0000-4000-8000-000000000002",
+          "replacesPlannedChemicalId": null,
+          "usageKind": "additional",
+          "name": "Example Solid Fungicide",
+          "unit": "Kg",
+          "plannedAmountBase": null,
+          "actualAmountBase": 750,
+          "matchSource": "actualOnly",
+          "productCategory": "fungicide",
+          "physicalForm": "solid",
+          "snapshotAt": "2026-09-09T01:18:00Z"
+        }
+      ]
+    }
+  ],
+  "tankSessions": [],
+  "plannedChemicalTotals": [],
+  "actualChemicalTotals": [],
+  "weather": [
+    {
+      "sampleSlot": "2026-09-03T21:00:00Z",
+      "observedAt": "2026-09-03T20:55:00Z",
+      "source": "Legacy start snapshot",
+      "sourceKind": "manual",
+      "stationId": null,
+      "isStale": true,
+      "temperatureC": 16.2,
+      "humidityPct": 59,
+      "windSpeedKmh": 0,
+      "windGustKmh": null,
+      "windDirectionDeg": null,
+      "windDirectionText": "N",
+      "rainMm": null,
+      "retrievalMode": "legacy_snapshot",
+      "providerRecordId": null,
+      "retrievedAt": null
+    },
+    {
+      "sampleSlot": "2026-09-03T22:00:00Z",
+      "observedAt": "2026-09-03T21:58:00Z",
+      "source": "Weather Underground PWS · Sanitized Station",
+      "sourceKind": "observed",
+      "stationId": "ISANITIZED1",
+      "isStale": false,
+      "temperatureC": 15.8,
+      "humidityPct": 61,
+      "windSpeedKmh": 2.1,
+      "windGustKmh": 4.3,
+      "windDirectionDeg": 5,
+      "rainMm": 0,
+      "retrievalMode": "historical_archive",
+      "providerRecordId": "2026-09-03T21:58:00Z",
+      "retrievedAt": "2026-09-08T01:00:00Z"
+    }
+  ],
+  "route": null,
+  "cost": null,
+  "amendments": [],
+  "metadataCorrectionVersion": 0,
+  "metadataAmendments": [],
+  "warnings": [
+    "Tank 2 session ended state was not recorded.",
+    "Fixture is sanitized and route bytes are intentionally omitted."
+  ],
+  "provenance": {
+    "source": "manual",
+    "manualEntryId": "30000000-0000-4000-8000-000000000001",
+    "isManualEntry": true,
+    "label": "Manual entry"
+  },
+  "recordingEvidence": {
+    "route": "Not recorded — manual application",
+    "rows": "Not recorded — manual application"
+  }
+}

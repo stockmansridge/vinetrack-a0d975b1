@@ -11,6 +11,12 @@ import {
   type SprayReportPayloadV1,
   type SprayReportWeather,
 } from "./sprayReportV1";
+import {
+  isManualEntryReport,
+  MANUAL_ACTUAL_USE_LABEL,
+  MANUAL_NOT_RECORDED_LABEL,
+  sprayReportSourceLabel,
+} from "./sprayReportV1";
 import type { ResolvedRouteImage } from "./sprayReportRoute";
 import {
   chemicalTotals,
@@ -268,7 +274,12 @@ export function buildSprayReportPdf(
     if (!t.chemicals.length) body.push(["No chemicals recorded", NR, NR, ""]);
     autoTable(doc, {
       startY: y,
-      head: [["Item", "Planned", "Actual", "Match"]],
+      head: [[
+        "Item",
+        "Planned",
+        isManualEntryReport(payload) ? MANUAL_ACTUAL_USE_LABEL : "Actual",
+        "Match",
+      ]],
       body,
       theme: "striped",
       styles: { fontSize: 9, cellPadding: 4 },
@@ -360,6 +371,26 @@ export function buildSprayReportPdf(
       y += 6;
     }
   }
+  // A manual application has no route or row record. That absence is stated
+  // explicitly rather than left looking like missing or lost data.
+  if (isManualEntryReport(payload)) {
+    section("Recording", 74);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(110);
+    doc.text(
+      [
+        `Source: ${sprayReportSourceLabel(payload)}`,
+        `Route: ${payload.recordingEvidence?.route ?? MANUAL_NOT_RECORDED_LABEL}`,
+        `Rows: ${payload.recordingEvidence?.rows ?? MANUAL_NOT_RECORDED_LABEL}`,
+      ],
+      margin,
+      y + 12,
+    );
+    doc.setTextColor(0);
+    y += 54;
+  }
+
   if (ctx.routeWarning) {
     if (!ctx.routeImage?.dataUrl) section("Route", 60);
     doc.setFont("helvetica", "normal");
@@ -462,8 +493,25 @@ export function buildSprayReportPdf(
   const markSize = mark ? fitWithin(mark.size, markBox.w, markBox.h) : null;
   const footerTextLeft = markSize ? margin + markSize.width + 12 : margin;
   const pageCount = (doc as any).internal.getNumberOfPages();
+  const manualEntry = isManualEntryReport(payload);
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
+
+    // A manual application is watermarked on EVERY page, so no printed page
+    // can be mistaken for a tracked, GPS-recorded application.
+    if (manualEntry) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(46);
+      doc.setTextColor(155, 125, 200);
+      try {
+        (doc as any).saveGraphicsState?.();
+        (doc as any).setGState?.(new (doc as any).GState({ opacity: 0.14 }));
+      } catch { /* opacity is cosmetic only */ }
+      doc.text("MANUAL ENTRY", pageWidth / 2, pageHeight / 2, { align: "center", angle: 32 });
+      try { (doc as any).restoreGraphicsState?.(); } catch { /* ignore */ }
+      doc.setTextColor(0);
+    }
+
 
     if (i > 1) {
       const w = drawVineyardLogo(20, { w: 60, h: 26 });

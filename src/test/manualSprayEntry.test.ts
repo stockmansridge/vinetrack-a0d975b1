@@ -34,7 +34,7 @@ import {
   saveManualSpray,
   deleteManualSpray,
   probeManualSprayContract,
-  MANUAL_SPRAY_CONTRACT_GAPS,
+  freezeManualSprayAttempt,
 } from "@/lib/manualSpray/contract";
 import { isManualSpraySource } from "@/components/spray/ManualEntryBadge";
 
@@ -195,54 +195,114 @@ describe("permissions", () => {
   });
 });
 
-describe("backend contract", () => {
-  it("maps the draft to base units in the agreed payload", () => {
-    const p = toManualSprayPayload(completeDraft());
-    expect(p.source).toBe("manual_entry");
-    expect(p.tanks[0].water_litres).toBe(1400);
-    expect(p.tanks[0].chemicals[0]).toMatchObject({ base_amount: 750, base_unit: "g", entered_unit: "Kg" });
-    expect(p.tanks[0].chemicals[1]).toMatchObject({ base_amount: 2500, base_unit: "mL", entered_unit: "Litres" });
+describe("backend contract (SQL 232)", () => {
+  const confirmed = (syncVersion = 1) => ({
+    data: {
+      operationId: "op-1",
+      manualEntryId: "me-1",
+      sprayRecordId: "sr-1",
+      tripId: "tp-1",
+      source: "manual",
+      status: "completed",
+      syncVersion,
+      serverConfirmed: true,
+    },
+    error: null,
   });
 
-  it("reports the contract as unavailable and never writes when the function is absent", async () => {
-    rpc.mockResolvedValue(missingFn);
+  it("maps the draft to the documented camelCase payload in base units", () => {
+    const d = completeDraft();
+    d.blockNames = { b1: "Block 1", b2: "Block 2" };
+    const p = toManualSprayPayload(d, "2026-09-09T02:00:00.000Z");
+    expect(p.operationType).toBe("manual_spray");
+    expect(p.manualEntryId).toBe(d.manualEntryId);
+    expect(p.sprayRecordId).toBe(d.sprayRecordId);
+    expect(p.tripId).toBe(d.tripId);
+    expect(p.startUtc).toBe("2026-09-08T22:30:00.000Z");
+    expect(p.blocks).toEqual([
+      { blockId: "b1", blockName: "Block 1" },
+      { blockId: "b2", blockName: "Block 2" },
+    ]);
+    expect(p.tanks[0].waterVolumeLitres).toBe(1400);
+    expect(p.tanks[0].id).toBe(d.tanks[0].id);
+    expect(p.tanks[0].actualId).toBe(d.tanks[0].actualId);
+    expect(p.tanks[0].chemicals[0]).toMatchObject({
+      actualAmountBase: 750, unit: "Kg", physicalForm: "solid", productCategory: null,
+    });
+    expect(p.tanks[0].chemicals[1]).toMatchObject({ actualAmountBase: 2500, unit: "Litres" });
+    // The provisional shape must never be sent again.
+    expect(p).not.toHaveProperty("application_id");
+    expect(p).not.toHaveProperty("start_at");
+  });
+
+  it("sends the documented arguments and reads the returned identities", async () => {
+    rpc.mockResolvedValue(confirmed(1));
+    const attempt = freezeManualSprayAttempt(completeDraft(), "op-1", "2026-09-09T02:00:00.000Z");
+    const out = await saveManualSpray(attempt);
+    expect(out).toEqual({
+      kind: "saved",
+      identities: { manualEntryId: "me-1", sprayRecordId: "sr-1", tripId: "tp-1", syncVersion: 1 },
+    });
+    expect(rpc).toHaveBeenCalledTimes(1);
+    const [fn, args] = rpc.mock.calls[0] as [string, any];
+    expect(fn).toBe("save_manual_spray_v1");
+    expect(Object.keys(args).sort()).toEqual(["p_expected_version", "p_operation_id", "p_payload"]);
+    expect(args.p_operation_id).toBe("op-1");
+    expect(args.p_expected_version).toBe(0);
+  });
+
+  it("never uses a mutation call as the availability check", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ status: 405 });
+    vi.stubGlobal("fetch", fetchMock);
     const status = await probeManualSprayContract();
-    expect(status.available).toBe(false);
-    expect(status.gaps).toEqual(MANUAL_SPRAY_CONTRACT_GAPS);
-
-    const out = await saveManualSpray(toManualSprayPayload(completeDraft()));
-    expect(out.kind).toBe("unavailable");
-    // Only the probe call was made — no write was attempted.
-    expect(rpc).toHaveBeenCalledTimes(2);
-    expect((rpc.mock.calls[1] as [string, unknown])[0]).toBe("save_manual_spray_v1");
-    expect((rpc.mock.calls[1] as [string, unknown])[1]).toEqual({});
+    expect(status.available).toBe(true);
+    expect(rpc).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
-  it("retries with the identical frozen payload after an uncertain response", async () => {
-    const payload = toManualSprayPayload(completeDraft());
-    rpc.mockResolvedValueOnce(deployed)
-      .mockResolvedValueOnce({ data: null, error: { message: "TypeError: Failed to fetch" } });
-    const first = await saveManualSpray(payload);
+  it("retries with the identical frozen request after an uncertain response", async () => {
+    const attempt = freezeManualSprayAttempt(completeDraft(), "op-9", "2026-09-09T02:00:00.000Z");
+    rpc.mockResolvedValueOnce({ data: null, error: { message: "TypeError: Failed to fetch" } });
+    const first = await saveManualSpray(attempt);
     expect(first.kind).toBe("uncertain");
 
-    rpc.mockResolvedValue(deployed);
-    const second = await saveManualSpray(payload);
-    expect(second).toEqual({ kind: "saved", applicationId: payload.application_id });
-    const sent = rpc.mock.calls.filter((c) => (c[1] as any)?.p_payload).map((c) => (c[1] as any).p_payload);
+    rpc.mockResolvedValue(confirmed(1));
+    const second = await saveManualSpray(attempt);
+    expect(second.kind).toBe("saved");
+    const sent = rpc.mock.calls.map((c) => c[1] as any);
     expect(sent[0]).toEqual(sent[1]);
-    expect(sent[0].application_id).toBe(payload.application_id);
+    expect(sent[1].p_operation_id).toBe("op-9");
+    expect(sent[1].p_payload.clientUpdatedAt).toBe("2026-09-09T02:00:00.000Z");
   });
 
-  it("surfaces a version conflict instead of overwriting", async () => {
-    rpc.mockResolvedValueOnce(deployed)
-      .mockResolvedValueOnce({ data: null, error: { code: "40001", message: "version conflict" } });
-    const out = await saveManualSpray(toManualSprayPayload(completeDraft()));
-    expect(out.kind).toBe("conflict");
+  it("treats a response without server confirmation as uncertain, not saved", async () => {
+    rpc.mockResolvedValue({ data: { manualEntryId: "me-1" }, error: null });
+    const out = await saveManualSpray(freezeManualSprayAttempt(completeDraft(), "op-2"));
+    expect(out.kind).toBe("uncertain");
   });
 
-  it("refuses deletion while the coordinated delete function is missing", async () => {
-    rpc.mockResolvedValue(missingFn);
-    expect((await deleteManualSpray("app-1")).kind).toBe("unavailable");
+  it("distinguishes permission, missing deployment and version conflict", async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { code: "42501", message: "permission denied" } });
+    expect((await saveManualSpray(freezeManualSprayAttempt(completeDraft(), "o1"))).kind).toBe("denied");
+    rpc.mockResolvedValueOnce({ data: null, error: { code: "PGRST202", message: "not found" } });
+    expect((await saveManualSpray(freezeManualSprayAttempt(completeDraft(), "o2"))).kind).toBe("unavailable");
+    rpc.mockResolvedValueOnce({ data: null, error: { code: "40001", message: "stale" } });
+    expect((await saveManualSpray(freezeManualSprayAttempt(completeDraft(), "o3"))).kind).toBe("conflict");
+  });
+
+  it("deletes through the coordinated function with the documented parameters", async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+    const out = await deleteManualSpray({
+      operationId: "op-del", vineyardId: "vy-1",
+      manualEntryId: "me-1", sprayRecordId: "sr-1", tripId: "tp-1",
+    });
+    expect(out.kind).toBe("saved");
+    const [fn, args] = rpc.mock.calls[0] as [string, any];
+    expect(fn).toBe("delete_manual_spray_v1");
+    expect(Object.keys(args).sort()).toEqual([
+      "p_manual_entry_id", "p_operation_id", "p_spray_record_id", "p_trip_id", "p_vineyard_id",
+    ]);
+    expect(args).not.toHaveProperty("p_application_id");
   });
 });
 
