@@ -8,7 +8,7 @@
 // positions — there is no separate edit modal, and nothing is saved on blur.
 // Planned quantities and calculated totals stay read-only; Cancel writes
 // nothing; only a confirmed save changes the worksheet or a new export.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { History, Loader2, Pencil, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -56,16 +56,18 @@ import {
   formatAmendmentTime,
   overPlanNotes,
   payloadAmendments,
-  saveSprayActuals,
-  SprayActualsConflictError,
   tankChemicalKey,
   type ActualsDraft,
 } from "@/lib/sprayActuals";
 import {
-  correctSprayTripMetadata,
-  TripMetadataConflictError,
-  validateFuelRate,
-} from "@/lib/sprayTripMetadata";
+  buildSavePlan,
+  createSaveAttempt,
+  planIsEmpty,
+  runSaveAttempt,
+  type AttemptSummary,
+  type SaveAttempt,
+} from "@/lib/spraySaveOrchestration";
+
 import { recoverSprayWeather, weatherProvenanceLabel } from "@/lib/sprayWeatherRecovery";
 import { recoverSprayRowAssignments, rowProvenanceLabel } from "@/lib/sprayRowRecovery";
 import { formatActiveDuration, formatDistance } from "@/lib/sprayReportPdf";
@@ -228,6 +230,11 @@ export default function SprayTripWorksheet({
   const [weatherDiagnostic, setWeatherDiagnostic] = useState<string | null>(null);
   const [rowNote, setRowNote] = useState<string | null>(null);
   const [rowDiagnostic, setRowDiagnostic] = useState<string | null>(null);
+  const [status, setStatus] = useState<AttemptSummary | null>(null);
+  const [refreshFailed, setRefreshFailed] = useState(false);
+  const attemptRef = useRef<SaveAttempt | null>(null);
+  const signatureRef = useRef<string | null>(null);
+
 
   const { data: machines = [] } = useQuery<VineyardMachine[]>({
     queryKey: ["worksheet-machines", vineyardId],
@@ -279,58 +286,76 @@ export default function SprayTripWorksheet({
 
   const amendments = useMemo(() => (payload ? payloadAmendments(payload) : []), [payload]);
 
-  const save = useMutation({
-    mutationFn: async () => {
-      if (!payload) return;
-      const diff = diffActualsDraft(payload, draft);
-      if (diff.errors.length) throw new Error(diff.errors.join(" "));
+  // One Save press = one frozen attempt. Retrying re-issues the SAME requests
+  // (same operation ids, expected versions and line identities) and skips
+  // anything already confirmed saved.
+  const formValues = () => ({
+    machineId: machineId === NONE ? null : machineId,
+    sprayEquipmentId: sprayUnitId === NONE ? null : sprayUnitId,
+    operatorUserId: operatorId === NONE ? null : operatorId,
+    fuelRateText: fuelRate,
+    startHoursText: startHours,
+    endHoursText: endHours,
+  });
+  const attemptSignature = () =>
+    JSON.stringify({ draft, form: formValues(), version: payload?.metadataCorrectionVersion ?? 0 });
 
-      const start = numOrNull(startHours);
-      const end = numOrNull(endHours);
-      const rate = numOrNull(fuelRate);
-      if (Number.isNaN(start) || Number.isNaN(end) || Number.isNaN(rate)) {
-        throw new Error("Engine hours and fuel use must be numbers.");
-      }
-      const invalidHours = validateTripEngineHours(start, end);
-      if (invalidHours) throw new Error(invalidHours);
-      const invalidRate = validateFuelRate(rate);
-      if (invalidRate) throw new Error(invalidRate);
-
-      // Complete metadata snapshot: an explicit null clears an overlay.
-      const metadata = await correctSprayTripMetadata({
-        tripId,
-        expectedVersion: payload.metadataCorrectionVersion ?? 0,
-        correction: {
-          machineId: machineId === NONE ? null : machineId,
-          tractorId: payload.equipment.tractorId ?? null,
-          sprayEquipmentId: sprayUnitId === NONE ? null : sprayUnitId,
-          operatorUserId: operatorId === NONE ? null : operatorId,
-          fuelConsumptionLPerHour: rate,
-          startEngineHours: start,
-          endEngineHours: end,
-        },
-      });
-
-      // Actual usage: one audited correction per edited tank.
-      await saveSprayActuals({ payload, draft });
-      return metadata;
-    },
-    onSuccess: async () => {
-      setError(null);
-      setErrorDiagnostic(null);
-      setEditing(false);
-      // The canonical report is re-read; nothing local is promoted.
+  const refreshSaved = async () => {
+    setRefreshFailed(false);
+    try {
       await qc.invalidateQueries({ queryKey: sprayReportQueryKey(tripId) });
+      const res = await query.refetch();
+      if (res.error) throw res.error;
       await qc.invalidateQueries();
-      toast({ title: "Spray trip saved" });
+    } catch {
+      setRefreshFailed(true);
+    }
+  };
+
+  const save = useMutation({
+    mutationFn: async (): Promise<AttemptSummary | null> => {
+      if (!payload) return null;
+      const signature = attemptSignature();
+      let attempt: SaveAttempt | null = attemptRef.current;
+      // Edits made since the failed attempt start a fresh, revalidated plan.
+      if (!attempt || signatureRef.current !== signature) {
+        const plan = buildSavePlan(payload, draft, formValues());
+        if (plan.errors.length) throw new Error(plan.errors.join(" "));
+        if (planIsEmpty(plan)) {
+          attemptRef.current = null;
+          return null;
+        }
+        attempt = createSaveAttempt(plan);
+        attemptRef.current = attempt;
+        signatureRef.current = signature;
+      }
+      return runSaveAttempt(attempt);
     },
-    // The draft is kept on screen so the user can retry.
-    onError: (e) => {
-      if (e instanceof SprayActualsConflictError || e instanceof TripMetadataConflictError) {
-        setError(ACTUALS_VERSION_CONFLICT.customer);
-        setErrorDiagnostic(ACTUALS_VERSION_CONFLICT.diagnostic);
+    onSuccess: async (summary) => {
+      setError(null);
+      if (!summary) {
+        attemptRef.current = null;
+        setStatus(null);
+        setErrorDiagnostic(null);
+        setEditing(false);
+        toast({ title: "No changes to save" });
         return;
       }
+      setStatus(summary);
+      setErrorDiagnostic(summary.diagnostics.join(" | ") || null);
+      // Anything that may have committed means the canonical record moved on.
+      if (summary.anySaved || summary.uncertain.length) await refreshSaved();
+      if (summary.allSaved) {
+        attemptRef.current = null;
+        signatureRef.current = null;
+        setStatus(null);
+        setEditing(false);
+        toast({ title: "Spray trip saved" });
+      }
+    },
+    // Validation only — nothing was written. The draft stays on screen.
+    onError: (e) => {
+      setStatus(null);
       const { customer, diagnostic } = toCustomerError(
         e instanceof Error ? e.message : String(e),
         ACTUALS_SAVE_FAILED.customer,
@@ -339,6 +364,7 @@ export default function SprayTripWorksheet({
       setErrorDiagnostic(diagnostic ?? TRIP_METADATA_SAVE_FAILED.diagnostic);
     },
   });
+
 
   const recoverRows = useMutation({
     mutationFn: () => recoverSprayRowAssignments({ tripId }),
@@ -371,7 +397,10 @@ export default function SprayTripWorksheet({
     );
   }
 
-  if (query.isError || !payload) {
+  // A failed refresh after a successful save keeps the last saved record on
+  // screen; the refresh failure is reported separately.
+  if (!payload) {
+
     const loadError = toCustomerError(
       (query.error as Error)?.message,
       "Spray details could not be loaded. Please try again.",
@@ -423,7 +452,7 @@ export default function SprayTripWorksheet({
           <div className="flex gap-2">
             <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
               {save.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              Save changes
+              {status && !status.allSaved ? "Retry save" : "Save changes"}
             </Button>
             <Button
               size="sm"
@@ -432,6 +461,10 @@ export default function SprayTripWorksheet({
               onClick={() => {
                 setEditing(false);
                 setError(null);
+                setStatus(null);
+                setRefreshFailed(false);
+                attemptRef.current = null;
+                signatureRef.current = null;
               }}
             >
               <X className="mr-1.5 h-3.5 w-3.5" /> Cancel
@@ -445,9 +478,27 @@ export default function SprayTripWorksheet({
           Unsaved changes are not exported. A report downloaded now uses the last saved record.
         </p>
       )}
+      {status && !status.allSaved && (
+        <p
+          role="status"
+          className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-sm"
+        >
+          {status.message}
+        </p>
+      )}
+      {refreshFailed && (
+        <p role="status" className="rounded-md border p-2 text-sm">
+          Your changes were saved, but this page couldn't be refreshed with the saved record.
+          Exports still use the saved record.
+          <Button size="sm" variant="outline" className="ml-2" onClick={() => refreshSaved()}>
+            <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Retry refresh
+          </Button>
+        </p>
+      )}
       {error && (
         <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-sm text-destructive">
           {error}
+
         </p>
       )}
       <SystemAdminDiagnostics details={[errorDiagnostic, weatherDiagnostic, rowDiagnostic]} />

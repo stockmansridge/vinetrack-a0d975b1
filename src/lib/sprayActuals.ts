@@ -464,12 +464,44 @@ function isConflict(error: any): boolean {
   );
 }
 
+/**
+ * One audited tank correction. The caller owns the operation id so a retry of
+ * the SAME attempt re-issues an identical request and the server de-duplicates
+ * it instead of recording a second correction.
+ */
+export async function saveTankActual(req: {
+  operationId: string;
+  tripId: string;
+  sprayRecordId: string | null;
+  snapshot: TankActualSnapshot;
+}): Promise<void> {
+  const { snapshot: snap } = req;
+  const { error } = await (supabase as any).rpc("correct_spray_tank_actual_v1", {
+    p_operation_id: req.operationId,
+    p_actual_id: snap.actualId,
+    p_trip_id: req.tripId,
+    p_spray_record_id: req.sprayRecordId,
+    p_tank_session_id: snap.tankSessionId,
+    p_tank_number: snap.tankNumber,
+    p_expected_version: snap.expectedVersion,
+    p_water_volume_l: snap.waterVolumeL,
+    p_chemicals: snap.chemicals,
+  });
+  if (error) {
+    if (isConflict(error)) throw new SprayActualsConflictError();
+    const err = new Error(error.message || SPRAY_ACTUALS_SAVE_FAILED);
+    (err as any).code = error.code;
+    throw err;
+  }
+}
+
 export interface SaveActualsRequest {
   payload: SprayReportPayloadV1;
   draft: ActualsDraft;
   /** One UUID per Save attempt per tank; reuse only when retrying that save. */
   operationIds?: Record<number, string>;
 }
+
 
 /**
  * Save every edited tank through the audited RPC. Each tank is a separate
