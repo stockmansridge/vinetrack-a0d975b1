@@ -1,4 +1,4 @@
-import { openDeferredTab, PopupBlockedError } from "@/lib/openExternalUrl";
+import SecureExternalLink from "@/components/SecureExternalLink";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -123,46 +123,29 @@ async function updateStatus(id: string, status: string): Promise<void> {
 }
 
 function AttachmentLink({ path }: { path: string }) {
-  const [loading, setLoading] = useState(false);
-  const open = async () => {
-    setLoading(true);
-    // Opened during the click so Safari does not block it; the signed URL is
-    // pushed into the tab when it arrives.
-    const tab = openDeferredTab();
-    try {
-      const { data, error } = await iosSupabase.storage
-        .from("support-attachments")
-        .createSignedUrl(path, 600);
-      if (error || !data?.signedUrl) {
-        tab.fail();
-        toast.error(
-          `Cannot sign attachment URL — admin policy missing on support-attachments bucket. (${error?.message ?? "no url"})`,
-        );
-        return;
-      }
-      try {
-        await tab.settle(data.signedUrl);
-      } catch (e) {
-        toast.error(
-          e instanceof PopupBlockedError ? e.message : String(e),
-        );
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
   const name = path.split("/").pop() || path;
+  const resolve = useCallback(async () => {
+    const { data, error } = await iosSupabase.storage
+      .from("support-attachments")
+      .createSignedUrl(path, 600);
+    if (error || !data?.signedUrl) {
+      throw new Error(
+        `Cannot sign attachment URL — admin policy missing on support-attachments bucket. (${error?.message ?? "no url"})`,
+      );
+    }
+    return data.signedUrl;
+  }, [path]);
+
   return (
-    <button
-      type="button"
-      onClick={open}
-      disabled={loading}
-      className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline disabled:opacity-50"
-    >
-      <Paperclip className="h-3 w-3" />
-      <span className="truncate max-w-[260px]">{name}</span>
-      <ExternalLink className="h-3 w-3" />
-    </button>
+    <SecureExternalLink
+      resolve={resolve}
+      prepareLabel={name}
+      openLabel="Open attachment"
+      fallbackMessage="This attachment link could not be prepared."
+      icon={<Paperclip className="h-3 w-3" aria-hidden="true" />}
+      variant="ghost"
+      className="text-xs text-primary"
+    />
   );
 }
 
