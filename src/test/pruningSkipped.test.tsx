@@ -80,12 +80,18 @@ function renderDialog() {
 
 const toggleSkip = () => fireEvent.click(screen.getByLabelText("Mark selected rows as skipped"));
 
+/** The dialog is a 3-step wizard: details -> blocks -> work tasks/notes/save. */
+const goToBlocks = () => fireEvent.click(screen.getByText("Blocks & allocation"));
+const goToFinish = () =>
+  fireEvent.click(screen.getByText(/^(Work Tasks, notes & save|Notes & save)$/));
+
 describe("Record Pruning dialog — skipped mode", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("shows the skipped toggle in the activity dialog", () => {
     renderDialog();
     expect(screen.getByLabelText("Mark selected rows as skipped")).toBeTruthy();
+    goToFinish();
     expect(screen.getByText("Record activity")).toBeTruthy();
   });
 
@@ -97,6 +103,7 @@ describe("Record Pruning dialog — skipped mode", () => {
     expect(screen.queryByText("Method")).toBeNull();
     expect(screen.queryByText("Start")).toBeNull();
     expect(screen.queryByText("Finish")).toBeNull();
+    goToFinish();
     expect(screen.queryByText("Work Task")).toBeNull();
   });
 
@@ -104,9 +111,11 @@ describe("Record Pruning dialog — skipped mode", () => {
     renderDialog();
     toggleSkip();
     expect(screen.getByText("Date")).toBeTruthy();
-    expect(screen.getByText("Notes")).toBeTruthy();
+    goToBlocks();
     expect(screen.getByText("Blocks and rows")).toBeTruthy();
     expect(screen.getByText("Row 68 quarter 1")).toBeTruthy();
+    goToFinish();
+    expect(screen.getByText("Notes")).toBeTruthy();
     expect(screen.getByText("Mark skipped")).toBeTruthy();
     expect(screen.queryByText("Record activity")).toBeNull();
   });
@@ -114,6 +123,7 @@ describe("Record Pruning dialog — skipped mode", () => {
   it("requires at least one selected row section", async () => {
     renderDialog();
     toggleSkip();
+    goToFinish();
     fireEvent.click(screen.getByText("Mark skipped"));
     await waitFor(() =>
       expect(screen.getByText("Select at least one row or row section to mark as skipped.")).toBeTruthy());
@@ -123,8 +133,10 @@ describe("Record Pruning dialog — skipped mode", () => {
   it("confirms, then saves one canonical segment payload per block", async () => {
     renderDialog();
     toggleSkip();
+    goToBlocks();
     fireEvent.click(screen.getByText("Row 68 quarter 1"));
     fireEvent.click(screen.getByText("Row 68 quarter 2"));
+    goToFinish();
     fireEvent.click(screen.getByText("Mark skipped"));
 
     await waitFor(() => expect(screen.getByText("Mark selected rows as skipped?")).toBeTruthy());
@@ -145,8 +157,10 @@ describe("Record Pruning dialog — skipped mode", () => {
   it("saves multiple blocks as one user action, one skipped entry per block", async () => {
     renderDialog();
     toggleSkip();
+    goToBlocks();
     fireEvent.click(screen.getByText("Row 68 quarter 1"));
     fireEvent.click(screen.getByText("Block 2 row 5 quarter 1"));
+    goToFinish();
     fireEvent.click(screen.getByText("Mark skipped"));
     await waitFor(() => expect(screen.getByText("Mark selected rows as skipped?")).toBeTruthy());
     fireEvent.click(screen.getByText("Mark Skipped"));
@@ -158,7 +172,9 @@ describe("Record Pruning dialog — skipped mode", () => {
 
   it("normal mode still uses the parent activity save path", async () => {
     renderDialog();
+    goToBlocks();
     fireEvent.click(screen.getByText("Row 68 quarter 1"));
+    goToFinish();
     fireEvent.click(screen.getByText("Record activity"));
     await waitFor(() => expect(saveActivity).toHaveBeenCalledTimes(1));
     expect(recordSkippedPruningEntry).not.toHaveBeenCalled();

@@ -166,9 +166,14 @@ export default function PruningActivityDialog({
   // activity exists are linked immediately after the first successful save.
   const [pendingTaskIds, setPendingTaskIds] = useState<string[]>([]);
 
+  // Three-step wizard: 1 Details · 2 Blocks & allocation · 3 Work Tasks & notes.
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+
 
 
   const loaded = detailQ.data ?? null;
+
+  useEffect(() => { if (open) setStep(1); }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -388,6 +393,35 @@ export default function PruningActivityDialog({
 
         {(!isEdit || loaded) && (
           <div className="space-y-4">
+            {/* ---------------- Step indicator ---------------- */}
+            <ol className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 p-2">
+              {[
+                { n: 1 as const, label: "Date & details" },
+                { n: 2 as const, label: "Blocks & allocation" },
+                { n: 3 as const, label: skipped ? "Notes & save" : "Work Tasks, notes & save" },
+              ].map((s, i) => (
+                <li key={s.n} className="flex items-center gap-2">
+                  {i > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                  <button
+                    type="button"
+                    onClick={() => setStep(s.n)}
+                    aria-current={step === s.n ? "step" : undefined}
+                    className={`flex items-center gap-2 rounded-md px-2.5 py-1 text-sm transition-colors ${
+                      step === s.n
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <span className={`flex h-5 w-5 items-center justify-center rounded-full border text-xs tabular-nums ${
+                      step === s.n ? "border-primary-foreground/50" : "border-current"
+                    }`}>{s.n}</span>
+                    {s.label}
+                  </button>
+                </li>
+              ))}
+            </ol>
+
+            {step === 1 && (<>
             {/* SQL 168 — skipped mode toggle. Same dialog, same selectors. */}
             {!isEdit && (
               <div className="flex items-start justify-between gap-4 rounded-md border p-3">
@@ -444,53 +478,61 @@ export default function PruningActivityDialog({
               </div>
               </>)}
             </div>
+            </>)}
 
-            {/* SQL 200 — Work Tasks are the ONLY labour/cost surface. */}
-            {!skipped && (
-              <PruningWorkTasksSection
+
+            {/* ---------------- Step 2: blocks & allocation ---------------- */}
+            {step === 2 && (
+              <MultiBlockAllocationEditor
                 vineyardId={vineyardId}
-                activityId={activityId}
-                legacyTaskId={draft.workTaskId}
-                draft={draft}
-                startTime={startInput}
-                finishTime={finishInput}
-                legacyLabourHours={draft.labourHours}
-                legacyHourlyRate={draft.hourlyRate}
-                pendingTaskIds={pendingTaskIds}
-                onPendingLink={(id) => setPendingTaskIds((ids) =>
-                  ids.includes(id) ? ids : [...ids, id])}
-                onLegacyTaskCleared={() => setDraft((d) => ({ ...d, workTaskId: null }))}
+                seasonYear={seasonYear}
+                value={draft.allocations}
+                onChange={handleAllocationsChange}
+                ownedByActivity={ownedByActivity}
+                initialPaddockId={paddockId}
                 disabled={busy}
               />
             )}
 
-            <div className="space-y-1">
-              <Label htmlFor="pa-notes">Notes</Label>
-              <Textarea id="pa-notes" rows={2} value={draft.notes}
-                onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))} />
-            </div>
+            {/* ---------------- Step 3: Work Tasks, notes & save ---------------- */}
+            {step === 3 && (<>
+              {/* SQL 200 — Work Tasks are the ONLY labour/cost surface. */}
+              {!skipped && (
+                <PruningWorkTasksSection
+                  vineyardId={vineyardId}
+                  activityId={activityId}
+                  legacyTaskId={draft.workTaskId}
+                  draft={draft}
+                  startTime={startInput}
+                  finishTime={finishInput}
+                  legacyLabourHours={draft.labourHours}
+                  legacyHourlyRate={draft.hourlyRate}
+                  pendingTaskIds={pendingTaskIds}
+                  onPendingLink={(id) => setPendingTaskIds((ids) =>
+                    ids.includes(id) ? ids : [...ids, id])}
+                  onLegacyTaskCleared={() => setDraft((d) => ({ ...d, workTaskId: null }))}
+                  disabled={busy}
+                />
+              )}
 
-            {isEdit && loaded && (
-              <div className="flex flex-wrap gap-x-6 gap-y-1 rounded-md border bg-muted/20 p-2.5 text-xs text-muted-foreground">
-                <span>Created by <b className="text-foreground">{resolveUser(loaded.createdById) ?? "—"}</b></span>
-                <span>Created <b className="text-foreground">{loaded.createdAt ? formatDate(loaded.createdAt.slice(0, 10)) : "—"}</b></span>
-                <span>Updated <b className="text-foreground">{loaded.updatedAt ? formatDate(loaded.updatedAt.slice(0, 10)) : "—"}</b></span>
-                <span>Season <b className="text-foreground">{loaded.seasonYear ?? "—"}</b></span>
-                <span>Vintage <b className="text-foreground">{loaded.vintageYear ?? "—"}</b></span>
-                <span>Status <b className="text-foreground">{loaded.isReversed ? "Reversed" : "Recorded"}</b></span>
+              <div className="space-y-1">
+                <Label htmlFor="pa-notes">Notes</Label>
+                <Textarea id="pa-notes" rows={2} value={draft.notes}
+                  onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))} />
               </div>
-            )}
 
-            {/* ---------------- Allocations ---------------- */}
-            <MultiBlockAllocationEditor
-              vineyardId={vineyardId}
-              seasonYear={seasonYear}
-              value={draft.allocations}
-              onChange={handleAllocationsChange}
-              ownedByActivity={ownedByActivity}
-              initialPaddockId={paddockId}
-              disabled={busy}
-            />
+              {isEdit && loaded && (
+                <div className="flex flex-wrap gap-x-6 gap-y-1 rounded-md border bg-muted/20 p-2.5 text-xs text-muted-foreground">
+                  <span>Created by <b className="text-foreground">{resolveUser(loaded.createdById) ?? "—"}</b></span>
+                  <span>Created <b className="text-foreground">{loaded.createdAt ? formatDate(loaded.createdAt.slice(0, 10)) : "—"}</b></span>
+                  <span>Updated <b className="text-foreground">{loaded.updatedAt ? formatDate(loaded.updatedAt.slice(0, 10)) : "—"}</b></span>
+                  <span>Season <b className="text-foreground">{loaded.seasonYear ?? "—"}</b></span>
+                  <span>Vintage <b className="text-foreground">{loaded.vintageYear ?? "—"}</b></span>
+                  <span>Status <b className="text-foreground">{loaded.isReversed ? "Reversed" : "Recorded"}</b></span>
+                </div>
+              )}
+            </>)}
+
 
             {conflicts.length > 0 && (
               <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
@@ -524,22 +566,35 @@ export default function PruningActivityDialog({
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button
-              type="button"
-              onClick={() => {
-                if (!skipped) { handleSave(); return; }
-                if (totals.quarters === 0) {
-                  setSaveError("Select at least one row or row section to mark as skipped.");
-                  return;
-                }
-                setSaveError(null);
-                setConfirmSkip(true);
-              }}
-              disabled={skipped ? busy || !draft.entryDate : !canSave}
-            >
-              {busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-              {skipped ? "Mark skipped" : isEdit ? "Save changes" : "Record activity"}
-            </Button>
+            {step > 1 && (
+              <Button type="button" variant="outline" disabled={busy}
+                onClick={() => setStep((s) => (s === 3 ? 2 : 1))}>
+                <ChevronLeft className="h-4 w-4 mr-1" /> Back
+              </Button>
+            )}
+            {step < 3 ? (
+              <Button type="button" disabled={busy || (step === 1 && !draft.entryDate)}
+                onClick={() => setStep((s) => (s === 1 ? 2 : 3))}>
+                Next <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                onClick={() => {
+                  if (!skipped) { handleSave(); return; }
+                  if (totals.quarters === 0) {
+                    setSaveError("Select at least one row or row section to mark as skipped.");
+                    return;
+                  }
+                  setSaveError(null);
+                  setConfirmSkip(true);
+                }}
+                disabled={skipped ? busy || !draft.entryDate : !canSave}
+              >
+                {busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                {skipped ? "Mark skipped" : isEdit ? "Save changes" : "Record activity"}
+              </Button>
+            )}
           </div>
         </DialogFooter>
 
