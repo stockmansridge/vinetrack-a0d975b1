@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 
 import { generateUuid, isUuid, tryGenerateUuid, SecureRandomUnavailableError } from "@/lib/uuid";
-import { openDeferredTab, PopupBlockedError } from "@/lib/openExternalUrl";
+import SecureExternalLink from "@/components/SecureExternalLink";
 import { HelpHint } from "@/components/ui/HelpHint";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
