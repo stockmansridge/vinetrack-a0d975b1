@@ -450,52 +450,58 @@ export default function PruningActivityDialog({
               </>)}
             </div>
 
-            {/* SQL 200 — Work Tasks are the ONLY labour/cost surface. */}
-            {!skipped && (
-              <PruningWorkTasksSection
+            {/* ---------------- Step 2: blocks & allocation ---------------- */}
+            {step === 2 && (
+              <MultiBlockAllocationEditor
                 vineyardId={vineyardId}
-                activityId={activityId}
-                legacyTaskId={draft.workTaskId}
-                draft={draft}
-                startTime={startInput}
-                finishTime={finishInput}
-                legacyLabourHours={draft.labourHours}
-                legacyHourlyRate={draft.hourlyRate}
-                pendingTaskIds={pendingTaskIds}
-                onPendingLink={(id) => setPendingTaskIds((ids) =>
-                  ids.includes(id) ? ids : [...ids, id])}
-                onLegacyTaskCleared={() => setDraft((d) => ({ ...d, workTaskId: null }))}
+                seasonYear={seasonYear}
+                value={draft.allocations}
+                onChange={handleAllocationsChange}
+                ownedByActivity={ownedByActivity}
+                initialPaddockId={paddockId}
                 disabled={busy}
               />
             )}
 
-            <div className="space-y-1">
-              <Label htmlFor="pa-notes">Notes</Label>
-              <Textarea id="pa-notes" rows={2} value={draft.notes}
-                onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))} />
-            </div>
+            {/* ---------------- Step 3: Work Tasks, notes & save ---------------- */}
+            {step === 3 && (<>
+              {/* SQL 200 — Work Tasks are the ONLY labour/cost surface. */}
+              {!skipped && (
+                <PruningWorkTasksSection
+                  vineyardId={vineyardId}
+                  activityId={activityId}
+                  legacyTaskId={draft.workTaskId}
+                  draft={draft}
+                  startTime={startInput}
+                  finishTime={finishInput}
+                  legacyLabourHours={draft.labourHours}
+                  legacyHourlyRate={draft.hourlyRate}
+                  pendingTaskIds={pendingTaskIds}
+                  onPendingLink={(id) => setPendingTaskIds((ids) =>
+                    ids.includes(id) ? ids : [...ids, id])}
+                  onLegacyTaskCleared={() => setDraft((d) => ({ ...d, workTaskId: null }))}
+                  disabled={busy}
+                />
+              )}
 
-            {isEdit && loaded && (
-              <div className="flex flex-wrap gap-x-6 gap-y-1 rounded-md border bg-muted/20 p-2.5 text-xs text-muted-foreground">
-                <span>Created by <b className="text-foreground">{resolveUser(loaded.createdById) ?? "—"}</b></span>
-                <span>Created <b className="text-foreground">{loaded.createdAt ? formatDate(loaded.createdAt.slice(0, 10)) : "—"}</b></span>
-                <span>Updated <b className="text-foreground">{loaded.updatedAt ? formatDate(loaded.updatedAt.slice(0, 10)) : "—"}</b></span>
-                <span>Season <b className="text-foreground">{loaded.seasonYear ?? "—"}</b></span>
-                <span>Vintage <b className="text-foreground">{loaded.vintageYear ?? "—"}</b></span>
-                <span>Status <b className="text-foreground">{loaded.isReversed ? "Reversed" : "Recorded"}</b></span>
+              <div className="space-y-1">
+                <Label htmlFor="pa-notes">Notes</Label>
+                <Textarea id="pa-notes" rows={2} value={draft.notes}
+                  onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))} />
               </div>
-            )}
 
-            {/* ---------------- Allocations ---------------- */}
-            <MultiBlockAllocationEditor
-              vineyardId={vineyardId}
-              seasonYear={seasonYear}
-              value={draft.allocations}
-              onChange={handleAllocationsChange}
-              ownedByActivity={ownedByActivity}
-              initialPaddockId={paddockId}
-              disabled={busy}
-            />
+              {isEdit && loaded && (
+                <div className="flex flex-wrap gap-x-6 gap-y-1 rounded-md border bg-muted/20 p-2.5 text-xs text-muted-foreground">
+                  <span>Created by <b className="text-foreground">{resolveUser(loaded.createdById) ?? "—"}</b></span>
+                  <span>Created <b className="text-foreground">{loaded.createdAt ? formatDate(loaded.createdAt.slice(0, 10)) : "—"}</b></span>
+                  <span>Updated <b className="text-foreground">{loaded.updatedAt ? formatDate(loaded.updatedAt.slice(0, 10)) : "—"}</b></span>
+                  <span>Season <b className="text-foreground">{loaded.seasonYear ?? "—"}</b></span>
+                  <span>Vintage <b className="text-foreground">{loaded.vintageYear ?? "—"}</b></span>
+                  <span>Status <b className="text-foreground">{loaded.isReversed ? "Reversed" : "Recorded"}</b></span>
+                </div>
+              )}
+            </>)}
+
 
             {conflicts.length > 0 && (
               <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
