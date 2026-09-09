@@ -83,7 +83,7 @@ describe("trip metadata corrections", () => {
 
 describe("weather recovery", () => {
   it("reports how many past hours were retrieved", async () => {
-    invoke.mockResolvedValue({ data: { filled: 2 }, error: null });
+    invoke.mockResolvedValue({ data: { success: true, captured: 2 }, error: null });
     const out = await recoverSprayWeather("t1");
     expect(out.kind).toBe("recovered");
     expect(out.message).toContain("2 past hours");

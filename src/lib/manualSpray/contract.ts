@@ -32,39 +32,13 @@ export interface ManualSprayContractStatus {
 }
 
 /**
- * Capability check. A mutation call is NEVER used as a health check: an empty
- * argument object cannot tell an absent function apart from a deployed one
- * whose arguments were omitted. Instead the PostgREST schema description is
- * read, which is a plain non-mutating GET.
- *
- * Anything other than a definitive "the function is not in the schema" is
- * treated as deployed — a permission refusal means the function exists and the
- * ordinary save-time error handling will report it accurately.
+ * SQL 232 and 233 are deployed, so the save/delete functions exist. No mutation
+ * call is ever used as a health check, and there is no stale "not deployed"
+ * warning: if the shared project ever answers PGRST202 at save time, ordinary
+ * error handling reports it accurately.
  */
 export async function probeManualSprayContract(): Promise<ManualSprayContractStatus> {
-  try {
-    const rest = (supabase as unknown as { rest?: { url?: string } }).rest?.url;
-    const base =
-      rest ??
-      (supabase as unknown as { supabaseUrl?: string }).supabaseUrl?.replace(/\/$/, "") + "/rest/v1";
-    if (!base) return { available: true, gaps: [] };
-    // HEAD on the RPC path: 404 means the routine is unknown to PostgREST.
-    const key = (supabase as unknown as { supabaseKey?: string }).supabaseKey ?? "";
-    const res = await fetch(`${base}/rpc/${MANUAL_SPRAY_RPC.save}`, {
-      method: "HEAD",
-      headers: { apikey: key, Authorization: `Bearer ${key}` },
-    });
-    if (res.status === 404) {
-      return {
-        available: false,
-        gaps: [`${MANUAL_SPRAY_RPC.save} is not deployed in the shared project.`],
-      };
-    }
-    return { available: true, gaps: [] };
-  } catch {
-    // A network failure says nothing about deployment. Do not block the form.
-    return { available: true, gaps: [] };
-  }
+  return { available: true, gaps: [] };
 }
 
 /* --------------------------------------------------------------- payload */
@@ -109,7 +83,52 @@ export interface ManualSprayPayload {
   clientUpdatedAt: string;
   blocks: Array<{ blockId: string; blockName: string | null }>;
   tanks: ManualSprayTankWire[];
-  manualWeather: ManualSprayDraft["weather"];
+  /** Documented single manual observation, or null when nothing was entered. */
+  manualWeather: ManualWeatherWire | null;
+}
+
+/** Manual weather evidence, exactly as documented in the handoff. */
+export interface ManualWeatherWire {
+  observedAt: string | null;
+  source: string;
+  temperatureC: number | null;
+  humidityPct: number | null;
+  windSpeedKmh: number | null;
+  windGustKmh: number | null;
+  windDirectionDeg: number | null;
+  rainMm: number | null;
+}
+
+const finite = (n: unknown): number | null =>
+  typeof n === "number" && Number.isFinite(n) ? n : null;
+
+/**
+ * Only genuinely entered conditions travel. Nothing is defaulted to zero, and a
+ * wind direction that isn't a compass bearing in degrees is sent as null rather
+ * than guessed.
+ */
+export function toManualWeatherWire(
+  weather: ManualSprayDraft["weather"],
+): ManualWeatherWire | null {
+  const w = weather?.[0];
+  if (!w) return null;
+  const deg = Number(w.windDirection);
+  const wire: ManualWeatherWire = {
+    observedAt: w.observedAt ?? null,
+    source: "Operator observation",
+    temperatureC: finite(w.temperature),
+    humidityPct: finite(w.humidity),
+    windSpeedKmh: finite(w.windSpeed),
+    windGustKmh: null,
+    windDirectionDeg: w.windDirection != null && Number.isFinite(deg) ? deg : null,
+    rainMm: null,
+  };
+  const hasValue =
+    wire.temperatureC != null ||
+    wire.humidityPct != null ||
+    wire.windSpeedKmh != null ||
+    wire.windDirectionDeg != null;
+  return hasValue ? wire : null;
 }
 
 /**
@@ -162,7 +181,7 @@ export function toManualSprayPayload(
         };
       }),
     })),
-    manualWeather: draft.weather,
+    manualWeather: toManualWeatherWire(draft.weather),
   };
 }
 
@@ -211,7 +230,12 @@ export type ManualSpraySaveOutcome =
   | { kind: "refused"; message: string }
   | { kind: "denied"; message: string }
   | { kind: "conflict"; message: string }
+  /** The application was deleted; the tombstone is authoritative (SQL 233). */
+  | { kind: "deleted"; message: string }
   | { kind: "uncertain"; message: string };
+
+export const MANUAL_SPRAY_DELETED_MESSAGE =
+  "This spray has been deleted, so it can't be saved again. Start a new manual spray if you still need to record it.";
 
 const UNCERTAIN_PATTERNS = [/failed to fetch/i, /network/i, /timeout/i, /aborted/i, /load failed/i];
 
@@ -233,6 +257,10 @@ function classify(error: { code?: string; message?: string }): ManualSpraySaveOu
     return { kind: "denied", message: "You don't have permission to record manual sprays for this vineyard." };
   if (code === "401" || /jwt|not authenticated/i.test(message))
     return { kind: "denied", message: "Your session has expired. Sign in again and retry." };
+  // SQL 233: a retry of a save whose application has since been deleted. The
+  // tombstone wins — never present the old cached response as confirmation.
+  if (code === "55000" || /tombstone|deleted/i.test(message))
+    return { kind: "deleted", message: MANUAL_SPRAY_DELETED_MESSAGE };
   if (code === "40001" || /conflict|stale/i.test(message))
     return { kind: "conflict", message: "This spray was changed somewhere else. Reopen it to see the newer version before saving again." };
   if (isUncertainManualFailure(error)) return { kind: "uncertain", message: UNCERTAIN_SAVE_MESSAGE };
@@ -295,7 +323,8 @@ export async function deleteManualSpray(req: ManualSprayDeleteRequest): Promise<
       const out = classify(error as any);
       if (out.kind === "uncertain")
         return { kind: "uncertain", message: "The connection dropped — this spray may already be deleted. Retry re-sends the same request." };
-      return out;
+      // Deleting something already tombstoned is the intended end state.
+      if (out.kind !== "deleted") return out;
     }
     return {
       kind: "saved",

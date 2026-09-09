@@ -15,15 +15,18 @@ export const WEATHER_RECOVERY_NONE =
   "No further observations were available for the missing hours.";
 
 export type WeatherRecoveryOutcome =
-  | { kind: "recovered"; filled: number; message: string }
+  | { kind: "recovered"; captured: number; message: string }
   | { kind: "pending"; message: string }
   | { kind: "unsupported"; message: string }
   | { kind: "failed"; message: string; diagnostic: string };
 
+/**
+ * Deployed response contract. `captured` counts genuine persisted observations;
+ * there is no `filled` field.
+ */
 export interface WeatherRecoveryResponse {
-  /** Deployed contract field (SQL 232). `filled` is the older alias. */
+  success?: boolean;
   captured?: number;
-  filled?: number;
   pending?: number;
   unavailable?: number;
   provider?: string | null;
@@ -53,20 +56,24 @@ export async function recoverSprayWeather(
     if (res.supported === false || res.status === "unsupported_provider") {
       return { kind: "unsupported", message: WEATHER_RECOVERY_UNSUPPORTED };
     }
-    // `captured` is the deployed field name; `filled` is the older alias.
-    const filled =
-      typeof res.captured === "number" ? res.captured : typeof res.filled === "number" ? res.filled : 0;
-    if (filled > 0) {
+    const captured = typeof res.captured === "number" ? res.captured : 0;
+    if (captured > 0) {
       return {
         kind: "recovered",
-        filled,
-        message: `${filled} past ${filled === 1 ? "hour" : "hours"} of weather retrieved.`,
+        captured,
+        message: `${captured} past ${captured === 1 ? "hour" : "hours"} of weather retrieved.`,
       };
     }
     if ((res.pending ?? 0) > 0) {
       return {
         kind: "pending",
         message: "Some hours are still waiting on the weather station — try again later.",
+      };
+    }
+    if ((res.unavailable ?? 0) > 0) {
+      return {
+        kind: "pending",
+        message: "The weather station holds no records for those hours, so they stay as not recorded.",
       };
     }
     return { kind: "pending", message: WEATHER_RECOVERY_NONE };

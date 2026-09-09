@@ -488,6 +488,9 @@ export default function ManualSprayEntryPage() {
         {outcome?.kind === "conflict" && (
           <PortalNotice variant="warning" title="Changed somewhere else" description={outcome.message} />
         )}
+        {outcome?.kind === "deleted" && (
+          <PortalNotice variant="warning" title="This spray was deleted" description={outcome.message} />
+        )}
         {(outcome?.kind === "refused" || outcome?.kind === "denied" || outcome?.kind === "unavailable") && (
           <PortalNotice variant="warning" title="Not saved" description={outcome.message} />
         )}
@@ -498,7 +501,7 @@ export default function ManualSprayEntryPage() {
               {saving ? "Saving…" : "Save manual spray"}
             </Button>
           )}
-          {attempt && !saved && (
+          {attempt && !saved && outcome?.kind !== "deleted" && (
             <Button variant="outline" disabled={saving} onClick={() => runSave(attempt)}>
               Retry (sends the same entry)
             </Button>
