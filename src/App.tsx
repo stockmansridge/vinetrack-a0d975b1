@@ -38,6 +38,7 @@ import NewPaddockPage from "./pages/setup/NewPaddockPage";
 import PinsPage from "./pages/setup/PinsPage";
 import DamageRecordsPage from "./pages/setup/DamageRecordsPage";
 import SprayRecordsPage from "./pages/setup/SprayRecordsPage";
+import ManualSprayEntryPage from "./pages/setup/ManualSprayEntryPage";
 import WorkTasksPage from "./pages/setup/WorkTasksPage";
 import MaintenancePage from "./pages/setup/MaintenancePage";
 import TripsPage from "./pages/setup/TripsPage";
@@ -198,6 +199,7 @@ const App = () => (
                     <Route path="/pins" element={<PinsPage />} />
                     <Route path="/manual-issues" element={<Navigate to="/pins" replace />} />
                     <Route path="/spray-records" element={<SprayRecordsPage />} />
+                    <Route path="/spray-records/manual/new" element={<ManualSprayEntryPage />} />
                     <Route path="/work-tasks" element={<WorkTasksPage />} />
                     <Route path="/maintenance" element={<MaintenancePage />} />
                     <Route path="/trips" element={<TripsPage />} />
