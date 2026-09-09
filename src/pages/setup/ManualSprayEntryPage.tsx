@@ -77,8 +77,32 @@ export default function ManualSprayEntryPage() {
   const { toast } = useToast();
   const vineyardId = selectedVineyardId ?? "";
 
+  // Edit mode: /spray-records/manual/:sprayRecordId/edit. The saved
+  // application is reloaded with ALL of its identities — never a fresh draft.
+  const { sprayRecordId: editRecordId } = useParams<{ sprayRecordId: string }>();
+  const isEdit = !!editRecordId;
+
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<ManualSprayDraft>(() => emptyManualSprayDraft(vineyardId));
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(!editRecordId);
+
+  useEffect(() => {
+    if (!editRecordId) return;
+    let cancelled = false;
+    setLoaded(false);
+    setLoadError(null);
+    void loadManualSprayDraft(editRecordId).then((res) => {
+      if (cancelled) return;
+      if (res.draft) setDraft(res.draft);
+      else setLoadError(res.error ?? "This manual spray could not be loaded.");
+      setLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [editRecordId]);
+
   const [showErrors, setShowErrors] = useState(false);
   const [saving, setSaving] = useState(false);
   /** The frozen, unresolved save attempt. Retry re-sends exactly this. */
