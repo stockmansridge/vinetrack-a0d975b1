@@ -115,7 +115,9 @@ export async function loadManualSprayDraft(
         };
       });
     return {
-      id: text(pick(stored, ["id", "tankId", "tank_id"])) ?? actualId || `tank-${t.tankNumber}`,
+      id:
+        text(pick(stored, ["id", "tankId", "tank_id"])) ??
+        (actualId || `tank-${t.tankNumber}`),
       actualId,
       displayNumber: t.tankNumber ?? i + 1,
       waterLitres: t.actualWaterLitres ?? null,
