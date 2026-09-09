@@ -155,14 +155,38 @@ export const SETUP_WARNING_LABELS: Record<string, string> = {
   no_estimate: "No base estimate has been calculated yet",
 };
 
-export const setupWarningLabel = (code: string): string =>
-  SETUP_WARNING_LABELS[code] ??
-  code.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+/**
+ * Warning codes can arrive from the DB as plain strings or as objects
+ * ({ code }/{ warning }/{ message }); coerce defensively so a shape change
+ * never crashes the page.
+ */
+const warningCode = (value: unknown): string => {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (value && typeof value === "object") {
+    const o = value as Record<string, unknown>;
+    const candidate = o.code ?? o.warning ?? o.message ?? o.label ?? o.type;
+    if (typeof candidate === "string") return candidate;
+  }
+  return "";
+};
+
+export const setupWarningLabel = (code: unknown): string => {
+  const key = warningCode(code);
+  if (!key) return "";
+  return (
+    SETUP_WARNING_LABELS[key] ??
+    key.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())
+  );
+};
 
 const num = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) ? v : null;
 
-const uniq = (list: string[]): string[] => Array.from(new Set(list.filter(Boolean)));
+const uniq = (list: unknown): string[] => {
+  const arr = Array.isArray(list) ? list : [];
+  return Array.from(new Set(arr.map(warningCode).filter(Boolean)));
+};
 
 /** 0–100 loss per paddock, from the Portal damage engine. */
 export interface BlockDamage {
