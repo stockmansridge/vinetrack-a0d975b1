@@ -87,3 +87,6 @@ verify_jwt = false
 
 [functions.admin-set-maintenance]
 verify_jwt = false
+
+[functions.admin-portal-notices]
+verify_jwt = false
