@@ -312,6 +312,10 @@ export default function SprayRecordsPage() {
         lookups={lookups}
         open={!!selected}
         onOpenChange={(o) => !o && setSelected(null)}
+        onDeleted={() => {
+          setSelected(null);
+          void refetch();
+        }}
       />
     </div>
   );
