@@ -362,7 +362,27 @@ function SprayRecordSheet({
         </SheetHeader>
         {record && (
           <div className="mt-4 space-y-4 text-sm">
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2 flex-wrap">
+              {canEditThis && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={() => navigate(`/spray-records/manual/${record.id}/edit`)}
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Edit manual spray
+                </Button>
+              )}
+              {canEditThis && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 text-destructive"
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="outline"
