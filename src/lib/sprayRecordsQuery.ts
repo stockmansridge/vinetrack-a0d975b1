@@ -34,6 +34,10 @@ export interface SprayRecord {
   is_template?: boolean | null;
   operation_type?: string | null;
   tanks?: any;
+  // Manual entry contract (SQL 232/233). Origin is explicit, never inferred.
+  entry_source?: string | null;
+  manual_entry_id?: string | null;
+  sync_version?: number | null;
   created_at?: string | null;
   updated_at?: string | null;
   deleted_at?: string | null;
