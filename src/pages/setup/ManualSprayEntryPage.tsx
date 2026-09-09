@@ -44,6 +44,7 @@ import {
   freezeManualSprayAttempt,
   type ManualSprayAttempt, type ManualSprayIdentities, type ManualSpraySaveOutcome,
 } from "@/lib/manualSpray/contract";
+import { loadManualSprayDraft } from "@/lib/manualSpray/load";
 import { recoverSprayWeather } from "@/lib/sprayWeatherRecovery";
 import { useCanEnterManualSpray, MANUAL_SPRAY_DENIED_MESSAGE } from "@/lib/manualSpray/permissions";
 
