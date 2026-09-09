@@ -341,8 +341,12 @@ describe("backend contract (SQL 232)", () => {
 
 describe("manual identification", () => {
   it("comes from the source field only", () => {
-    expect(isManualSpraySource("manual_entry")).toBe(true);
+    // Deployed contract: entry_source === "manual".
+    expect(isManualSpraySource("manual")).toBe(true);
+    expect(isManualSpraySource("tracked")).toBe(false);
+    expect(isManualSpraySource("manual_entry")).toBe(false);
     expect(isManualSpraySource("gps_tracked")).toBe(false);
     expect(isManualSpraySource(null)).toBe(false);
+    expect(isManualSpraySource(undefined)).toBe(false);
   });
 });
