@@ -750,6 +750,23 @@ export default function SprayTripWorksheet({
       )}
 
       <Block title="Rows">
+        {canEdit && (
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              Recovery only fills in rows that have enough recorded evidence;
+              recorded attribution is never changed.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => recoverRows.mutate()}
+              disabled={recoverRows.isPending}
+            >
+              {recoverRows.isPending ? "Checking…" : "Recover row and block matches"}
+            </Button>
+          </div>
+        )}
+        {rowNote && <p className="mb-2 text-xs text-muted-foreground">{rowNote}</p>}
         <Table>
           <TableHeader>
             <TableRow>
