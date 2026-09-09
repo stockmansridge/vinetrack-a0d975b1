@@ -4,6 +4,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { PendingInvitesBanner } from "@/components/invites/PendingInvitesModal";
 import PortalInfoBanner from "@/components/PortalInfoBanner";
+import PortalNoticesBanner from "@/components/PortalNoticesBanner";
 import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -179,6 +180,7 @@ export default function AppLayout() {
               <GlobalSearch autoFocus />
             </div>
           )}
+          <PortalNoticesBanner />
           <PortalInfoBanner />
           <PendingInvitesBanner />
           <main className="relative flex-1 bg-transparent min-w-0 w-full max-w-full overflow-x-hidden">

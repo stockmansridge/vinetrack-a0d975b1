@@ -227,6 +227,51 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_notices: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          created_by_email: string | null
+          ends_at: string | null
+          id: string
+          is_active: boolean
+          message: string
+          priority: number
+          starts_at: string | null
+          title: string
+          tone: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          created_by_email?: string | null
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          message: string
+          priority?: number
+          starts_at?: string | null
+          title: string
+          tone?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          created_by_email?: string | null
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          message?: string
+          priority?: number
+          starts_at?: string | null
+          title?: string
+          tone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
