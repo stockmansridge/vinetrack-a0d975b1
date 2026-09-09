@@ -99,7 +99,7 @@ export default function AccountBillingPage() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
-  const [pendingInvoice, setPendingInvoice] = useState<string | null>(null);
+  
 
   // Auto-select, validated against the server list every time.
   useEffect(() => {
