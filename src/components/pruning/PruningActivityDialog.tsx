@@ -566,22 +566,35 @@ export default function PruningActivityDialog({
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button
-              type="button"
-              onClick={() => {
-                if (!skipped) { handleSave(); return; }
-                if (totals.quarters === 0) {
-                  setSaveError("Select at least one row or row section to mark as skipped.");
-                  return;
-                }
-                setSaveError(null);
-                setConfirmSkip(true);
-              }}
-              disabled={skipped ? busy || !draft.entryDate : !canSave}
-            >
-              {busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-              {skipped ? "Mark skipped" : isEdit ? "Save changes" : "Record activity"}
-            </Button>
+            {step > 1 && (
+              <Button type="button" variant="outline" disabled={busy}
+                onClick={() => setStep((s) => (s === 3 ? 2 : 1))}>
+                <ChevronLeft className="h-4 w-4 mr-1" /> Back
+              </Button>
+            )}
+            {step < 3 ? (
+              <Button type="button" disabled={busy || (step === 1 && !draft.entryDate)}
+                onClick={() => setStep((s) => (s === 1 ? 2 : 3))}>
+                Next <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                onClick={() => {
+                  if (!skipped) { handleSave(); return; }
+                  if (totals.quarters === 0) {
+                    setSaveError("Select at least one row or row section to mark as skipped.");
+                    return;
+                  }
+                  setSaveError(null);
+                  setConfirmSkip(true);
+                }}
+                disabled={skipped ? busy || !draft.entryDate : !canSave}
+              >
+                {busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                {skipped ? "Mark skipped" : isEdit ? "Save changes" : "Record activity"}
+              </Button>
+            )}
           </div>
         </DialogFooter>
 
