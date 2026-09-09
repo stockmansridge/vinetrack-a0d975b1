@@ -1,3 +1,4 @@
+import { ManualSprayEntryButton } from "@/components/spray/ManualSprayEntryButton";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Copy, Archive, RotateCcw, FileText, Save, X, Download, FileDown, Trash2, Upload, FileSpreadsheet, Info } from "lucide-react";
@@ -202,6 +203,7 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <ManualSprayEntryButton />
           {canEdit && effectiveTab === "templates" && (
             <>
               <Button onClick={() => setEditing({ job: null, isTemplate: true })}>

@@ -1,3 +1,4 @@
+import { ManualSprayEntryButton } from "@/components/spray/ManualSprayEntryButton";
 import { readRecordChemistry } from "@/lib/sprayRecordChemistry";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -181,6 +182,7 @@ export default function SprayRecordsPage() {
             Read-only. Templates and soft-deleted records are excluded.
           </p>
         </div>
+        <ManualSprayEntryButton />
       </div>
 
       <PortalNotice
