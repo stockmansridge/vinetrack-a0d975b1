@@ -7,7 +7,7 @@
 // contract. Until that function is deployed the Save action stays unavailable
 // and the exact contract gaps are shown.
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Copy, Plus, Trash2 } from "lucide-react";
 
