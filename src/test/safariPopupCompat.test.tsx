@@ -110,7 +110,11 @@ describe("SecureExternalLink", () => {
 
   it("keeps the Open link and offers manual copy when copying is refused", async () => {
     (navigator.clipboard.writeText as any).mockRejectedValue(new Error("denied"));
-    vi.spyOn(document, "execCommand").mockReturnValue(false);
+    Object.defineProperty(document, "execCommand", {
+      value: vi.fn().mockReturnValue(false),
+      configurable: true,
+      writable: true,
+    });
     const resolve = vi.fn().mockResolvedValue("https://example.com/invoice.pdf");
     render(
       <SecureExternalLink resolve={resolve} prepareLabel="View invoice" openLabel="Open invoice" />,
