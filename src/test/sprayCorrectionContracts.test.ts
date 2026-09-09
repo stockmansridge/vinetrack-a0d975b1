@@ -21,11 +21,11 @@ import {
 } from "@/lib/sprayTripMetadata";
 import { recoverSprayWeather } from "@/lib/sprayWeatherRecovery";
 import {
-  isSubmittableAssignment,
   recoverSprayRowAssignments,
   rowProvenanceLabel,
   ROW_RECOVERY_NO_EVIDENCE,
-  type RowAssignmentEvidence,
+  ROW_RECOVERY_FAILED,
+  ROW_RECOVERY_NOT_PERMITTED,
 } from "@/lib/sprayRowRecovery";
 import { chemicalTotals, toDisplayAmount } from "@/lib/sprayReportQuantities";
 
@@ -101,33 +101,34 @@ describe("weather recovery", () => {
 });
 
 describe("row assignment recovery", () => {
-  const evidence: RowAssignmentEvidence = {
-    blockId: "b1",
-    blockName: "Block A",
-    rowIdentity: "b1:24.5",
-    rowNumber: 24.5,
-    tankSessionId: "ts1",
-    tankNumber: 1,
-    status: "Complete",
-    assignmentSource: "gps_geometry_intersection",
-    confidence: 0.95,
-    originalEvidence: { points: 12 },
-  };
-
-  it("never submits low-confidence location evidence", async () => {
-    expect(isSubmittableAssignment({ ...evidence, confidence: 0.8 })).toBe(false);
-    await expect(
-      recoverSprayRowAssignments({ tripId: "t1", assignments: [{ ...evidence, confidence: 0.8 }] }),
-    ).rejects.toThrow(ROW_RECOVERY_NO_EVIDENCE);
+  it("asks the authorised action to run and never derives assignments itself", async () => {
+    invoke.mockResolvedValue({ data: { assigned: 3 }, error: null });
+    const out = await recoverSprayRowAssignments({ tripId: "t1", operationId: "op-9" });
+    const [fn, opts] = invoke.mock.calls[0] as [string, any];
+    expect(fn).toBe("spray-row-recovery");
+    expect(opts.body).toEqual({ tripId: "t1", operationId: "op-9" });
+    expect(out.kind).toBe("recovered");
+    expect(out.message).toContain("3 rows");
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  it("submits evidence exactly as supplied", async () => {
-    rpc.mockResolvedValue({ data: null, error: null });
-    await recoverSprayRowAssignments({ tripId: "t1", assignments: [evidence] });
-    const [, args] = rpc.mock.calls[0] as [string, any];
-    expect(args.p_assignments[0].originalEvidence).toEqual({ points: 12 });
-    expect(args.p_assignments[0].confidence).toBe(0.95);
+  it("reports plainly when the evidence does not clear the action's thresholds", async () => {
+    invoke.mockResolvedValue({ data: { assigned: 0, unresolved: 4 }, error: null });
+    const out = await recoverSprayRowAssignments({ tripId: "t1" });
+    expect(out.kind).toBe("none");
+    expect(out.message).toBe(ROW_RECOVERY_NO_EVIDENCE);
+  });
+
+  it("separates a permission refusal from a transient failure", async () => {
+    invoke.mockResolvedValue({ data: null, error: { message: "403 not_authorized" } });
+    const denied = await recoverSprayRowAssignments({ tripId: "t1" });
+    expect(denied.kind).toBe("not_permitted");
+    expect(denied.message).toBe(ROW_RECOVERY_NOT_PERMITTED);
+
+    invoke.mockResolvedValue({ data: null, error: { message: "boom" } });
+    const failed = await recoverSprayRowAssignments({ tripId: "t1" });
+    expect(failed.kind).toBe("failed");
+    expect(failed.message).toBe(ROW_RECOVERY_FAILED);
   });
 
   it("labels calculated attribution plainly", () => {

@@ -67,7 +67,7 @@ import {
   validateFuelRate,
 } from "@/lib/sprayTripMetadata";
 import { recoverSprayWeather, weatherProvenanceLabel } from "@/lib/sprayWeatherRecovery";
-import { rowProvenanceLabel } from "@/lib/sprayRowRecovery";
+import { recoverSprayRowAssignments, rowProvenanceLabel } from "@/lib/sprayRowRecovery";
 import { formatActiveDuration, formatDistance } from "@/lib/sprayReportPdf";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { validateTripEngineHours, type Trip } from "@/lib/tripsQuery";
@@ -226,6 +226,8 @@ export default function SprayTripWorksheet({
   const [openHistory, setOpenHistory] = useState<string | null>(null);
   const [weatherNote, setWeatherNote] = useState<string | null>(null);
   const [weatherDiagnostic, setWeatherDiagnostic] = useState<string | null>(null);
+  const [rowNote, setRowNote] = useState<string | null>(null);
+  const [rowDiagnostic, setRowDiagnostic] = useState<string | null>(null);
 
   const { data: machines = [] } = useQuery<VineyardMachine[]>({
     queryKey: ["worksheet-machines", vineyardId],
@@ -338,6 +340,17 @@ export default function SprayTripWorksheet({
     },
   });
 
+  const recoverRows = useMutation({
+    mutationFn: () => recoverSprayRowAssignments({ tripId }),
+    onSuccess: async (outcome) => {
+      setRowNote(outcome.message);
+      setRowDiagnostic(outcome.kind === "failed" ? outcome.diagnostic : null);
+      if (outcome.kind === "recovered") {
+        await qc.invalidateQueries({ queryKey: sprayReportQueryKey(tripId) });
+      }
+    },
+  });
+
   const recoverWeather = useMutation({
     mutationFn: () => recoverSprayWeather(tripId),
     onSuccess: async (outcome) => {
@@ -437,7 +450,7 @@ export default function SprayTripWorksheet({
           {error}
         </p>
       )}
-      <SystemAdminDiagnostics details={[errorDiagnostic, weatherDiagnostic]} />
+      <SystemAdminDiagnostics details={[errorDiagnostic, weatherDiagnostic, rowDiagnostic]} />
 
 
       {!!notes.length && (
@@ -737,6 +750,23 @@ export default function SprayTripWorksheet({
       )}
 
       <Block title="Rows">
+        {canEdit && (
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              Recovery only fills in rows that have enough recorded evidence;
+              recorded attribution is never changed.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => recoverRows.mutate()}
+              disabled={recoverRows.isPending}
+            >
+              {recoverRows.isPending ? "Checking…" : "Recover row and block matches"}
+            </Button>
+          </div>
+        )}
+        {rowNote && <p className="mb-2 text-xs text-muted-foreground">{rowNote}</p>}
         <Table>
           <TableHeader>
             <TableRow>
