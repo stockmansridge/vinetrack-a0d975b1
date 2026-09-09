@@ -173,6 +173,8 @@ export default function PruningActivityDialog({
 
   const loaded = detailQ.data ?? null;
 
+  useEffect(() => { if (open) setStep(1); }, [open]);
+
   useEffect(() => {
     if (!open) return;
     if (isEdit) {
