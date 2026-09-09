@@ -200,6 +200,7 @@ const App = () => (
                     <Route path="/manual-issues" element={<Navigate to="/pins" replace />} />
                     <Route path="/spray-records" element={<SprayRecordsPage />} />
                     <Route path="/spray-records/manual/new" element={<ManualSprayEntryPage />} />
+                    <Route path="/spray-records/manual/:sprayRecordId/edit" element={<ManualSprayEntryPage />} />
                     <Route path="/work-tasks" element={<WorkTasksPage />} />
                     <Route path="/maintenance" element={<MaintenancePage />} />
                     <Route path="/trips" element={<TripsPage />} />
