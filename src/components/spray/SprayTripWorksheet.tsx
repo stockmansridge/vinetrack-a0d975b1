@@ -450,7 +450,7 @@ export default function SprayTripWorksheet({
           {error}
         </p>
       )}
-      <SystemAdminDiagnostics details={[errorDiagnostic, weatherDiagnostic]} />
+      <SystemAdminDiagnostics details={[errorDiagnostic, weatherDiagnostic, rowDiagnostic]} />
 
 
       {!!notes.length && (
