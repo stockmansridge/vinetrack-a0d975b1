@@ -290,6 +290,39 @@ describe("backend contract (SQL 232)", () => {
     expect((await saveManualSpray(freezeManualSprayAttempt(completeDraft(), "o3"))).kind).toBe("conflict");
   });
 
+  it("sends manual weather as the documented single observation", () => {
+    const d = completeDraft();
+    d.weather = [{ provenance: "manual", observedAt: "2026-09-08T13:30:00.000Z", temperature: 18.2, humidity: 71, windSpeed: 6.4, windDirection: "210" }];
+    const p = toManualSprayPayload(d, "2026-09-09T02:00:00.000Z");
+    expect(p.manualWeather).toEqual({
+      observedAt: "2026-09-08T13:30:00.000Z",
+      source: "Operator observation",
+      temperatureC: 18.2,
+      humidityPct: 71,
+      windSpeedKmh: 6.4,
+      windGustKmh: null,
+      windDirectionDeg: 210,
+      rainMm: null,
+    });
+    const none = toManualSprayPayload({ ...completeDraft(), weather: [] }, "2026-09-09T02:00:00.000Z");
+    expect(none.manualWeather).toBeNull();
+  });
+
+  it("never presents a cached save for a deleted application as confirmation", async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { code: "55000", message: "manual entry tombstoned" } });
+    const out = await saveManualSpray(freezeManualSprayAttempt(completeDraft(), "op-tomb"));
+    expect(out.kind).toBe("deleted");
+  });
+
+  it("treats deleting an already tombstoned entry as done", async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { code: "55000", message: "already deleted" } });
+    const out = await deleteManualSpray({
+      operationId: "op-del2", vineyardId: "vy-1",
+      manualEntryId: "me-1", sprayRecordId: "sr-1", tripId: "tp-1",
+    });
+    expect(out.kind).toBe("saved");
+  });
+
   it("deletes through the coordinated function with the documented parameters", async () => {
     rpc.mockResolvedValue({ data: null, error: null });
     const out = await deleteManualSpray({
