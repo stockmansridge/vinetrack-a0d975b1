@@ -393,6 +393,35 @@ export default function PruningActivityDialog({
 
         {(!isEdit || loaded) && (
           <div className="space-y-4">
+            {/* ---------------- Step indicator ---------------- */}
+            <ol className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 p-2">
+              {[
+                { n: 1 as const, label: "Date & details" },
+                { n: 2 as const, label: "Blocks & allocation" },
+                { n: 3 as const, label: skipped ? "Notes & save" : "Work Tasks, notes & save" },
+              ].map((s, i) => (
+                <li key={s.n} className="flex items-center gap-2">
+                  {i > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                  <button
+                    type="button"
+                    onClick={() => setStep(s.n)}
+                    aria-current={step === s.n ? "step" : undefined}
+                    className={`flex items-center gap-2 rounded-md px-2.5 py-1 text-sm transition-colors ${
+                      step === s.n
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <span className={`flex h-5 w-5 items-center justify-center rounded-full border text-xs tabular-nums ${
+                      step === s.n ? "border-primary-foreground/50" : "border-current"
+                    }`}>{s.n}</span>
+                    {s.label}
+                  </button>
+                </li>
+              ))}
+            </ol>
+
+            {step === 1 && (<>
             {/* SQL 168 — skipped mode toggle. Same dialog, same selectors. */}
             {!isEdit && (
               <div className="flex items-start justify-between gap-4 rounded-md border p-3">
