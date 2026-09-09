@@ -156,26 +156,18 @@ export default function AccountBillingPage() {
     }
   };
 
-  const handleInvoice = async (invoiceId: string, action: "view" | "download") => {
-    if (!selectedId) return;
-    setPendingInvoice(`${invoiceId}:${action}`);
-    // Open the tab synchronously inside the click, before awaiting the signed
-    // URL — Safari blocks a `window.open` that happens after an await.
-    const tab = openDeferredTab();
+  // Invoice links are fetched first, then presented as a real link the user
+  // clicks — no tab is opened before the URL exists.
+  const resolveInvoice = (invoiceId: string, action: "view" | "download") => async () => {
+    if (!selectedId) throw new Error("Select a vineyard first.");
     try {
-      const url = await invoiceLink.mutateAsync({
+      return await invoiceLink.mutateAsync({
         vineyardId: selectedId,
         invoiceId,
         action,
       });
-      await tab.settle(url);
     } catch (e) {
-      tab.fail();
-      toast.error(
-        e instanceof PopupBlockedError ? e.message : billingErrorMessage(e),
-      );
-    } finally {
-      setPendingInvoice(null);
+      throw new Error(billingErrorMessage(e));
     }
   };
 
