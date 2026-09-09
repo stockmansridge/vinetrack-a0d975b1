@@ -1,4 +1,4 @@
-import { Outlet } from "react-router-dom";
+import { Link, Outlet } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
 import { BrandName } from "@/components/BrandName";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { DemoModeToggle } from "@/components/DemoModeToggle";
@@ -39,6 +39,9 @@ import {
   VINEYARD_ACCESS_STATE_LABEL,
 } from "@/lib/vineyardAccessQuery";
 import { VineyardAccessGate } from "@/components/access/VineyardAccessGate";
+import { ActivityNavigation } from "@/components/navigation/ActivityNavigation";
+import { useNavViewer } from "@/hooks/useNavViewer";
+import { ACCOUNT_ACTIVITY, accessibleViews } from "@/lib/navigationConfig";
 
 
 export default function AppLayout() {
@@ -46,7 +49,10 @@ export default function AppLayout() {
   const { user, signOut } = useAuth();
   const { profile } = useCurrentProfile();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const displayName = displayNameFor(profile, user?.email);
+  const navViewer = useNavViewer();
+  const billingViews = accessibleViews(ACCOUNT_ACTIVITY, navViewer);
 
   // Per-vineyard access state (Phase 2F) — display only; the gate below
   // decides what may mount.
@@ -133,6 +139,15 @@ export default function AppLayout() {
               <GlobalSearch />
             </div>
             <div className="ml-auto flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Search"
+                className="lg:hidden rounded-full"
+                onClick={() => setMobileSearchOpen((o) => !o)}
+              >
+                <Search className="h-4 w-4" />
+              </Button>
               <SupportAlertPill />
               <DemoModeToggle />
               <ThemeToggle />
@@ -147,6 +162,11 @@ export default function AppLayout() {
                   <DropdownMenuItem onClick={() => setProfileOpen(true)}>
                     Profile
                   </DropdownMenuItem>
+                  {billingViews.map((v) => (
+                    <DropdownMenuItem key={v.path} asChild>
+                      <Link to={v.path}>{v.label}</Link>
+                    </DropdownMenuItem>
+                  ))}
                   <DropdownMenuItem onClick={() => signOut()}>Sign out</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -154,6 +174,11 @@ export default function AppLayout() {
 
             </div>
           </header>
+          {mobileSearchOpen && (
+            <div className="lg:hidden border-b border-border bg-card/90 px-4 py-2 backdrop-blur">
+              <GlobalSearch autoFocus />
+            </div>
+          )}
           <PortalInfoBanner />
           <PendingInvitesBanner />
           <main className="relative flex-1 bg-transparent min-w-0 w-full max-w-full overflow-x-hidden">
@@ -174,6 +199,7 @@ export default function AppLayout() {
             </div>
             <div className="relative z-10 p-4 md:p-6 lg:p-8">
               <VineyardAccessGate>
+                <ActivityNavigation />
                 <Outlet />
               </VineyardAccessGate>
             </div>
