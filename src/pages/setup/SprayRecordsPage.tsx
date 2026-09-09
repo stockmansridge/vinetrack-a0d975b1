@@ -283,7 +283,12 @@ export default function SprayRecordsPage() {
                 <TableCell>
                   {r.operation_type ? <Badge variant="secondary">{r.operation_type}</Badge> : "—"}
                 </TableCell>
-                <TableCell>{fmt(r.spray_reference)}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <span>{fmt(r.spray_reference)}</span>
+                    {isManualSpraySource(r.entry_source) && <ManualEntryBadge />}
+                  </div>
+                </TableCell>
                 <TableCell>{fmt(resolveSprayTractorName(r, lookups))}</TableCell>
                 <TableCell>{fmt(resolveSprayEquipmentName(r, lookups))}</TableCell>
                 <TableCell>{fmt(r.temperature)}</TableCell>
