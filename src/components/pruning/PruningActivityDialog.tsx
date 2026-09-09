@@ -449,6 +449,8 @@ export default function PruningActivityDialog({
               </div>
               </>)}
             </div>
+            </>)}
+
 
             {/* ---------------- Step 2: blocks & allocation ---------------- */}
             {step === 2 && (
