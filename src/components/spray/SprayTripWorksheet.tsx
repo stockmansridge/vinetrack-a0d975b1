@@ -338,6 +338,17 @@ export default function SprayTripWorksheet({
     },
   });
 
+  const recoverRows = useMutation({
+    mutationFn: () => recoverSprayRowAssignments({ tripId }),
+    onSuccess: async (outcome) => {
+      setRowNote(outcome.message);
+      setRowDiagnostic(outcome.kind === "failed" ? outcome.diagnostic : null);
+      if (outcome.kind === "recovered") {
+        await qc.invalidateQueries({ queryKey: sprayReportQueryKey(tripId) });
+      }
+    },
+  });
+
   const recoverWeather = useMutation({
     mutationFn: () => recoverSprayWeather(tripId),
     onSuccess: async (outcome) => {
