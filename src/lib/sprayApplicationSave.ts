@@ -16,12 +16,46 @@ import type { ApplicationGeometry } from "@/lib/sprayApplicationGeometry";
 import type { CarrierResult, SprayCalculationResult } from "@/lib/sprayCalculation";
 import type { SprayJobChemicalLine, SprayJobInput } from "@/lib/sprayJobsQuery";
 import { chemUnitOnly } from "@/lib/rateBasis";
+import {
+  normaliseCanopyDensity,
+  normaliseCanopySize,
+  type CanopyDensity,
+  type CanopySize,
+} from "@/lib/sprayCanopy";
 import { provenanceWritePayload } from "@/lib/resistance/sprayJobPlanLink";
 import {
   chemistryStampFromLine,
   stampMatchesLine,
 } from "@/lib/resistance/sprayJobChemistryStamp";
 
+
+// Persistence boundary only: `spray_jobs` check constraints require title-case
+// canopy values. The wizard, the AWRI tables and every calculation keep their
+// canonical lowercase values — nothing below this line feeds the maths.
+// These are STORAGE codes, not display labels.
+const CANOPY_SIZE_STORAGE: Record<CanopySize, string> = {
+  small: "Small",
+  medium: "Medium",
+  large: "Large",
+  full: "Full",
+};
+
+const CANOPY_DENSITY_STORAGE: Record<CanopyDensity, string> = {
+  low: "Low",
+  high: "High",
+};
+
+/** Title-case storage value, or `null` when unanswered/unrecognised. */
+export function canopySizeForStorage(value: unknown): string | null {
+  const size = normaliseCanopySize(value);
+  return size ? CANOPY_SIZE_STORAGE[size] : null;
+}
+
+/** Title-case storage value, or `null` when unanswered/unrecognised. */
+export function canopyDensityForStorage(value: unknown): string | null {
+  const density = normaliseCanopyDensity(value);
+  return density ? CANOPY_DENSITY_STORAGE[density] : null;
+}
 
 const pos = (v: unknown): number | null => {
   const n = Number(v);
@@ -160,8 +194,8 @@ export function toSprayJobInput(args: {
     concentration_factor: round(concentrationFactor, 3),
     // The canopy answer that produced the recommendation. Trellis form has no
     // column, so only size and density round-trip.
-    vsp_canopy_size: isManual ? null : app.carrier.canopySize ?? null,
-    vsp_canopy_density: isManual ? null : app.carrier.canopyDensity ?? null,
+    vsp_canopy_size: isManual ? null : canopySizeForStorage(app.carrier.canopySize),
+    vsp_canopy_density: isManual ? null : canopyDensityForStorage(app.carrier.canopyDensity),
     // Manual stores the operator's stated total verbatim; every other basis
     // stores the engine's computed total.
     water_volume: isTemplate
