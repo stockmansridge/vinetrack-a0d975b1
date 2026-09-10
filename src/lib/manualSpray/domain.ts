@@ -171,6 +171,8 @@ export function emptyManualSprayDraft(
     vineyardTimeZone,
     vineyardId,
     name: "",
+    operationType: "manual_spray",
+
     startAt: null,
     endAt: null,
     tractorId: null,
