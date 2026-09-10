@@ -102,7 +102,7 @@ const stationObservation = {
   sampleSlot: "start",
   observedAt: "2026-03-01T00:05:00.000Z",
   source: "Davis station — North shed",
-  sourceKind: "station",
+  sourceKind: "observed",
   stationId: "stn-9",
   isStale: false,
   temperatureC: 19,
