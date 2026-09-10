@@ -579,6 +579,9 @@ export default function ManualSprayEntryPage() {
 
 /* ------------------------------------------------------------- helpers */
 
+const manualWeather = (d: ManualSprayDraft) =>
+  d.weather.find((w) => w.provenance === "manual") ?? null;
+
 function setWeather(
   setDraft: React.Dispatch<React.SetStateAction<ManualSprayDraft>>,
   p: Partial<ManualSprayDraft["weather"][number]>,
