@@ -494,10 +494,10 @@ export default function ManualSprayEntryPage() {
           what you entered, and it can't stop the spray being saved.
         </p>
         <div className="grid gap-3 sm:grid-cols-4">
-          <Field label="Temperature (°C)"><Input inputMode="decimal" value={draft.weather[0]?.temperature ?? ""} onChange={(e) => setWeather(setDraft, { temperature: numOrNull(e.target.value) })} /></Field>
-          <Field label="Humidity (%)"><Input inputMode="decimal" value={draft.weather[0]?.humidity ?? ""} onChange={(e) => setWeather(setDraft, { humidity: numOrNull(e.target.value) })} /></Field>
-          <Field label="Wind speed"><Input inputMode="decimal" value={draft.weather[0]?.windSpeed ?? ""} onChange={(e) => setWeather(setDraft, { windSpeed: numOrNull(e.target.value) })} /></Field>
-          <Field label="Wind direction"><Input value={draft.weather[0]?.windDirection ?? ""} onChange={(e) => setWeather(setDraft, { windDirection: e.target.value || null })} /></Field>
+          <Field label="Temperature (°C)"><Input inputMode="decimal" value={manualWeather(draft)?.temperature ?? ""} onChange={(e) => setWeather(setDraft, { temperature: numOrNull(e.target.value) })} /></Field>
+          <Field label="Humidity (%)"><Input inputMode="decimal" value={manualWeather(draft)?.humidity ?? ""} onChange={(e) => setWeather(setDraft, { humidity: numOrNull(e.target.value) })} /></Field>
+          <Field label="Wind speed"><Input inputMode="decimal" value={manualWeather(draft)?.windSpeed ?? ""} onChange={(e) => setWeather(setDraft, { windSpeed: numOrNull(e.target.value) })} /></Field>
+          <Field label="Wind direction"><Input value={manualWeather(draft)?.windDirection ?? ""} onChange={(e) => setWeather(setDraft, { windDirection: e.target.value || null })} /></Field>
         </div>
       </Card>
 
@@ -584,8 +584,13 @@ function setWeather(
   p: Partial<ManualSprayDraft["weather"][number]>,
 ) {
   setDraft((d) => {
-    const first = d.weather[0] ?? { provenance: "manual" as const };
-    return { ...d, weather: [{ ...first, ...p, provenance: "manual" }, ...d.weather.slice(1)] };
+    // Only the operator's own observation is edited here; any station
+    // observation keeps its provenance and values untouched.
+    const i = d.weather.findIndex((w) => w.provenance === "manual");
+    const current = i >= 0 ? d.weather[i] : { provenance: "manual" as const };
+    const next = { ...current, ...p, provenance: "manual" as const };
+    const weather = i >= 0 ? d.weather.map((w, x) => (x === i ? next : w)) : [next, ...d.weather];
+    return { ...d, weather };
   });
 }
 
