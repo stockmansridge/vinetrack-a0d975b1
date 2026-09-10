@@ -70,7 +70,8 @@ export interface ManualSprayPayload {
   sprayRecordId: string;
   tripId: string;
   reference: string;
-  operationType: "manual_spray";
+  /** Saved operation type; preserved on edit rather than overwritten. */
+  operationType: string;
   startUtc: string | null;
   endUtc: string | null;
   vineyardTimeZone: string | null;
@@ -150,7 +151,7 @@ export function toManualSprayPayload(
     sprayRecordId: draft.sprayRecordId,
     tripId: draft.tripId,
     reference: draft.name.trim(),
-    operationType: "manual_spray",
+    operationType: draft.operationType?.trim() || "manual_spray",
     startUtc: draft.startAt,
     endUtc: draft.endAt,
     vineyardTimeZone: draft.vineyardTimeZone ?? null,
