@@ -79,6 +79,12 @@ export interface ManualSprayDraft {
   vineyardTimeZone: string | null;
   vineyardId: string;
   name: string;
+  /**
+   * Saved operation type. A new manual entry records "manual_spray"; an edit
+   * preserves whatever the saved application already carries.
+   */
+  operationType: string | null;
+
   /** ISO instants in the vineyard timezone; end may cross midnight. */
   startAt: string | null;
   endAt: string | null;
