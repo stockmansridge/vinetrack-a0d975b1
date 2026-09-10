@@ -70,7 +70,8 @@ export interface ManualSprayPayload {
   sprayRecordId: string;
   tripId: string;
   reference: string;
-  operationType: "manual_spray";
+  /** Saved operation type; preserved on edit rather than overwritten. */
+  operationType: string;
   startUtc: string | null;
   endUtc: string | null;
   vineyardTimeZone: string | null;
@@ -105,31 +106,35 @@ const finite = (n: unknown): number | null =>
 /**
  * Only genuinely entered conditions travel. Nothing is defaulted to zero, and a
  * wind direction that isn't a compass bearing in degrees is sent as null rather
- * than guessed.
+ * than guessed. Station observations are never re-sent as an operator
+ * observation: only a manual observation becomes `manualWeather`.
  */
 export function toManualWeatherWire(
   weather: ManualSprayDraft["weather"],
 ): ManualWeatherWire | null {
-  const w = weather?.[0];
+  const w = (weather ?? []).find((x) => x.provenance === "manual");
   if (!w) return null;
   const deg = Number(w.windDirection);
   const wire: ManualWeatherWire = {
     observedAt: w.observedAt ?? null,
-    source: "Operator observation",
+    source: w.source?.trim() || "Operator observation",
     temperatureC: finite(w.temperature),
     humidityPct: finite(w.humidity),
     windSpeedKmh: finite(w.windSpeed),
-    windGustKmh: null,
+    windGustKmh: finite(w.windGust),
     windDirectionDeg: w.windDirection != null && Number.isFinite(deg) ? deg : null,
-    rainMm: null,
+    rainMm: finite(w.rain),
   };
   const hasValue =
     wire.temperatureC != null ||
     wire.humidityPct != null ||
     wire.windSpeedKmh != null ||
-    wire.windDirectionDeg != null;
+    wire.windGustKmh != null ||
+    wire.windDirectionDeg != null ||
+    wire.rainMm != null;
   return hasValue ? wire : null;
 }
+
 
 /**
  * Deterministic mapping from a validated draft to the documented wire payload.
@@ -146,7 +151,7 @@ export function toManualSprayPayload(
     sprayRecordId: draft.sprayRecordId,
     tripId: draft.tripId,
     reference: draft.name.trim(),
-    operationType: "manual_spray",
+    operationType: draft.operationType?.trim() || "manual_spray",
     startUtc: draft.startAt,
     endUtc: draft.endAt,
     vineyardTimeZone: draft.vineyardTimeZone ?? null,

@@ -51,13 +51,20 @@ export interface ManualWeather {
   provenance: "manual" | "station";
   stationId?: string | null;
   observedAt?: string | null;
+  /** Recorded source text, preserved exactly as saved. */
+  source?: string | null;
   temperature?: number | null;
   humidity?: number | null;
   windSpeed?: number | null;
+  /** Recorded gust, in km/h. Preserved through load/edit/save. */
+  windGust?: number | null;
   windDirection?: string | null;
+  /** Recorded rainfall, in mm. Preserved through load/edit/save. */
+  rain?: number | null;
   /** Retrieval status text shown to the user; never fabricated. */
   retrievalStatus?: string | null;
 }
+
 
 export interface ManualSprayDraft {
   /** Stable application identity, allocated once for the draft. */
@@ -72,6 +79,12 @@ export interface ManualSprayDraft {
   vineyardTimeZone: string | null;
   vineyardId: string;
   name: string;
+  /**
+   * Saved operation type. A new manual entry records "manual_spray"; an edit
+   * preserves whatever the saved application already carries.
+   */
+  operationType: string | null;
+
   /** ISO instants in the vineyard timezone; end may cross midnight. */
   startAt: string | null;
   endAt: string | null;
@@ -158,6 +171,8 @@ export function emptyManualSprayDraft(
     vineyardTimeZone,
     vineyardId,
     name: "",
+    operationType: "manual_spray",
+
     startAt: null,
     endAt: null,
     tractorId: null,
