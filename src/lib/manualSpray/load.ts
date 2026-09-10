@@ -128,7 +128,20 @@ export async function loadManualSprayDraft(
   const blockNames: Record<string, string> = {};
   for (const b of payload.blocks ?? []) if (b.blockId) blockNames[b.blockId] = b.name;
 
-  const w = payload.weather.find((x) => x.sourceKind === "manual") ?? payload.weather[0] ?? null;
+  // Provenance is preserved exactly as recorded: a station observation stays a
+  // station observation and is never re-labelled as an operator observation.
+  const weather = (payload.weather ?? []).map((w) => ({
+    provenance: w.sourceKind === "manual" ? ("manual" as const) : ("station" as const),
+    stationId: w.stationId ?? null,
+    observedAt: w.observedAt ?? null,
+    source: w.source ?? null,
+    temperature: w.temperatureC,
+    humidity: w.humidityPct,
+    windSpeed: w.windSpeedKmh,
+    windGust: w.windGustKmh,
+    windDirection: w.windDirectionDeg == null ? null : String(w.windDirectionDeg),
+    rain: w.rainMm,
+  }));
 
   const draft: ManualSprayDraft = {
     id: sprayRecordId,
@@ -140,6 +153,7 @@ export async function loadManualSprayDraft(
     vineyardTimeZone: payload.identity.vineyardTimeZone ?? null,
     vineyardId: payload.identity.vineyardId,
     name: payload.identity.reference ?? "",
+    operationType: text(payload.application?.operationType) ?? "manual_spray",
     startAt: payload.trip.startUtc,
     endAt: payload.trip.endUtc,
     tractorId: payload.equipment.tractorId ?? payload.equipment.machineId ?? null,
@@ -150,20 +164,10 @@ export async function loadManualSprayDraft(
     blockIds: (payload.blocks ?? []).map((b) => b.blockId).filter(Boolean),
     blockNames,
     tanks: tanks.length ? tanks : [],
-    weather: w
-      ? [
-          {
-            provenance: "manual",
-            observedAt: w.observedAt,
-            temperature: w.temperatureC,
-            humidity: w.humidityPct,
-            windSpeed: w.windSpeedKmh,
-            windDirection: w.windDirectionDeg == null ? null : String(w.windDirectionDeg),
-          },
-        ]
-      : [],
+    weather,
     notes: payload.application?.notes ?? "",
   };
+
 
   return { draft, error: null };
 }
