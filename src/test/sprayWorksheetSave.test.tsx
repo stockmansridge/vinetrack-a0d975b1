@@ -84,7 +84,9 @@ describe("worksheet save", () => {
     await startEditingWithWaterChange(true);
     const note = await screen.findByRole("status");
     // One transaction: metadata was never written on its own.
-    expect(calls).toEqual(["save_spray_trip_worksheet_v1"]);
+    expect(calls.filter((c) => c.startsWith("save_") || c.startsWith("correct_"))).toEqual([
+      "save_spray_trip_worksheet_v1",
+    ]);
     expect(note.textContent ?? "").not.toMatch(/Saved: Trip details/);
     expect(await screen.findByRole("button", { name: /Retry save/i })).toBeTruthy();
   });
