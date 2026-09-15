@@ -1,6 +1,6 @@
 // Worksheet save orchestration: the whole draft is validated and frozen before
-// any write, outcomes are tracked per operation, and a retry re-issues the
-// identical request instead of creating a new correction.
+// any write, the write is ONE transaction, and a retry re-issues the identical
+// request instead of creating a second amendment.
 //
 // Only the network boundary (the shared client's `rpc`) is mocked — the
 // production plan/attempt/save functions run for real.
@@ -22,6 +22,7 @@ import {
   isUncertainFailure,
   type MetadataFormValues,
 } from "@/lib/spraySaveOrchestration";
+import { WorksheetSaveUnavailableError } from "@/lib/sprayWorksheetTransaction";
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -59,10 +60,19 @@ function editWater(p: SprayReportPayloadV1, values: Record<number, string>): Act
   return d;
 }
 
-const ok = { data: { correction: { version: 3 }, report: null }, error: null };
+const ok = { data: { metadata: { correction: { version: 3 }, report: null }, tankCount: 1 }, error: null };
 const netFail = { data: null, error: { message: "TypeError: Failed to fetch" } };
-const hardFail = { data: null, error: { message: "boom", code: "P0001" } };
-const conflict = { data: null, error: { message: "version conflict", code: "40001" } };
+const staleTank = {
+  data: null,
+  error: { message: "WORKSHEET_VERSION_CONFLICT: this trip was changed by someone else.", code: "PT409" },
+};
+const notDeployed = {
+  data: null,
+  error: { message: "Could not find the function public.save_spray_trip_worksheet_v1", code: "PGRST202" },
+};
+const denied = { data: null, error: { message: "Not authorised for this vineyard", code: "42501" } };
+
+const call = (i = 0) => rpc.mock.calls[i] as [string, any];
 
 describe("plan construction", () => {
   it("skips unchanged metadata and unchanged tanks", () => {
@@ -74,7 +84,7 @@ describe("plan construction", () => {
     expect(planIsEmpty(buildSavePlan(p, draftFromPayload(p), form(p)))).toBe(true);
   });
 
-  it("validates the whole draft before any write is issued", async () => {
+  it("validates the whole draft before any write is issued", () => {
     const p = basePayload();
     const plan = buildSavePlan(p, editWater(p, { 1: "abc", 2: "1400" }), form(p, { fuelRateText: "0" }));
     expect(plan.errors.length).toBeGreaterThan(1);
@@ -82,30 +92,90 @@ describe("plan construction", () => {
     expect(plan.tanks).toEqual([]);
     expect(rpc).not.toHaveBeenCalled();
   });
-});
 
-describe("partial outcomes", () => {
-  it("reports metadata saved and a tank still to save, never 'not saved'", async () => {
-    const p = basePayload();
-    const plan = buildSavePlan(p, editWater(p, { 1: "1400" }), form(p, { startHoursText: "120" }));
-    rpc.mockResolvedValueOnce(ok).mockResolvedValueOnce(hardFail);
-    const s = await runSaveAttempt(createSaveAttempt(plan));
-    expect(s.saved).toEqual(["Trip details"]);
-    expect(s.unresolved).toEqual(["Tank 1"]);
-    expect(s.anySaved).toBe(true);
-    expect(s.allSaved).toBe(false);
-    expect(s.message).toContain("Saved: Trip details.");
-    expect(s.message).toContain("Still to save: Tank 1");
-    expect(s.message).not.toContain("Your changes have not been saved");
-  });
-
-  it("separates Tank 1 success from Tank 2 failure", async () => {
+  it("gives every tank its own stable correction operation id", () => {
     const p = basePayload();
     const plan = buildSavePlan(p, editWater(p, { 1: "1400", 2: "1300" }), form(p));
-    rpc.mockResolvedValueOnce({ data: null, error: null }).mockResolvedValueOnce(hardFail);
+    const ids = plan.tanks.map((t) => t.operationId);
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).not.toContain(plan.worksheetOperationId);
+  });
+});
+
+describe("one transaction per Save", () => {
+  it("sends metadata and every tank in a single request", async () => {
+    const p = basePayload();
+    const plan = buildSavePlan(p, editWater(p, { 1: "1400", 2: "1300" }), form(p, { startHoursText: "120" }));
+    rpc.mockResolvedValue(ok);
     const s = await runSaveAttempt(createSaveAttempt(plan));
-    expect(s.saved).toEqual(["Tank 1"]);
-    expect(s.unresolved).toEqual(["Tank 2"]);
+
+    expect(rpc).toHaveBeenCalledTimes(1);
+    const [fn, args] = call();
+    expect(fn).toBe("save_spray_trip_worksheet_v1");
+    expect(args.p_trip_id).toBe(p.identity.tripId);
+    expect(args.p_metadata.operationId).toBe(plan.metadata!.operationId);
+    expect(args.p_tanks.map((t: any) => t.tankNumber)).toEqual([1, 2]);
+    // Existing identities are preserved, never regenerated.
+    expect(args.p_tanks[0].actualId).toBe(plan.tanks[0].snapshot.actualId);
+    expect(args.p_tanks[0].expectedVersion).toBe(plan.tanks[0].snapshot.expectedVersion);
+    expect(s.allSaved).toBe(true);
+    expect(s.message).toBe("Your changes have been saved.");
+    expect(s.metadataVersion).toBe(3);
+  });
+
+  it("saves metadata only, without any tank correction", async () => {
+    const p = basePayload();
+    const plan = buildSavePlan(p, draftFromPayload(p), form(p, { startHoursText: "120", endHoursText: "124" }));
+    rpc.mockResolvedValue(ok);
+    const s = await runSaveAttempt(createSaveAttempt(plan));
+    expect(call()[1].p_tanks).toEqual([]);
+    expect(s.allSaved).toBe(true);
+  });
+
+  it("saves actuals only, without any metadata correction", async () => {
+    const p = basePayload();
+    const plan = buildSavePlan(p, editWater(p, { 1: "1400" }), form(p));
+    rpc.mockResolvedValue(ok);
+    const s = await runSaveAttempt(createSaveAttempt(plan));
+    expect(call()[1].p_metadata).toBeNull();
+    expect(s.allSaved).toBe(true);
+  });
+});
+
+describe("nothing half-commits", () => {
+  it("a stale tank version leaves metadata and every other tank untouched", async () => {
+    const p = basePayload();
+    const plan = buildSavePlan(
+      p,
+      editWater(p, { 1: "1400", 2: "1300" }),
+      form(p, { startHoursText: "120" }),
+    );
+    rpc.mockResolvedValue(staleTank);
+    const s = await runSaveAttempt(createSaveAttempt(plan));
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(s.anySaved).toBe(false);
+    expect(s.saved).toEqual([]);
+    expect(s.conflicts).toEqual(["Trip details", "Tank 1", "Tank 2"]);
+    expect(s.message.toLowerCase()).toContain("changed by someone else");
+  });
+
+  it("an authorisation failure writes nothing", async () => {
+    const p = basePayload();
+    const plan = buildSavePlan(p, editWater(p, { 1: "1400" }), form(p, { startHoursText: "120" }));
+    rpc.mockResolvedValue(denied);
+    const s = await runSaveAttempt(createSaveAttempt(plan));
+    expect(s.anySaved).toBe(false);
+    expect(s.unresolved).toEqual(["Trip details", "Tank 1"]);
+  });
+
+  it("reports unavailability instead of writing anything", async () => {
+    const p = basePayload();
+    const plan = buildSavePlan(p, editWater(p, { 1: "1400" }), form(p, { startHoursText: "120" }));
+    rpc.mockResolvedValue(notDeployed);
+    await expect(runSaveAttempt(createSaveAttempt(plan))).rejects.toBeInstanceOf(
+      WorksheetSaveUnavailableError,
+    );
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -115,40 +185,29 @@ describe("committed-but-response-lost", () => {
     expect(isUncertainFailure(new Error("duplicate key"))).toBe(false);
     const p = basePayload();
     const plan = buildSavePlan(p, editWater(p, { 1: "1400" }), form(p));
-    rpc.mockResolvedValueOnce(netFail);
+    rpc.mockResolvedValue(netFail);
     const s = await runSaveAttempt(createSaveAttempt(plan));
     expect(s.uncertain).toEqual(["Tank 1"]);
     expect(s.message).toContain("may already be saved");
     expect(s.message).not.toContain("Your changes have not been saved");
   });
 
-  it("retries with the identical request and operation id", async () => {
+  it("retries with the identical payload and the same operation ids", async () => {
     const p = basePayload();
-    const plan = buildSavePlan(p, editWater(p, { 1: "1400", 2: "1300" }), form(p));
+    const plan = buildSavePlan(p, editWater(p, { 1: "1400", 2: "1300" }), form(p, { startHoursText: "120" }));
     const attempt = createSaveAttempt(plan);
-    rpc.mockResolvedValueOnce({ data: null, error: null }).mockResolvedValueOnce(netFail);
+    rpc.mockResolvedValueOnce(netFail);
     await runSaveAttempt(attempt);
-    const firstTank2 = (rpc.mock.calls[1] as [string, any])[1];
+    const first = call(0)[1];
 
-    rpc.mockResolvedValue({ data: null, error: null });
+    rpc.mockResolvedValue(ok);
     const second = await runSaveAttempt(attempt);
-    // Tank 1 was confirmed: it is not resubmitted.
-    expect(rpc.mock.calls.length).toBe(3);
-    const retried = (rpc.mock.calls[2] as [string, any])[1];
-    expect(retried).toEqual(firstTank2);
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(call(1)[1]).toEqual(first);
     expect(second.allSaved).toBe(true);
-    expect(second.message).toBe("Your changes have been saved.");
-  });
-});
 
-describe("version conflicts", () => {
-  it("refuses to overwrite a newer record and says so", async () => {
-    const p = basePayload();
-    const plan = buildSavePlan(p, editWater(p, { 1: "1400" }), form(p));
-    rpc.mockResolvedValueOnce(conflict);
-    const s = await runSaveAttempt(createSaveAttempt(plan));
-    expect(s.conflicts).toEqual(["Tank 1"]);
-    expect(s.anySaved).toBe(false);
-    expect(s.message.toLowerCase()).toContain("changed by someone else");
+    // A third press after confirmation issues no further correction at all.
+    await runSaveAttempt(attempt);
+    expect(rpc).toHaveBeenCalledTimes(2);
   });
 });
