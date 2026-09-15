@@ -75,19 +75,19 @@ beforeEach(() => {
 });
 
 describe("worksheet save", () => {
-  it("says what saved and what still needs attention, never 'not saved'", async () => {
-    rpc.mockImplementation(async (fn: string) =>
-      fn === "correct_spray_trip_metadata_v1"
-        ? { data: { correction: { version: 1 }, report: null }, error: null }
-        : fn === "correct_spray_tank_actual_v1"
-          ? { data: null, error: { message: "boom", code: "P0001" } }
-          : { data: null, error: null },
-    );
+  it("a rejected tank leaves the trip details unsaved too, and offers Retry save", async () => {
+    const calls: string[] = [];
+    rpc.mockImplementation(async (fn: string) => {
+      calls.push(fn);
+      return { data: null, error: { message: "tank 1 is not in the frozen plan", code: "P0001" } };
+    });
     await startEditingWithWaterChange(true);
     const note = await screen.findByRole("status");
-    expect(note.textContent ?? "").toMatch(/Saved: Trip details/);
-    expect(note.textContent ?? "").toMatch(/Still to save: Tank 1/);
-    expect(note.textContent ?? "").not.toMatch(/have not been saved/);
+    // One transaction: metadata was never written on its own.
+    expect(calls.filter((c) => c.startsWith("save_") || c.startsWith("correct_"))).toEqual([
+      "save_spray_trip_worksheet_v1",
+    ]);
+    expect(note.textContent ?? "").not.toMatch(/Saved: Trip details/);
     expect(await screen.findByRole("button", { name: /Retry save/i })).toBeTruthy();
   });
 

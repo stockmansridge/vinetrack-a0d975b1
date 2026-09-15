@@ -16,7 +16,6 @@
 import type { SprayReportPayloadV1 } from "@/lib/sprayReportV1";
 import {
   diffActualsDraft,
-  saveTankActual,
   tankSnapshotsForDraft,
   SprayActualsConflictError,
   SPRAY_ACTUALS_SAVE_FAILED,
@@ -24,11 +23,15 @@ import {
   type TankActualSnapshot,
 } from "@/lib/sprayActuals";
 import {
-  correctSprayTripMetadata,
   TripMetadataConflictError,
   validateFuelRate,
   type TripMetadataCorrection,
 } from "@/lib/sprayTripMetadata";
+import {
+  saveWorksheetTransaction,
+  WorksheetConflictError,
+  WorksheetSaveUnavailableError,
+} from "@/lib/sprayWorksheetTransaction";
 import { validateTripEngineHours } from "@/lib/tripsQuery";
 import { generateUuid } from "@/lib/uuid";
 import { ACTUALS_VERSION_CONFLICT } from "@/lib/sprayReportMessaging";
@@ -56,6 +59,8 @@ export interface TankRequest {
 }
 
 export interface SavePlan {
+  /** Stable id for this whole worksheet attempt; reused on every retry. */
+  worksheetOperationId: string;
   metadata: MetadataRequest | null;
   tanks: TankRequest[];
   /** Validation problems. When non-empty nothing is written at all. */
@@ -121,7 +126,7 @@ export function buildSavePlan(
     if (badRate) errors.push(badRate);
   }
 
-  if (errors.length) return { metadata: null, tanks: [], errors };
+  if (errors.length) return { worksheetOperationId: generateUuid(), metadata: null, tanks: [], errors };
 
   const correction: TripMetadataCorrection = {
     machineId: form.machineId,
@@ -150,7 +155,7 @@ export function buildSavePlan(
     sprayRecordId: payload.identity.sprayRecordId ?? null,
   }));
 
-  return { metadata, tanks, errors: [] };
+  return { worksheetOperationId: generateUuid(), metadata, tanks, errors: [] };
 }
 
 export function planIsEmpty(plan: SavePlan): boolean {
@@ -206,10 +211,13 @@ export function isUncertainFailure(error: unknown): boolean {
 }
 
 function isConflictError(error: unknown): boolean {
+  const code = (error as { code?: string })?.code;
   return (
+    error instanceof WorksheetConflictError ||
     error instanceof SprayActualsConflictError ||
     error instanceof TripMetadataConflictError ||
-    (error as { code?: string })?.code === "40001"
+    code === "PT409" ||
+    code === "40001"
   );
 }
 
@@ -242,47 +250,41 @@ const METADATA_LABEL = "Trip details";
 const tankLabel = (n: number) => `Tank ${n}`;
 
 /**
- * Run (or retry) a frozen attempt. Operations already confirmed saved are
- * skipped; everything else is re-issued with its ORIGINAL request and
- * operation id, so a committed-but-unconfirmed write is de-duplicated by the
- * server rather than repeated as a new correction.
+ * Run (or retry) a frozen attempt as ONE transaction. Trip metadata and every
+ * edited tank travel in a single request, so the worksheet cannot half-commit:
+ * a stale version or an invalid tank leaves every other field untouched.
+ *
+ * A retry re-sends the identical payload — same worksheet operation id, same
+ * per-tank operation ids, same expected versions and line identities — so a
+ * committed-but-unconfirmed save is de-duplicated by the audited contracts
+ * instead of recorded as a second amendment.
  */
 export async function runSaveAttempt(attempt: SaveAttempt): Promise<AttemptSummary> {
-  let metadataVersion: number | null = null;
-
-  if (attempt.plan.metadata && attempt.results.metadata?.status !== "saved") {
-    const req = attempt.plan.metadata;
-    try {
-      const res = await correctSprayTripMetadata({
-        tripId: req.tripId,
-        expectedVersion: req.expectedVersion,
-        correction: req.correction,
-        operationId: req.operationId,
-      });
-      metadataVersion = res.version ?? null;
-      attempt.results.metadata = { status: "saved", diagnostic: null };
-    } catch (e) {
-      attempt.results.metadata = classify(e);
-    }
+  const keys = Object.keys(attempt.results);
+  if (keys.every((k) => attempt.results[k].status === "saved")) {
+    return summariseAttempt(attempt, null);
   }
 
-  for (const req of attempt.plan.tanks) {
-    const key = `tank:${req.tankNumber}`;
-    if (attempt.results[key]?.status === "saved") continue;
-    try {
-      await saveTankActual({
-        operationId: req.operationId,
-        tripId: req.tripId,
-        sprayRecordId: req.sprayRecordId,
-        snapshot: req.snapshot,
-      });
-      attempt.results[key] = { status: "saved", diagnostic: null };
-    } catch (e) {
-      attempt.results[key] = classify(e);
-    }
-  }
+  const mark = (result: OperationResult) => {
+    for (const k of keys) attempt.results[k] = { ...result };
+  };
 
-  return summariseAttempt(attempt, metadataVersion);
+  try {
+    const res = await saveWorksheetTransaction({
+      worksheetOperationId: attempt.plan.worksheetOperationId,
+      tripId: attempt.plan.metadata?.tripId ?? attempt.plan.tanks[0]?.tripId ?? "",
+      metadata: attempt.plan.metadata,
+      tanks: attempt.plan.tanks,
+    });
+    mark({ status: "saved", diagnostic: null });
+    return summariseAttempt(attempt, res.metadataVersion);
+  } catch (e) {
+    // Availability is a capability failure before any mutation: surface it and
+    // keep the worksheet in edit mode with the typed values intact.
+    if (e instanceof WorksheetSaveUnavailableError) throw e;
+    mark(classify(e));
+    return summariseAttempt(attempt, null);
+  }
 }
 
 export function summariseAttempt(
