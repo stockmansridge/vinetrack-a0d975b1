@@ -16,7 +16,6 @@
 import type { SprayReportPayloadV1 } from "@/lib/sprayReportV1";
 import {
   diffActualsDraft,
-  saveTankActual,
   tankSnapshotsForDraft,
   SprayActualsConflictError,
   SPRAY_ACTUALS_SAVE_FAILED,
@@ -24,11 +23,15 @@ import {
   type TankActualSnapshot,
 } from "@/lib/sprayActuals";
 import {
-  correctSprayTripMetadata,
   TripMetadataConflictError,
   validateFuelRate,
   type TripMetadataCorrection,
 } from "@/lib/sprayTripMetadata";
+import {
+  saveWorksheetTransaction,
+  WorksheetConflictError,
+  WorksheetSaveUnavailableError,
+} from "@/lib/sprayWorksheetTransaction";
 import { validateTripEngineHours } from "@/lib/tripsQuery";
 import { generateUuid } from "@/lib/uuid";
 import { ACTUALS_VERSION_CONFLICT } from "@/lib/sprayReportMessaging";
