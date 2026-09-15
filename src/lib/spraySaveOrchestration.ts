@@ -56,6 +56,8 @@ export interface TankRequest {
 }
 
 export interface SavePlan {
+  /** Stable id for this whole worksheet attempt; reused on every retry. */
+  worksheetOperationId: string;
   metadata: MetadataRequest | null;
   tanks: TankRequest[];
   /** Validation problems. When non-empty nothing is written at all. */
