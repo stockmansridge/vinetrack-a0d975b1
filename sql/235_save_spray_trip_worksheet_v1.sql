@@ -83,19 +83,18 @@ BEGIN
 
   BEGIN
     IF p_metadata IS NOT NULL THEN
-      SELECT to_jsonb(m) INTO v_meta
-        FROM public.correct_spray_trip_metadata_v1(
-          p_operation_id := (p_metadata->>'operationId')::uuid,
-          p_trip_id := p_trip_id,
-          p_expected_version := (p_metadata->>'expectedVersion')::bigint,
-          p_machine_id := (p_metadata->>'machineId')::uuid,
-          p_tractor_id := (p_metadata->>'tractorId')::uuid,
-          p_spray_equipment_id := (p_metadata->>'sprayEquipmentId')::uuid,
-          p_operator_user_id := (p_metadata->>'operatorUserId')::uuid,
-          p_fuel_consumption_l_per_hour := (p_metadata->>'fuelConsumptionLPerHour')::double precision,
-          p_start_engine_hours := (p_metadata->>'startEngineHours')::double precision,
-          p_end_engine_hours := (p_metadata->>'endEngineHours')::double precision
-        ) m;
+      SELECT public.correct_spray_trip_metadata_v1(
+        p_operation_id := (p_metadata->>'operationId')::uuid,
+        p_trip_id := p_trip_id,
+        p_expected_version := (p_metadata->>'expectedVersion')::bigint,
+        p_machine_id := (p_metadata->>'machineId')::uuid,
+        p_tractor_id := (p_metadata->>'tractorId')::uuid,
+        p_spray_equipment_id := (p_metadata->>'sprayEquipmentId')::uuid,
+        p_operator_user_id := (p_metadata->>'operatorUserId')::uuid,
+        p_fuel_consumption_l_per_hour := (p_metadata->>'fuelConsumptionLPerHour')::double precision,
+        p_start_engine_hours := (p_metadata->>'startEngineHours')::double precision,
+        p_end_engine_hours := (p_metadata->>'endEngineHours')::double precision
+      ) INTO v_meta;
     END IF;
 
     FOR v_tank IN SELECT * FROM jsonb_array_elements(v_tanks) LOOP
