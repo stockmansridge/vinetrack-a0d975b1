@@ -211,10 +211,13 @@ export function isUncertainFailure(error: unknown): boolean {
 }
 
 function isConflictError(error: unknown): boolean {
+  const code = (error as { code?: string })?.code;
   return (
+    error instanceof WorksheetConflictError ||
     error instanceof SprayActualsConflictError ||
     error instanceof TripMetadataConflictError ||
-    (error as { code?: string })?.code === "40001"
+    code === "PT409" ||
+    code === "40001"
   );
 }
 
