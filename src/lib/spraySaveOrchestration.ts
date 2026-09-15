@@ -123,7 +123,7 @@ export function buildSavePlan(
     if (badRate) errors.push(badRate);
   }
 
-  if (errors.length) return { metadata: null, tanks: [], errors };
+  if (errors.length) return { worksheetOperationId: generateUuid(), metadata: null, tanks: [], errors };
 
   const correction: TripMetadataCorrection = {
     machineId: form.machineId,
@@ -152,7 +152,7 @@ export function buildSavePlan(
     sprayRecordId: payload.identity.sprayRecordId ?? null,
   }));
 
-  return { metadata, tanks, errors: [] };
+  return { worksheetOperationId: generateUuid(), metadata, tanks, errors: [] };
 }
 
 export function planIsEmpty(plan: SavePlan): boolean {
