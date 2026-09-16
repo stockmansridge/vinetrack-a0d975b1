@@ -163,6 +163,7 @@ export default function VineyardOverviewMap({
   const [showTrips, setShowTrips] = useState(true);
   const [pinFilter, setPinFilter] = useState<"active" | "completed" | "all" | "hidden">("active");
   const showPins = pinFilter !== "hidden";
+  const [showGrowthPins, setShowGrowthPins] = useState(false);
   const [days, setDays] = useState<number>(daysDefault);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -250,6 +251,12 @@ export default function VineyardOverviewMap({
           : pinFilter === "completed"
             ? pins.filter((p: any) => p?.is_completed === true)
             : pins.filter((p: any) => p?.is_completed !== true);
+      if (!showGrowthPins) {
+        // EL growth-stage pins are hidden by default.
+        filtered = filtered.filter(
+          (p: any) => !String(p?.growth_stage_code ?? "").trim(),
+        );
+      }
       return filtered
         .map((p) => ({ pin: p, coords: pinDisplayCoords(p as any) }))
         .filter((x): x is { pin: typeof pins[number]; coords: NonNullable<ReturnType<typeof pinDisplayCoords>> } => !!x.coords);
