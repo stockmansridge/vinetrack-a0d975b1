@@ -245,7 +245,7 @@ export default function VineyardOverviewMap({
 
   const pinsWithCoords = useMemo(
     () => {
-      const filtered =
+      let filtered =
         pinFilter === "all" || pinFilter === "hidden"
           ? pins
           : pinFilter === "completed"
