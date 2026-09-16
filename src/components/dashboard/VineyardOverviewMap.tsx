@@ -163,6 +163,7 @@ export default function VineyardOverviewMap({
   const [showTrips, setShowTrips] = useState(true);
   const [pinFilter, setPinFilter] = useState<"active" | "completed" | "all" | "hidden">("active");
   const showPins = pinFilter !== "hidden";
+  const [showGrowthPins, setShowGrowthPins] = useState(false);
   const [days, setDays] = useState<number>(daysDefault);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -244,17 +245,23 @@ export default function VineyardOverviewMap({
 
   const pinsWithCoords = useMemo(
     () => {
-      const filtered =
+      let filtered =
         pinFilter === "all" || pinFilter === "hidden"
           ? pins
           : pinFilter === "completed"
             ? pins.filter((p: any) => p?.is_completed === true)
             : pins.filter((p: any) => p?.is_completed !== true);
+      if (!showGrowthPins) {
+        // EL growth-stage pins are hidden by default.
+        filtered = filtered.filter(
+          (p: any) => !String(p?.growth_stage_code ?? "").trim(),
+        );
+      }
       return filtered
         .map((p) => ({ pin: p, coords: pinDisplayCoords(p as any) }))
         .filter((x): x is { pin: typeof pins[number]; coords: NonNullable<ReturnType<typeof pinDisplayCoords>> } => !!x.coords);
     },
-    [pins, pinFilter],
+    [pins, pinFilter, showGrowthPins],
   );
 
   // Pre-parse trip paths once per recentTrips; sort newest first.
@@ -575,6 +582,7 @@ export default function VineyardOverviewMap({
             <Layers className="h-3.5 w-3.5 text-muted-foreground" />
             <Toggle label={rf.blocksLabel} checked={showPaddocks} onChange={setShowPaddocks} />
             <Toggle label="Trips" checked={showTrips} onChange={setShowTrips} />
+            <Toggle label="Growth stages" checked={showGrowthPins} onChange={setShowGrowthPins} />
           </div>
           <Select value={pinFilter} onValueChange={(v) => setPinFilter(v as typeof pinFilter)}>
             <SelectTrigger className="h-8 w-[140px] text-xs">
