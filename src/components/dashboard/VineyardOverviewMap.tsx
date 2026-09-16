@@ -261,7 +261,7 @@ export default function VineyardOverviewMap({
         .map((p) => ({ pin: p, coords: pinDisplayCoords(p as any) }))
         .filter((x): x is { pin: typeof pins[number]; coords: NonNullable<ReturnType<typeof pinDisplayCoords>> } => !!x.coords);
     },
-    [pins, pinFilter],
+    [pins, pinFilter, showGrowthPins],
   );
 
   // Pre-parse trip paths once per recentTrips; sort newest first.
@@ -582,6 +582,7 @@ export default function VineyardOverviewMap({
             <Layers className="h-3.5 w-3.5 text-muted-foreground" />
             <Toggle label={rf.blocksLabel} checked={showPaddocks} onChange={setShowPaddocks} />
             <Toggle label="Trips" checked={showTrips} onChange={setShowTrips} />
+            <Toggle label="Growth stages" checked={showGrowthPins} onChange={setShowGrowthPins} />
           </div>
           <Select value={pinFilter} onValueChange={(v) => setPinFilter(v as typeof pinFilter)}>
             <SelectTrigger className="h-8 w-[140px] text-xs">
