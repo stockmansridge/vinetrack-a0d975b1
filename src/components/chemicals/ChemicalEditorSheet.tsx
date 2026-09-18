@@ -420,16 +420,8 @@ export function ChemicalEditor({
               : formFromInventoryUnit(normaliseUnit((initial as any).unit)),
           );
         }
-        setManualBaseline(
-          evaluateManualSaveContract({
-            name: initial.name,
-            category:
-              matchProductCategoryKey(initial.product_category) ??
-              matchProductCategoryKey(initial.use) ??
-              "",
-            uses: hydrated.registeredUses,
-          }).violations,
-        );
+        // The manual baseline is computed below, once the persisted default
+        // rate has been decoded — pre-existing incompleteness stays repairable.
         setRateLife(
           hydrateDefaultRateLifecycle({
             storedDefaultRates: (initial as any).default_rates,
