@@ -12,7 +12,7 @@ import {
 } from "@/lib/chemicalRateUnitContract";
 import {
   encodeChemicalIntelligenceForWrite,
-  decodeChemicalIntelligenceRow,
+  draftFromRow,
   type ChemicalIntelligenceDraft,
 } from "@/lib/chemicalIntelligenceWrite";
 
@@ -145,7 +145,7 @@ describe("legacy composite units when editing", () => {
       status: "needs_review",
       unit: "L/ha",
     });
-    const decoded = decodeChemicalIntelligenceRow({
+    const decoded = draftFromRow({
       registered_uses: [
         {
           crop: "Grapevines",
@@ -159,7 +159,7 @@ describe("legacy composite units when editing", () => {
   });
 
   it("presents an unambiguous legacy rate bare on load", () => {
-    const decoded = decodeChemicalIntelligenceRow({
+    const decoded = draftFromRow({
       registered_uses: [
         {
           crop: "Grapevines",
