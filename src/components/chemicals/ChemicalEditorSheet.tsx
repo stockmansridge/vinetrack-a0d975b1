@@ -1352,9 +1352,14 @@ export function ChemicalEditor({
               <Section title="Product">
                 <Field label="Chemical / product name *">
                   <Input value={form.name ?? ""} onChange={(e) => set("name", e.target.value)} />
+                  {manualNameViolation && (
+                    <p role="alert" className="mt-1 text-[11px] text-destructive">
+                      {manualNameViolation.message}
+                    </p>
+                  )}
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Registration number">
+                  <Field label={manualMode ? "Registration number (optional)" : "Registration number"}>
                     <Input
                       value={intel.registration.number ?? ""}
                       placeholder="Not stated"
@@ -1369,7 +1374,7 @@ export function ChemicalEditor({
                       }
                     />
                   </Field>
-                  <Field label="Category">
+                  <Field label={manualMode ? "Category (optional)" : "Category"}>
                     {/* The raw shared key is what is persisted; `use` is only
                         the display projection written alongside it. */}
                     <Select
