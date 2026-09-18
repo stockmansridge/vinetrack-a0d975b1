@@ -22,6 +22,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { masterChemicalDraft, setMasterReviewStatus, type MasterChemicalRow } from "@/lib/masterChemicals";
 import {
+  encodeMasterViticultureRates,
   MASTER_CORE_FIELD_LABEL,
   MASTER_RATE_BASIS_LABEL,
   MASTER_RATE_BASIS_SUFFIX,
@@ -71,7 +72,6 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
   const [identity, setIdentity] = useState<MasterCurationIdentity>({});
   const [rates, setRates] = useState<MasterViticultureRate[]>([]);
   const [reason, setReason] = useState("");
-  const [confirmApprove, setConfirmApprove] = useState(false);
 
   // Re-seed whenever a different record is opened.
   useEffect(() => {
@@ -86,12 +86,27 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
     });
     setRates(parseMasterViticultureRates(row.viticulture_rates));
     setReason("");
-    setConfirmApprove(false);
   }, [row?.id]);
 
   const draft = useMemo(() => (row ? masterChemicalDraft(row) : null), [row]);
   const labels = useMemo(() => (row ? masterLabelTargets(row) : []), [row]);
   const missing = useMemo(() => (row ? masterMissingFields(row) : []), [row]);
+
+  // What remains missing AFTER the current edits — this decides whether the
+  // one-click "Save, Approve & Next" is offered or the admin keeps editing.
+  const effectiveMissing = useMemo(() => {
+    if (!row) return [];
+    const edited: MasterChemicalRow = {
+      ...row,
+      registered_product_name: identity.registered_product_name ?? row.registered_product_name,
+      registration_number: identity.registration_number ?? row.registration_number,
+      product_category: identity.product_category ?? row.product_category,
+      label_reference: identity.label_reference ?? row.label_reference,
+      viticulture_rates: encodeMasterViticultureRates(rates),
+    };
+    return masterMissingFields(edited);
+  }, [row, identity, rates]);
+  const readyToApprove = effectiveMissing.length === 0;
 
   const save = useMutation({
     mutationFn: async () => {
@@ -125,11 +140,19 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
   };
 
   const runApprove = async () => {
+    // Hard guard: approval only ever fires with all mandatory fields complete.
+    if (!readyToApprove) {
+      toast({
+        title: "Not approved",
+        description: `Still missing: ${effectiveMissing.map((f) => MASTER_CORE_FIELD_LABEL[f]).join(", ")}`,
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       await approve.mutateAsync();
-      toast({ title: "Approved" });
+      toast({ title: "Approved", description: "Saved and approved. Moving to the next record." });
       props.onSaved?.();
-      setConfirmApprove(false);
       props.onNextAttention?.();
     } catch (e: any) {
       toast({ title: "Not approved", description: e?.message ?? String(e), variant: "destructive" });
@@ -308,25 +331,6 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
               </Field>
             </div>
 
-            {confirmApprove && (
-              <div className="mt-4 rounded-md border border-orange-500/40 bg-orange-500/5 p-3 text-xs space-y-2">
-                <div className="font-semibold">Still missing on this record</div>
-                <ul className="list-disc pl-4">
-                  {missing.map((f) => (
-                    <li key={f}>{MASTER_CORE_FIELD_LABEL[f]}</li>
-                  ))}
-                </ul>
-                <div className="flex gap-2">
-                  <Button size="sm" disabled={busy} onClick={runApprove}>
-                    Approve anyway & next
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setConfirmApprove(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-
             {/* --------------------------------------------------- controls */}
             <div className="sticky bottom-0 mt-4 -mx-6 border-t border-border/60 bg-background px-6 py-3 flex flex-wrap items-center gap-2">
               <Button
@@ -344,16 +348,23 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
               <Button size="sm" variant="outline" disabled={busy} onClick={() => runSave()}>
                 <Save className="h-4 w-4 mr-1" /> Save
               </Button>
-              <Button size="sm" variant="outline" disabled={busy} onClick={() => runSave(props.onNext)}>
-                Save &amp; Next
-              </Button>
-              <Button
-                size="sm"
-                disabled={busy}
-                onClick={() => (missing.length ? setConfirmApprove(true) : runApprove())}
-              >
-                <BadgeCheck className="h-4 w-4 mr-1" /> Approve &amp; Next
-              </Button>
+              {readyToApprove ? (
+                // All mandatory review fields complete → one click saves,
+                // approves and moves to the next record needing attention.
+                <Button size="sm" disabled={busy} onClick={runApprove}>
+                  <BadgeCheck className="h-4 w-4 mr-1" /> Save, Approve &amp; Next
+                </Button>
+              ) : (
+                // Gaps remain → never approve; show what is missing instead.
+                <Button
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => runSave(props.onNext)}
+                  title={`Still missing: ${effectiveMissing.map((f) => MASTER_CORE_FIELD_LABEL[f]).join(", ")}`}
+                >
+                  Save &amp; Next
+                </Button>
+              )}
             </div>
           </>
         )}
