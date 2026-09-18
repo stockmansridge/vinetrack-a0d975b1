@@ -477,12 +477,19 @@ export function ChemicalEditor({
       const storedDefaults = initial
         ? decodePersistedDefaultRates((initial as any).default_rates)
         : null;
-      setManualRate(
-        manualRateDraftFromSelection(
-          storedDefaults?.per_hectare ?? null,
-        ) ??
-          manualRateDraftFromSelection(storedDefaults?.per_100_litres ?? null) ??
-          emptyManualRateDraft(),
+      const storedManualDraft =
+        manualRateDraftFromSelection(storedDefaults?.per_hectare ?? null) ??
+        manualRateDraftFromSelection(storedDefaults?.per_100_litres ?? null);
+      setManualRate(storedManualDraft ?? emptyManualRateDraft());
+      // Existing records: only violations introduced in THIS session block a
+      // save, so a saved chemical with no typed default rate stays editable.
+      setManualBaseline(
+        initial
+          ? evaluateManualSaveContract({
+              name: initial.name,
+              rate: storedManualDraft,
+            }).violations
+          : [],
       );
       setMasterUpdateOpen(false);
       setEditorReverifyOpen(false);
