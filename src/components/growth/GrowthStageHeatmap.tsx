@@ -32,13 +32,13 @@ import {
   type HeatObservation,
 } from "@/lib/growthHeatmap";
 import {
-  EL_PHASES,
+  ALL_PHASES,
+  PHASE_OPTIONS,
   elInPhase,
   makePhaseColour,
   makePhaseColourCss,
   phaseById,
   phaseColourCss,
-  phaseForEl,
   phaseOptionLabel,
 } from "@/lib/growthPhases";
 import {
