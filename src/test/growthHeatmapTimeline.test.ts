@@ -21,8 +21,7 @@ import {
   parseElStage,
   observationDays,
   toObservations,
-  type GrowthStageRecordLike,
-} from "@/lib/growthHeatmap" as any;
+} from "@/lib/growthHeatmap";
 
 const BLOCK = [
   { lat: -34.5, lng: 138.5 },
