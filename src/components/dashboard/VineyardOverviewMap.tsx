@@ -14,7 +14,10 @@ import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
-import { isGrowthPin } from "@/lib/growthStageRecordsQuery";
+import {
+  currentGrowthStagePinIds,
+  isOverviewPinVisible,
+} from "@/lib/overviewPinClasses";
 import { extractPathPoints } from "@/lib/tripReport";
 import { formatTripNameLabel } from "@/lib/tripDisplay";
 import {
@@ -164,7 +167,9 @@ export default function VineyardOverviewMap({
   const [showTrips, setShowTrips] = useState(true);
   const [pinFilter, setPinFilter] = useState<"active" | "completed" | "all" | "hidden">("active");
   const showPins = pinFilter !== "hidden";
-  const [showGrowthPins, setShowGrowthPins] = useState(false);
+  const [showRepairPins, setShowRepairPins] = useState(true);
+  const [showGrowthPins, setShowGrowthPins] = useState(true);
+  const [showCurrentGrowthStages, setShowCurrentGrowthStages] = useState(false);
   const [days, setDays] = useState<number>(daysDefault);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
