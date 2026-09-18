@@ -605,7 +605,24 @@ export default function VineyardOverviewMap({
             <Layers className="h-3.5 w-3.5 text-muted-foreground" />
             <Toggle label={rf.blocksLabel} checked={showPaddocks} onChange={setShowPaddocks} />
             <Toggle label="Trips" checked={showTrips} onChange={setShowTrips} />
-            <Toggle label="Growth stages" checked={showGrowthPins} onChange={setShowGrowthPins} />
+            <Toggle
+              label="Repairs"
+              checked={showRepairPins}
+              onChange={setShowRepairPins}
+              title="Vine issues, posts, wires, irrigation and other pins"
+            />
+            <Toggle
+              label="Growth"
+              checked={showGrowthPins}
+              onChange={setShowGrowthPins}
+              title="Growth pins without an E-L growth stage"
+            />
+            <Toggle
+              label="Current growth stages"
+              checked={showCurrentGrowthStages}
+              onChange={setShowCurrentGrowthStages}
+              title="Highest recorded E-L stage for each variety"
+            />
           </div>
           <Select value={pinFilter} onValueChange={(v) => setPinFilter(v as typeof pinFilter)}>
             <SelectTrigger className="h-8 w-[140px] text-xs">
