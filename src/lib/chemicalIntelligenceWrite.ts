@@ -813,7 +813,11 @@ function decodeRate(value: unknown): WriteLabelRate {
     value: finiteOrUndef(o.value),
     min_value: finiteOrUndef(o.min_value),
     max_value: finiteOrUndef(o.max_value),
-    unit: trimOrUndef(o.unit) ?? "",
+    // A legacy composite unit is presented bare ONLY when its denominator
+    // agrees with the stored basis ("L/ha" + per_hectare -> "L"). A
+    // contradiction ("L/ha" + per_100_litres) is preserved verbatim so the
+    // editor can require operator review instead of guessing.
+    unit: normaliseStructuredRateUnit(o.unit, basis).unit,
     raw_text: trimOrUndef(o.raw_text),
     condition: trimOrUndef(o.condition),
     condition_ambiguous:
