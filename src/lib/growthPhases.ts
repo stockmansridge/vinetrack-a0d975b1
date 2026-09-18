@@ -1,4 +1,4 @@
-// E-L development phases for the Ripeness Heatmap.
+// E-L development phases for the Growth Stage Heatmap.
 //
 // Presentation/derived logic only — no data source, no writes. Each phase has
 // its OWN red → green scale: the first stage of the phase is red, the final

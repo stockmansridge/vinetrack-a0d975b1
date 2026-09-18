@@ -32,7 +32,7 @@ function labelElement(text: string) {
 }
 
 /**
- * Apple MapKit renderer for the Ripeness Heatmap.
+ * Apple MapKit renderer for the Growth Stage Heatmap.
  *
  * MapKit JS has no image-overlay primitive, so the per-block heat rasters
  * (already clipped to each polygon) are painted onto a canvas layered over

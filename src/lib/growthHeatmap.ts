@@ -1,4 +1,4 @@
-// Ripeness Heatmap — pure, deterministic logic.
+// Growth Stage Heatmap — pure, deterministic logic.
 //
 // Derived reporting only. Reads existing Growth Stage observations
 // (see `growthStageRecordsQuery.ts`) and existing block polygons

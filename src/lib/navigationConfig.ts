@@ -158,7 +158,7 @@ export const ACTIVITIES: NavActivity[] = [
         label: "Growth Stages",
         path: "/reports/growth-stage",
         report: true,
-        keywords: ["growth", "stage", "phenology", "e-l", "el", "heatmap", "ripeness"],
+        keywords: ["growth", "stage", "phenology", "e-l", "el", "heatmap", "growth stage heatmap"],
       },
       {
         id: "observations.damage",

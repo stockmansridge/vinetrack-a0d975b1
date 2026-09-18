@@ -1,4 +1,4 @@
-// Ripeness Heatmap timeline logic — pure, so the slider, markers, previous /
+// Growth Stage Heatmap timeline logic — pure, so the slider, markers, previous /
 // next buttons and playback can never become disconnected: they all resolve
 // through these helpers against one list of observation dates.
 
