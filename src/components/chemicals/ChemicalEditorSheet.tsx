@@ -1542,8 +1542,9 @@ export function ChemicalEditor({
 
             {/* --------------------------------------- operational column */}
             <div className="space-y-4">
-              {structuredUses && (
-                <Section title="Default rate">
+              {(structuredUses || manualMode) && (
+                <Section title={manualMode ? "Default rate *" : "Default rate"}>
+
                   {/* The recovery actions (retry / official label / change
                       product) stay visible while the manual rate is typed —
                       the operator needs the label open to confirm the rate. */}
