@@ -17,6 +17,7 @@ import {
   manualRateRegisteredUse,
   manualRateSelection,
   manualRateSatisfiesGate,
+  validateManualRate,
   type ManualRateDraft,
 } from "@/lib/chemicalManualRate";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
