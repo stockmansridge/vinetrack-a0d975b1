@@ -1618,7 +1618,12 @@ export function ChemicalEditor({
                 </Section>
               )}
 
-              <Section title="Grapevine uses & rates">
+              {/* Manual entry never asks the operator to recreate the label's
+                  structured Grapevine uses & rates: the section is hidden unless
+                  real label information already populated it (Master Catalogue,
+                  product label, Chemical Search, label extraction). */}
+              {(!manualMode || intel.registeredUses.length > 0) && (
+              <Section title={manualMode ? "Grapevine uses & rates (optional)" : "Grapevine uses & rates"}>
                 {/* Vineyard-first: other crops on the label are not part of the
                     normal add flow and are never shown here. */}
                 {manualMode ? (
@@ -1632,20 +1637,6 @@ export function ChemicalEditor({
                       compact
                       sections={{ actives: false, registration: false, uses: true, sources: false, audit: false }}
                     />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-7 px-2 text-[11px]"
-                      onClick={handleAddGrapevineUse}
-                    >
-                      {ADD_GRAPEVINE_USE_LABEL}
-                    </Button>
-                    {manualBlocking.map((v) => (
-                      <p key={v.field} role="alert" className="text-[11px] text-destructive">
-                        {v.message}
-                      </p>
-                    ))}
                   </div>
                 ) : structuredUses || lookupSelected ? (
                   <>
