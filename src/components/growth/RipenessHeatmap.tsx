@@ -20,15 +20,10 @@ import { parsePolygonPoints, type LatLng } from "@/lib/paddockGeometry";
 import { usePinPlacements } from "@/lib/pinPlacementQuery";
 import type { GrowthStageRecord } from "@/lib/growthStageRecordsQuery";
 import {
-  EL_COLOUR_STOPS,
-  EL_MAX,
-  EL_MIN,
   RECENCY_HALF_LIFE_DAYS,
   RECENCY_MAX_AGE_DAYS,
   ageLabel,
   buildHeatModel,
-  daysBetween,
-  elColourCss,
   filterToVintage,
   formatEl,
   observationDays,
@@ -36,6 +31,25 @@ import {
   toObservations,
   type HeatObservation,
 } from "@/lib/growthHeatmap";
+import {
+  EL_PHASES,
+  elInPhase,
+  makePhaseColour,
+  makePhaseColourCss,
+  phaseById,
+  phaseColourCss,
+  phaseForEl,
+  phaseOptionLabel,
+} from "@/lib/growthPhases";
+import {
+  advancePlayback,
+  dayIndex as timelineIndex,
+  dayAtIndex,
+  dayOffsetPct,
+  playbackStartDay,
+  resolveSelectedDay,
+  stepDay,
+} from "@/lib/heatTimeline";
 import { blockHeatDataUrl } from "@/components/growth/heatCanvas";
 
 interface Paddock {
@@ -48,12 +62,6 @@ interface Paddock {
 
 const ALL = "all";
 const dayKey = (iso: string) => String(iso).slice(0, 10);
-
-function addDays(iso: string, n: number): string {
-  const t = Date.parse(`${dayKey(iso)}T00:00:00Z`) + n * 86_400_000;
-  return new Date(t).toISOString().slice(0, 10);
-}
-
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
@@ -84,15 +92,14 @@ export default function RipenessHeatmap({
 
   const [vintage, setVintage] = useState<number | null>(null);
   const [blockFilter, setBlockFilter] = useState<string>(ALL);
-  const [dayIndex, setDayIndex] = useState<number>(0);
+  const [phaseId, setPhaseId] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [selectedObs, setSelectedObs] = useState<HeatObservation | null>(null);
   const [fitKey, setFitKey] = useState(0);
   const [showBoundaries, setShowBoundaries] = useState(true);
   const [mapProvider, setMapProvider] = useState<"apple" | "fallback">("apple");
   const [mapReason, setMapReason] = useState<string | null>(null);
-
-  const touchedDay = useRef(false);
 
   /** Data-driven: only Vintages that actually contain observations. */
   const vintageOptions = useMemo(() => {
@@ -147,24 +154,42 @@ export default function RipenessHeatmap({
     [allObs, season.startISO, season.endISO],
   );
 
-  const days = useMemo(() => {
-    const out: string[] = [];
-    const total = Math.max(1, daysBetween(season.startISO, season.endISO));
-    for (let i = 0; i <= total; i++) out.push(addDays(season.startISO, i));
-    return out;
-  }, [season.startISO, season.endISO]);
+  // ---- development phase --------------------------------------------------
+  /** Phase containing the most recent observation in the season. */
+  const latestPhaseId = useMemo(() => {
+    let latest: HeatObservation | null = null;
+    for (const o of seasonObs) {
+      if (!latest || dayKey(o.dateISO) > dayKey(latest.dateISO)) latest = o;
+    }
+    return latest ? phaseForEl(latest.el).id : EL_PHASES[0].id;
+  }, [seasonObs]);
 
-  const obsDays = useMemo(() => observationDays(seasonObs), [seasonObs]);
+  const phase = phaseById(phaseId) ?? phaseById(latestPhaseId) ?? EL_PHASES[0];
 
-  // Default the slider to the latest recorded observation in the season.
+  const phaseObs = useMemo(
+    () => seasonObs.filter((o) => elInPhase(o.el, phase)),
+    [seasonObs, phase],
+  );
+
+  const colourFor = useMemo(() => makePhaseColour(phase), [phase]);
+  const colourCss = useMemo(() => makePhaseColourCss(phase), [phase]);
+
+  // ---- timeline -----------------------------------------------------------
+  /** Distinct observation dates for the selected phase and block. */
+  const obsDays = useMemo(() => {
+    const scoped = blockFilter === ALL ? phaseObs : phaseObs.filter((o) => o.paddockId === blockFilter);
+    return observationDays(scoped);
+  }, [phaseObs, blockFilter]);
+
+  // Phase / Vintage / block change → latest available date in that scope.
   useEffect(() => {
-    touchedDay.current = false;
-    const last = obsDays[obsDays.length - 1];
-    const idx = last ? days.indexOf(last) : days.length - 1;
-    setDayIndex(idx >= 0 ? idx : days.length - 1);
-  }, [activeVintage, days, obsDays]);
+    setSelectedDate(null);
+    setPlaying(false);
+  }, [phase.id, activeVintage, blockFilter]);
 
-  const selectedDay = days[Math.min(dayIndex, days.length - 1)] ?? season.startISO;
+  const activeDay = resolveSelectedDay(obsDays, selectedDate);
+  const selectedDay = activeDay ?? dayKey(season.endISO);
+  const dayPos = timelineIndex(obsDays, activeDay);
 
   const blocks = useMemo(
     () =>
@@ -182,19 +207,19 @@ export default function RipenessHeatmap({
   const model = useMemo(
     () =>
       buildHeatModel({
-        observations: seasonObs,
+        observations: phaseObs,
         blocks,
         atDateISO: selectedDay,
         blockFilter: blockFilter === ALL ? null : blockFilter,
       }),
-    [seasonObs, blocks, selectedDay, blockFilter],
+    [phaseObs, blocks, selectedDay, blockFilter],
   );
 
   const overlays = useMemo(
     () =>
       model.blocks.flatMap((b) => {
         if (b.mode === "none" || b.mode === "no_polygon" || !b.gridBounds) return [];
-        const url = blockHeatDataUrl(b, b.mode === "halo" ? 0.55 : 0.72);
+        const url = blockHeatDataUrl(b, b.mode === "halo" ? 0.55 : 0.72, colourFor);
         if (!url) return [];
         return [{
           id: b.paddockId,
@@ -205,7 +230,7 @@ export default function RipenessHeatmap({
           ] as [[number, number], [number, number]],
         }];
       }),
-    [model],
+    [model, colourFor],
   );
 
   const fitPoints = useMemo(() => {
@@ -225,6 +250,7 @@ export default function RipenessHeatmap({
     fitPoints,
     fitKey,
     showBoundaries,
+    colourCss,
     onSelect: setSelectedObs,
   };
 
@@ -232,15 +258,16 @@ export default function RipenessHeatmap({
   // ---- playback -----------------------------------------------------------
   useEffect(() => {
     if (!playing) return;
-    if (reducedMotion) { setPlaying(false); return; }
+    if (reducedMotion || obsDays.length < 2) { setPlaying(false); return; }
     const id = window.setInterval(() => {
-      setDayIndex((i) => {
-        if (i >= days.length - 1) return 0;
-        return i + 1;
+      setSelectedDate((cur) => {
+        const next = advancePlayback(obsDays, cur);
+        if (!next.playing) setPlaying(false);
+        return next.day;
       });
-    }, 90);
+    }, 800);
     return () => window.clearInterval(id);
-  }, [playing, days.length, reducedMotion]);
+  }, [playing, obsDays, reducedMotion]);
 
   useEffect(() => {
     const stop = () => setPlaying(false);
@@ -258,11 +285,17 @@ export default function RipenessHeatmap({
 
   const stepObs = (dir: 1 | -1) => {
     setPlaying(false);
-    const cur = selectedDay;
-    const next = dir === 1 ? obsDays.find((d) => d > cur) : [...obsDays].reverse().find((d) => d < cur);
-    if (!next) return;
-    const idx = days.indexOf(next);
-    if (idx >= 0) setDayIndex(idx);
+    const next = stepDay(obsDays, selectedDate);
+    void next;
+    const target = stepDay(obsDays, selectedDate ?? activeDay, dir);
+    if (target) setSelectedDate(target);
+  };
+
+  const togglePlay = () => {
+    if (playing) { setPlaying(false); return; }
+    if (obsDays.length < 2) return;
+    setSelectedDate(playbackStartDay(obsDays, selectedDate));
+    setPlaying(true);
   };
 
   const dateLabel = new Date(`${selectedDay}T00:00:00Z`).toLocaleDateString(undefined, {
