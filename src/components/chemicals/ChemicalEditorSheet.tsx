@@ -1674,6 +1674,7 @@ export function ChemicalEditor({
                   legacyRateBlock
                 )}
               </Section>
+              )}
 
               {(whpLegalText || rei || unresolvedItems.length > 0) && (
                 <Section title="Withholding & re-entry">
