@@ -84,7 +84,7 @@ export function ManualRateEditor({
       </div>
 
       <div className="space-y-1">
-        <Label className="text-[11px]">Rate basis</Label>
+        <Label className="text-[11px]">Rate basis{requiredMarkers ? " *" : ""}</Label>
         <RadioGroup
           className="flex gap-4"
           value={draft.basis}
@@ -107,7 +107,7 @@ export function ManualRateEditor({
       <div className="flex flex-wrap items-end gap-2">
         {draft.kind === "single" ? (
           <div className="space-y-1">
-            <Label className="text-[11px]" htmlFor="manual-rate-value">Rate</Label>
+            <Label className="text-[11px]" htmlFor="manual-rate-value">Rate{requiredMarkers ? " *" : ""}</Label>
             <Input
               id="manual-rate-value"
               aria-label="Rate"
@@ -122,7 +122,7 @@ export function ManualRateEditor({
         ) : (
           <>
             <div className="space-y-1">
-              <Label className="text-[11px]" htmlFor="manual-rate-min">Minimum</Label>
+              <Label className="text-[11px]" htmlFor="manual-rate-min">Minimum{requiredMarkers ? " *" : ""}</Label>
               <Input
                 id="manual-rate-min"
                 aria-label="Minimum"
@@ -135,7 +135,7 @@ export function ManualRateEditor({
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-[11px]" htmlFor="manual-rate-max">Maximum</Label>
+              <Label className="text-[11px]" htmlFor="manual-rate-max">Maximum{requiredMarkers ? " *" : ""}</Label>
               <Input
                 id="manual-rate-max"
                 aria-label="Maximum"
@@ -150,7 +150,7 @@ export function ManualRateEditor({
           </>
         )}
         <div className="space-y-1">
-          <Label className="text-[11px]">Product unit</Label>
+          <Label className="text-[11px]">Product unit{requiredMarkers ? " *" : ""}</Label>
           <Select
             value={draft.unit}
             onValueChange={(v) => patch({ unit: v as ManualRateUnit })}
