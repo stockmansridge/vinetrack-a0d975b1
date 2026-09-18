@@ -33,6 +33,7 @@ import {
   ENTER_MANUALLY_LABEL,
 } from "@/lib/chemicalManualEntry";
 import { grapevineOnlyDraft } from "@/lib/chemicalVineyardScope";
+import { emptyManualRateDraft, type ManualRateDraft } from "@/lib/chemicalManualRate";
 import { emptyDraft, type WriteRegisteredUse } from "@/lib/chemicalIntelligenceWrite";
 import { legacyRatePerHaForWrite } from "@/lib/savedChemicalLegacyRate";
 import { createSavedChemical } from "@/lib/savedChemicalsQuery";
