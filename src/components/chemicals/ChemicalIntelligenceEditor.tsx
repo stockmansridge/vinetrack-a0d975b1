@@ -544,7 +544,7 @@ export function ChemicalIntelligenceEditor({
               disabled={disabled}
               onClick={() =>
                 setUse(ui, {
-                  rates: [...u.rates, { label: "", basis: "per_hectare", unit: "L/ha" }],
+                  rates: [...u.rates, { label: "", basis: "per_hectare", unit: "" }],
                 })
               }
             >
@@ -559,7 +559,7 @@ export function ChemicalIntelligenceEditor({
             patch({
               registeredUses: [
                 ...draft.registeredUses,
-                { crop: "", target_raw: "", rates: [{ label: "", basis: "per_hectare", unit: "L/ha" }] },
+                { crop: "", target_raw: "", rates: [{ label: "", basis: "per_hectare", unit: "" }] },
               ],
             })
           }

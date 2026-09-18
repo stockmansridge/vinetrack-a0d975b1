@@ -574,6 +574,11 @@ function encodeActive(a: WriteActiveIngredient): Record<string, unknown> {
 }
 
 function encodeRate(r: WriteLabelRate): Record<string, unknown> {
+  // Save boundary: `unit` must be a bare numerator (L / mL / kg / g) and the
+  // single/range shapes are exclusive. A contradictory combination fails
+  // visibly instead of persisting data no consumer can interpret.
+  const check = validateStructuredRate(r);
+  if (check.ok === false) throw new Error(check.message);
   const base: Record<string, unknown> = {
     label: r.label ?? "",
     basis: r.basis,
