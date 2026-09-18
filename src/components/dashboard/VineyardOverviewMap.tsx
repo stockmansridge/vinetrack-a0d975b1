@@ -14,6 +14,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
+import { isGrowthPin } from "@/lib/growthStageRecordsQuery";
 import { extractPathPoints } from "@/lib/tripReport";
 import { formatTripNameLabel } from "@/lib/tripDisplay";
 import {
