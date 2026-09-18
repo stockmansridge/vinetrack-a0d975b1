@@ -324,7 +324,7 @@ export interface MasterActionResult {
 const obj = (v: unknown): Record<string, any> =>
   v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, any>) : {};
 
-async function callReviewRpc(
+export async function callReviewRpc(
   fn: string,
   args: Record<string, unknown>,
   masterId: string,

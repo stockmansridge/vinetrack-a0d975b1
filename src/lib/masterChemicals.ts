@@ -76,6 +76,12 @@ export interface MasterChemicalRow {
   activity_groups?: string[] | null;
   activity_group_scheme?: string | null;
   registered_uses?: unknown;
+  /** Existing SQL 199 columns used by the admin curation workflow. */
+  product_category?: string | null;
+  form_type?: string | null;
+  common_names?: string[] | null;
+  /** Master vineyard-rate source (existing column — no schema change). */
+  viticulture_rates?: unknown;
   label_reference?: string | null;
   label_version?: string | null;
   catalogue_version?: number | string | null;
