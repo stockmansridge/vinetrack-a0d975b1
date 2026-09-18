@@ -85,12 +85,27 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
     });
     setRates(parseMasterViticultureRates(row.viticulture_rates));
     setReason("");
-    setConfirmApprove(false);
   }, [row?.id]);
 
   const draft = useMemo(() => (row ? masterChemicalDraft(row) : null), [row]);
   const labels = useMemo(() => (row ? masterLabelTargets(row) : []), [row]);
   const missing = useMemo(() => (row ? masterMissingFields(row) : []), [row]);
+
+  // What remains missing AFTER the current edits — this decides whether the
+  // one-click "Save, Approve & Next" is offered or the admin keeps editing.
+  const effectiveMissing = useMemo(() => {
+    if (!row) return [];
+    const edited: MasterChemicalRow = {
+      ...row,
+      registered_product_name: identity.registered_product_name ?? row.registered_product_name,
+      registration_number: identity.registration_number ?? row.registration_number,
+      product_category: identity.product_category ?? row.product_category,
+      label_reference: identity.label_reference ?? row.label_reference,
+      viticulture_rates: encodeMasterViticultureRates(rates),
+    };
+    return masterMissingFields(edited);
+  }, [row, identity, rates]);
+  const readyToApprove = effectiveMissing.length === 0;
 
   const save = useMutation({
     mutationFn: async () => {
