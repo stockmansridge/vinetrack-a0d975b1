@@ -134,6 +134,21 @@ async function fetchFromView(
 export const GROWTH_PINS_OR_FILTER = "mode.eq.Growth,growth_stage_code.not.is.null";
 
 /**
+ * Client-side mirror of GROWTH_PINS_OR_FILTER: a pin is a growth-stage pin
+ * when its mode is 'Growth' (case/whitespace tolerant) OR it carries a
+ * non-blank growth_stage_code. Shared so the map toggle, lists and any other
+ * consumer classify pins identically to the server-side query contract.
+ */
+export function isGrowthPin(pin: {
+  mode?: string | null;
+  growth_stage_code?: string | null;
+} | null | undefined): boolean {
+  if (!pin) return false;
+  if (String(pin.mode ?? "").trim().toLowerCase() === "growth") return true;
+  return String(pin.growth_stage_code ?? "").trim().length > 0;
+}
+
+/**
  * Apply the mandatory safety scopes to a pins query, in a testable shape:
  * vineyard scope AND not soft-deleted AND (growth mode OR has an EL code).
  * PostgREST ANDs successive filters, so both OR branches inherit both scopes.
