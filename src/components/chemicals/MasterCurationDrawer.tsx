@@ -322,25 +322,6 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
               </Field>
             </div>
 
-            {confirmApprove && (
-              <div className="mt-4 rounded-md border border-orange-500/40 bg-orange-500/5 p-3 text-xs space-y-2">
-                <div className="font-semibold">Still missing on this record</div>
-                <ul className="list-disc pl-4">
-                  {missing.map((f) => (
-                    <li key={f}>{MASTER_CORE_FIELD_LABEL[f]}</li>
-                  ))}
-                </ul>
-                <div className="flex gap-2">
-                  <Button size="sm" disabled={busy} onClick={runApprove}>
-                    Approve anyway & next
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setConfirmApprove(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-
             {/* --------------------------------------------------- controls */}
             <div className="sticky bottom-0 mt-4 -mx-6 border-t border-border/60 bg-background px-6 py-3 flex flex-wrap items-center gap-2">
               <Button
@@ -358,16 +339,23 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
               <Button size="sm" variant="outline" disabled={busy} onClick={() => runSave()}>
                 <Save className="h-4 w-4 mr-1" /> Save
               </Button>
-              <Button size="sm" variant="outline" disabled={busy} onClick={() => runSave(props.onNext)}>
-                Save &amp; Next
-              </Button>
-              <Button
-                size="sm"
-                disabled={busy}
-                onClick={() => (missing.length ? setConfirmApprove(true) : runApprove())}
-              >
-                <BadgeCheck className="h-4 w-4 mr-1" /> Approve &amp; Next
-              </Button>
+              {readyToApprove ? (
+                // All mandatory review fields complete → one click saves,
+                // approves and moves to the next record needing attention.
+                <Button size="sm" disabled={busy} onClick={runApprove}>
+                  <BadgeCheck className="h-4 w-4 mr-1" /> Save, Approve &amp; Next
+                </Button>
+              ) : (
+                // Gaps remain → never approve; show what is missing instead.
+                <Button
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => runSave(props.onNext)}
+                  title={`Still missing: ${effectiveMissing.map((f) => MASTER_CORE_FIELD_LABEL[f]).join(", ")}`}
+                >
+                  Save &amp; Next
+                </Button>
+              )}
             </div>
           </>
         )}
