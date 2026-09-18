@@ -1565,26 +1565,25 @@ export function ChemicalEditor({
                       onCancel={() => setManualRate(emptyManualRateDraft())}
                     />
                   )}
-                  {/* Manual entry: an OPTIONAL operator-confirmed default. */}
+                  {/* Manual entry: the default rate is a REQUIRED operational
+                      field, so the editor is always open. The label-check tick
+                      inside it stays informational and never blocks Save. */}
                   {manualMode && !showRateRecovery && (
-                    manualRateActive ? (
+                    <>
                       <ManualRateEditor
                         draft={manualRate}
                         onChange={handleManualRateChange}
                         onCancel={() => setManualRate(emptyManualRateDraft())}
                         provenanceMessage={MANUAL_RATE_ENTRY_MESSAGE}
+                        allowCancel={false}
+                        requiredMarkers
                       />
-                    ) : (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="mb-2 h-7 px-2 text-[11px]"
-                        onClick={() => setManualRate((p) => ({ ...emptyManualRateDraft(), ...p, open: true }))}
-                      >
-                        Set a default rate (optional)
-                      </Button>
-                    )
+                      {manualRateViolation && (
+                        <p role="alert" className="mb-2 text-[11px] text-destructive">
+                          {manualRateViolation.message}
+                        </p>
+                      )}
+                    </>
                   )}
 
                   {rateLife.productChangedNotice && (
