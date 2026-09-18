@@ -6,7 +6,7 @@ import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { useGrowthStagePhoto } from "@/hooks/useGrowthStagePhoto";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import RipenessHeatmap from "@/components/growth/RipenessHeatmap";
+import GrowthStageHeatmap from "@/components/growth/GrowthStageHeatmap";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -202,7 +202,7 @@ export default function GrowthStageRecordsPage() {
       <Tabs defaultValue="summary">
       <TabsList>
         <TabsTrigger value="summary">Summary</TabsTrigger>
-        <TabsTrigger value="heatmap">Ripeness Heatmap</TabsTrigger>
+        <TabsTrigger value="heatmap">Growth Stage Heatmap</TabsTrigger>
       </TabsList>
 
       <TabsContent value="summary" className="space-y-4 mt-4">
@@ -364,7 +364,7 @@ export default function GrowthStageRecordsPage() {
       </TabsContent>
 
       <TabsContent value="heatmap" className="mt-4">
-        <RipenessHeatmap records={all} isLoading={isLoading} error={error} />
+        <GrowthStageHeatmap records={all} isLoading={isLoading} error={error} />
       </TabsContent>
       </Tabs>
 

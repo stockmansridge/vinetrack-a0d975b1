@@ -76,7 +76,7 @@ function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
-export default function RipenessHeatmap({
+export default function GrowthStageHeatmap({
   records,
   isLoading,
   error,
