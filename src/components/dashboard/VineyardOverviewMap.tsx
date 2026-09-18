@@ -249,24 +249,42 @@ export default function VineyardOverviewMap({
     return m;
   }, [paddocks]);
 
+  /** Block → first allocated variety, used to group Current Growth Stages. */
+  const varietyByPaddock = useMemo(() => {
+    const m = new Map<string, string | null>();
+    paddocks.forEach((p: any) => {
+      const alloc = Array.isArray(p?.variety_allocations) ? p.variety_allocations : [];
+      const v = alloc[0]?.variety;
+      m.set(p.id, v ? String(v) : null);
+    });
+    return m;
+  }, [paddocks]);
+
+  /** Highest recorded E-L per variety — the only growth-stage pins ever drawn. */
+  const currentGrowthIds = useMemo(
+    () => currentGrowthStagePinIds(pins as any, varietyByPaddock),
+    [pins, varietyByPaddock],
+  );
+
   const pinsWithCoords = useMemo(
     () => {
-      let filtered =
+      const statusFiltered =
         pinFilter === "all" || pinFilter === "hidden"
           ? pins
           : pinFilter === "completed"
             ? pins.filter((p: any) => p?.is_completed === true)
             : pins.filter((p: any) => p?.is_completed !== true);
-      if (!showGrowthPins) {
-        // EL growth-stage pins are hidden by default: mode 'Growth' or any
-        // non-blank growth_stage_code (same predicate as the server query).
-        filtered = filtered.filter((p: any) => !isGrowthPin(p));
-      }
-      return filtered
+      const visibility = {
+        repairs: showRepairPins,
+        growth: showGrowthPins,
+        currentGrowthStages: showCurrentGrowthStages,
+      };
+      return statusFiltered
+        .filter((p: any) => isOverviewPinVisible(p, visibility, currentGrowthIds))
         .map((p) => ({ pin: p, coords: pinDisplayCoords(p as any) }))
         .filter((x): x is { pin: typeof pins[number]; coords: NonNullable<ReturnType<typeof pinDisplayCoords>> } => !!x.coords);
     },
-    [pins, pinFilter, showGrowthPins],
+    [pins, pinFilter, showRepairPins, showGrowthPins, showCurrentGrowthStages, currentGrowthIds],
   );
 
   // Pre-parse trip paths once per recentTrips; sort newest first.
