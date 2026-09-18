@@ -32,10 +32,16 @@ export function ManualRateEditor({
   onChange,
   onCancel,
   provenanceMessage,
+  allowCancel = true,
+  requiredMarkers = false,
 }: {
   draft: ManualRateDraft;
   onChange: (next: ManualRateDraft) => void;
   onCancel: () => void;
+  /** Manual chemical entry: the rate is required, so there is nothing to cancel. */
+  allowCancel?: boolean;
+  /** Mark the operational fields the save actually requires with `*`. */
+  requiredMarkers?: boolean;
   /**
    * Manual ENTRY uses its own wording: the registered-product recovery message
    * ("VineTrack could not read this rate…") must never be shown there.
