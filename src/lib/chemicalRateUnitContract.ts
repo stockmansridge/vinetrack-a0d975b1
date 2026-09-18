@@ -167,7 +167,7 @@ export function structuredRateProblems(
   (uses ?? []).forEach((use, useIndex) => {
     (use?.rates ?? []).forEach((rate, rateIndex) => {
       const v = validateStructuredRate(rate ?? {});
-      if (!v.ok) out.push({ useIndex, rateIndex, message: v.message });
+      if (v.ok === false) out.push({ useIndex, rateIndex, message: v.message });
     });
   });
   return out;
