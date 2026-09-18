@@ -71,7 +71,6 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
   const [identity, setIdentity] = useState<MasterCurationIdentity>({});
   const [rates, setRates] = useState<MasterViticultureRate[]>([]);
   const [reason, setReason] = useState("");
-  const [confirmApprove, setConfirmApprove] = useState(false);
 
   // Re-seed whenever a different record is opened.
   useEffect(() => {
