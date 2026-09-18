@@ -5,7 +5,9 @@
 // (`paddocks.polygon_points`). No writes, no new data sources.
 //
 // Documented rules (single source of truth for the Portal):
-//  * EL scale is FIXED at EL 1 → EL 43. Colours never rescale to the data.
+//  * Valid EL stages run EL 1 → EL 47. Heatmap colours come from the selected
+//    development phase (see `growthPhases.ts`); `elColour` below remains the
+//    legacy full-scale ramp used by the handoff generator.
 //  * An observation qualifies for a timeline date D when it is not
 //    soft-deleted, has a parseable EL stage in [1, 43], has valid GPS and
 //    its OBSERVATION timestamp (not updated_at) is on or before D.
@@ -19,7 +21,7 @@ import type { GrowthStageRecord } from "@/lib/growthStageRecordsQuery";
 import type { LatLng } from "@/lib/paddockGeometry";
 
 export const EL_MIN = 1;
-export const EL_MAX = 43;
+export const EL_MAX = 47;
 export const RECENCY_HALF_LIFE_DAYS = 21;
 /** Beyond this age an observation has zero heat-surface influence. */
 export const RECENCY_MAX_AGE_DAYS = 84;
@@ -43,7 +45,7 @@ export const EL_COLOUR_STOPS: { el: number; rgb: RGB; label: string }[] = [
 /**
  * Parse a stored growth stage code into a numeric EL value.
  * Accepts "23", "EL23", "E-L 23", "e l 23". Returns null for anything
- * missing, non-numeric or outside EL 1–43 — NEVER 0 and never EL 1.
+ * missing, non-numeric or outside EL 1–47 — NEVER 0 and never EL 1.
  */
 export function parseElStage(code: unknown): number | null {
   if (code == null) return null;

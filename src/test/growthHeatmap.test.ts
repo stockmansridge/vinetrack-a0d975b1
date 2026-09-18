@@ -56,13 +56,14 @@ describe("EL parsing and fixed colour scale", () => {
     expect(parseElStage("E-L 4")).toBe(4);
     expect(parseElStage("43")).toBe(43);
     expect(parseElStage("0")).toBeNull();
-    expect(parseElStage("44")).toBeNull();
+    expect(parseElStage("47")).toBe(47);
+    expect(parseElStage("48")).toBeNull();
     expect(parseElStage("")).toBeNull();
     expect(parseElStage(null)).toBeNull();
     expect(parseElStage("unknown")).toBeNull();
   });
 
-  it("maps EL 1 to red and EL 43 to green, fixed for all data", () => {
+  it("maps the low end to red and the high end to green", () => {
     const lo = elColour(EL_MIN);
     const hi = elColour(EL_MAX);
     expect(lo.r).toBeGreaterThan(lo.g);

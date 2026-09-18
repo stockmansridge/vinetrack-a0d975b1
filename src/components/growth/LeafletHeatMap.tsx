@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { MapContainer, TileLayer, Polygon, ImageOverlay, CircleMarker, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { elColourCss, formatEl } from "@/lib/growthHeatmap";
+import { formatEl } from "@/lib/growthHeatmap";
 import type { HeatMapViewProps } from "@/components/growth/heatMapTypes";
 
 function FitTo({ points, fitKey }: { points: { lat: number; lng: number }[]; fitKey: number }) {
@@ -28,6 +28,7 @@ export default function LeafletHeatMap({
   fitPoints,
   fitKey,
   showBoundaries,
+  colourCss,
   onSelect,
 }: HeatMapViewProps) {
   const blockLabel = (mode: string, medianEl: number | null) =>
@@ -80,7 +81,7 @@ export default function LeafletHeatMap({
               weight: 2,
               opacity: stale ? 0.55 : 1,
               dashArray: stale ? "3 3" : undefined,
-              fillColor: elColourCss(o.el),
+              fillColor: colourCss(o.el),
               fillOpacity: filled ? (stale ? 0.35 : 1) : 0,
             }}
             eventHandlers={{ click: () => onSelect(o) }}
