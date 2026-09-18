@@ -49,6 +49,18 @@ import {
   type MasterReviewStatus,
 } from "@/lib/masterChemicals";
 import { countryLabel, vineyardCountryCode } from "@/lib/chemicalJurisdiction";
+import { MasterCurationDrawer } from "@/components/chemicals/MasterCurationDrawer";
+import {
+  MASTER_QUEUE_FILTERS,
+  filterMasterQueue,
+  masterMissingFields,
+  masterRateCoverage,
+  nextAttentionId,
+  nextQueueId,
+  previousQueueId,
+  primaryMasterLabelTarget,
+  type MasterQueueFilter,
+} from "@/lib/masterCuration";
 
 const QK = ["admin", "master-chemicals"] as const;
 
@@ -67,86 +79,105 @@ export default function MasterCataloguePage() {
 }
 
 function CatalogueBody() {
-  const [status, setStatus] = useState<MasterReviewStatus>("candidate");
+  const [filter, setFilter] = useState<MasterQueueFilter>("needs_attention");
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<MasterChemicalRow | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [deep, setDeep] = useState<MasterChemicalRow | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   // System Admin maintenance only — never a vineyard-user feature.
   const [refreshOpen, setRefreshOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const q = useQuery({
-    queryKey: [...QK, status],
-    queryFn: () => listMasterChemicals({ status }),
+    queryKey: [...QK, "queue"],
+    queryFn: () => listMasterChemicals({}),
   });
 
-  const rows = useMemo(() => {
-    const list = q.data ?? [];
-    const needle = search.trim().toLowerCase();
-    if (!needle) return list;
-    return list.filter((r) =>
-      [r.registered_product_name, r.registrant, r.registration_number, r.registration_country]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(needle)),
-    );
-  }, [q.data, search]);
+  const queue = useMemo(
+    () => filterMasterQueue(q.data ?? [], filter, search),
+    [q.data, filter, search],
+  );
+
+  const selected = queue.find((r) => r.id === selectedId) ?? null;
+  const index = selected ? queue.findIndex((r) => r.id === selected.id) : -1;
+
+  const openId = (id: string | null) => setSelectedId(id);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <AdminError error={q.error} />
 
-      <Tabs value={status} onValueChange={(v) => setStatus(v as MasterReviewStatus)}>
-        <TabsList>
-          <TabsTrigger value="candidate">Candidates</TabsTrigger>
-          <TabsTrigger value="approved">Approved</TabsTrigger>
-          <TabsTrigger value="retired">Retired</TabsTrigger>
-        </TabsList>
-
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <div className="relative max-w-sm flex-1 min-w-[220px]">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              className="pl-8"
-              placeholder="Search product, registrant or registration number"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <Button variant="outline" onClick={() => setImportOpen(true)}>
-            <Download className="h-4 w-4 mr-1" /> Import from APVMA
+      <div className="flex flex-wrap items-center gap-2">
+        {MASTER_QUEUE_FILTERS.map((f) => (
+          <Button
+            key={f.key}
+            size="sm"
+            variant={filter === f.key ? "default" : "outline"}
+            onClick={() => setFilter(f.key)}
+          >
+            {f.label}
           </Button>
-          {status === "candidate" && (
-            <Button
-              variant="outline"
-              onClick={() => setRefreshOpen(true)}
-              disabled={(q.data ?? []).length === 0}
-            >
-              <RefreshCw className="h-4 w-4 mr-1" /> Refresh Chemical Catalogue
-            </Button>
-          )}
-        </div>
+        ))}
+      </div>
 
-        <TabsContent value={status} className="mt-3">
-          {q.isLoading ? (
-            <div className="text-sm text-muted-foreground py-8 text-center">Loading…</div>
-          ) : rows.length === 0 ? (
-            <AdminEmpty>
-              No {MASTER_REVIEW_STATUS_LABEL[status].toLowerCase()} records.
-            </AdminEmpty>
-          ) : (
-            <div className="grid gap-2 md:grid-cols-2">
-              {rows.map((row) => (
-                <RowCard key={row.id} row={row} onOpen={() => setSelected(row)} />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative max-w-sm flex-1 min-w-[220px]">
+          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            className="pl-8"
+            placeholder="Search product, registrant or APVMA number"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <Button variant="outline" onClick={() => setImportOpen(true)}>
+          <Download className="h-4 w-4 mr-1" /> Import from APVMA
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => setRefreshOpen(true)}
+          disabled={queue.length === 0}
+        >
+          <RefreshCw className="h-4 w-4 mr-1" /> Refresh Chemical Catalogue
+        </Button>
+        <span className="text-xs text-muted-foreground">{queue.length} record(s)</span>
+      </div>
+
+      {q.isLoading ? (
+        <div className="text-sm text-muted-foreground py-8 text-center">Loading…</div>
+      ) : queue.length === 0 ? (
+        <AdminEmpty>Nothing matches this filter.</AdminEmpty>
+      ) : (
+        <Card className="divide-y divide-border/60">
+          {queue.map((row) => (
+            <QueueRow
+              key={row.id}
+              row={row}
+              active={row.id === selectedId}
+              onOpen={() => openId(row.id)}
+              onEvidence={() => setDeep(row)}
+            />
+          ))}
+        </Card>
+      )}
+
+      <MasterCurationDrawer
+        row={selected}
+        open={!!selected}
+        onOpenChange={(v) => !v && setSelectedId(null)}
+        position={index >= 0 ? { index, total: queue.length } : undefined}
+        hasPrevious={index > 0}
+        hasNext={index >= 0 && index < queue.length - 1}
+        onPrevious={() => openId(previousQueueId(queue, selectedId))}
+        onNext={() => openId(nextQueueId(queue, selectedId))}
+        onNextAttention={() => openId(nextAttentionId(queue, selectedId))}
+        onSaved={() => queryClient.invalidateQueries({ queryKey: QK })}
+      />
 
       <MasterCatalogueRefreshDialog
         open={refreshOpen}
         onOpenChange={setRefreshOpen}
-        ids={(q.data ?? []).map((r) => r.id)}
+        ids={queue.map((r) => r.id)}
         country={vineyardCountryCode("AU") ?? "AU"}
         onFinished={() => queryClient.invalidateQueries({ queryKey: QK })}
       />
@@ -155,71 +186,95 @@ function CatalogueBody() {
         open={importOpen}
         onOpenChange={setImportOpen}
         invalidateKey={QK}
-        onReview={(row) => setSelected(row)}
+        onReview={(row) => openId(row.id)}
       />
 
-      {selected && (
-        <ReviewDialog
-          row={selected}
-          open={!!selected}
-          onOpenChange={(v) => !v && setSelected(null)}
-        />
+      {deep && (
+        <ReviewDialog row={deep} open={!!deep} onOpenChange={(v) => !v && setDeep(null)} />
       )}
     </div>
   );
 }
 
-function RowCard({ row, onOpen }: { row: MasterChemicalRow; onOpen: () => void }) {
-  const readiness = approvalReadiness(row);
-  const draft = masterChemicalDraft(row);
+/** One scannable queue row. The full registered_uses structure is never shown here. */
+function QueueRow({
+  row,
+  active,
+  onOpen,
+  onEvidence,
+}: {
+  row: MasterChemicalRow;
+  active: boolean;
+  onOpen: () => void;
+  onEvidence: () => void;
+}) {
+  const missing = masterMissingFields(row);
+  const coverage = masterRateCoverage(row);
+  const label = primaryMasterLabelTarget(row);
+  const status = MASTER_REVIEW_STATUS_LABEL[
+    (row.review_status as MasterReviewStatus) ?? "candidate"
+  ] ?? row.review_status;
+
   return (
-    <Card className="p-3 space-y-1.5 text-sm">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <div className="font-medium">
-            {row.registered_product_name?.trim() || "Unnamed product"}
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {row.registrant?.trim() || "Registrant unknown"} · {masterIdentityKey(row) ?? "no registration"}
-          </div>
-          <div className="text-[11px] text-muted-foreground">
-            {countryLabel(row.registration_country)} registration
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <Badge className="border-transparent bg-primary/15 text-primary text-[10px]">
-            {vineyardCountryCode(row.registration_country) ?? "No country"}
-          </Badge>
-          <Badge variant="secondary" className="text-[10px]">
-            rev {masterRevision(row) ?? "—"}
-          </Badge>
-          {row.verification_status && (
-            <Badge variant="outline" className="text-[10px]">
-              {String(row.verification_status).replace(/_/g, " ")}
-            </Badge>
-          )}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm cursor-pointer hover:bg-muted/50 ${
+        active ? "bg-muted/60" : ""
+      }`}
+    >
+      <div className="min-w-[200px] flex-1">
+        <div className="font-medium">{row.registered_product_name?.trim() || "Unnamed product"}</div>
+        <div className="text-xs text-muted-foreground">
+          {row.registration_number?.trim() || "No APVMA number"}
+          {row.product_category?.trim() ? ` · ${row.product_category.trim()}` : " · No category"}
         </div>
       </div>
-      <div className="text-xs text-muted-foreground">
-        {draft.actives.length
-          ? draft.actives.map((a) => a.name).join(" + ")
-          : "No structured actives"}
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        {readiness.ready ? (
-          <span className="inline-flex items-center gap-1 text-[11px] text-primary">
-            <BadgeCheck className="h-3.5 w-3.5" /> Evidence complete
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-            <AlertTriangle className="h-3.5 w-3.5" /> {readiness.reasons.length} issue(s)
-          </span>
+
+      <Badge variant="secondary" className="text-[10px]">{status}</Badge>
+
+      <div className="flex items-center gap-1">
+        {coverage.perHectare && <Badge variant="outline" className="text-[10px]">/ha</Badge>}
+        {coverage.per100Litres && <Badge variant="outline" className="text-[10px]">/100 L</Badge>}
+        {!coverage.any && (
+          <Badge variant="outline" className="text-[10px] border-orange-500/40 text-orange-600">
+            No vineyard rate
+          </Badge>
         )}
-        <Button size="sm" variant="outline" onClick={onOpen}>
-          Review
-        </Button>
       </div>
-    </Card>
+
+      <Badge variant="outline" className="text-[10px]">
+        {label ? "Label" : "No label"}
+      </Badge>
+
+      {missing.length > 0 ? (
+        <span className="inline-flex items-center gap-1 text-[11px] text-orange-600">
+          <AlertTriangle className="h-3.5 w-3.5" /> Needs attention ({missing.length})
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1 text-[11px] text-primary">
+          <BadgeCheck className="h-3.5 w-3.5" /> Complete
+        </span>
+      )}
+
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={(e) => {
+          e.stopPropagation();
+          onEvidence();
+        }}
+      >
+        Evidence
+      </Button>
+    </div>
   );
 }
 
