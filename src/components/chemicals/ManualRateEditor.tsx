@@ -60,13 +60,15 @@ export function ManualRateEditor({
     <div className="mb-2 space-y-3 rounded-md border border-border/60 bg-muted/40 p-3 text-xs">
       <div className="flex items-center justify-between gap-2">
         <div className="font-medium">Enter the rate manually</div>
-        <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-[11px]" onClick={onCancel}>
-          Cancel
-        </Button>
+        {allowCancel && (
+          <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-[11px]" onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
       </div>
 
       <div className="space-y-1">
-        <Label className="text-[11px]">Rate type</Label>
+        <Label className="text-[11px]">Rate type{requiredMarkers ? " *" : ""}</Label>
         <RadioGroup
           className="flex gap-4"
           value={draft.kind}
