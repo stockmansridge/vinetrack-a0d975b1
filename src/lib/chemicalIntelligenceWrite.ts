@@ -18,6 +18,10 @@ import {
   lookupActivityGroup,
   activityGroupCodesEquivalent,
 } from "@/lib/activityGroupReference";
+import {
+  normaliseStructuredRateUnit,
+  validateStructuredRate,
+} from "@/lib/chemicalRateUnitContract";
 
 export const INTELLIGENCE_SCHEMA_VERSION = 1;
 export { ACTIVITY_GROUP_TABLE_VERSION, ACTIVITY_GROUP_REFERENCE_NAME };
