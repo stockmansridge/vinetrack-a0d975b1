@@ -14,6 +14,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
+import { isGrowthPin } from "@/lib/growthStageRecordsQuery";
 import { extractPathPoints } from "@/lib/tripReport";
 import { formatTripNameLabel } from "@/lib/tripDisplay";
 import {
@@ -252,10 +253,9 @@ export default function VineyardOverviewMap({
             ? pins.filter((p: any) => p?.is_completed === true)
             : pins.filter((p: any) => p?.is_completed !== true);
       if (!showGrowthPins) {
-        // EL growth-stage pins are hidden by default.
-        filtered = filtered.filter(
-          (p: any) => !String(p?.growth_stage_code ?? "").trim(),
-        );
+        // EL growth-stage pins are hidden by default: mode 'Growth' or any
+        // non-blank growth_stage_code (same predicate as the server query).
+        filtered = filtered.filter((p: any) => !isGrowthPin(p));
       }
       return filtered
         .map((p) => ({ pin: p, coords: pinDisplayCoords(p as any) }))
