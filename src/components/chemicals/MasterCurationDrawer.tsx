@@ -22,6 +22,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { masterChemicalDraft, setMasterReviewStatus, type MasterChemicalRow } from "@/lib/masterChemicals";
 import {
+  encodeMasterViticultureRates,
   MASTER_CORE_FIELD_LABEL,
   MASTER_RATE_BASIS_LABEL,
   MASTER_RATE_BASIS_SUFFIX,
@@ -141,9 +142,8 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
   const runApprove = async () => {
     try {
       await approve.mutateAsync();
-      toast({ title: "Approved" });
+      toast({ title: "Approved", description: "Saved and approved. Moving to the next record." });
       props.onSaved?.();
-      setConfirmApprove(false);
       props.onNextAttention?.();
     } catch (e: any) {
       toast({ title: "Not approved", description: e?.message ?? String(e), variant: "destructive" });
