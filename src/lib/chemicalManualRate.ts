@@ -220,8 +220,16 @@ export function manualRateRegisteredUse(
 export function manualRateSelection(
   draft: ManualRateDraft,
   meta?: { selected_at?: string | null },
+  /**
+   * Simplified manual chemical entry: the label-check confirmation is
+   * INFORMATIONAL and never gates the save, so the selection is written from a
+   * valid rate alone. The registered-product RECOVERY path keeps requiring the
+   * explicit confirmation (default `true`).
+   */
+  opts?: { requireConfirmation?: boolean },
 ): PersistedDefaultRateSelection | null {
-  if (!manualRateSatisfiesGate(draft)) return null;
+  const requireConfirmation = opts?.requireConfirmation !== false;
+  if (requireConfirmation && !manualRateSatisfiesGate(draft)) return null;
   const v = validateManualRate(draft);
   if (!v.ok) return null;
   return {
