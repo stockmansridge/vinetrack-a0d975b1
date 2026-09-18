@@ -285,8 +285,6 @@ export default function RipenessHeatmap({
 
   const stepObs = (dir: 1 | -1) => {
     setPlaying(false);
-    const next = stepDay(obsDays, selectedDate);
-    void next;
     const target = stepDay(obsDays, selectedDate ?? activeDay, dir);
     if (target) setSelectedDate(target);
   };
@@ -347,6 +345,19 @@ export default function RipenessHeatmap({
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-1">
+            <div className="text-xs text-muted-foreground">Development phase</div>
+            <Select value={phase.id} onValueChange={(v) => setPhaseId(v)}>
+              <SelectTrigger className="w-[320px]" aria-label="Development phase">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EL_PHASES.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{phaseOptionLabel(p)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <Button variant="outline" size="sm" onClick={() => setFitKey((k) => k + 1)}>
             <Maximize2 className="mr-2 h-4 w-4" /> Fit to {blockFilter === ALL ? "vineyard" : "block"}
           </Button>
@@ -373,25 +384,21 @@ export default function RipenessHeatmap({
         </div>
 
 
-        {/* Fixed EL legend — never rescaled to the current result set. */}
+        {/* Phase legend — first stage red, final stage green. */}
         <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs text-muted-foreground">E-L {phase.min}</span>
           <div
             className="h-3 w-56 rounded-full"
             style={{
-              background: `linear-gradient(to right, ${EL_COLOUR_STOPS.map(
-                (s) => `${elColourCss(s.el)} ${((s.el - EL_MIN) / (EL_MAX - EL_MIN)) * 100}%`,
-              ).join(", ")})`,
+              background: `linear-gradient(to right, ${phaseColourCss(phase.min, phase)}, ${phaseColourCss(
+                (phase.min + phase.max) / 2,
+                phase,
+              )}, ${phaseColourCss(phase.max, phase)})`,
             }}
             aria-hidden
           />
-          <div className="flex flex-wrap gap-2 text-xs">
-            {EL_COLOUR_STOPS.map((s) => (
-              <span key={s.el} className="inline-flex items-center gap-1">
-                <span className="h-2.5 w-2.5 rounded-sm" style={{ background: elColourCss(s.el) }} />
-                {s.label}
-              </span>
-            ))}
-          </div>
+          <span className="text-xs text-muted-foreground">E-L {phase.max}</span>
+          <span className="text-xs text-muted-foreground">{phase.label}</span>
         </div>
 
         <div className="space-y-0.5 text-sm">
@@ -419,6 +426,10 @@ export default function RipenessHeatmap({
           <div className="rounded-md border p-6 text-sm text-muted-foreground">
             No Growth Stage observations recorded in the {activeVintage} Vintage.
           </div>
+        ) : phaseObs.length === 0 ? (
+          <div className="rounded-md border p-6 text-sm text-muted-foreground">
+            No observations in this development phase
+          </div>
         ) : (
           <div className="h-[540px] overflow-hidden rounded-md border">
             {mapProvider === "apple" ? (
@@ -436,41 +447,64 @@ export default function RipenessHeatmap({
             <Button
               size="icon"
               variant="outline"
-              onClick={() => setPlaying((p) => !p)}
-              disabled={reducedMotion}
+              onClick={togglePlay}
+              disabled={reducedMotion || obsDays.length < 2}
               aria-label={playing ? "Pause timeline" : "Play timeline"}
             >
               {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
             </Button>
-            <Button size="icon" variant="ghost" onClick={() => stepObs(-1)} aria-label="Previous observation date">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => stepObs(-1)}
+              disabled={!obsDays.length}
+              aria-label="Previous observation date"
+            >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button size="icon" variant="ghost" onClick={() => stepObs(1)} aria-label="Next observation date">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => stepObs(1)}
+              disabled={!obsDays.length}
+              aria-label="Next observation date"
+            >
               <ChevronRight className="h-4 w-4" />
             </Button>
             <div className="relative flex-1">
               <Slider
-                value={[Math.min(dayIndex, days.length - 1)]}
+                value={[dayPos]}
                 min={0}
-                max={Math.max(0, days.length - 1)}
+                max={Math.max(0, obsDays.length - 1)}
                 step={1}
-                onValueChange={([v]) => { touchedDay.current = true; setPlaying(false); setDayIndex(v); }}
-                aria-label="Season timeline"
+                disabled={obsDays.length < 2}
+                onValueChange={([v]) => {
+                  setPlaying(false);
+                  const d = dayAtIndex(obsDays, v);
+                  if (d) setSelectedDate(d);
+                }}
+                aria-label="Observation date timeline"
               />
-              <div className="pointer-events-none absolute inset-x-0 top-5 h-2">
-                {obsDays.map((d) => {
-                  const i = days.indexOf(d);
-                  if (i < 0) return null;
-                  return (
-                    <span
-                      key={d}
-                      className="absolute top-0 h-2 w-px bg-primary/70"
-                      style={{ left: `${(i / Math.max(1, days.length - 1)) * 100}%` }}
-                    />
-                  );
-                })}
+              <div className="absolute inset-x-0 top-5 h-3">
+                {obsDays.map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    className={`absolute top-0 h-3 w-1.5 -translate-x-1/2 rounded-sm ${
+                      d === activeDay ? "bg-primary" : "bg-primary/60 hover:bg-primary"
+                    }`}
+                    style={{ left: `${dayOffsetPct(obsDays, d)}%` }}
+                    aria-label={`Select observation date ${d}`}
+                    onClick={() => { setPlaying(false); setSelectedDate(d); }}
+                  />
+                ))}
               </div>
             </div>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {obsDays.length
+              ? `${obsDays.length} observation date${obsDays.length === 1 ? "" : "s"} in this development phase`
+              : "No observations in this development phase"}
           </div>
           {reducedMotion && (
             <div className="text-xs text-muted-foreground">
@@ -519,7 +553,7 @@ export default function RipenessHeatmap({
             <Button size="sm" variant="ghost" onClick={() => setSelectedObs(null)}>Close</Button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge style={{ background: elColourCss(selectedObs.el), color: "#fff" }}>
+            <Badge style={{ background: colourCss(selectedObs.el), color: "#fff" }}>
               {formatEl(selectedObs.el)}
             </Badge>
             {selectedObs.record.growth_stage_label && <span>{selectedObs.record.growth_stage_label}</span>}
