@@ -155,16 +155,9 @@ export default function GrowthStageHeatmap({
   );
 
   // ---- development phase --------------------------------------------------
-  /** Phase containing the most recent observation in the season. */
-  const latestPhaseId = useMemo(() => {
-    let latest: HeatObservation | null = null;
-    for (const o of seasonObs) {
-      if (!latest || dayKey(o.dateISO) > dayKey(latest.dateISO)) latest = o;
-    }
-    return latest ? phaseForEl(latest.el).id : EL_PHASES[0].id;
-  }, [seasonObs]);
-
-  const phase = phaseById(phaseId) ?? phaseById(latestPhaseId) ?? EL_PHASES[0];
+  // Defaults to All phases (E-L 1–47) so the whole season stays selectable and
+  // coloured; choosing a single phase narrows the surface, pins and scale.
+  const phase = phaseById(phaseId) ?? ALL_PHASES;
 
   const phaseObs = useMemo(
     () => seasonObs.filter((o) => elInPhase(o.el, phase)),
@@ -352,7 +345,7 @@ export default function GrowthStageHeatmap({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {EL_PHASES.map((p) => (
+                {PHASE_OPTIONS.map((p) => (
                   <SelectItem key={p.id} value={p.id}>{phaseOptionLabel(p)}</SelectItem>
                 ))}
               </SelectContent>
