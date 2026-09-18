@@ -124,7 +124,7 @@ export function evaluateManualSaveContract(
     violations.push({ field: "rate", message: MANUAL_CONTRACT_MESSAGE.rate });
   } else {
     const rate = validateManualRate(input.rate);
-    if (!rate.ok) violations.push({ field: "rate", message: rate.message });
+    if (rate.ok === false) violations.push({ field: "rate", message: rate.message });
   }
   return { ok: violations.length === 0, violations };
 }
