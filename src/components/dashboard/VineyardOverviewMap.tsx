@@ -14,7 +14,10 @@ import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
-import { isGrowthPin } from "@/lib/growthStageRecordsQuery";
+import {
+  currentGrowthStagePinIds,
+  isOverviewPinVisible,
+} from "@/lib/overviewPinClasses";
 import { extractPathPoints } from "@/lib/tripReport";
 import { formatTripNameLabel } from "@/lib/tripDisplay";
 import {
@@ -164,7 +167,9 @@ export default function VineyardOverviewMap({
   const [showTrips, setShowTrips] = useState(true);
   const [pinFilter, setPinFilter] = useState<"active" | "completed" | "all" | "hidden">("active");
   const showPins = pinFilter !== "hidden";
-  const [showGrowthPins, setShowGrowthPins] = useState(false);
+  const [showRepairPins, setShowRepairPins] = useState(true);
+  const [showGrowthPins, setShowGrowthPins] = useState(true);
+  const [showCurrentGrowthStages, setShowCurrentGrowthStages] = useState(false);
   const [days, setDays] = useState<number>(daysDefault);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -244,24 +249,42 @@ export default function VineyardOverviewMap({
     return m;
   }, [paddocks]);
 
+  /** Block → first allocated variety, used to group Current Growth Stages. */
+  const varietyByPaddock = useMemo(() => {
+    const m = new Map<string, string | null>();
+    paddocks.forEach((p: any) => {
+      const alloc = Array.isArray(p?.variety_allocations) ? p.variety_allocations : [];
+      const v = alloc[0]?.variety;
+      m.set(p.id, v ? String(v) : null);
+    });
+    return m;
+  }, [paddocks]);
+
+  /** Highest recorded E-L per variety — the only growth-stage pins ever drawn. */
+  const currentGrowthIds = useMemo(
+    () => currentGrowthStagePinIds(pins as any, varietyByPaddock),
+    [pins, varietyByPaddock],
+  );
+
   const pinsWithCoords = useMemo(
     () => {
-      let filtered =
+      const statusFiltered =
         pinFilter === "all" || pinFilter === "hidden"
           ? pins
           : pinFilter === "completed"
             ? pins.filter((p: any) => p?.is_completed === true)
             : pins.filter((p: any) => p?.is_completed !== true);
-      if (!showGrowthPins) {
-        // EL growth-stage pins are hidden by default: mode 'Growth' or any
-        // non-blank growth_stage_code (same predicate as the server query).
-        filtered = filtered.filter((p: any) => !isGrowthPin(p));
-      }
-      return filtered
+      const visibility = {
+        repairs: showRepairPins,
+        growth: showGrowthPins,
+        currentGrowthStages: showCurrentGrowthStages,
+      };
+      return statusFiltered
+        .filter((p: any) => isOverviewPinVisible(p, visibility, currentGrowthIds))
         .map((p) => ({ pin: p, coords: pinDisplayCoords(p as any) }))
         .filter((x): x is { pin: typeof pins[number]; coords: NonNullable<ReturnType<typeof pinDisplayCoords>> } => !!x.coords);
     },
-    [pins, pinFilter, showGrowthPins],
+    [pins, pinFilter, showRepairPins, showGrowthPins, showCurrentGrowthStages, currentGrowthIds],
   );
 
   // Pre-parse trip paths once per recentTrips; sort newest first.
@@ -582,7 +605,24 @@ export default function VineyardOverviewMap({
             <Layers className="h-3.5 w-3.5 text-muted-foreground" />
             <Toggle label={rf.blocksLabel} checked={showPaddocks} onChange={setShowPaddocks} />
             <Toggle label="Trips" checked={showTrips} onChange={setShowTrips} />
-            <Toggle label="Growth stages" checked={showGrowthPins} onChange={setShowGrowthPins} />
+            <Toggle
+              label="Repairs"
+              checked={showRepairPins}
+              onChange={setShowRepairPins}
+              title="Vine issues, posts, wires, irrigation and other pins"
+            />
+            <Toggle
+              label="Growth"
+              checked={showGrowthPins}
+              onChange={setShowGrowthPins}
+              title="Growth pins without an E-L growth stage"
+            />
+            <Toggle
+              label="Current growth stages"
+              checked={showCurrentGrowthStages}
+              onChange={setShowCurrentGrowthStages}
+              title="Highest recorded E-L stage for each variety"
+            />
           </div>
           <Select value={pinFilter} onValueChange={(v) => setPinFilter(v as typeof pinFilter)}>
             <SelectTrigger className="h-8 w-[140px] text-xs">
