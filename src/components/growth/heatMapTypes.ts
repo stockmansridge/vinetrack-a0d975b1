@@ -19,6 +19,8 @@ export interface HeatMapViewProps {
   /** Bump to re-fit the map. */
   fitKey: number;
   showBoundaries: boolean;
+  /** Phase-relative CSS colour for an E-L value. */
+  colourCss: (el: number) => string;
   onSelect: (obs: HeatObservation) => void;
 }
 

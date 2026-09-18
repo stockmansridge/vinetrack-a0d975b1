@@ -45,7 +45,7 @@ export const EL_COLOUR_STOPS: { el: number; rgb: RGB; label: string }[] = [
 /**
  * Parse a stored growth stage code into a numeric EL value.
  * Accepts "23", "EL23", "E-L 23", "e l 23". Returns null for anything
- * missing, non-numeric or outside EL 1–43 — NEVER 0 and never EL 1.
+ * missing, non-numeric or outside EL 1–47 — NEVER 0 and never EL 1.
  */
 export function parseElStage(code: unknown): number | null {
   if (code == null) return null;
