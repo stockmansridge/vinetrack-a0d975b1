@@ -105,33 +105,7 @@ describe("simplified manual save contract", () => {
   });
 });
 
-
-describe("manual save contract", () => {
-  it("requires a name, a category, a grapevine use and one calculable rate", () => {
-    const none = evaluateManualSaveContract({ name: "", category: "", uses: [] });
-    expect(none.ok).toBe(false);
-    expect(none.violations.map((v) => v.field)).toEqual(["name", "category", "grapevine_use"]);
-
-    const noRate = evaluateManualSaveContract({
-      name: "Shed Mix",
-      category: "fungicide",
-      uses: [use({ rates: [] })],
-    });
-    expect(noRate.violations.map((v) => v.field)).toEqual(["rate"]);
-
-    expect(
-      evaluateManualSaveContract({ name: "Shed Mix", category: "fungicide", uses: [use()] }).ok,
-    ).toBe(true);
-  });
-
-  it("accepts a record with no active ingredients and no registration evidence", () => {
-    const draft = { ...emptyDraft(), registeredUses: [use()] };
-    expect(draft.actives).toHaveLength(0);
-    expect(
-      evaluateManualSaveContract({ name: "Shed Mix", category: "fungicide", uses: draft.registeredUses }).ok,
-    ).toBe(true);
-  });
-
+describe("label rate usability (Master Catalogue / label sourced rates)", () => {
   it("treats a range as calculable and rejects zero, negative and unitless rates", () => {
     expect(
       isUsableLabelRate({ label: "", basis: "range_per_hectare", min_value: 1, max_value: 2, unit: "L/ha" }),
@@ -142,12 +116,6 @@ describe("manual save contract", () => {
     expect(isUsableLabelRate({ label: "", basis: "per_hectare", value: 0, unit: "L/ha" })).toBe(false);
     expect(isUsableLabelRate({ label: "", basis: "per_hectare", value: -1, unit: "L/ha" })).toBe(false);
     expect(isUsableLabelRate({ label: "", basis: "per_hectare", value: 1, unit: "" })).toBe(false);
-  });
-
-  it("only blocks violations introduced in this editing session", () => {
-    const baseline = evaluateManualSaveContract({ name: "Old", category: "", uses: [use()] }).violations;
-    const current = evaluateManualSaveContract({ name: "", category: "", uses: [use()] }).violations;
-    expect(newlyIntroducedViolations(baseline, current).map((v) => v.field)).toEqual(["name"]);
   });
 });
 
