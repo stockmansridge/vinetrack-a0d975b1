@@ -140,6 +140,17 @@ describe("one transaction per Save", () => {
     expect(call()[1].p_metadata).toBeNull();
     expect(s.allSaved).toBe(true);
   });
+
+  it("never calls the per-operation correction RPCs directly (regression: stale saver wiring)", async () => {
+    const p = basePayload();
+    const plan = buildSavePlan(p, editWater(p, { 1: "1400", 2: "1300" }), form(p, { startHoursText: "120" }));
+    rpc.mockResolvedValue(ok);
+    await runSaveAttempt(createSaveAttempt(plan));
+    const fns = rpc.mock.calls.map(([fn]) => fn);
+    expect(fns).toEqual(["save_spray_trip_worksheet_v1"]);
+    expect(fns).not.toContain("correct_spray_tank_actual_v1");
+    expect(fns).not.toContain("correct_spray_trip_metadata_v1");
+  });
 });
 
 describe("nothing half-commits", () => {
