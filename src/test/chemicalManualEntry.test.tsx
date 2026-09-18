@@ -45,6 +45,67 @@ const use = (over: Partial<WriteRegisteredUse> = {}): WriteRegisteredUse => ({
   ...over,
 });
 
+const singleRate = (over: Partial<ManualRateDraft> = {}): ManualRateDraft => ({
+  ...emptyManualRateDraft(),
+  open: true,
+  kind: "single",
+  value: "1.5",
+  ...over,
+});
+
+describe("simplified manual save contract", () => {
+  it("saves a manual product with only a name and a single rate", () => {
+    const ok = evaluateManualSaveContract({ name: "Shed Mix", rate: singleRate() });
+    expect(ok.ok).toBe(true);
+    expect(ok.violations).toEqual([]);
+  });
+
+  it("saves with a rate range", () => {
+    expect(
+      evaluateManualSaveContract({
+        name: "Shed Mix",
+        rate: singleRate({ kind: "range", value: "", min: "1", max: "2" }),
+      }).ok,
+    ).toBe(true);
+  });
+
+  it("does not block on a missing category, registered uses or manufacturer", () => {
+    const result = evaluateManualSaveContract({
+      name: "Shed Mix",
+      rate: singleRate(),
+      category: "",
+      uses: [],
+    });
+    expect(result.ok).toBe(true);
+    expect(result.violations.map((v) => v.field)).toEqual([]);
+  });
+
+  it("reports a field-level error for a missing name and a genuinely missing rate", () => {
+    const none = evaluateManualSaveContract({ name: "", rate: null });
+    expect(none.ok).toBe(false);
+    expect(none.violations.map((v) => v.field)).toEqual(["name", "rate"]);
+
+    const badRange = evaluateManualSaveContract({
+      name: "Shed Mix",
+      rate: singleRate({ kind: "range", value: "", min: "5", max: "2" }),
+    });
+    expect(badRange.violations.map((v) => v.field)).toEqual(["rate"]);
+    expect(badRange.violations[0].message).toBeTruthy();
+  });
+
+  it("only blocks violations introduced in this editing session", () => {
+    const baseline = evaluateManualSaveContract({ name: "Old", rate: null }).violations;
+    const current = evaluateManualSaveContract({ name: "", rate: null }).violations;
+    expect(newlyIntroducedViolations(baseline, current).map((v) => v.field)).toEqual(["name"]);
+  });
+
+  it("keeps registered uses in the data model when they are populated", () => {
+    const draft = { ...emptyDraft(), registeredUses: [use()] };
+    expect(grapevineOnlyDraft(draft).registeredUses).toHaveLength(1);
+  });
+});
+
+
 describe("manual save contract", () => {
   it("requires a name, a category, a grapevine use and one calculable rate", () => {
     const none = evaluateManualSaveContract({ name: "", category: "", uses: [] });
