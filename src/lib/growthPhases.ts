@@ -22,10 +22,26 @@ export const EL_PHASES: ElPhase[] = [
   { id: "senescence", label: "Senescence", min: 41, max: 47 },
 ];
 
+/**
+ * "All phases" — the whole season, E-L 1–47, on one red → green scale. This is
+ * the default so every recorded observation date remains selectable and
+ * colourable; picking a single phase narrows the surface, pins and scale.
+ */
+export const ALL_PHASES_ID = "all";
+export const ALL_PHASES: ElPhase = {
+  id: ALL_PHASES_ID,
+  label: "All phases",
+  min: 1,
+  max: 47,
+};
+
+/** Dropdown options: All phases first, then each documented phase. */
+export const PHASE_OPTIONS: ElPhase[] = [ALL_PHASES, ...EL_PHASES];
+
 export const phaseOptionLabel = (p: ElPhase) => `${p.label} — E-L ${p.min}–${p.max}`;
 
 export const phaseById = (id: string | null | undefined): ElPhase | null =>
-  EL_PHASES.find((p) => p.id === id) ?? null;
+  PHASE_OPTIONS.find((p) => p.id === id) ?? null;
 
 export const elInPhase = (el: number, phase: ElPhase): boolean =>
   el >= phase.min && el <= phase.max;
