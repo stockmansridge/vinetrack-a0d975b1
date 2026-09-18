@@ -999,7 +999,9 @@ export function ChemicalEditor({
         {
           crop: "Grapevines",
           target_raw: "",
-          rates: [{ label: "", basis: "per_hectare" as const, unit: "L/ha" }],
+          // `unit` carries the NUMERATOR only (L / mL / kg / g). The
+          // denominator lives in the basis, so it is never seeded as "L/ha".
+          rates: [{ label: "", basis: "per_hectare" as const, unit: "" }],
         },
       ],
     });

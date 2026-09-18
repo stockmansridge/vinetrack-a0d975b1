@@ -18,6 +18,10 @@ import {
   lookupActivityGroup,
   activityGroupCodesEquivalent,
 } from "@/lib/activityGroupReference";
+import {
+  normaliseStructuredRateUnit,
+  validateStructuredRate,
+} from "@/lib/chemicalRateUnitContract";
 
 export const INTELLIGENCE_SCHEMA_VERSION = 1;
 export { ACTIVITY_GROUP_TABLE_VERSION, ACTIVITY_GROUP_REFERENCE_NAME };
@@ -574,6 +578,11 @@ function encodeActive(a: WriteActiveIngredient): Record<string, unknown> {
 }
 
 function encodeRate(r: WriteLabelRate): Record<string, unknown> {
+  // Save boundary: `unit` must be a bare numerator (L / mL / kg / g) and the
+  // single/range shapes are exclusive. A contradictory combination fails
+  // visibly instead of persisting data no consumer can interpret.
+  const check = validateStructuredRate(r);
+  if (check.ok === false) throw new Error(check.message);
   const base: Record<string, unknown> = {
     label: r.label ?? "",
     basis: r.basis,
@@ -804,7 +813,11 @@ function decodeRate(value: unknown): WriteLabelRate {
     value: finiteOrUndef(o.value),
     min_value: finiteOrUndef(o.min_value),
     max_value: finiteOrUndef(o.max_value),
-    unit: trimOrUndef(o.unit) ?? "",
+    // A legacy composite unit is presented bare ONLY when its denominator
+    // agrees with the stored basis ("L/ha" + per_hectare -> "L"). A
+    // contradiction ("L/ha" + per_100_litres) is preserved verbatim so the
+    // editor can require operator review instead of guessing.
+    unit: normaliseStructuredRateUnit(o.unit, basis).unit,
     raw_text: trimOrUndef(o.raw_text),
     condition: trimOrUndef(o.condition),
     condition_ambiguous:

@@ -42,6 +42,11 @@ import {
   activityGroupReferenceSource,
   withSource,
 } from "@/lib/chemicalIntelligenceWrite";
+import {
+  CANONICAL_RATE_UNITS,
+  RATE_UNIT_REVIEW_MESSAGE,
+  normaliseStructuredRateUnit,
+} from "@/lib/chemicalRateUnitContract";
 import { VERIFICATION_LABEL } from "@/lib/chemicalIntelligence";
 import { ChemicalReverifyDialog } from "@/components/chemicals/ChemicalReverifyDialog";
 
@@ -419,12 +424,27 @@ export function ChemicalIntelligenceEditor({
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
-            {u.rates.map((r, ri) => (
-              <div key={ri} className="grid grid-cols-4 gap-2">
+            {u.rates.map((r, ri) => {
+              // Legacy composite units are shown bare ONLY when they agree with
+              // the stored basis; a contradiction is surfaced for review.
+              const unitState = normaliseStructuredRateUnit(r.unit, r.basis);
+              const unitValue = unitState.status === "needs_review" ? "" : unitState.unit;
+              return (
+              <div key={ri} className="space-y-1">
+              <div className="grid grid-cols-4 gap-2">
                 <Select
                   value={r.basis}
                   disabled={disabled}
-                  onValueChange={(v) => setRate(ui, ri, { basis: v as LabelRateBasis })}
+                  onValueChange={(v) => {
+                    const next = v as LabelRateBasis;
+                    // Single and range shapes are exclusive: switching type
+                    // never reuses the old scalar as a range, and never picks a
+                    // minimum, midpoint or maximum as the single value.
+                    const patchRate: Partial<WriteLabelRate> = isRangeBasis(next)
+                      ? { basis: next, value: undefined }
+                      : { basis: next, min_value: undefined, max_value: undefined };
+                    setRate(ui, ri, patchRate);
+                  }}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -463,14 +483,29 @@ export function ChemicalIntelligenceEditor({
                     }
                   />
                 )}
-                <Input
-                  placeholder="Unit (L/ha)"
-                  value={r.unit}
+                <Select
+                  value={unitValue}
                   disabled={disabled}
-                  onChange={(e) => setRate(ui, ri, { unit: e.target.value })}
-                />
+                  onValueChange={(v) => setRate(ui, ri, { unit: v })}
+                >
+                  <SelectTrigger aria-label="Rate unit">
+                    <SelectValue placeholder="Unit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CANONICAL_RATE_UNITS.map((cu) => (
+                      <SelectItem key={cu} value={cu}>{cu}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            ))}
+              {unitState.status === "needs_review" && (
+                <p role="alert" className="text-[11px] text-destructive">
+                  {RATE_UNIT_REVIEW_MESSAGE} Stored as “{r.unit}”.
+                </p>
+              )}
+              </div>
+              );
+            })}
             <div className="grid grid-cols-2 gap-2">
               <Row label="Withholding period (days)">
                 <Input
@@ -509,7 +544,7 @@ export function ChemicalIntelligenceEditor({
               disabled={disabled}
               onClick={() =>
                 setUse(ui, {
-                  rates: [...u.rates, { label: "", basis: "per_hectare", unit: "L/ha" }],
+                  rates: [...u.rates, { label: "", basis: "per_hectare", unit: "" }],
                 })
               }
             >
@@ -524,7 +559,7 @@ export function ChemicalIntelligenceEditor({
             patch({
               registeredUses: [
                 ...draft.registeredUses,
-                { crop: "", target_raw: "", rates: [{ label: "", basis: "per_hectare", unit: "L/ha" }] },
+                { crop: "", target_raw: "", rates: [{ label: "", basis: "per_hectare", unit: "" }] },
               ],
             })
           }
