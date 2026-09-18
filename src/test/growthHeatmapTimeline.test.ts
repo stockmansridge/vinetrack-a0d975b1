@@ -10,8 +10,11 @@ import {
   stepDay,
 } from "@/lib/heatTimeline";
 import {
+  ALL_PHASES,
   EL_PHASES,
+  PHASE_OPTIONS,
   elInPhase,
+  phaseById,
   phaseColour,
   phaseForEl,
   phaseProgress,
@@ -105,6 +108,18 @@ describe("development phases", () => {
     expect(parseElStage("48")).toBeNull();
     expect(phaseForEl(47).id).toBe("senescence");
     expect(phaseForEl(23).id).toBe("flowering");
+  });
+
+  it("offers All phases first, covering every E-L value including the gaps", () => {
+    expect(PHASE_OPTIONS[0]).toBe(ALL_PHASES);
+    expect(phaseById("all")).toBe(ALL_PHASES);
+    for (const el of [1, 18, 19, 26, 33, 40, 43, 47]) {
+      expect(elInPhase(el, ALL_PHASES)).toBe(true);
+    }
+    const first = phaseColour(ALL_PHASES.min, ALL_PHASES);
+    const last = phaseColour(ALL_PHASES.max, ALL_PHASES);
+    expect(first.r).toBeGreaterThan(first.g);
+    expect(last.g).toBeGreaterThan(last.r);
   });
 
   it("uses a separate red-to-green scale per phase", () => {
