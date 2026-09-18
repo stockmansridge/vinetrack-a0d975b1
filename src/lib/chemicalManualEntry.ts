@@ -19,7 +19,10 @@ import {
   type WriteLabelRate,
   type WriteRegisteredUse,
 } from "@/lib/chemicalIntelligenceWrite";
-import { grapevineOnlyUses } from "@/lib/chemicalVineyardScope";
+import {
+  validateManualRate,
+  type ManualRateDraft,
+} from "@/lib/chemicalManualRate";
 
 /* ------------------------------------------------------------- user copy */
 
@@ -71,7 +74,17 @@ export function useHasUsableRate(use: WriteRegisteredUse): boolean {
 
 /* --------------------------------------------------------- save contract */
 
-export type ManualContractField = "name" | "category" | "grapevine_use" | "rate";
+/**
+ * SIMPLIFIED manual save contract (all platforms).
+ *
+ * A manually entered vineyard chemical needs a product name and a usable
+ * default rate — rate type, rate basis, amount(s) and product unit. Nothing
+ * else can block the save: category, registration number, product form,
+ * manufacturer, active ingredients, resistance groups, label links, registered
+ * uses, WHP/REI, restrictions, purchase, inventory, notes and verification
+ * metadata are ALL optional information.
+ */
+export type ManualContractField = "name" | "rate";
 
 export interface ManualContractViolation {
   field: ManualContractField;
@@ -80,22 +93,26 @@ export interface ManualContractViolation {
 
 export interface ManualContractInput {
   name?: string | null;
-  /** RAW shared category key. A display label is not a category. */
+  /**
+   * The operator's default-rate draft. `null`/absent means no rate has been
+   * entered yet, which is the only rate violation possible.
+   */
+  rate?: ManualRateDraft | null;
+  /**
+   * Accepted for compatibility with existing callers and NEVER validated:
+   * registered uses are optional for manual entry and are only populated from
+   * the Master Catalogue, product labels, Chemical Search or label extraction.
+   */
+  uses?: readonly WriteRegisteredUse[];
+  /** Accepted and never validated — product category is optional. */
   category?: string | null;
-  uses: readonly WriteRegisteredUse[];
 }
 
 export const MANUAL_CONTRACT_MESSAGE: Record<ManualContractField, string> = {
-  name: "Enter the product name from the label.",
-  category: "Choose the product category.",
-  grapevine_use: "Add at least one grapevine use.",
-  rate: "Enter a label rate for the grapevine use: a single amount, or a minimum and maximum, with a unit.",
+  name: "Enter the product name.",
+  rate: "Enter a default rate: a single amount, or a minimum and maximum, with a product unit.",
 };
 
-/**
- * Mirror of the mobile minimum manual-record contract. Registration number,
- * label URL, WHP, REI, purchase data and active ingredients are all optional.
- */
 export function evaluateManualSaveContract(
   input: ManualContractInput,
 ): { ok: boolean; violations: ManualContractViolation[] } {
@@ -103,14 +120,11 @@ export function evaluateManualSaveContract(
   if (!String(input.name ?? "").trim()) {
     violations.push({ field: "name", message: MANUAL_CONTRACT_MESSAGE.name });
   }
-  if (!String(input.category ?? "").trim()) {
-    violations.push({ field: "category", message: MANUAL_CONTRACT_MESSAGE.category });
-  }
-  const grapevine = grapevineOnlyUses(input.uses as WriteRegisteredUse[]);
-  if (grapevine.length === 0) {
-    violations.push({ field: "grapevine_use", message: MANUAL_CONTRACT_MESSAGE.grapevine_use });
-  } else if (!grapevine.some(useHasUsableRate)) {
+  if (!input.rate) {
     violations.push({ field: "rate", message: MANUAL_CONTRACT_MESSAGE.rate });
+  } else {
+    const rate = validateManualRate(input.rate);
+    if (rate.ok === false) violations.push({ field: "rate", message: rate.message });
   }
   return { ok: violations.length === 0, violations };
 }

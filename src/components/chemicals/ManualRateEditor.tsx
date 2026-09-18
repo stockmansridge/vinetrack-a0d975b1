@@ -32,10 +32,16 @@ export function ManualRateEditor({
   onChange,
   onCancel,
   provenanceMessage,
+  allowCancel = true,
+  requiredMarkers = false,
 }: {
   draft: ManualRateDraft;
   onChange: (next: ManualRateDraft) => void;
   onCancel: () => void;
+  /** Manual chemical entry: the rate is required, so there is nothing to cancel. */
+  allowCancel?: boolean;
+  /** Mark the operational fields the save actually requires with `*`. */
+  requiredMarkers?: boolean;
   /**
    * Manual ENTRY uses its own wording: the registered-product recovery message
    * ("VineTrack could not read this rate…") must never be shown there.
@@ -54,13 +60,15 @@ export function ManualRateEditor({
     <div className="mb-2 space-y-3 rounded-md border border-border/60 bg-muted/40 p-3 text-xs">
       <div className="flex items-center justify-between gap-2">
         <div className="font-medium">Enter the rate manually</div>
-        <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-[11px]" onClick={onCancel}>
-          Cancel
-        </Button>
+        {allowCancel && (
+          <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-[11px]" onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
       </div>
 
       <div className="space-y-1">
-        <Label className="text-[11px]">Rate type</Label>
+        <Label className="text-[11px]">Rate type{requiredMarkers ? " *" : ""}</Label>
         <RadioGroup
           className="flex gap-4"
           value={draft.kind}
@@ -76,7 +84,7 @@ export function ManualRateEditor({
       </div>
 
       <div className="space-y-1">
-        <Label className="text-[11px]">Rate basis</Label>
+        <Label className="text-[11px]">Rate basis{requiredMarkers ? " *" : ""}</Label>
         <RadioGroup
           className="flex gap-4"
           value={draft.basis}
@@ -99,7 +107,7 @@ export function ManualRateEditor({
       <div className="flex flex-wrap items-end gap-2">
         {draft.kind === "single" ? (
           <div className="space-y-1">
-            <Label className="text-[11px]" htmlFor="manual-rate-value">Rate</Label>
+            <Label className="text-[11px]" htmlFor="manual-rate-value">Rate{requiredMarkers ? " *" : ""}</Label>
             <Input
               id="manual-rate-value"
               aria-label="Rate"
@@ -114,7 +122,7 @@ export function ManualRateEditor({
         ) : (
           <>
             <div className="space-y-1">
-              <Label className="text-[11px]" htmlFor="manual-rate-min">Minimum</Label>
+              <Label className="text-[11px]" htmlFor="manual-rate-min">Minimum{requiredMarkers ? " *" : ""}</Label>
               <Input
                 id="manual-rate-min"
                 aria-label="Minimum"
@@ -127,7 +135,7 @@ export function ManualRateEditor({
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-[11px]" htmlFor="manual-rate-max">Maximum</Label>
+              <Label className="text-[11px]" htmlFor="manual-rate-max">Maximum{requiredMarkers ? " *" : ""}</Label>
               <Input
                 id="manual-rate-max"
                 aria-label="Maximum"
@@ -142,7 +150,7 @@ export function ManualRateEditor({
           </>
         )}
         <div className="space-y-1">
-          <Label className="text-[11px]">Product unit</Label>
+          <Label className="text-[11px]">Product unit{requiredMarkers ? " *" : ""}</Label>
           <Select
             value={draft.unit}
             onValueChange={(v) => patch({ unit: v as ManualRateUnit })}

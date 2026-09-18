@@ -33,6 +33,7 @@ import {
   ENTER_MANUALLY_LABEL,
 } from "@/lib/chemicalManualEntry";
 import { grapevineOnlyDraft } from "@/lib/chemicalVineyardScope";
+import { emptyManualRateDraft, type ManualRateDraft } from "@/lib/chemicalManualRate";
 import { emptyDraft, type WriteRegisteredUse } from "@/lib/chemicalIntelligenceWrite";
 import { legacyRatePerHaForWrite } from "@/lib/savedChemicalLegacyRate";
 import { createSavedChemical } from "@/lib/savedChemicalsQuery";
@@ -45,32 +46,67 @@ const use = (over: Partial<WriteRegisteredUse> = {}): WriteRegisteredUse => ({
   ...over,
 });
 
-describe("manual save contract", () => {
-  it("requires a name, a category, a grapevine use and one calculable rate", () => {
-    const none = evaluateManualSaveContract({ name: "", category: "", uses: [] });
-    expect(none.ok).toBe(false);
-    expect(none.violations.map((v) => v.field)).toEqual(["name", "category", "grapevine_use"]);
+const singleRate = (over: Partial<ManualRateDraft> = {}): ManualRateDraft => ({
+  ...emptyManualRateDraft(),
+  open: true,
+  kind: "single",
+  value: "1.5",
+  ...over,
+});
 
-    const noRate = evaluateManualSaveContract({
+describe("simplified manual save contract", () => {
+  it("saves a manual product with only a name and a single rate", () => {
+    const ok = evaluateManualSaveContract({ name: "Shed Mix", rate: singleRate() });
+    expect(ok.ok).toBe(true);
+    expect(ok.violations).toEqual([]);
+  });
+
+  it("saves with a rate range", () => {
+    expect(
+      evaluateManualSaveContract({
+        name: "Shed Mix",
+        rate: singleRate({ kind: "range", value: "", min: "1", max: "2" }),
+      }).ok,
+    ).toBe(true);
+  });
+
+  it("does not block on a missing category, registered uses or manufacturer", () => {
+    const result = evaluateManualSaveContract({
       name: "Shed Mix",
-      category: "fungicide",
-      uses: [use({ rates: [] })],
+      rate: singleRate(),
+      category: "",
+      uses: [],
     });
-    expect(noRate.violations.map((v) => v.field)).toEqual(["rate"]);
-
-    expect(
-      evaluateManualSaveContract({ name: "Shed Mix", category: "fungicide", uses: [use()] }).ok,
-    ).toBe(true);
+    expect(result.ok).toBe(true);
+    expect(result.violations.map((v) => v.field)).toEqual([]);
   });
 
-  it("accepts a record with no active ingredients and no registration evidence", () => {
+  it("reports a field-level error for a missing name and a genuinely missing rate", () => {
+    const none = evaluateManualSaveContract({ name: "", rate: null });
+    expect(none.ok).toBe(false);
+    expect(none.violations.map((v) => v.field)).toEqual(["name", "rate"]);
+
+    const badRange = evaluateManualSaveContract({
+      name: "Shed Mix",
+      rate: singleRate({ kind: "range", value: "", min: "5", max: "2" }),
+    });
+    expect(badRange.violations.map((v) => v.field)).toEqual(["rate"]);
+    expect(badRange.violations[0].message).toBeTruthy();
+  });
+
+  it("only blocks violations introduced in this editing session", () => {
+    const baseline = evaluateManualSaveContract({ name: "Old", rate: null }).violations;
+    const current = evaluateManualSaveContract({ name: "", rate: null }).violations;
+    expect(newlyIntroducedViolations(baseline, current).map((v) => v.field)).toEqual(["name"]);
+  });
+
+  it("keeps registered uses in the data model when they are populated", () => {
     const draft = { ...emptyDraft(), registeredUses: [use()] };
-    expect(draft.actives).toHaveLength(0);
-    expect(
-      evaluateManualSaveContract({ name: "Shed Mix", category: "fungicide", uses: draft.registeredUses }).ok,
-    ).toBe(true);
+    expect(grapevineOnlyDraft(draft).registeredUses).toHaveLength(1);
   });
+});
 
+describe("label rate usability (Master Catalogue / label sourced rates)", () => {
   it("treats a range as calculable and rejects zero, negative and unitless rates", () => {
     expect(
       isUsableLabelRate({ label: "", basis: "range_per_hectare", min_value: 1, max_value: 2, unit: "L/ha" }),
@@ -81,12 +117,6 @@ describe("manual save contract", () => {
     expect(isUsableLabelRate({ label: "", basis: "per_hectare", value: 0, unit: "L/ha" })).toBe(false);
     expect(isUsableLabelRate({ label: "", basis: "per_hectare", value: -1, unit: "L/ha" })).toBe(false);
     expect(isUsableLabelRate({ label: "", basis: "per_hectare", value: 1, unit: "" })).toBe(false);
-  });
-
-  it("only blocks violations introduced in this editing session", () => {
-    const baseline = evaluateManualSaveContract({ name: "Old", category: "", uses: [use()] }).violations;
-    const current = evaluateManualSaveContract({ name: "", category: "", uses: [use()] }).violations;
-    expect(newlyIntroducedViolations(baseline, current).map((v) => v.field)).toEqual(["name"]);
   });
 });
 

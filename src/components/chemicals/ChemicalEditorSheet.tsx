@@ -17,6 +17,7 @@ import {
   manualRateRegisteredUse,
   manualRateSelection,
   manualRateSatisfiesGate,
+  validateManualRate,
   type ManualRateDraft,
 } from "@/lib/chemicalManualRate";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -420,16 +421,8 @@ export function ChemicalEditor({
               : formFromInventoryUnit(normaliseUnit((initial as any).unit)),
           );
         }
-        setManualBaseline(
-          evaluateManualSaveContract({
-            name: initial.name,
-            category:
-              matchProductCategoryKey(initial.product_category) ??
-              matchProductCategoryKey(initial.use) ??
-              "",
-            uses: hydrated.registeredUses,
-          }).violations,
-        );
+        // The manual baseline is computed below, once the persisted default
+        // rate has been decoded — pre-existing incompleteness stays repairable.
         setRateLife(
           hydrateDefaultRateLifecycle({
             storedDefaultRates: (initial as any).default_rates,
@@ -485,12 +478,19 @@ export function ChemicalEditor({
       const storedDefaults = initial
         ? decodePersistedDefaultRates((initial as any).default_rates)
         : null;
-      setManualRate(
-        manualRateDraftFromSelection(
-          storedDefaults?.per_hectare ?? null,
-        ) ??
-          manualRateDraftFromSelection(storedDefaults?.per_100_litres ?? null) ??
-          emptyManualRateDraft(),
+      const storedManualDraft =
+        manualRateDraftFromSelection(storedDefaults?.per_hectare ?? null) ??
+        manualRateDraftFromSelection(storedDefaults?.per_100_litres ?? null);
+      setManualRate(storedManualDraft ?? emptyManualRateDraft());
+      // Existing records: only violations introduced in THIS session block a
+      // save, so a saved chemical with no typed default rate stays editable.
+      setManualBaseline(
+        initial
+          ? evaluateManualSaveContract({
+              name: initial.name,
+              rate: storedManualDraft,
+            }).violations
+          : [],
       );
       setMasterUpdateOpen(false);
       setEditorReverifyOpen(false);
@@ -529,11 +529,20 @@ export function ChemicalEditor({
       // user-entered grapevine use. No canonical option/rate identity is minted
       // and the resolved registered identity is left exactly as it was.
       const manualSelection = manualRateConfirmed
-        ? manualRateSelection(manualRate, { selected_at: new Date().toISOString() })
+        ? manualRateSelection(
+            manualRate,
+            { selected_at: new Date().toISOString() },
+            // Manual entry: the label-check tick is informational only.
+            { requireConfirmation: !manualMode },
+          )
         : null;
-      const manualUse = manualRateConfirmed
-        ? manualRateRegisteredUse(manualRate, intel.registeredUses[0]?.target_raw ?? null)
-        : null;
+      // Manual ENTRY never fabricates a registered-use record to carry the rate:
+      // `registered_uses` stays empty until real label information populates it.
+      // The registered-product recovery path keeps appending its user-entered use.
+      const manualUse =
+        manualRateConfirmed && !manualMode
+          ? manualRateRegisteredUse(manualRate, intel.registeredUses[0]?.target_raw ?? null)
+          : null;
       const withManual = manualUse
         ? { ...reconciled, registeredUses: [...reconciled.registeredUses, manualUse] }
         : reconciled;
@@ -908,29 +917,40 @@ export function ChemicalEditor({
     !(initial as any).master_chemical_id &&
     !String((initial as any).registration_number ?? "").trim();
   const manualMode = selectionMode === "manual" || manualRecord;
+  // Simplified manual contract: product name + a usable default rate. Category,
+  // registered uses, manufacturer, actives, registration evidence and label
+  // links never block the save.
   const manualContract = evaluateManualSaveContract({
     name: form.name,
-    category: form.product_category,
-    uses: intel.registeredUses,
+    rate: manualMode ? manualRate : null,
   });
   const manualBlocking = !manualMode
     ? []
     : initial
     ? newlyIntroducedViolations(manualBaseline, manualContract.violations)
     : manualContract.violations;
+  const manualRateViolation = manualBlocking.find((v) => v.field === "rate") ?? null;
+  const manualNameViolation = manualBlocking.find((v) => v.field === "name") ?? null;
   const grapevineRegistered = hasGrapevineRegistration(intel.registeredUses);
   const noGrapevineRegistration = !initial && lookupSelected && !grapevineRegistered;
   // A successful retry that resolves canonical options retires the manual
   // fallback entirely — derived, never an effect.
   const manualRateActive = manualMode
-    // Manual entry: an operator-confirmed default rate is OPTIONAL and always
-    // available. It is never auto-created from a typed label rate.
-    ? manualRate.open
+    // Manual entry: the default rate is a REQUIRED operational field, so the
+    // editor is always present.
+    ? true
     : !initial &&
       lookupSelected &&
       manualRate.open &&
       !hasUsableRateOptions(canonicalRateOptions);
-  const manualRateConfirmed = manualRateActive && manualRateSatisfiesGate(manualRate);
+  /**
+   * The typed rate is usable operational data. Manual ENTRY needs a valid rate
+   * only — the label-check tick is informational there. The registered-product
+   * RECOVERY path still requires the explicit confirmation.
+   */
+  const manualRateConfirmed = manualMode
+    ? validateManualRate(manualRate).ok
+    : manualRateActive && manualRateSatisfiesGate(manualRate);
   const firstAddBlocked = lookupSaveBlocked({
     isExistingRecord: !!initial,
     selectionMode,
@@ -1332,9 +1352,14 @@ export function ChemicalEditor({
               <Section title="Product">
                 <Field label="Chemical / product name *">
                   <Input value={form.name ?? ""} onChange={(e) => set("name", e.target.value)} />
+                  {manualNameViolation && (
+                    <p role="alert" className="mt-1 text-[11px] text-destructive">
+                      {manualNameViolation.message}
+                    </p>
+                  )}
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Registration number">
+                  <Field label={manualMode ? "Registration number (optional)" : "Registration number"}>
                     <Input
                       value={intel.registration.number ?? ""}
                       placeholder="Not stated"
@@ -1349,7 +1374,7 @@ export function ChemicalEditor({
                       }
                     />
                   </Field>
-                  <Field label="Category">
+                  <Field label={manualMode ? "Category (optional)" : "Category"}>
                     {/* The raw shared key is what is persisted; `use` is only
                         the display projection written alongside it. */}
                     <Select
@@ -1517,8 +1542,9 @@ export function ChemicalEditor({
 
             {/* --------------------------------------- operational column */}
             <div className="space-y-4">
-              {structuredUses && (
-                <Section title="Default rate">
+              {(structuredUses || manualMode) && (
+                <Section title={manualMode ? "Default rate *" : "Default rate"}>
+
                   {/* The recovery actions (retry / official label / change
                       product) stay visible while the manual rate is typed —
                       the operator needs the label open to confirm the rate. */}
@@ -1539,26 +1565,25 @@ export function ChemicalEditor({
                       onCancel={() => setManualRate(emptyManualRateDraft())}
                     />
                   )}
-                  {/* Manual entry: an OPTIONAL operator-confirmed default. */}
+                  {/* Manual entry: the default rate is a REQUIRED operational
+                      field, so the editor is always open. The label-check tick
+                      inside it stays informational and never blocks Save. */}
                   {manualMode && !showRateRecovery && (
-                    manualRateActive ? (
+                    <>
                       <ManualRateEditor
                         draft={manualRate}
                         onChange={handleManualRateChange}
                         onCancel={() => setManualRate(emptyManualRateDraft())}
                         provenanceMessage={MANUAL_RATE_ENTRY_MESSAGE}
+                        allowCancel={false}
+                        requiredMarkers
                       />
-                    ) : (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="mb-2 h-7 px-2 text-[11px]"
-                        onClick={() => setManualRate((p) => ({ ...emptyManualRateDraft(), ...p, open: true }))}
-                      >
-                        Set a default rate (optional)
-                      </Button>
-                    )
+                      {manualRateViolation && (
+                        <p role="alert" className="mb-2 text-[11px] text-destructive">
+                          {manualRateViolation.message}
+                        </p>
+                      )}
+                    </>
                   )}
 
                   {rateLife.productChangedNotice && (
@@ -1593,7 +1618,12 @@ export function ChemicalEditor({
                 </Section>
               )}
 
-              <Section title="Grapevine uses & rates">
+              {/* Manual entry never asks the operator to recreate the label's
+                  structured Grapevine uses & rates: the section is hidden unless
+                  real label information already populated it (Master Catalogue,
+                  product label, Chemical Search, label extraction). */}
+              {(!manualMode || intel.registeredUses.length > 0) && (
+              <Section title={manualMode ? "Grapevine uses & rates (optional)" : "Grapevine uses & rates"}>
                 {/* Vineyard-first: other crops on the label are not part of the
                     normal add flow and are never shown here. */}
                 {manualMode ? (
@@ -1607,20 +1637,6 @@ export function ChemicalEditor({
                       compact
                       sections={{ actives: false, registration: false, uses: true, sources: false, audit: false }}
                     />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-7 px-2 text-[11px]"
-                      onClick={handleAddGrapevineUse}
-                    >
-                      {ADD_GRAPEVINE_USE_LABEL}
-                    </Button>
-                    {manualBlocking.map((v) => (
-                      <p key={v.field} role="alert" className="text-[11px] text-destructive">
-                        {v.message}
-                      </p>
-                    ))}
                   </div>
                 ) : structuredUses || lookupSelected ? (
                   <>
@@ -1658,6 +1674,7 @@ export function ChemicalEditor({
                   legacyRateBlock
                 )}
               </Section>
+              )}
 
               {(whpLegalText || rei || unresolvedItems.length > 0) && (
                 <Section title="Withholding & re-entry">
