@@ -19,7 +19,10 @@ import {
   type WriteLabelRate,
   type WriteRegisteredUse,
 } from "@/lib/chemicalIntelligenceWrite";
-import { grapevineOnlyUses } from "@/lib/chemicalVineyardScope";
+import {
+  validateManualRate,
+  type ManualRateDraft,
+} from "@/lib/chemicalManualRate";
 
 /* ------------------------------------------------------------- user copy */
 
