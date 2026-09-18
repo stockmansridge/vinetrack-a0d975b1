@@ -529,11 +529,20 @@ export function ChemicalEditor({
       // user-entered grapevine use. No canonical option/rate identity is minted
       // and the resolved registered identity is left exactly as it was.
       const manualSelection = manualRateConfirmed
-        ? manualRateSelection(manualRate, { selected_at: new Date().toISOString() })
+        ? manualRateSelection(
+            manualRate,
+            { selected_at: new Date().toISOString() },
+            // Manual entry: the label-check tick is informational only.
+            { requireConfirmation: !manualMode },
+          )
         : null;
-      const manualUse = manualRateConfirmed
-        ? manualRateRegisteredUse(manualRate, intel.registeredUses[0]?.target_raw ?? null)
-        : null;
+      // Manual ENTRY never fabricates a registered-use record to carry the rate:
+      // `registered_uses` stays empty until real label information populates it.
+      // The registered-product recovery path keeps appending its user-entered use.
+      const manualUse =
+        manualRateConfirmed && !manualMode
+          ? manualRateRegisteredUse(manualRate, intel.registeredUses[0]?.target_raw ?? null)
+          : null;
       const withManual = manualUse
         ? { ...reconciled, registeredUses: [...reconciled.registeredUses, manualUse] }
         : reconciled;
