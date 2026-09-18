@@ -907,29 +907,40 @@ export function ChemicalEditor({
     !(initial as any).master_chemical_id &&
     !String((initial as any).registration_number ?? "").trim();
   const manualMode = selectionMode === "manual" || manualRecord;
+  // Simplified manual contract: product name + a usable default rate. Category,
+  // registered uses, manufacturer, actives, registration evidence and label
+  // links never block the save.
   const manualContract = evaluateManualSaveContract({
     name: form.name,
-    category: form.product_category,
-    uses: intel.registeredUses,
+    rate: manualMode ? manualRate : null,
   });
   const manualBlocking = !manualMode
     ? []
     : initial
     ? newlyIntroducedViolations(manualBaseline, manualContract.violations)
     : manualContract.violations;
+  const manualRateViolation = manualBlocking.find((v) => v.field === "rate") ?? null;
+  const manualNameViolation = manualBlocking.find((v) => v.field === "name") ?? null;
   const grapevineRegistered = hasGrapevineRegistration(intel.registeredUses);
   const noGrapevineRegistration = !initial && lookupSelected && !grapevineRegistered;
   // A successful retry that resolves canonical options retires the manual
   // fallback entirely — derived, never an effect.
   const manualRateActive = manualMode
-    // Manual entry: an operator-confirmed default rate is OPTIONAL and always
-    // available. It is never auto-created from a typed label rate.
-    ? manualRate.open
+    // Manual entry: the default rate is a REQUIRED operational field, so the
+    // editor is always present.
+    ? true
     : !initial &&
       lookupSelected &&
       manualRate.open &&
       !hasUsableRateOptions(canonicalRateOptions);
-  const manualRateConfirmed = manualRateActive && manualRateSatisfiesGate(manualRate);
+  /**
+   * The typed rate is usable operational data. Manual ENTRY needs a valid rate
+   * only — the label-check tick is informational there. The registered-product
+   * RECOVERY path still requires the explicit confirmation.
+   */
+  const manualRateConfirmed = manualMode
+    ? validateManualRate(manualRate).ok
+    : manualRateActive && manualRateSatisfiesGate(manualRate);
   const firstAddBlocked = lookupSaveBlocked({
     isExistingRecord: !!initial,
     selectionMode,
