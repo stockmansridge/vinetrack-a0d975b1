@@ -140,6 +140,15 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
   };
 
   const runApprove = async () => {
+    // Hard guard: approval only ever fires with all mandatory fields complete.
+    if (!readyToApprove) {
+      toast({
+        title: "Not approved",
+        description: `Still missing: ${effectiveMissing.map((f) => MASTER_CORE_FIELD_LABEL[f]).join(", ")}`,
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       await approve.mutateAsync();
       toast({ title: "Approved", description: "Saved and approved. Moving to the next record." });
