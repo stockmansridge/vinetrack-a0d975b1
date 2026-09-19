@@ -39,17 +39,13 @@ import type { SavedChemical, SavedChemicalInput } from "@/lib/savedChemicalsQuer
 
 export const CHEMICAL_SEARCH_V2_FLAG = "chemical_search_v2";
 
-/** Pure gate — both conditions must hold, exactly as on mobile. */
-export const chemicalSearchV2Enabled = (
-  flagEnabled: boolean,
-  isSystemAdmin: boolean,
-): boolean => flagEnabled === true && isSystemAdmin === true;
+/** Pure gate — the feature flag alone routes V1 vs V2 (production cutover). */
+export const chemicalSearchV2Enabled = (flagEnabled: boolean): boolean =>
+  flagEnabled === true;
 
-/** React gate. Everyone else keeps the existing portal workflow unchanged. */
+/** React gate. When the flag is off, the existing V1 workflow is unchanged. */
 export function useChemicalSearchV2(): boolean {
-  const flagEnabled = useFeatureFlag(CHEMICAL_SEARCH_V2_FLAG);
-  const { isAdmin } = useIsSystemAdmin();
-  return chemicalSearchV2Enabled(flagEnabled, isAdmin);
+  return chemicalSearchV2Enabled(useFeatureFlag(CHEMICAL_SEARCH_V2_FLAG));
 }
 
 /* ------------------------------------------------------------ master search */
