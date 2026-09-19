@@ -15,6 +15,7 @@ const QK = {
   workTasks: (limit: number) => ["admin", "work-tasks", limit] as const,
   trips: (limit: number) => ["admin", "trips", limit] as const,
   paddocks: (vineyardId: string) => ["admin", "paddocks", vineyardId] as const,
+  members: (vineyardId: string) => ["admin", "vineyard-members", vineyardId] as const,
   systemAdmins: ["admin", "system-admins"] as const,
 };
 
@@ -139,6 +140,18 @@ export interface AdminPaddock {
   created_at: string | null;
   updated_at: string | null;
   deleted_at: string | null;
+}
+
+/** One membership row for the System Admin vineyard member list (SQL 240). */
+export interface AdminVineyardMember {
+  membership_id: string;
+  user_id: string;
+  role: string;
+  display_name: string | null;
+  email: string | null;
+  full_name: string | null;
+  worker_type_id: string | null;
+  joined_at: string | null;
 }
 
 export interface SystemAdminRow {
@@ -311,6 +324,34 @@ export function useAdminVineyardPaddocks(vineyardId: string | undefined) {
       rpc<AdminPaddock[]>("admin_list_vineyard_paddocks", { p_vineyard_id: vineyardId }).then(
         (d) => d ?? [],
       ),
+  });
+}
+
+/** Live memberships for one vineyard (SQL 240 `admin_list_vineyard_members`). */
+export function useAdminVineyardMembers(vineyardId: string | undefined) {
+  return useQuery({
+    queryKey: vineyardId ? QK.members(vineyardId) : ["admin", "vineyard-members", "none"],
+    enabled: !!vineyardId,
+    queryFn: () =>
+      rpc<AdminVineyardMember[]>("admin_list_vineyard_members", {
+        p_vineyard_id: vineyardId,
+      }).then((d) => d ?? []),
+  });
+}
+
+/** Change a member's role (SQL 240 `admin_set_member_role`). */
+export function useAdminSetMemberRole(vineyardId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { membershipId: string; newRole: string }) =>
+      rpc<unknown>("admin_set_member_role", {
+        p_membership_id: args.membershipId,
+        p_new_role: args.newRole,
+      }),
+    onSuccess: () => {
+      if (vineyardId) qc.invalidateQueries({ queryKey: QK.members(vineyardId) });
+      qc.invalidateQueries({ queryKey: QK.vineyards });
+    },
   });
 }
 
