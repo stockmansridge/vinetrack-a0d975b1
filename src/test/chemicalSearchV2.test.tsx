@@ -145,7 +145,7 @@ describe("manual entry", () => {
     expect(input.name).toBe("Local Wettable Sulphur");
     expect(input.default_rates?.per_hectare).toMatchObject({ unit: "kg", value: 3, entry_method: "manual" });
     expect(input.product_category).toBeUndefined();
-    expect(input.registered_uses as any).toBeUndefined();
+    expect((input as any).registered_uses).toBeUndefined();
     expect((input as any).master_chemical_id).toBeUndefined();
   });
 

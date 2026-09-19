@@ -422,11 +422,14 @@ export function AddChemicalV2Dialog({
                       size="sm"
                       variant="outline"
                       onClick={() => {
-                        const selection = buildManualSavedChemicalInput("x", rateDraft)?.default_rates;
-                        if (selection) setSelections({
-                          per_hectare: selection.per_hectare,
-                          per_100_litres: selection.per_100_litres,
-                        });
+                        const selection = manualRateSelection(
+                          rateDraft,
+                          { selected_at: new Date().toISOString() },
+                          { requireConfirmation: false },
+                        );
+                        if (selection) {
+                          setSelections((p) => ({ ...p, [selection.basis]: selection }));
+                        }
                       }}
                     >
                       Use this rate
