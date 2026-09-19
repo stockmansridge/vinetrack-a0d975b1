@@ -129,7 +129,10 @@ const EMPTY: SavedChemicalInput = {
 };
 
 export default function SavedChemicalsPage() {
-  const { selectedVineyardId, currentRole } = useVineyard();
+  const { selectedVineyardId, currentRole, currentCountry } = useVineyard();
+  // Chemical Search V2 — controlled rollout (flag + System Admin), same gate
+  // as mobile. Everyone else keeps the existing editor workflow unchanged.
+  const searchV2 = useChemicalSearchV2();
   const canEdit = currentRole === "owner" || currentRole === "manager";
   const canSeeCosts = useCanSeeCosts();
   const qc = useQueryClient();
