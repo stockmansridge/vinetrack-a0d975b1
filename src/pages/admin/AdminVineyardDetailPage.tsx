@@ -27,7 +27,7 @@ export default function AdminVineyardDetailPage() {
       {v && (
         <div className="space-y-4">
           <Card className="p-2">
-            <PolygonsPreview paddocks={paddocksQ.data ?? []} />
+            <AdminVineyardMap paddocks={paddocksQ.data ?? []} />
           </Card>
           <Card className="p-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
