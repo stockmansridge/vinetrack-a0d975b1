@@ -15,7 +15,7 @@
 // `chemical_search_v2` AND a signed-in System Admin).
 
 import { supabase as iosSupabase } from "@/integrations/ios-supabase/client";
-import { useFeatureFlag, useIsSystemAdmin } from "@/lib/systemAdmin";
+import { useFeatureFlag } from "@/lib/systemAdmin";
 import {
   parseMasterViticultureRates,
   isPersistableMasterRate,
