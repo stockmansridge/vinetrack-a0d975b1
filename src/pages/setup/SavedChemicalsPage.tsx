@@ -87,6 +87,8 @@ import { DraggableHeaderCell } from "@/components/table/DraggableHeaderCell";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { formatDate } from "@/lib/dateFormat";
 import { ChemicalEditor } from "@/components/chemicals/ChemicalEditorSheet";
+import { AddChemicalV2Dialog } from "@/components/chemicals/AddChemicalV2Dialog";
+import { useChemicalSearchV2 } from "@/lib/chemicalSearchV2";
 
 // The legacy free-text `chemical_group` column is no longer displayed — the
 // structured resistance group is the single visible authority. The value is
@@ -127,7 +129,10 @@ const EMPTY: SavedChemicalInput = {
 };
 
 export default function SavedChemicalsPage() {
-  const { selectedVineyardId, currentRole } = useVineyard();
+  const { selectedVineyardId, currentRole, currentCountry } = useVineyard();
+  // Chemical Search V2 — controlled rollout (flag + System Admin), same gate
+  // as mobile. Everyone else keeps the existing editor workflow unchanged.
+  const searchV2 = useChemicalSearchV2();
   const canEdit = currentRole === "owner" || currentRole === "manager";
   const canSeeCosts = useCanSeeCosts();
   const qc = useQueryClient();
@@ -672,8 +677,29 @@ export default function SavedChemicalsPage() {
         </TabsContent>
       </Tabs>
 
+      {searchV2 && (
+        <AddChemicalV2Dialog
+          open={editing === "new"}
+          onOpenChange={(o) => {
+            if (!o) {
+              setEditing(null);
+              setRestoredDraft(null);
+            }
+          }}
+          vineyardId={selectedVineyardId!}
+          country={currentCountry}
+          existingLibrary={chemicals}
+          onSaved={() => {
+            invalidate();
+            setEditing(null);
+            setRestoredDraft(null);
+          }}
+          onOpenExisting={(c) => setEditing(c)}
+        />
+      )}
+
       <ChemicalEditor
-        open={!!editing}
+        open={!!editing && !(searchV2 && editing === "new")}
         onOpenChange={(o) => {
           if (!o) {
             setEditing(null);
