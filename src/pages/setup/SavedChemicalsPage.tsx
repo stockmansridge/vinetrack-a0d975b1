@@ -87,6 +87,8 @@ import { DraggableHeaderCell } from "@/components/table/DraggableHeaderCell";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { formatDate } from "@/lib/dateFormat";
 import { ChemicalEditor } from "@/components/chemicals/ChemicalEditorSheet";
+import { AddChemicalV2Dialog } from "@/components/chemicals/AddChemicalV2Dialog";
+import { useChemicalSearchV2 } from "@/lib/chemicalSearchV2";
 
 // The legacy free-text `chemical_group` column is no longer displayed — the
 // structured resistance group is the single visible authority. The value is
