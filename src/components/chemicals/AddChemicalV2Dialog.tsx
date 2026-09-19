@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ManualRateEditor } from "@/components/chemicals/ManualRateEditor";
 import {
   emptyManualRateDraft,
+  manualRateSelection,
   validateManualRate,
   type ManualRateDraft,
 } from "@/lib/chemicalManualRate";
