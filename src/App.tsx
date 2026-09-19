@@ -99,6 +99,7 @@ import AdminUsersPage from "./pages/admin/AdminUsersPage";
 import AdminUserDetailPage from "./pages/admin/AdminUserDetailPage";
 import AdminVineyardsPage from "./pages/admin/AdminVineyardsPage";
 import AdminVineyardDetailPage from "./pages/admin/AdminVineyardDetailPage";
+import AdminVineyardMemberPage from "./pages/admin/AdminVineyardMemberPage";
 import AdminPaddockDetailPage from "./pages/admin/AdminPaddockDetailPage";
 import AdminBlocksPage from "./pages/admin/AdminBlocksPage";
 import AdminInvitationsPage from "./pages/admin/AdminInvitationsPage";
@@ -276,6 +277,7 @@ const App = () => (
                     <Route path="/admin/users/:id" element={<AdminUserDetailPage />} />
                     <Route path="/admin/vineyards" element={<AdminVineyardsPage />} />
                     <Route path="/admin/vineyards/:id" element={<AdminVineyardDetailPage />} />
+                    <Route path="/admin/vineyards/:id/members/:mid" element={<AdminVineyardMemberPage />} />
                     <Route path="/admin/vineyards/:id/paddocks/:pid" element={<AdminPaddockDetailPage />} />
                     <Route path="/admin/blocks" element={<AdminBlocksPage />} />
                     <Route path="/admin/invitations" element={<AdminInvitationsPage />} />

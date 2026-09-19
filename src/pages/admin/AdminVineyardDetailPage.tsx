@@ -5,7 +5,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useAdminVineyards, useAdminVineyardPaddocks, type AdminPaddock } from "@/lib/adminApi";
+import { useAdminVineyards, useAdminVineyardPaddocks, useAdminVineyardMembers, type AdminPaddock } from "@/lib/adminApi";
 import { computeAdminVineyardStats, formatHa } from "@/lib/adminVineyardStats";
 import { AdminGate, AdminPageHeader, AdminError, AdminEmpty, ArchivedBadge, formatDate } from "./_shared";
 import MapSourceBadge from "@/components/MapSourceBadge";
@@ -67,6 +67,7 @@ export default function AdminVineyardDetailPage() {
   const { id } = useParams<{ id: string }>();
   const vineyardsQ = useAdminVineyards();
   const paddocksQ = useAdminVineyardPaddocks(id);
+  const membersQ = useAdminVineyardMembers(id);
   const v = vineyardsQ.data?.find((x) => x.id === id);
   const stats = computeAdminVineyardStats(paddocksQ.data);
 
@@ -106,6 +107,37 @@ export default function AdminVineyardDetailPage() {
               </div>
             )}
             <div className="text-xs text-muted-foreground font-mono break-all mt-2">{v.id}</div>
+          </Card>
+
+          <Card className="p-4">
+            <h2 className="font-semibold mb-2">Members</h2>
+            {membersQ.isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
+            {membersQ.error && (
+              <div className="text-sm text-muted-foreground">
+                Member list unavailable — the backend update for admin member access (SQL 240)
+                may not be applied yet.
+              </div>
+            )}
+            {!membersQ.isLoading && !membersQ.error && (membersQ.data ?? []).length === 0 && (
+              <AdminEmpty>No members.</AdminEmpty>
+            )}
+            <div className="divide-y">
+              {(membersQ.data ?? []).map((m) => (
+                <Link
+                  key={m.membership_id}
+                  to={`/admin/vineyards/${v.id}/members/${m.membership_id}`}
+                  className="flex items-center gap-3 py-2 px-2 hover:bg-accent/40 rounded"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium truncate">
+                      {m.display_name?.trim() || m.full_name?.trim() || m.email?.trim() || "Member"}
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">{m.email ?? "—"}</div>
+                  </div>
+                  <Badge variant="outline" className="text-xs capitalize">{m.role}</Badge>
+                </Link>
+              ))}
+            </div>
           </Card>
 
           <Card className="p-4">
