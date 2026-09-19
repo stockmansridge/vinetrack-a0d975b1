@@ -36,11 +36,9 @@ const SPRAYSEED_ROW = {
 };
 
 describe("V2 gate", () => {
-  it("is visible only with the flag enabled AND a System Admin", () => {
-    expect(chemicalSearchV2Enabled(true, true)).toBe(true);
-    expect(chemicalSearchV2Enabled(true, false)).toBe(false);
-    expect(chemicalSearchV2Enabled(false, true)).toBe(false);
-    expect(chemicalSearchV2Enabled(false, false)).toBe(false);
+  it("routes on the feature flag alone — System Admin is not required", () => {
+    expect(chemicalSearchV2Enabled(true)).toBe(true);
+    expect(chemicalSearchV2Enabled(false)).toBe(false);
   });
 });
 
