@@ -677,8 +677,29 @@ export default function SavedChemicalsPage() {
         </TabsContent>
       </Tabs>
 
+      {searchV2 && (
+        <AddChemicalV2Dialog
+          open={editing === "new"}
+          onOpenChange={(o) => {
+            if (!o) {
+              setEditing(null);
+              setRestoredDraft(null);
+            }
+          }}
+          vineyardId={selectedVineyardId!}
+          country={currentCountry}
+          existingLibrary={chemicals}
+          onSaved={() => {
+            invalidate();
+            setEditing(null);
+            setRestoredDraft(null);
+          }}
+          onOpenExisting={(c) => setEditing(c)}
+        />
+      )}
+
       <ChemicalEditor
-        open={!!editing}
+        open={!!editing && !(searchV2 && editing === "new")}
         onOpenChange={(o) => {
           if (!o) {
             setEditing(null);
