@@ -1,67 +1,10 @@
-import { useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { MapContainer, TileLayer, Polygon, useMap } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useAdminVineyards, useAdminVineyardPaddocks, useAdminVineyardMembers, type AdminPaddock } from "@/lib/adminApi";
+import { useAdminVineyards, useAdminVineyardPaddocks, useAdminVineyardMembers } from "@/lib/adminApi";
 import { computeAdminVineyardStats, formatHa } from "@/lib/adminVineyardStats";
 import { AdminGate, AdminPageHeader, AdminError, AdminEmpty, ArchivedBadge, formatDate } from "./_shared";
-import MapSourceBadge from "@/components/MapSourceBadge";
-
-function FitToPolys({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
-  const map = useMap();
-  useEffect(() => {
-    if (!bounds) return;
-    try {
-      const lb = L.latLngBounds(bounds as L.LatLngBoundsLiteral).pad(0.2);
-      map.fitBounds(lb, { padding: [16, 16] });
-    } catch { /* noop */ }
-  }, [bounds, map]);
-  return null;
-}
-
-function PolygonsPreview({ paddocks, height = 420 }: { paddocks: AdminPaddock[]; height?: number }) {
-  const polys = paddocks
-    .filter((p) => !p.deleted_at && (p.polygon_points?.length ?? 0) >= 3)
-    .map((p) => p.polygon_points!.map((pt) => [pt.latitude, pt.longitude] as [number, number]));
-  if (polys.length === 0) {
-    return (
-      <div className="flex items-center justify-center text-xs text-muted-foreground border rounded h-40">
-        No polygons available
-      </div>
-    );
-  }
-  const all = polys.flat();
-  const bounds: L.LatLngBoundsExpression = all as any;
-  const center: [number, number] = [all[0][0], all[0][1]];
-  return (
-    <div className="relative rounded border overflow-hidden" style={{ height }}>
-      <MapContainer
-        center={center}
-        zoom={15}
-        style={{ height: "100%", width: "100%" }}
-        scrollWheelZoom
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://www.esri.com/">Esri</a>'
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-          maxZoom={19}
-        />
-        {polys.map((pts, i) => (
-          <Polygon
-            key={i}
-            positions={pts}
-            pathOptions={{ color: "#A3E635", weight: 2, fillColor: "#A3E635", fillOpacity: 0.35 }}
-          />
-        ))}
-        <FitToPolys bounds={bounds} />
-      </MapContainer>
-      <MapSourceBadge source="fallback" />
-    </div>
-  );
-}
+import AdminVineyardMap from "@/components/admin/AdminVineyardMap";
 
 export default function AdminVineyardDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -84,7 +27,7 @@ export default function AdminVineyardDetailPage() {
       {v && (
         <div className="space-y-4">
           <Card className="p-2">
-            <PolygonsPreview paddocks={paddocksQ.data ?? []} />
+            <AdminVineyardMap paddocks={paddocksQ.data ?? []} />
           </Card>
           <Card className="p-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
