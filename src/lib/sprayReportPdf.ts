@@ -238,6 +238,23 @@ export function buildSprayReportPdf(
     y += 6;
   };
 
+  // Hand-drawn paragraphs must flow across pages the same way autoTable does.
+  // Writing a multi-line block in one doc.text call silently discards every
+  // line past the page bottom and never adds a page, which is how long
+  // text-heavy reports collapsed into a single page.
+  const writeLines = (lines: string[], lineHeight: number, firstOffset = 12) => {
+    let cursor = y + firstOffset;
+    for (const line of lines) {
+      if (cursor > pageHeight - FOOTER_RESERVED) {
+        doc.addPage();
+        cursor = CONTINUATION_CONTENT_TOP;
+      }
+      doc.text(line, margin, cursor);
+      cursor += lineHeight;
+    }
+    y = cursor;
+  };
+
   // Rows
   section("Rows");
   autoTable(doc, {
