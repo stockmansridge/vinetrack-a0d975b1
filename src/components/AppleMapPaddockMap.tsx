@@ -505,11 +505,9 @@ function VarietySummaryBlock({ allocations }: { allocations: ResolvedAllocation[
   }
 
   return (
-    <div className="border-b pb-3 last:border-b-0">
-      <div className="mb-2 flex items-baseline justify-between gap-4">
-        <span className="text-xs uppercase text-muted-foreground">Varieties</span>
-      </div>
-      <div className="space-y-2">
+    <div className="flex items-start justify-between gap-4 border-b pb-3 last:border-b-0">
+      <span className="text-xs uppercase text-muted-foreground">Varieties</span>
+      <div className="space-y-2 text-right">
         {allocations.map((a, i) => (
           <div key={a.id ?? i}>
             <div className="text-sm font-medium">{a.name ?? "Unknown"}</div>
