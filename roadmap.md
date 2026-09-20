@@ -17,6 +17,6 @@
 - [x] Field Trips: update the detail header name immediately while editing Title / details
 - [x] Field Trips: fix repeated Trip name edits reporting saved without persisting the new value
 - [x] System Admin: add gated Maintenance Mode settings and login message
-- [ ] Complete vineyard-wide Pin Colour identity, precedence, renderer and refresh parity
+- [x] Complete vineyard-wide Pin Colour identity, precedence, renderer and refresh parity
 
 

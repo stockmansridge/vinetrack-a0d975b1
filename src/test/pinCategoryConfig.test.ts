@@ -7,6 +7,7 @@ import {
 } from "@/lib/pinCategoryConfig";
 import { pinDisplayStyle } from "@/lib/pinStyle";
 import { parseColourToken } from "@/lib/colourToken";
+import { pinCategoryColoursQueryKey, PIN_COLOUR_REFRESH_MS } from "@/lib/pinCategoryColoursQuery";
 
 const CANONICAL_GREEN = "#34C759";
 const CANONICAL_BROWN = "#A2845E";
@@ -80,6 +81,13 @@ describe("vineyard-configured category colours", () => {
   it("a different vineyard can configure a different colour for the same category", () => {
     expect(pinDisplayStyle(pin() as any, vineyardB).hex).toBe("#0AA1DD");
     expect(pinDisplayStyle(pin() as any, vineyardA).hex).toBe("#7B1FA2");
+  });
+
+  it("keys colour configuration independently by selected vineyard", () => {
+    expect(pinCategoryColoursQueryKey("vineyard-a")).toEqual(["pin-category-colours", "vineyard-a"]);
+    expect(pinCategoryColoursQueryKey("vineyard-b")).toEqual(["pin-category-colours", "vineyard-b"]);
+    expect(pinCategoryColoursQueryKey("vineyard-a")).not.toEqual(pinCategoryColoursQueryKey("vineyard-b"));
+    expect(PIN_COLOUR_REFRESH_MS).toBe(60_000);
   });
 
   it("missing configuration uses the canonical fallback", () => {

@@ -43,7 +43,10 @@ export function usePinCategoryColours(vineyardIdOverride?: string | null): PinCa
     refetchOnWindowFocus: true,
     refetchInterval: PIN_COLOUR_REFRESH_MS,
     refetchIntervalInBackground: false,
-    queryFn: () => fetchPinCategoryColours(vineyardId!),
+    queryFn: () => {
+      if (!vineyardId) return Promise.resolve(EMPTY_PIN_CATEGORY_COLOURS);
+      return fetchPinCategoryColours(vineyardId);
+    },
   });
   return data ?? EMPTY_PIN_CATEGORY_COLOURS;
 }

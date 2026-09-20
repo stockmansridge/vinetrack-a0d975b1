@@ -16,11 +16,11 @@ import { parseColourToken } from "@/lib/colourToken";
 //   2. historical pin.button_color compatibility snapshot
 //   3. pin.mode / pin.category  → broad mode palette
 //      (Repair / Growth / Note / Hazard / Spray).
-//   3. Neutral default.
+//   4. Neutral default.
 //
 // All consumers (overview map, live dashboard map, pins page, pin
-// detail panel, trip report) call `pinStyle(mode, button_color,
-// category)` so changing the resolver here updates every surface.
+// detail panel) call `pinDisplayStyle` so changing the resolver here updates
+// every standard pin-colour surface.
 
 export interface PinStyle {
   hex: string;
@@ -66,7 +66,7 @@ export function pinStyle(
 ): PinStyle {
   const modeStyle = lookupMode(mode) ?? lookupMode(category);
 
-  // 1. Per-button colour wins — that's the colour the user dropped.
+  // Legacy helper: the historical snapshot wins when no vineyard config is supplied.
   if (buttonColor && buttonColor.trim()) {
     const hex = parseColourToken(buttonColor);
     if (hex) {
