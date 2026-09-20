@@ -18,6 +18,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import PaddockDetailPanel from "@/components/PaddockDetailPanel";
 import { X } from "lucide-react";
+import {
+  useGrapeVarieties,
+  buildVarietyMap,
+  resolvePaddockAllocations,
+  type ResolvedAllocation,
+} from "@/lib/varietyResolver";
 
 interface Paddock {
   id: string;
@@ -28,6 +34,7 @@ interface Paddock {
   vine_spacing?: number | null;
   intermediate_post_spacing?: number | null;
   emitter_spacing?: number | null;
+  flow_per_emitter?: number | null;
   vine_count_override?: number | null;
   row_width?: number | null;
   updated_at?: string | null;
@@ -84,6 +91,9 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
     staleTime: 5 * 60_000,
   });
 
+  const { data: grapeVarieties } = useGrapeVarieties(selectedVineyardId);
+  const varietyMap = useMemo(() => buildVarietyMap(grapeVarieties), [grapeVarieties]);
+
   const paddocks = data ?? [];
   // Stable signature for paddock geometry — changes only when ids/updated_at change.
   const paddockSig = useMemo(
@@ -104,6 +114,18 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
     [parsed],
   );
   const selected = parsed.find((p) => p.paddock.id === selectedId) ?? null;
+  const selectedAllocations = useMemo(
+    () => (selected ? resolvePaddockAllocations(selected.paddock.variety_allocations, varietyMap) : []),
+    [selected, varietyMap],
+  );
+
+  const irrigationLph = useMemo(() => {
+    if (!selected) return null;
+    const flow = Number(selected.paddock.flow_per_emitter);
+    const emitters = selected.metrics.emitterCount;
+    if (!Number.isFinite(flow) || flow <= 0 || emitters == null || emitters <= 0) return null;
+    return flow * emitters;
+  }, [selected]);
   const lastBoundsRef = useRef<{ minLat: number; maxLat: number; minLng: number; maxLng: number } | null>(null);
   const didFitRef = useRef(false);
 
@@ -417,8 +439,8 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
                   value={selected.metrics.vineCount != null ? selected.metrics.vineCount.toLocaleString() : "—"}
                 />
                 <SummaryMetric
-                  label="Emitters"
-                  value={selected.metrics.emitterCount != null ? selected.metrics.emitterCount.toLocaleString() : "—"}
+                  label="Irrigation"
+                  value={irrigationLph != null ? `${Math.round(irrigationLph).toLocaleString()} L/hr` : "—"}
                 />
                 <SummaryMetric
                   label="Vine spacing"
@@ -428,6 +450,7 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
                   label="Row width"
                   value={selected.paddock.row_width ? `${selected.paddock.row_width} m` : "—"}
                 />
+                <VarietySummaryBlock allocations={selectedAllocations} />
               </div>
               <Button type="button" className="mt-5 w-full" onClick={() => setDetailsOpen(true)}>
                 All block details
@@ -472,6 +495,32 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
           onClose={() => setDetailsOpen(false)}
         />
       )}
+    </div>
+  );
+}
+
+function VarietySummaryBlock({ allocations }: { allocations: ResolvedAllocation[] }) {
+  if (allocations.length === 0) {
+    return <SummaryMetric label="Varieties" value="—" />;
+  }
+
+  return (
+    <div className="border-b pb-3 last:border-b-0">
+      <div className="mb-2 flex items-baseline justify-between gap-4">
+        <span className="text-xs uppercase text-muted-foreground">Varieties</span>
+      </div>
+      <div className="space-y-2">
+        {allocations.map((a, i) => (
+          <div key={a.id ?? i} className="text-right">
+            <div className="text-sm font-medium">{a.name ?? "Unknown"}</div>
+            <div className="text-xs text-muted-foreground">
+              {[a.clone, a.rootstock, a.percent != null ? `${a.percent}%` : null]
+                .filter((v): v is string => Boolean(v))
+                .join(" · ")}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
