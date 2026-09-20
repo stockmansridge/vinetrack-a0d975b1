@@ -162,6 +162,10 @@ describe("vineyard-configured category colours", () => {
     expect(pinDisplayStyle({ mode: "Growth", button_name: "Powdery", button_color: "orange" }, growth).hex).toBe("#FF2D55");
   });
 
+  it("does not attach a Growth pin to a Repair button by a colliding name", () => {
+    expect(pinDisplayStyle({ mode: "Growth", button_name: "Vine Issue", button_color: "pink" }, vineyardA).hex).toBe("#FF2D55");
+  });
+
   it("uses historical colour only when current configuration cannot resolve", () => {
     expect(pinDisplayStyle({ mode: "Growth", button_name: "Legacy disease", button_color: "cyan" }, vineyardA).hex).toBe("#32ADE6");
     expect(pinDisplayStyle({ mode: "Growth", button_name: "Unknown", button_color: "invalid" }, vineyardA).hex).toBe("#34C759");

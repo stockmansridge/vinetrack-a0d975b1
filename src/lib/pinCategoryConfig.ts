@@ -158,7 +158,10 @@ export function configuredPinColourMatch(
   }
 
   const categoryId = normalisePinCategoryId(pin);
-  if (categoryId !== "unknown" && colours.byCanonicalCategory[categoryId]) {
+  const modeKey = String(pin.mode ?? "").trim().toLowerCase();
+  const explicitCategoryId = normalisePinCategoryId({ category_id: pin.category_id });
+  const canUseRepairCategory = modeKey === "repair" || modeKey === "repairs" || explicitCategoryId !== "unknown";
+  if (canUseRepairCategory && categoryId !== "unknown" && colours.byCanonicalCategory[categoryId]) {
     return {
       hex: colours.byCanonicalCategory[categoryId] as string,
       label: colours.labelByCategory[categoryId] ?? null,
