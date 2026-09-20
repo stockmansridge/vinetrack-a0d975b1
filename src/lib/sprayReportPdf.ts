@@ -238,6 +238,23 @@ export function buildSprayReportPdf(
     y += 6;
   };
 
+  // Hand-drawn paragraphs must flow across pages the same way autoTable does.
+  // Writing a multi-line block in one doc.text call silently discards every
+  // line past the page bottom and never adds a page, which is how long
+  // text-heavy reports collapsed into a single page.
+  const writeLines = (lines: string[], lineHeight: number, firstOffset = 12) => {
+    let cursor = y + firstOffset;
+    for (const line of lines) {
+      if (cursor > pageHeight - FOOTER_RESERVED) {
+        doc.addPage();
+        cursor = CONTINUATION_CONTENT_TOP;
+      }
+      doc.text(line, margin, cursor);
+      cursor += lineHeight;
+    }
+    y = cursor;
+  };
+
   // Rows
   section("Rows");
   autoTable(doc, {
@@ -378,17 +395,16 @@ export function buildSprayReportPdf(
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(110);
-    doc.text(
+    writeLines(
       [
         `Source: ${sprayReportSourceLabel(payload)}`,
         `Route: ${payload.recordingEvidence?.route ?? MANUAL_NOT_RECORDED_LABEL}`,
         `Rows: ${payload.recordingEvidence?.rows ?? MANUAL_NOT_RECORDED_LABEL}`,
       ],
-      margin,
-      y + 12,
+      14,
     );
     doc.setTextColor(0);
-    y += 54;
+    y += 12;
   }
 
   if (ctx.routeWarning) {
@@ -397,9 +413,9 @@ export function buildSprayReportPdf(
     doc.setFontSize(9);
     doc.setTextColor(110);
     const lines = doc.splitTextToSize(ctx.routeWarning, pageWidth - margin * 2);
-    doc.text(lines, margin, y + 12);
+    writeLines(lines, 12);
     doc.setTextColor(0);
-    y += 12 + lines.length * 12 + 10;
+    y += 10;
   }
 
 
@@ -418,8 +434,8 @@ export function buildSprayReportPdf(
       pageWidth - margin * 2,
 
     );
-    doc.text(lines, margin, y + 12);
-    y += lines.length * 11 + 20;
+    writeLines(lines, 11);
+    y += 9;
     doc.setTextColor(0);
   }
 
@@ -481,9 +497,9 @@ export function buildSprayReportPdf(
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(110);
-    doc.text(`Times shown in the vineyard timezone (${tz}).`, margin, y + 8);
+    writeLines([`Times shown in the vineyard timezone (${tz}).`], 12, 8);
     doc.setTextColor(0);
-    y += 20;
+    y += 8;
   }
 
   // Per-page branding: compact vineyard header on continuation pages, and the
