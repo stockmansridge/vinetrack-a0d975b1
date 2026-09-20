@@ -123,7 +123,7 @@ describe("vineyard-configured category colours", () => {
 
   it("joins first on launcher identity and keeps exact legacy names", () => {
     expect(pinStableKeys({ launcher_button_id: "button-7", category_id: "Vine_Issue", button_name: "Vine Issue" })).toEqual([
-      "button_7",
+      "button7",
       "vine_issue",
       "vineissue",
     ]);

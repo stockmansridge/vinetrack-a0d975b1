@@ -25,7 +25,7 @@ describe("unified pin (SQL 170)", () => {
       { config_type: "button_templates", config_data: [{ id: "x", name: "Ignored" }] },
     ]);
     expect(cat.repair).toEqual([
-      { id: "broken_post", name: "Broken Post", colour: "#A2845E", growthStageCode: null },
+      { id: "broken_post", launcherButtonId: "broken_post", name: "Broken Post", colour: "#A2845E", growthStageCode: null },
     ]);
     expect(cat.growth[0].growthStageCode).toBe("E-L 4");
   });
@@ -173,7 +173,13 @@ describe("unified pin (SQL 170)", () => {
       { id: "broken_post_right", name: "Broken Post Right", colour: "#A2845E", growthStageCode: null },
     ]);
     expect(deduped).toHaveLength(1);
-    expect(deduped[0]).toEqual({ id: "broken_post", name: "Broken Post", colour: "#A2845E", growthStageCode: null });
+    expect(deduped[0]).toEqual({
+      id: "broken_post",
+      launcherButtonId: "broken_post",
+      name: "Broken Post",
+      colour: "#A2845E",
+      growthStageCode: null,
+    });
   });
 
   it("keeps distinct buttons apart and identifies the growth stage action", () => {

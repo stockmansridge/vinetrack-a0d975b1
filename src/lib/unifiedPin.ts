@@ -169,7 +169,7 @@ export function dedupePinButtons(buttons: PinButtonDef[]): PinButtonDef[] {
     const canonical: PinButtonDef = {
       ...b,
       id: baseId !== b.id ? baseId : b.id,
-      launcherButtonId: b.launcherButtonId ?? b.id,
+      launcherButtonId: stripSideToken(b.launcherButtonId ?? b.id),
       name: stripSideToken(b.name),
     };
     const at = seen.get(key);
