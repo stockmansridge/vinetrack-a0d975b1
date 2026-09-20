@@ -434,8 +434,8 @@ export function buildSprayReportPdf(
       pageWidth - margin * 2,
 
     );
-    doc.text(lines, margin, y + 12);
-    y += lines.length * 11 + 20;
+    writeLines(lines, 11);
+    y += 9;
     doc.setTextColor(0);
   }
 
