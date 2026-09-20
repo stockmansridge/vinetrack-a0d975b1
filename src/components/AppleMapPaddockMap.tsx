@@ -34,6 +34,7 @@ interface Paddock {
   vine_spacing?: number | null;
   intermediate_post_spacing?: number | null;
   emitter_spacing?: number | null;
+  flow_per_emitter?: number | null;
   vine_count_override?: number | null;
   row_width?: number | null;
   updated_at?: string | null;
