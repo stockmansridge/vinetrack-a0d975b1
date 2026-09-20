@@ -18,5 +18,6 @@
 - [x] Field Trips: fix repeated Trip name edits reporting saved without persisting the new value
 - [x] System Admin: add gated Maintenance Mode settings and login message
 - [x] Complete vineyard-wide Pin Colour identity, precedence, renderer and refresh parity
+- [x] Block Setup map: Apple-only provider, stable vineyard framing, compact block summary with full-details action
 
 
