@@ -1,15 +1,22 @@
-<!doctype html><html><body><button id="b">go</button>
+<!doctype html><html><body>
 <script type="module">
 import { parseSprayReportPayload } from "/src/lib/sprayReportV1.ts";
 import { saveSprayReportPdf, buildSprayReportPdf } from "/src/lib/sprayReportPdf.ts";
 window.run = async () => {
   const raw = await (await fetch("/__fx.json")).json();
+  const imgs = await (await fetch("/__imgs.json")).json();
   raw.rows = Array.from({length:140},(_,i)=>({...raw.rows[0], rowNumber:i+1}));
-  const { payload, errors } = parseSprayReportPayload(raw);
-  if (!payload) return { errors };
-  const doc = buildSprayReportPdf(payload, {});
+  const { payload } = parseSprayReportPayload(raw);
+  const ctx = {
+    routeImage: { dataUrl: imgs.route, width: 1200, height: 800 },
+    routeWarning: null,
+    branding: { vineyardLogo: { dataUrl: imgs.logo, size: { width: 300, height: 140 } },
+                vineTrackMark: { dataUrl: imgs.mark, size: { width: 240, height: 60 } },
+                warning: null },
+  };
+  const doc = buildSprayReportPdf(payload, ctx);
   const pages = doc.internal.getNumberOfPages();
-  const name = saveSprayReportPdf(payload, {});
+  const name = saveSprayReportPdf(payload, ctx);
   return { pages, name };
 };
 </script></body></html>
