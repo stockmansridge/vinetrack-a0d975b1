@@ -18,6 +18,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import PaddockDetailPanel from "@/components/PaddockDetailPanel";
 import { X } from "lucide-react";
+import {
+  useGrapeVarieties,
+  buildVarietyMap,
+  resolvePaddockAllocations,
+  type ResolvedAllocation,
+} from "@/lib/varietyResolver";
 
 interface Paddock {
   id: string;
