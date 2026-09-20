@@ -60,7 +60,7 @@ describe("canonical category colours", () => {
     expect(pinDisplayStyle(manual as any).hex).toBe(GREEN);
   });
 
-  it("ignores stored marker colour, title text, creator and sync state", () => {
+  it("uses stored marker colour only when current configuration is unavailable", () => {
     const noisy = pin({
       button_color: "#FF0000",
       title: "Broken post near the shed",
@@ -68,7 +68,7 @@ describe("canonical category colours", () => {
       sync_version: 9,
       platform: "android",
     });
-    expect(pinDisplayStyle(noisy as any).hex).toBe(GREEN);
+    expect(pinDisplayStyle(noisy as any).hex).toBe("#FF0000");
   });
 
   it("normalises legacy category and button-name spellings", () => {

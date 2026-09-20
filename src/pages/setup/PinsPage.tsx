@@ -531,8 +531,8 @@ export default function PinsPage() {
               <SelectContent>
                 <SelectItem value="all">All categories</SelectItem>
                 {PIN_CATEGORY_ORDER.map((id) => {
-                  const cs = pinCategoryStyleById(id);
-                  const label = catColours.labelByCategory[id] ?? cs.label;
+                  const cs = pinDisplayStyle({ mode: "Repairs", category_id: id }, catColours);
+                  const label = cs.label;
                   return (
                     <SelectItem key={id} value={id}>
                       {label} ({categoryCounts.get(id) ?? 0})
@@ -592,9 +592,9 @@ export default function PinsPage() {
           All categories
         </Button>
         {PIN_CATEGORY_ORDER.map((id) => {
-          const cs = pinCategoryStyleById(id);
-          const hex = catColours.byCategory[id] ?? cs.hex;
-          const label = catColours.labelByCategory[id] ?? cs.label;
+          const cs = pinDisplayStyle({ mode: "Repairs", category_id: id }, catColours);
+          const hex = cs.hex;
+          const label = cs.label;
           const count = categoryCounts.get(id) ?? 0;
           if (!count && id !== "other" && id !== "unknown") return null;
           return (

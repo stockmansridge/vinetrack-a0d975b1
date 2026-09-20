@@ -15,6 +15,7 @@ import {
   type UnifiedPinForm,
 } from "@/lib/unifiedPin";
 import type { LatLng } from "@/lib/paddockGeometry";
+import { PIN_BUTTON_CATALOGUE_QUERY_KEY, PIN_COLOUR_REFRESH_MS } from "@/lib/pinCategoryColoursQuery";
 
 function newId(): string {
   return generateUuid();
@@ -29,14 +30,17 @@ async function rpc<T>(fn: string, args: Record<string, any>): Promise<T> {
 /** Repair / Growth button catalogues configured for this vineyard. */
 export function usePinButtonCatalogue(vineyardId: string | null) {
   return useQuery({
-    queryKey: ["pin-button-catalogue", vineyardId],
+    queryKey: [PIN_BUTTON_CATALOGUE_QUERY_KEY, vineyardId],
     enabled: !!vineyardId,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+    refetchInterval: PIN_COLOUR_REFRESH_MS,
+    refetchIntervalInBackground: false,
     queryFn: async (): Promise<{ repair: PinButtonDef[]; growth: PinButtonDef[] }> => {
       const { data, error } = await supabase
         .from("vineyard_button_configs")
         .select("config_type, config_data")
-        .eq("vineyard_id", vineyardId!);
+        .eq("vineyard_id", vineyardId ?? "");
       if (error) throw new Error(manualIssueErrorMessage(error));
       return parseButtonCatalogue((data ?? []) as ButtonConfigRow[]);
     },

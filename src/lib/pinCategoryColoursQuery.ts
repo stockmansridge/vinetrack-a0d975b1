@@ -9,6 +9,14 @@ import {
   type PinCategoryColourMap,
 } from "@/lib/pinCategoryConfig";
 
+export const PIN_CATEGORY_COLOURS_QUERY_KEY = "pin-category-colours";
+export const PIN_BUTTON_CATALOGUE_QUERY_KEY = "pin-button-catalogue";
+export const PIN_COLOUR_REFRESH_MS = 60_000;
+
+export function pinCategoryColoursQueryKey(vineyardId: string | null | undefined) {
+  return [PIN_CATEGORY_COLOURS_QUERY_KEY, vineyardId] as const;
+}
+
 export async function fetchPinCategoryColours(vineyardId: string): Promise<PinCategoryColourMap> {
   const { data, error } = await supabase
     .from("vineyard_button_configs")
@@ -29,10 +37,16 @@ export function usePinCategoryColours(vineyardIdOverride?: string | null): PinCa
   const { selectedVineyardId } = useVineyard();
   const vineyardId = vineyardIdOverride ?? selectedVineyardId;
   const { data } = useQuery({
-    queryKey: ["pin-category-colours", vineyardId],
+    queryKey: pinCategoryColoursQueryKey(vineyardId),
     enabled: !!vineyardId,
-    staleTime: 5 * 60 * 1000,
-    queryFn: () => fetchPinCategoryColours(vineyardId!),
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+    refetchInterval: PIN_COLOUR_REFRESH_MS,
+    refetchIntervalInBackground: false,
+    queryFn: () => {
+      if (!vineyardId) return Promise.resolve(EMPTY_PIN_CATEGORY_COLOURS);
+      return fetchPinCategoryColours(vineyardId);
+    },
   });
   return data ?? EMPTY_PIN_CATEGORY_COLOURS;
 }
