@@ -107,6 +107,13 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
   const lastBoundsRef = useRef<{ minLat: number; maxLat: number; minLng: number; maxLng: number } | null>(null);
   const didFitRef = useRef(false);
 
+  useEffect(() => {
+    setSelectedId(null);
+    setDetailsOpen(false);
+    didFitRef.current = false;
+    lastBoundsRef.current = null;
+  }, [selectedVineyardId]);
+
   // Init MapKit map
   useEffect(() => {
     let cancelled = false;
@@ -439,7 +446,7 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
           </Card>
         )}
 
-        {withoutGeometry.length > 0 && (
+        {!selected && withoutGeometry.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">No map boundary</CardTitle>
