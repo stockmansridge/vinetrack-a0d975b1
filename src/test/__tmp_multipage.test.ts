@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import fixture from "../../docs/fixtures/spray-report-v1-2-manual.json";
+import fixture from "../../docs/fixtures/spray-report-v1-2-tracked.json";
 import { parseSprayReportPayload } from "@/lib/sprayReportV1";
 import { buildSprayReportPdf } from "@/lib/sprayReportPdf";
 import { writeFileSync } from "node:fs";
