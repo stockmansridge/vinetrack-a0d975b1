@@ -497,9 +497,9 @@ export function buildSprayReportPdf(
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(110);
-    doc.text(`Times shown in the vineyard timezone (${tz}).`, margin, y + 8);
+    writeLines([`Times shown in the vineyard timezone (${tz}).`], 12, 8);
     doc.setTextColor(0);
-    y += 20;
+    y += 8;
   }
 
   // Per-page branding: compact vineyard header on continuation pages, and the
