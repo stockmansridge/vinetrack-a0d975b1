@@ -430,8 +430,8 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
                   value={selected.metrics.vineCount != null ? selected.metrics.vineCount.toLocaleString() : "—"}
                 />
                 <SummaryMetric
-                  label="Emitters"
-                  value={selected.metrics.emitterCount != null ? selected.metrics.emitterCount.toLocaleString() : "—"}
+                  label="Irrigation"
+                  value={irrigationLph != null ? `${Math.round(irrigationLph).toLocaleString()} L/hr` : "—"}
                 />
                 <SummaryMetric
                   label="Vine spacing"
@@ -441,6 +441,7 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
                   label="Row width"
                   value={selected.paddock.row_width ? `${selected.paddock.row_width} m` : "—"}
                 />
+                <VarietySummaryBlock allocations={selectedAllocations} />
               </div>
               <Button type="button" className="mt-5 w-full" onClick={() => setDetailsOpen(true)}>
                 All block details
