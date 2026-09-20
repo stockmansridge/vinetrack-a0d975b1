@@ -499,6 +499,32 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
   );
 }
 
+function VarietySummaryBlock({ allocations }: { allocations: ResolvedAllocation[] }) {
+  if (allocations.length === 0) {
+    return <SummaryMetric label="Varieties" value="—" />;
+  }
+
+  return (
+    <div className="border-b pb-3 last:border-b-0">
+      <div className="mb-2 flex items-baseline justify-between gap-4">
+        <span className="text-xs uppercase text-muted-foreground">Varieties</span>
+      </div>
+      <div className="space-y-2">
+        {allocations.map((a, i) => (
+          <div key={a.id ?? i} className="text-right">
+            <div className="text-sm font-medium">{a.name ?? "Unknown"}</div>
+            <div className="text-xs text-muted-foreground">
+              {[a.clone, a.rootstock, a.percent != null ? `${a.percent}%` : null]
+                .filter((v): v is string => Boolean(v))
+                .join(" · ")}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SummaryMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-4 border-b pb-3 last:border-b-0">
