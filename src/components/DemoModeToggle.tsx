@@ -1,4 +1,4 @@
-import { Eye, EyeOff } from "lucide-react";
+import { EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDemoMode } from "@/context/DemoModeContext";
 import { useIsSystemAdminRaw } from "@/lib/systemAdmin";
@@ -14,8 +14,8 @@ export function DemoModeToggle() {
 
   return (
     <Button
-      variant={demoMode ? "default" : "ghost"}
-      size="sm"
+      variant="ghost"
+      size="icon"
       onClick={toggleDemoMode}
       aria-pressed={demoMode}
       aria-label={demoMode ? "Exit demo mode" : "Enter demo mode"}
@@ -24,12 +24,9 @@ export function DemoModeToggle() {
           ? "Demo mode on — System Admin tools hidden. Click to exit."
           : "Demo mode — view the portal as a vineyard owner"
       }
-      className="rounded-full gap-1.5"
+      className="rounded-full"
     >
-      {demoMode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-      <span className="hidden sm:inline text-xs font-medium">
-        {demoMode ? "Demo on" : "Demo"}
-      </span>
+      <EyeOff className="h-4 w-4" />
     </Button>
   );
 }
