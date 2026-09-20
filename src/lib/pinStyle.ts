@@ -1,5 +1,6 @@
 import { pinCategoryStyle, type PinCategoryId } from "@/lib/pinCategory";
-import { configuredPinColour, type PinCategoryColourMap } from "@/lib/pinCategoryConfig";
+import { configuredPinColourMatch, type PinCategoryColourMap } from "@/lib/pinCategoryConfig";
+import { parseColourToken } from "@/lib/colourToken";
 // Pin colour mapping — mirrors the iOS app's per-button colour palette.
 //
 // In the iOS app every Repair / Growth button (e.g. "Irrigation",
@@ -11,10 +12,9 @@ import { configuredPinColour, type PinCategoryColourMap } from "@/lib/pinCategor
 //
 // To make Lovable pins match the iOS app, the resolver order is:
 //
-//   1. pin.button_color  → SwiftUI named colour or hex string.
-//      This is the per-button colour the user actually sees in the
-//      iOS app, so it wins whenever it's present.
-//   2. pin.mode / pin.category  → broad mode palette
+//   1. current vineyard launcher configuration
+//   2. historical pin.button_color compatibility snapshot
+//   3. pin.mode / pin.category  → broad mode palette
 //      (Repair / Growth / Note / Hazard / Spray).
 //   3. Neutral default.
 //
@@ -42,48 +42,13 @@ const MODE_PALETTE: Record<string, PinStyle> = {
   manual_issue: { hex: "#FF9500", label: "Manual Issue" },
 };
 
-// SwiftUI / UIKit named colours → hex. Light-mode system tints where
-// applicable so the web matches what the iOS button shows on screen.
-const NAMED_COLORS: Record<string, string> = {
-  red: "#FF3B30",
-  orange: "#FF9500",
-  yellow: "#FFCC00",
-  green: "#34C759",
-  darkgreen: "#1B7F3B",
-  mint: "#00C7BE",
-  teal: "#30B0C7",
-  cyan: "#32ADE6",
-  blue: "#007AFF",
-  indigo: "#5856D6",
-  purple: "#AF52DE",
-  pink: "#FF2D55",
-  brown: "#A2845E",
-  gray: "#8E8E93",
-  grey: "#8E8E93",
-  black: "#000000",
-  white: "#FFFFFF",
-};
-
 const DEFAULT_STYLE: PinStyle = { hex: "#8E8E93", label: "Other" };
-
-const HEX_RE = /^#?[0-9a-fA-F]{6}$/;
-
-function normalizeHex(raw: string): string | null {
-  const s = raw.trim();
-  if (!HEX_RE.test(s)) return null;
-  return (s.startsWith("#") ? s : `#${s}`).toUpperCase();
-}
 
 function lookupMode(key?: string | null): PinStyle | null {
   if (!key) return null;
   const k = key.trim().toLowerCase();
   if (!k) return null;
   return MODE_PALETTE[k] ?? null;
-}
-
-function lookupNamedColor(key: string): string | null {
-  const k = key.trim().toLowerCase().replace(/\s+/g, "");
-  return NAMED_COLORS[k] ?? null;
 }
 
 /**
@@ -103,16 +68,7 @@ export function pinStyle(
 
   // 1. Per-button colour wins — that's the colour the user dropped.
   if (buttonColor && buttonColor.trim()) {
-    const raw = buttonColor.trim();
-
-    // Named SwiftUI colour (e.g. "blue", "brown", "darkgreen").
-    const named = lookupNamedColor(raw);
-    if (named) {
-      return { hex: named, label: modeStyle?.label ?? DEFAULT_STYLE.label };
-    }
-
-    // Explicit hex (e.g. "#A2845E" or "A2845E").
-    const hex = normalizeHex(raw);
+    const hex = parseColourToken(buttonColor);
     if (hex) {
       return { hex, label: modeStyle?.label ?? DEFAULT_STYLE.label };
     }
@@ -128,14 +84,12 @@ export function pinStyle(
 /**
  * Display style for a pin.
  *
- * Colour resolution for a recognised category:
- *   1. the current vineyard's configured colour for the stable
- *      category/button identifier
- *   2. the canonical fallback colour
- *   3. neutral grey
+ * Colour resolution: current vineyard configuration (launcher id, canonical
+ * Repair category, then exact normalised legacy name) → historical snapshot
+ * → canonical category/mode fallback → neutral grey.
  *
- * It is never derived from the pin's own stored marker colour, title text,
- * completion status, placement, sync state, creator or source platform.
+ * Completion status, placement, sync state, creator and source platform never
+ * affect colour.
  *
  * Non-repair modes (Growth / Note / Hazard / Spray / Manual Issue) keep
  * their existing mode identity colour when the category is unknown.
@@ -143,21 +97,26 @@ export function pinStyle(
 export function pinDisplayStyle(
   pin: {
     mode?: string | null;
+    launcher_button_id?: string | null;
     category?: string | null;
     category_id?: string | null;
     button_id?: string | null;
     button_key?: string | null;
     button_name?: string | null;
+    button_color?: string | null;
   },
   colours?: PinCategoryColourMap | null,
 ): PinStyle & { categoryId: PinCategoryId } {
   const cat = pinCategoryStyle(pin);
-  const configured = configuredPinColour(pin, colours);
-  if (cat.id !== "unknown") {
-    const label = colours?.labelByCategory?.[cat.id] ?? cat.label;
-    return { hex: configured ?? cat.hex, label, categoryId: cat.id };
+  const configured = configuredPinColourMatch(pin, colours);
+  if (configured) {
+    return { hex: configured.hex, label: configured.label ?? cat.label, categoryId: cat.id };
   }
-  if (configured) return { hex: configured, label: cat.label, categoryId: "unknown" };
+
+  const historical = parseColourToken(pin.button_color);
+  if (historical) return { hex: historical, label: cat.label, categoryId: cat.id };
+
+  if (cat.id !== "unknown") return { hex: cat.hex, label: cat.label, categoryId: cat.id };
   const modeKey = (pin.mode ?? "").trim().toLowerCase();
   const isRepair = modeKey === "repair" || modeKey === "repairs";
   const modeStyle = !isRepair ? lookupMode(pin.mode) ?? lookupMode(pin.category) : null;

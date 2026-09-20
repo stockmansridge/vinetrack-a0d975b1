@@ -5,9 +5,9 @@
 // `growth_buttons` or `button_templates`. `config_data` is a JSON array of
 // button definitions authored on iOS/Android.
 //
-// Colour is joined to pins by STABLE IDENTIFIER, never by display text
-// alone. Match priority: category_id → button_id / stable button key →
-// normalised legacy category or button name.
+// Colour is joined to pins by the launcher button's stable identifier first.
+// Canonical Repair identity and exact normalised name remain compatibility
+// paths for historical pins that pre-date `pins.launcher_button_id`.
 //
 // An individual pin's stored `button_color` is NOT trusted: historical pins
 // may carry a colour that no longer matches the vineyard's configuration.
@@ -16,21 +16,30 @@ import { parseColourToken } from "@/lib/colourToken";
 import { normaliseKey, normalisePinCategoryId, type PinCategoryId } from "@/lib/pinCategory";
 
 export interface PinCategoryColourMap {
-  /** Normalised stable key (button id / category id / name) → hex. */
-  byKey: Record<string, string>;
-  /** Canonical category id → hex, when a configured button maps onto one. */
-  byCategory: Partial<Record<PinCategoryId, string>>;
+  /** Normalised launcher button id → current configured hex. */
+  byLauncherButtonId: Record<string, string>;
+  /** Canonical Repair category id → current configured hex. */
+  byCanonicalCategory: Partial<Record<PinCategoryId, string>>;
+  /** Exact normalised legacy button name → current configured hex. */
+  byNormalizedName: Record<string, string>;
   /** Configured display label per canonical category, when available. */
   labelByCategory: Partial<Record<PinCategoryId, string>>;
+  /** Current configured display label by launcher id/name. */
+  labelByLauncherButtonId: Record<string, string>;
+  labelByNormalizedName: Record<string, string>;
 }
 
 export const EMPTY_PIN_CATEGORY_COLOURS: PinCategoryColourMap = {
-  byKey: {},
-  byCategory: {},
+  byLauncherButtonId: {},
+  byCanonicalCategory: {},
+  byNormalizedName: {},
   labelByCategory: {},
+  labelByLauncherButtonId: {},
+  labelByNormalizedName: {},
 };
 
-const ID_FIELDS = ["category_id", "categoryId", "button_id", "buttonId", "id", "key", "slug", "code"];
+const LAUNCHER_ID_FIELDS = ["launcher_button_id", "launcherButtonId", "button_id", "buttonId", "id", "key", "slug", "code"];
+const CATEGORY_ID_FIELDS = ["category_id", "categoryId"];
 const NAME_FIELDS = ["name", "label", "title", "button_name", "buttonName", "category"];
 const COLOUR_FIELDS = ["color", "colour", "hex", "hex_color", "hexColor", "button_color", "buttonColor", "tint"];
 
@@ -61,45 +70,106 @@ export interface ButtonConfigRow {
  * Invalid / unparseable colours are ignored so the canonical fallback wins.
  */
 export function buildPinCategoryColours(rows: ButtonConfigRow[] | null | undefined): PinCategoryColourMap {
-  const byKey: Record<string, string> = {};
-  const byCategory: Partial<Record<PinCategoryId, string>> = {};
+  const byLauncherButtonId: Record<string, string> = {};
+  const byCanonicalCategory: Partial<Record<PinCategoryId, string>> = {};
+  const byNormalizedName: Record<string, string> = {};
   const labelByCategory: Partial<Record<PinCategoryId, string>> = {};
+  const labelByLauncherButtonId: Record<string, string> = {};
+  const labelByNormalizedName: Record<string, string> = {};
 
   for (const row of rows ?? []) {
+    const configType = String(row?.config_type ?? "").trim().toLowerCase();
+    const isRepairConfig = configType.includes("repair");
     for (const button of toArray(row?.config_data)) {
       const hex = parseColourToken(firstString(button, COLOUR_FIELDS));
       if (!hex) continue;
 
-      const id = firstString(button, ID_FIELDS);
+      const launcherButtonId = firstString(button, LAUNCHER_ID_FIELDS);
+      const categoryIdentity = firstString(button, CATEGORY_ID_FIELDS) ?? launcherButtonId;
       const name = firstString(button, NAME_FIELDS);
 
-      for (const raw of [id, name]) {
-        const k = normaliseKey(raw);
-        if (k && !byKey[k]) byKey[k] = hex;
+      const launcherKey = normaliseKey(launcherButtonId);
+      if (launcherKey && !byLauncherButtonId[launcherKey]) {
+        byLauncherButtonId[launcherKey] = hex;
+        if (name) labelByLauncherButtonId[launcherKey] = name;
       }
 
-      const categoryId = normalisePinCategoryId({ category_id: id, category: name, button_name: name });
-      if (categoryId !== "unknown" && !byCategory[categoryId]) {
-        byCategory[categoryId] = hex;
+      const nameKey = normaliseKey(name);
+      if (nameKey && !byNormalizedName[nameKey]) {
+        byNormalizedName[nameKey] = hex;
+        if (name) labelByNormalizedName[nameKey] = name;
+      }
+
+      const categoryId = normalisePinCategoryId({ category_id: categoryIdentity, category: name, button_name: name });
+      if (isRepairConfig && categoryId !== "unknown" && !byCanonicalCategory[categoryId]) {
+        byCanonicalCategory[categoryId] = hex;
         if (name) labelByCategory[categoryId] = name;
       }
     }
   }
 
-  return { byKey, byCategory, labelByCategory };
+  return {
+    byLauncherButtonId,
+    byCanonicalCategory,
+    byNormalizedName,
+    labelByCategory,
+    labelByLauncherButtonId,
+    labelByNormalizedName,
+  };
 }
 
-/** Stable identifiers on a pin, in match priority order. */
-export function pinStableKeys(pin: {
+export interface PinColourIdentity {
+  launcher_button_id?: string | null;
   category_id?: string | null;
   button_id?: string | null;
   button_key?: string | null;
   category?: string | null;
   button_name?: string | null;
-}): string[] {
-  return [pin.category_id, pin.button_id, pin.button_key, pin.category, pin.button_name]
-    .map((v) => normaliseKey(v))
-    .filter((v): v is string => !!v);
+  mode?: string | null;
+}
+
+export interface ConfiguredPinColour {
+  hex: string;
+  label: string | null;
+  source: "launcher_button_id" | "canonical_category" | "normalized_name";
+}
+
+/** Current-vineyard configuration match using the mobile precedence contract. */
+export function configuredPinColourMatch(
+  pin: PinColourIdentity,
+  colours: PinCategoryColourMap | null | undefined,
+): ConfiguredPinColour | null {
+  if (!colours) return null;
+
+  const launcherKey = normaliseKey(pin.launcher_button_id);
+  if (launcherKey && colours.byLauncherButtonId[launcherKey]) {
+    return {
+      hex: colours.byLauncherButtonId[launcherKey],
+      label: colours.labelByLauncherButtonId[launcherKey] ?? null,
+      source: "launcher_button_id",
+    };
+  }
+
+  const categoryId = normalisePinCategoryId(pin);
+  if (categoryId !== "unknown" && colours.byCanonicalCategory[categoryId]) {
+    return {
+      hex: colours.byCanonicalCategory[categoryId] as string,
+      label: colours.labelByCategory[categoryId] ?? null,
+      source: "canonical_category",
+    };
+  }
+
+  for (const rawName of [pin.button_name, pin.category]) {
+    const nameKey = normaliseKey(rawName);
+    if (nameKey && colours.byNormalizedName[nameKey]) {
+      return {
+        hex: colours.byNormalizedName[nameKey],
+        label: colours.labelByNormalizedName[nameKey] ?? null,
+        source: "normalized_name",
+      };
+    }
+  }
+  return null;
 }
 
 /**
@@ -107,14 +177,8 @@ export function pinStableKeys(pin: {
  * Never looks at the pin's own stored colour, placement, or status.
  */
 export function configuredPinColour(
-  pin: Parameters<typeof pinStableKeys>[0],
+  pin: PinColourIdentity,
   colours: PinCategoryColourMap | null | undefined,
 ): string | null {
-  if (!colours) return null;
-  for (const k of pinStableKeys(pin)) {
-    const hit = colours.byKey[k];
-    if (hit) return hit;
-  }
-  const categoryId = normalisePinCategoryId(pin);
-  return colours.byCategory[categoryId] ?? null;
+  return configuredPinColourMatch(pin, colours)?.hex ?? null;
 }

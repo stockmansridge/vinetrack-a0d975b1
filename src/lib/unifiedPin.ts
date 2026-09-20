@@ -64,6 +64,8 @@ export const GROWTH_STAGE_PIN_COLOUR = "darkgreen";
 export interface PinButtonDef {
   /** Stable identifier from the vineyard configuration. */
   id: string;
+  /** Exact launcher identity retained even when the UI deduplicates labels. */
+  launcherButtonId?: string | null;
   name: string;
   colour: string | null;
   growthStageCode: string | null;
@@ -119,6 +121,7 @@ export function parseButtonCatalogue(
       if (target.some((b) => b.id === id)) continue;
       target.push({
         id,
+        launcherButtonId: id,
         name,
         colour: parseColourToken(firstString(button, COLOUR_FIELDS)),
         growthStageCode: firstString(button, STAGE_FIELDS),
@@ -166,6 +169,7 @@ export function dedupePinButtons(buttons: PinButtonDef[]): PinButtonDef[] {
     const canonical: PinButtonDef = {
       ...b,
       id: baseId !== b.id ? baseId : b.id,
+      launcherButtonId: b.launcherButtonId ?? b.id,
       name: stripSideToken(b.name),
     };
     const at = seen.get(key);
@@ -459,6 +463,7 @@ export interface PinInsertRow {
   title: string;
   button_name: string;
   button_color: string | null;
+  launcher_button_id: string | null;
   category_id: string;
   category: string;
   growth_stage_code: string | null;
@@ -498,6 +503,7 @@ export function buildPinInsertRow(
     title: name,
     button_name: name,
     button_color: isStagePin ? GROWTH_STAGE_PIN_COLOUR : opts.button.colour,
+    launcher_button_id: opts.button.launcherButtonId ?? opts.button.id,
     category_id: opts.button.id,
     category: opts.button.name,
     growth_stage_code: stage,

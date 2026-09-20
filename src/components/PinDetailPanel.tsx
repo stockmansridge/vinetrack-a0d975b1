@@ -18,6 +18,9 @@ export interface PinRecord {
   mode?: string | null;
   category?: string | null;
   category_id?: string | null;
+  launcher_button_id?: string | null;
+  button_id?: string | null;
+  button_key?: string | null;
   assignment_reason?: string | null;
   priority?: string | null;
   status?: string | null;
