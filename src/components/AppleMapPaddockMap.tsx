@@ -90,6 +90,9 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
     staleTime: 5 * 60_000,
   });
 
+  const { data: grapeVarieties } = useGrapeVarieties(selectedVineyardId);
+  const varietyMap = useMemo(() => buildVarietyMap(grapeVarieties), [grapeVarieties]);
+
   const paddocks = data ?? [];
   // Stable signature for paddock geometry — changes only when ids/updated_at change.
   const paddockSig = useMemo(
@@ -110,6 +113,10 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
     [parsed],
   );
   const selected = parsed.find((p) => p.paddock.id === selectedId) ?? null;
+  const selectedAllocations = useMemo(
+    () => (selected ? resolvePaddockAllocations(selected.paddock.variety_allocations, varietyMap) : []),
+    [selected, varietyMap],
+  );
   const lastBoundsRef = useRef<{ minLat: number; maxLat: number; minLng: number; maxLng: number } | null>(null);
   const didFitRef = useRef(false);
 
