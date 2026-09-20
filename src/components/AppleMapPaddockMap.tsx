@@ -425,6 +425,7 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
             </CardHeader>
             <CardContent className="flex min-h-0 flex-1 flex-col pt-5">
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
+                <VarietySummaryBlock allocations={selectedAllocations} />
                 <SummaryMetric
                   label="Area"
                   value={selected.metrics.areaHa > 0 ? `${selected.metrics.areaHa.toFixed(2)} ha` : "—"}
@@ -450,7 +451,6 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
                   label="Row width"
                   value={selected.paddock.row_width ? `${selected.paddock.row_width} m` : "—"}
                 />
-                <VarietySummaryBlock allocations={selectedAllocations} />
               </div>
               <Button type="button" className="mt-5 w-full" onClick={() => setDetailsOpen(true)}>
                 All block details
