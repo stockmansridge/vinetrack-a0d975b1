@@ -395,17 +395,16 @@ export function buildSprayReportPdf(
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(110);
-    doc.text(
+    writeLines(
       [
         `Source: ${sprayReportSourceLabel(payload)}`,
         `Route: ${payload.recordingEvidence?.route ?? MANUAL_NOT_RECORDED_LABEL}`,
         `Rows: ${payload.recordingEvidence?.rows ?? MANUAL_NOT_RECORDED_LABEL}`,
       ],
-      margin,
-      y + 12,
+      14,
     );
     doc.setTextColor(0);
-    y += 54;
+    y += 12;
   }
 
   if (ctx.routeWarning) {
@@ -414,9 +413,9 @@ export function buildSprayReportPdf(
     doc.setFontSize(9);
     doc.setTextColor(110);
     const lines = doc.splitTextToSize(ctx.routeWarning, pageWidth - margin * 2);
-    doc.text(lines, margin, y + 12);
+    writeLines(lines, 12);
     doc.setTextColor(0);
-    y += 12 + lines.length * 12 + 10;
+    y += 10;
   }
 
 
