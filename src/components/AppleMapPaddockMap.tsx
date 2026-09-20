@@ -302,7 +302,7 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
       annotationsRef.current = newAnnotations;
     }
 
-    // Manual bounds-based region fit (only on first successful fit)
+    // Fit once on load, then restore vineyard bounds after selection refreshes.
     let bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number } | null = null;
     if (allPts.length) {
       let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
