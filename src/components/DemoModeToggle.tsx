@@ -1,4 +1,4 @@
-import { Eye, EyeOff } from "lucide-react";
+import { EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDemoMode } from "@/context/DemoModeContext";
 import { useIsSystemAdminRaw } from "@/lib/systemAdmin";
