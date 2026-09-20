@@ -117,6 +117,14 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
     () => (selected ? resolvePaddockAllocations(selected.paddock.variety_allocations, varietyMap) : []),
     [selected, varietyMap],
   );
+
+  const irrigationLph = useMemo(() => {
+    if (!selected) return null;
+    const flow = Number(selected.paddock.flow_per_emitter);
+    const emitters = selected.metrics.emitterCount;
+    if (!Number.isFinite(flow) || flow <= 0 || emitters == null || emitters <= 0) return null;
+    return flow * emitters;
+  }, [selected]);
   const lastBoundsRef = useRef<{ minLat: number; maxLat: number; minLng: number; maxLng: number } | null>(null);
   const didFitRef = useRef(false);
 
