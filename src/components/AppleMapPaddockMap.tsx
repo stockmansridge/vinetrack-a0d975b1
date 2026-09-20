@@ -511,7 +511,7 @@ function VarietySummaryBlock({ allocations }: { allocations: ResolvedAllocation[
       </div>
       <div className="space-y-2">
         {allocations.map((a, i) => (
-          <div key={a.id ?? i} className="text-right">
+          <div key={a.id ?? i}>
             <div className="text-sm font-medium">{a.name ?? "Unknown"}</div>
             <div className="text-xs text-muted-foreground">
               {[a.clone, a.rootstock, a.percent != null ? `${a.percent}%` : null]
