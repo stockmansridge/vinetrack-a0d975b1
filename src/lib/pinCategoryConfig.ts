@@ -134,6 +134,13 @@ export interface ConfiguredPinColour {
   source: "launcher_button_id" | "canonical_category" | "normalized_name";
 }
 
+/** Compatibility helper used by older callers; launcher identity is first. */
+export function pinStableKeys(pin: PinColourIdentity): string[] {
+  return [pin.launcher_button_id, pin.category_id, pin.button_id, pin.button_key, pin.category, pin.button_name]
+    .map((value) => normaliseKey(value))
+    .filter((value): value is string => !!value);
+}
+
 /** Current-vineyard configuration match using the mobile precedence contract. */
 export function configuredPinColourMatch(
   pin: PinColourIdentity,

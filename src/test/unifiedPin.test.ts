@@ -105,6 +105,7 @@ describe("unified pin (SQL 170)", () => {
     expect(rowOut.title).toBe("Growth Stage EL23");
     expect(rowOut.button_name).toBe("Growth Stage EL23");
     expect(rowOut.button_color).toBe("darkgreen");
+    expect(rowOut.launcher_button_id).toBe("growth_stage");
     expect(rowOut.growth_stage_code).toBe("EL23");
   });
 
@@ -141,6 +142,7 @@ describe("unified pin (SQL 170)", () => {
     });
     expect(row.mode).toBe("Repairs");
     expect(row.button_name).toBe("Broken Post");
+    expect(row.launcher_button_id).toBe("broken_post");
     expect(row.category_id).toBe("broken_post");
     expect(row.is_completed).toBe(false);
     // The unified workflow never stores a side.
@@ -195,5 +197,17 @@ describe("unified pin (SQL 170)", () => {
     expect(row.mode).toBe("Growth");
     expect(row.growth_stage_code).toBe("EL23");
     expect(row.category_id).toBe("growth_stage");
+  });
+
+  it("retains the exact launcher identity when a deduplicated label changes", () => {
+    const [button] = dedupePinButtons([
+      { id: "powdery_left", launcherButtonId: "launcher-123", name: "Powdery Left", colour: "#FF2D55", growthStageCode: null },
+    ]);
+    const row = buildPinInsertRow(
+      { ...emptyUnifiedPinForm(), pinType: "growth", latitude: -33.1, longitude: 149.2 },
+      { id: "id2", vineyardId: "v1", button },
+    );
+    expect(row.category_id).toBe("powdery");
+    expect(row.launcher_button_id).toBe("launcher-123");
   });
 });

@@ -116,20 +116,47 @@ describe("vineyard-configured category colours", () => {
     expect(pinDisplayStyle({ mode: "Repair" } as any, vineyardA).hex).toBe(GREY);
   });
 
-  it("honours a configured colour for a non-canonical button via its stable id", () => {
-    const p = pin({ category_id: "custom_gate", category: null });
+  it("honours a configured colour for a non-canonical button via its launcher id", () => {
+    const p = pin({ launcher_button_id: "custom_gate", category_id: null, category: null });
     expect(pinDisplayStyle(p as any, vineyardA).hex).toBe("#123456");
   });
 
-  it("joins on stable identifiers, not display text alone", () => {
-    expect(pinStableKeys({ category_id: "Vine_Issue", button_name: "Vine Issue" })).toEqual([
+  it("joins first on launcher identity and keeps exact legacy names", () => {
+    expect(pinStableKeys({ launcher_button_id: "button-7", category_id: "Vine_Issue", button_name: "Vine Issue" })).toEqual([
+      "button_7",
       "vine_issue",
       "vineissue",
     ]);
-    // Same colour whether the pin carries the id or only the legacy name.
+    expect(configuredPinColour({ launcher_button_id: "vine_issue", button_name: "Renamed Vine Alert" }, vineyardA)).toBe("#7B1FA2");
     expect(configuredPinColour({ category_id: "vine_issue" }, vineyardA)).toBe("#7B1FA2");
     expect(configuredPinColour({ button_name: "Vine Issue" }, vineyardA)).toBe("#7B1FA2");
     expect(configuredPinColour({ button_name: "Something Else" }, vineyardA)).toBeNull();
+  });
+
+  it("stable launcher identity survives a configured button rename", () => {
+    const renamed = buildPinCategoryColours([{
+      config_type: "growth_buttons",
+      config_data: [{ id: "powdery-id", name: "Powdery Mildew", color: "pink" }],
+    }]);
+    expect(pinDisplayStyle({
+      mode: "Growth",
+      launcher_button_id: "powdery-id",
+      button_name: "Powdery",
+      button_color: "orange",
+    }, renamed).hex).toBe("#FF2D55");
+  });
+
+  it("current Growth config overrides the historical snapshot", () => {
+    const growth = buildPinCategoryColours([{
+      config_type: "growth_buttons",
+      config_data: [{ id: "powdery", name: "Powdery", color: "pink" }],
+    }]);
+    expect(pinDisplayStyle({ mode: "Growth", button_name: "Powdery", button_color: "orange" }, growth).hex).toBe("#FF2D55");
+  });
+
+  it("uses historical colour only when current configuration cannot resolve", () => {
+    expect(pinDisplayStyle({ mode: "Growth", button_name: "Legacy disease", button_color: "cyan" }, vineyardA).hex).toBe("#32ADE6");
+    expect(pinDisplayStyle({ mode: "Growth", button_name: "Unknown", button_color: "invalid" }, vineyardA).hex).toBe("#34C759");
   });
 
   it("accepts named colours and hex from configuration", () => {
@@ -138,6 +165,18 @@ describe("vineyard-configured category colours", () => {
     expect(parseColourToken("#abc")).toBe("#AABBCC");
     expect(parseColourToken("banana")).toBeNull();
     expect(pinDisplayStyle(pin({ category_id: "broken_post" }) as any, vineyardA).hex).toBe("#AF52DE");
+  });
+
+  it("maps every shared mobile token to its exact hex", () => {
+    expect(Object.fromEntries([
+      "red", "orange", "yellow", "green", "darkgreen", "mint", "teal", "cyan",
+      "blue", "indigo", "purple", "pink", "brown", "gray", "grey", "black", "white",
+    ].map((token) => [token, parseColourToken(token)]))).toEqual({
+      red: "#FF3B30", orange: "#FF9500", yellow: "#FFCC00", green: "#34C759",
+      darkgreen: "#1B7F3B", mint: "#00C7BE", teal: "#30B0C7", cyan: "#32ADE6",
+      blue: "#007AFF", indigo: "#5856D6", purple: "#AF52DE", pink: "#FF2D55",
+      brown: "#A2845E", gray: "#8E8E93", grey: "#8E8E93", black: "#000000", white: "#FFFFFF",
+    });
   });
 
   it("uses the configured label for the category badge when present", () => {
