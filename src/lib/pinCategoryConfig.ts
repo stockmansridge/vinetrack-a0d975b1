@@ -22,6 +22,8 @@ export interface PinCategoryColourMap {
   byCanonicalCategory: Partial<Record<PinCategoryId, string>>;
   /** Exact normalised legacy button name → current configured hex. */
   byNormalizedName: Record<string, string>;
+  /** Exact normalised legacy names separated by Repair/Growth catalogue. */
+  byNormalizedNameByMode: Record<"repair" | "growth", Record<string, string>>;
   /** Configured display label per canonical category, when available. */
   labelByCategory: Partial<Record<PinCategoryId, string>>;
   /** Current configured display label by launcher id/name. */
@@ -33,6 +35,7 @@ export const EMPTY_PIN_CATEGORY_COLOURS: PinCategoryColourMap = {
   byLauncherButtonId: {},
   byCanonicalCategory: {},
   byNormalizedName: {},
+  byNormalizedNameByMode: { repair: {}, growth: {} },
   labelByCategory: {},
   labelByLauncherButtonId: {},
   labelByNormalizedName: {},
@@ -73,6 +76,7 @@ export function buildPinCategoryColours(rows: ButtonConfigRow[] | null | undefin
   const byLauncherButtonId: Record<string, string> = {};
   const byCanonicalCategory: Partial<Record<PinCategoryId, string>> = {};
   const byNormalizedName: Record<string, string> = {};
+  const byNormalizedNameByMode = { repair: {} as Record<string, string>, growth: {} as Record<string, string> };
   const labelByCategory: Partial<Record<PinCategoryId, string>> = {};
   const labelByLauncherButtonId: Record<string, string> = {};
   const labelByNormalizedName: Record<string, string> = {};
@@ -80,6 +84,7 @@ export function buildPinCategoryColours(rows: ButtonConfigRow[] | null | undefin
   for (const row of rows ?? []) {
     const configType = String(row?.config_type ?? "").trim().toLowerCase();
     const isRepairConfig = configType.includes("repair");
+    const configMode = isRepairConfig ? "repair" : configType.includes("growth") ? "growth" : null;
     for (const button of toArray(row?.config_data)) {
       const hex = parseColourToken(firstString(button, COLOUR_FIELDS));
       if (!hex) continue;
@@ -99,6 +104,9 @@ export function buildPinCategoryColours(rows: ButtonConfigRow[] | null | undefin
         byNormalizedName[nameKey] = hex;
         if (name) labelByNormalizedName[nameKey] = name;
       }
+      if (nameKey && configMode && !byNormalizedNameByMode[configMode][nameKey]) {
+        byNormalizedNameByMode[configMode][nameKey] = hex;
+      }
 
       const categoryId = normalisePinCategoryId({ category_id: categoryIdentity, category: name, button_name: name });
       if (isRepairConfig && categoryId !== "unknown" && !byCanonicalCategory[categoryId]) {
@@ -112,6 +120,7 @@ export function buildPinCategoryColours(rows: ButtonConfigRow[] | null | undefin
     byLauncherButtonId,
     byCanonicalCategory,
     byNormalizedName,
+    byNormalizedNameByMode,
     labelByCategory,
     labelByLauncherButtonId,
     labelByNormalizedName,
@@ -171,9 +180,19 @@ export function configuredPinColourMatch(
 
   for (const rawName of [pin.button_name, pin.category]) {
     const nameKey = normaliseKey(rawName);
-    if (nameKey && colours.byNormalizedName[nameKey]) {
+    const pinMode = modeKey === "repair" || modeKey === "repairs"
+      ? "repair"
+      : modeKey === "growth"
+        ? "growth"
+        : null;
+    const matchedHex = nameKey
+      ? pinMode
+        ? colours.byNormalizedNameByMode[pinMode][nameKey]
+        : colours.byNormalizedName[nameKey]
+      : null;
+    if (nameKey && matchedHex) {
       return {
-        hex: colours.byNormalizedName[nameKey],
+        hex: matchedHex,
         label: colours.labelByNormalizedName[nameKey] ?? null,
         source: "normalized_name",
       };
