@@ -15,7 +15,9 @@ import MapSourceBadge from "@/components/MapSourceBadge";
 import "@/components/map/mapChips.css";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import PaddockDetailPanel from "@/components/PaddockDetailPanel";
+import { X } from "lucide-react";
 
 interface Paddock {
   id: string;
@@ -63,6 +65,7 @@ function getParsed(p: Paddock) {
 export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMapProps) {
   const { selectedVineyardId } = useVineyard();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
   const [mapReady, setMapReady] = useState(false);
@@ -103,6 +106,13 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
   const selected = parsed.find((p) => p.paddock.id === selectedId) ?? null;
   const lastBoundsRef = useRef<{ minLat: number; maxLat: number; minLng: number; maxLng: number } | null>(null);
   const didFitRef = useRef(false);
+
+  useEffect(() => {
+    setSelectedId(null);
+    setDetailsOpen(false);
+    didFitRef.current = false;
+    lastBoundsRef.current = null;
+  }, [selectedVineyardId]);
 
   // Init MapKit map
   useEffect(() => {
@@ -183,7 +193,10 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
         }),
         data: { id: p.paddock.id },
       });
-      poly.addEventListener("select", () => setSelectedId(p.paddock.id));
+      poly.addEventListener("select", () => {
+        setSelectedId(p.paddock.id);
+        setDetailsOpen(false);
+      });
       newOverlays.push(poly);
 
       // Row segments — canonical iOS shape uses start/end (parsed) only.
@@ -263,13 +276,17 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
             el.addEventListener("click", (ev) => {
               ev.stopPropagation();
               setSelectedId(id);
+              setDetailsOpen(false);
             });
             return el;
           },
         );
         // Also hook MapKit's own select event
         try {
-          ann.addEventListener?.("select", () => setSelectedId(id));
+          ann.addEventListener?.("select", () => {
+            setSelectedId(id);
+            setDetailsOpen(false);
+          });
         } catch { /* noop */ }
         newAnnotations.push(ann);
       }
@@ -285,7 +302,7 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
       annotationsRef.current = newAnnotations;
     }
 
-    // Manual bounds-based region fit (only on first successful fit)
+    // Fit once on load, then restore vineyard bounds after selection refreshes.
     let bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number } | null = null;
     if (allPts.length) {
       let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
@@ -301,7 +318,7 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
       bounds = lastBoundsRef.current;
     }
 
-    if (bounds && !didFitRef.current && !selectedIdRef.current) {
+    if (bounds && (!didFitRef.current || selectedIdRef.current)) {
       const { minLat, maxLat, minLng, maxLng } = bounds;
       const centerLat = (minLat + maxLat) / 2;
       const centerLng = (minLng + maxLng) / 2;
@@ -365,14 +382,58 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
 
       <div className="space-y-4">
         {selected ? (
-          <PaddockDetailPanel
-            paddock={selected.paddock}
-            metrics={selected.metrics}
-            parsedRowsCount={selected.rows.length}
-            rawRowsCount={Array.isArray(selected.paddock.rows) ? selected.paddock.rows.length : 0}
-            polygonPointCount={selected.polygon.length}
-            onClose={() => setSelectedId(null)}
-          />
+          <Card className="flex h-[600px] min-h-0 flex-col overflow-hidden">
+            <CardHeader className="flex-row items-start justify-between space-y-0 border-b pb-4">
+              <div className="min-w-0">
+                <CardTitle className="truncate text-base">
+                  {selected.paddock.name ?? "Unnamed block"}
+                </CardTitle>
+                <p className="mt-1 text-xs text-muted-foreground">Block summary</p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={() => setSelectedId(null)}
+                aria-label="Close block summary"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="flex min-h-0 flex-1 flex-col pt-5">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
+                <SummaryMetric
+                  label="Area"
+                  value={selected.metrics.areaHa > 0 ? `${selected.metrics.areaHa.toFixed(2)} ha` : "—"}
+                />
+                <SummaryMetric label="Rows" value={selected.metrics.rowCount.toLocaleString()} />
+                <SummaryMetric
+                  label="Total row length"
+                  value={selected.metrics.totalRowLengthM > 0 ? `${Math.round(selected.metrics.totalRowLengthM).toLocaleString()} m` : "—"}
+                />
+                <SummaryMetric
+                  label="Vines"
+                  value={selected.metrics.vineCount != null ? selected.metrics.vineCount.toLocaleString() : "—"}
+                />
+                <SummaryMetric
+                  label="Emitters"
+                  value={selected.metrics.emitterCount != null ? selected.metrics.emitterCount.toLocaleString() : "—"}
+                />
+                <SummaryMetric
+                  label="Vine spacing"
+                  value={selected.paddock.vine_spacing ? `${selected.paddock.vine_spacing} m` : "—"}
+                />
+                <SummaryMetric
+                  label="Row width"
+                  value={selected.paddock.row_width ? `${selected.paddock.row_width} m` : "—"}
+                />
+              </div>
+              <Button type="button" className="mt-5 w-full" onClick={() => setDetailsOpen(true)}>
+                All block details
+              </Button>
+            </CardContent>
+          </Card>
         ) : (
           <Card>
             <CardHeader>
@@ -385,7 +446,7 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
           </Card>
         )}
 
-        {withoutGeometry.length > 0 && (
+        {!selected && withoutGeometry.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">No map boundary</CardTitle>
@@ -401,6 +462,25 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
           </Card>
         )}
       </div>
+      {selected && detailsOpen && (
+        <PaddockDetailPanel
+          paddock={selected.paddock}
+          metrics={selected.metrics}
+          parsedRowsCount={selected.rows.length}
+          rawRowsCount={Array.isArray(selected.paddock.rows) ? selected.paddock.rows.length : 0}
+          polygonPointCount={selected.polygon.length}
+          onClose={() => setDetailsOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function SummaryMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-b pb-3 last:border-b-0">
+      <span className="text-xs uppercase text-muted-foreground">{label}</span>
+      <span className="text-right text-sm font-medium">{value}</span>
     </div>
   );
 }
