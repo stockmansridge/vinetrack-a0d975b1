@@ -70,6 +70,7 @@ import {
 
 import { recoverSprayWeather, weatherProvenanceLabel } from "@/lib/sprayWeatherRecovery";
 import { recoverSprayRowAssignments, rowProvenanceLabel } from "@/lib/sprayRowRecovery";
+import { generateUuid } from "@/lib/uuid";
 import { formatActiveDuration, formatDistance } from "@/lib/sprayReportPdf";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { validateTripEngineHours, type Trip } from "@/lib/tripsQuery";
