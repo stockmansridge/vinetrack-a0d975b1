@@ -737,8 +737,9 @@ function MaintenanceEditor({
         machine_hours: numOrNull(machineHours),
         work_completed: workCompleted.trim() || null,
         parts_used: partsUsed.trim() || null,
-        parts_cost: canSeeCosts ? numOrNull(partsCost) : null,
-        labour_cost: canSeeCosts ? numOrNull(labourCost) : null,
+        // parts_cost / labour_cost are NOT NULL in the shared schema; blank = 0.
+        parts_cost: canSeeCosts ? (numOrNull(partsCost) ?? 0) : 0,
+        labour_cost: canSeeCosts ? (numOrNull(labourCost) ?? 0) : 0,
         is_finalized: finalized,
         user_id: user?.id ?? null,
       });
@@ -771,8 +772,9 @@ function MaintenanceEditor({
         machine_hours: numOrNull(machineHours),
         work_completed: workCompleted.trim() || null,
         parts_used: partsUsed.trim() || null,
-        parts_cost: canSeeCosts ? numOrNull(partsCost) : (editing.parts_cost ?? null),
-        labour_cost: canSeeCosts ? numOrNull(labourCost) : (editing.labour_cost ?? null),
+        // parts_cost / labour_cost are NOT NULL in the shared schema; blank = 0.
+        parts_cost: canSeeCosts ? (numOrNull(partsCost) ?? 0) : (editing.parts_cost ?? 0),
+        labour_cost: canSeeCosts ? (numOrNull(labourCost) ?? 0) : (editing.labour_cost ?? 0),
         is_finalized: finalized,
         was_finalized: !!editing.is_finalized,
         user_id: user?.id ?? null,
