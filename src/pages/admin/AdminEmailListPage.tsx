@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Download, RefreshCw, Trash2, Upload } from "lucide-react";
+import { Download, Pencil, RefreshCw, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   AdminEmpty,
@@ -47,6 +47,8 @@ import {
   useEmailListSubscribers,
   useImportSubscribers,
   useSetSubscriberStatus,
+  useUpdateSubscriber,
+  type EmailListSubscriber,
   type SubscriberStatus,
 } from "@/lib/emailListAdmin";
 
