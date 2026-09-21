@@ -97,14 +97,20 @@ Deno.serve(async (req: Request) => {
     const patch = status === "unsubscribed"
       ? { status, unsubscribed_at: now, updated_at: now }
       : { status, unsubscribed_at: null, subscribed_at: now, updated_at: now };
-    const { data, error } = await admin
-      .from("email_list_subscribers")
-      .update(patch)
-      .eq("id", id)
-      .select(
-        "id, email, first_name, last_name, status, source, source_page, consent_version, subscribed_at, unsubscribed_at, created_at, updated_at",
-      )
-      .maybeSingle();
+    const updateIn = (client: ReturnType<typeof createClient>) =>
+      client
+        .from("email_list_subscribers")
+        .update(patch)
+        .eq("id", id)
+        .select(SUBSCRIBER_COLUMNS)
+        .maybeSingle();
+
+    let { data, error } = await updateIn(admin);
+    if ((error && isMissingTableError(error)) || (!error && !data)) {
+      // Missing table, or an id that only exists in the legacy copy.
+      const fallback = await updateIn(legacy);
+      if (fallback.data || fallback.error) ({ data, error } = fallback);
+    }
     if (error) return jsonError(500, `Could not update the subscriber: ${error.message}`);
     if (!data) return jsonError(404, "Subscriber not found.");
     return json(200, { success: true, subscriber: data });
