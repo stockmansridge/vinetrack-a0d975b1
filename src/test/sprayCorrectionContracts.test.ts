@@ -114,19 +114,19 @@ describe("row assignment recovery", () => {
 
   it("reports plainly when the evidence does not clear the action's thresholds", async () => {
     invoke.mockResolvedValue({ data: { assigned: 0, unresolved: 4 }, error: null });
-    const out = await recoverSprayRowAssignments({ tripId: "t1" });
+    const out = await recoverSprayRowAssignments({ tripId: "t1", operationId: "op-none" });
     expect(out.kind).toBe("none");
     expect(out.message).toBe(ROW_RECOVERY_NO_EVIDENCE);
   });
 
   it("separates a permission refusal from a transient failure", async () => {
     invoke.mockResolvedValue({ data: null, error: { message: "403 not_authorized" } });
-    const denied = await recoverSprayRowAssignments({ tripId: "t1" });
+    const denied = await recoverSprayRowAssignments({ tripId: "t1", operationId: "op-denied" });
     expect(denied.kind).toBe("not_permitted");
     expect(denied.message).toBe(ROW_RECOVERY_NOT_PERMITTED);
 
     invoke.mockResolvedValue({ data: null, error: { message: "boom" } });
-    const failed = await recoverSprayRowAssignments({ tripId: "t1" });
+    const failed = await recoverSprayRowAssignments({ tripId: "t1", operationId: "op-failed" });
     expect(failed.kind).toBe("failed");
     expect(failed.message).toBe(ROW_RECOVERY_FAILED);
   });
