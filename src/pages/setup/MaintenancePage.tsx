@@ -726,6 +726,7 @@ function MaintenanceEditor({
       if (!selectedVineyardId) throw new Error("No vineyard selected");
       if (!itemName.trim()) throw new Error("Item / Machine is required");
       if (!date) throw new Error("Date is required");
+      if (numOrNull(hours) == null) throw new Error("Hours worked is required");
       return createMaintenanceLog({
         vineyard_id: selectedVineyardId,
         item_name: itemName,
@@ -758,6 +759,7 @@ function MaintenanceEditor({
       if (!editing) throw new Error("No record selected");
       if (!itemName.trim()) throw new Error("Item / Machine is required");
       if (!date) throw new Error("Date is required");
+      if (numOrNull(hours) == null) throw new Error("Hours worked is required");
       return updateMaintenanceLog({
         id: editing.id,
         vineyard_id: editing.vineyard_id,
@@ -838,14 +840,14 @@ function MaintenanceEditor({
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Hours worked</Label>
+              <Label>Hours worked *</Label>
               <Input
                 type="number"
                 inputMode="decimal"
                 step="0.1"
                 value={hours}
                 onChange={(e) => setHours(e.target.value)}
-                placeholder="optional"
+                placeholder="e.g. 1.5"
               />
             </div>
             <div className="space-y-1.5 flex flex-col">
