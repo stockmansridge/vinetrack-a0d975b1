@@ -77,6 +77,24 @@ export function useSetSubscriberStatus() {
   });
 }
 
+/** Edit a subscriber's name and email address. */
+export function useUpdateSubscriber() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      id: string;
+      email: string;
+      first_name: string | null;
+      last_name: string | null;
+    }) => {
+      await callAdmin({ action: "update", ...vars });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [...EMAIL_LIST_QK] });
+    },
+  });
+}
+
 export function useBulkSubscriberStatus() {
   const qc = useQueryClient();
   return useMutation({
