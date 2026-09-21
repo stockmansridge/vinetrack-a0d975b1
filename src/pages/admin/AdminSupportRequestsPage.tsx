@@ -517,6 +517,7 @@ export default function AdminSupportRequestsPage() {
                         {cat && (
                           <Badge variant="outline" className="text-[10px]">{categoryLabel(cat)}</Badge>
                         )}
+                        {isWebsiteRequest(r) && <WebsiteBadge />}
                         {attCount > 0 && (
                           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                             <Paperclip className="h-3 w-3" />
