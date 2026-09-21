@@ -141,6 +141,11 @@ export interface BuildReportInput {
   demoRequests: DemoRequestRow[];
   subscribers: SubscriberRow[];
   granularity: Granularity;
+  /**
+   * Normalised emails already seen BEFORE the reporting window. They are
+   * excluded from new_contacts so a contact counts only when first appearing.
+   */
+  priorContacts?: string[];
   /** Local start/end dates (YYYY-MM-DD) used to fill empty periods. */
   fromDay?: string;
   toDay?: string;
@@ -184,6 +189,7 @@ export function buildAnalyticsReport(input: BuildReportInput): AnalyticsReport {
     }
   }
 
+  const prior = new Set((input.priorContacts ?? []).map((e) => normEmail(e)).filter(Boolean));
   const demosByPeriod = new Map<string, number>();
   const contactsByPeriod = new Map<string, Set<string>>();
   const allContacts = new Set<string>();
@@ -196,7 +202,7 @@ export function buildAnalyticsReport(input: BuildReportInput): AnalyticsReport {
     demosByPeriod.set(key, (demosByPeriod.get(key) ?? 0) + 1);
     demoTotal += 1;
     const email = normEmail(row.submitter_email);
-    if (email) {
+    if (email && !prior.has(email)) {
       if (!contactsByPeriod.has(key)) contactsByPeriod.set(key, new Set());
       contactsByPeriod.get(key)!.add(email);
       allContacts.add(email);
@@ -215,7 +221,7 @@ export function buildAnalyticsReport(input: BuildReportInput): AnalyticsReport {
     subsByPeriod.set(key, (subsByPeriod.get(key) ?? 0) + 1);
     subTotal += 1;
     const email = normEmail(row.email);
-    if (email) {
+    if (email && !prior.has(email)) {
       if (!contactsByPeriod.has(key)) contactsByPeriod.set(key, new Set());
       contactsByPeriod.get(key)!.add(email);
       allContacts.add(email);
