@@ -52,6 +52,7 @@ interface SupportRequestRow {
   browser_info?: string | null;
   app_version?: string | null;
   platform?: string | null;
+  app_platform?: string | null;
   device?: string | null;
   os_version?: string | null;
   email_status?: string | null;
@@ -62,6 +63,27 @@ interface SupportRequestRow {
 }
 
 const STATUS_OPTIONS = ["new", "open", "in_progress", "resolved", "closed"] as const;
+
+/** Public-website enquiries are submitted anonymously via `website-enquiry`. */
+function isWebsiteRequest(r: SupportRequestRow): boolean {
+  const platform = (r.app_platform ?? r.platform ?? "").toLowerCase();
+  const category = (r.category ?? r.request_type ?? "").toLowerCase();
+  return platform === "website" || category.startsWith("website");
+}
+
+/** Friendly label for the category badge/filter (e.g. website_demo). */
+function categoryLabel(value: string): string {
+  if (value === "website_demo") return "Website Demo";
+  return value;
+}
+
+function WebsiteBadge() {
+  return (
+    <Badge className="text-[10px] bg-sky-500/15 text-sky-600 border border-sky-500/30 hover:bg-sky-500/15">
+      Website
+    </Badge>
+  );
+}
 
 function statusClass(s: string | null | undefined) {
   switch ((s ?? "").toLowerCase()) {
