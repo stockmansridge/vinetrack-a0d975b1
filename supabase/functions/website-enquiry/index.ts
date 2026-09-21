@@ -65,12 +65,30 @@ Deno.serve(async (req: Request) => {
     return jsonFor(origin, 503, { ok: false, error: "This form is temporarily unavailable." });
   }
 
+  const cloud = createClient(CLOUD_URL, CLOUD_SERVICE, { auth: { persistSession: false } });
+  const vinetrack = createClient(VT_URL, VT_SERVICE, { auth: { persistSession: false } });
+
+  // Server-side backstop: CORS and the honeypot do not constrain direct HTTP
+  // callers. Conservative enough that a genuine visitor never sees it.
+  const limit = await checkRateLimit(cloud, req, {
+    form: "website-enquiry",
+    limit: 8,
+    windowSeconds: 900,
+  });
+  if (!limit.allowed) {
+    return jsonFor(origin, 429, {
+      ok: false,
+      error: "Too many attempts. Please try again in a few minutes.",
+    });
+  }
+
   let body: Record<string, unknown> = {};
   try {
     body = (await req.json()) as Record<string, unknown>;
   } catch {
     return jsonFor(origin, 400, { ok: false, error: "Invalid request." });
   }
+
 
   // Silently accept and discard honeypot spam.
   if (honeypotTripped(body)) {
