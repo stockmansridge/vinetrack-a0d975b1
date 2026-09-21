@@ -36,9 +36,10 @@ Deno.serve(async (req: Request) => {
 
   const VT_URL = Deno.env.get("VINETRACK_SUPABASE_URL");
   const VT_ANON = Deno.env.get("VINETRACK_ANON_KEY");
+  const VT_SERVICE = Deno.env.get("VINETRACK_SERVICE_ROLE_KEY");
   const CLOUD_URL = Deno.env.get("SUPABASE_URL");
   const CLOUD_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!VT_URL || !VT_ANON || !CLOUD_URL || !CLOUD_SERVICE) {
+  if (!VT_URL || !VT_ANON || !VT_SERVICE || !CLOUD_URL || !CLOUD_SERVICE) {
     return jsonError(503, "Backend is not configured.");
   }
 
