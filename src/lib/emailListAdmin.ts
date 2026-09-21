@@ -36,7 +36,7 @@ async function callAdmin(body: Record<string, unknown>) {
   const token = sessionData.session?.access_token;
   if (!token) throw new Error("Your session has expired — please sign in again.");
 
-  const { data, error } = await cloudSupabase.functions.invoke("admin-email-list", {
+  const { data, error } = await functionsHost.functions.invoke("admin-email-list", {
     body,
     headers: { "x-vinetrack-token": token },
   });

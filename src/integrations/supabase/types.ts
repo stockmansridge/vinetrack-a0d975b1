@@ -347,6 +347,36 @@ export type Database = {
         }
         Relationships: []
       }
+      public_form_rate_limits: {
+        Row: {
+          created_at: string
+          form: string
+          id: string
+          key_hash: string
+          request_count: number
+          updated_at: string
+          window_started_at: string
+        }
+        Insert: {
+          created_at?: string
+          form: string
+          id?: string
+          key_hash: string
+          request_count?: number
+          updated_at?: string
+          window_started_at: string
+        }
+        Update: {
+          created_at?: string
+          form?: string
+          id?: string
+          key_hash?: string
+          request_count?: number
+          updated_at?: string
+          window_started_at?: string
+        }
+        Relationships: []
+      }
       satellite_backfill_jobs: {
         Row: {
           auto_scheduled: boolean
