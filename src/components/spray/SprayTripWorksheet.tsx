@@ -366,14 +366,30 @@ export default function SprayTripWorksheet({
   });
 
 
+  // One press of "Recover row and block matches" is one logical attempt with
+  // exactly one operationId. An uncertain (failed) retry of that same attempt
+  // reuses the id so the backend can de-duplicate; a definitive outcome ends
+  // the attempt and the next press generates a fresh id.
+  const rowRecoveryOpRef = useRef<string | null>(null);
   const recoverRows = useMutation({
-    mutationFn: () => recoverSprayRowAssignments({ tripId }),
+    retry: false,
+    mutationFn: () => {
+      if (!rowRecoveryOpRef.current) rowRecoveryOpRef.current = generateUuid();
+      return recoverSprayRowAssignments({ tripId, operationId: rowRecoveryOpRef.current });
+    },
     onSuccess: async (outcome) => {
       setRowNote(outcome.message);
       setRowDiagnostic(outcome.kind === "failed" ? outcome.diagnostic : null);
+      // Definitive outcomes close the attempt; only an uncertain failure keeps
+      // the operationId for a deliberate retry of the same attempt.
+      if (outcome.kind !== "failed") rowRecoveryOpRef.current = null;
       if (outcome.kind === "recovered") {
         await qc.invalidateQueries({ queryKey: sprayReportQueryKey(tripId) });
       }
+    },
+    onError: () => {
+      // Uncertain — keep the operationId so a manual retry stays the same
+      // logical attempt.
     },
   });
 
