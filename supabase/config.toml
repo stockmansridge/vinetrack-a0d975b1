@@ -87,3 +87,9 @@ verify_jwt = false
 
 [functions.admin-email-list]
 verify_jwt = false
+
+[functions.website-analytics]
+verify_jwt = false
+
+[functions.admin-website-analytics]
+verify_jwt = false
