@@ -12,13 +12,17 @@
 //      the VineTrack project (category = website_demo, app_platform = website,
 //      email_status = pending) using the VineTrack service role. This record is
 //      authoritative and is never rolled back because of an email failure.
-//   3. Send the staff notification and the visitor receipt through the managed
-//      email service. If the staff notification fails the record is left at
-//      email_status = pending so the existing sync-support-request-emails cron
-//      retries it.
-//   4. When marketing_opt_in is explicitly true, also add the submitter to
-//      public.email_list_subscribers (source = website_demo_opt_in). Without
-//      explicit consent the submitter is never added to the marketing list.
+//   3. Return success to the browser as soon as the durable record exists.
+//      The staff notification, the visitor receipt, the email_status
+//      bookkeeping and the marketing opt-in are finished in the background
+//      (EdgeRuntime.waitUntil) so the public form is not held open for the
+//      email round-trips. If the staff notification fails the record is left
+//      at email_status = pending so the existing sync-support-request-emails
+//      cron retries it — unchanged retry behaviour.
+//   4. When marketing_opt_in is explicitly true, also add the submitter to the
+//      canonical VineTrack public.email_list_subscribers (source =
+//      website_demo_opt_in). Without explicit consent the submitter is never
+//      added to the marketing list.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import {
   cleanText,
@@ -28,9 +32,11 @@ import {
   jsonFor,
   normaliseEmail,
 } from "../_shared/website-public.ts";
-import { upsertSubscriber } from "../_shared/email-list.ts";
+import { upsertSubscriberCanonical } from "../_shared/email-list.ts";
+import { checkRateLimit } from "../_shared/public-rate-limit.ts";
 import { sendTemplateEmail } from "../_shared/transactional-email-templates/send-email.ts";
 import { logEmailSend } from "../_shared/email-send-log.ts";
+
 
 
 const CATEGORY = "website_demo";
@@ -59,12 +65,27 @@ Deno.serve(async (req: Request) => {
     return jsonFor(origin, 503, { ok: false, error: "This form is temporarily unavailable." });
   }
 
+  const cloud = createClient(CLOUD_URL, CLOUD_SERVICE, { auth: { persistSession: false } });
+  const vinetrack = createClient(VT_URL, VT_SERVICE, { auth: { persistSession: false } });
+
+  // Server-side backstop: CORS and the honeypot do not constrain direct HTTP
+  // callers. Conservative enough that a genuine visitor never sees it. Started
+  // here and awaited before anything is written, so its round-trip overlaps
+  // request parsing and validation.
+  const limitPromise = checkRateLimit(cloud, req, {
+    form: "website-enquiry",
+    limit: 8,
+    windowSeconds: 900,
+  });
+
+
   let body: Record<string, unknown> = {};
   try {
     body = (await req.json()) as Record<string, unknown>;
   } catch {
     return jsonFor(origin, 400, { ok: false, error: "Invalid request." });
   }
+
 
   // Silently accept and discard honeypot spam.
   if (honeypotTripped(body)) {
@@ -116,34 +137,49 @@ Deno.serve(async (req: Request) => {
   ].filter(Boolean);
   const storedMessage = `${message}\n\n---\n${contextLines.join("\n")}`;
 
-  const vinetrack = createClient(VT_URL, VT_SERVICE, { auth: { persistSession: false } });
-
   // Rapid duplicate guard — same address, same category, within the window.
-  try {
-    const since = new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString();
-    const recent = await vinetrack
-      .from("support_requests")
-      .select("id, message")
-      .eq("category", CATEGORY)
-      .ilike("submitter_email", email)
-      .gte("created_at", since)
-      .limit(5);
-    if (!recent.error) {
-      const dup = (recent.data ?? []).find(
-        (r) => typeof (r as { message?: string }).message === "string" &&
-          (r as { message: string }).message.startsWith(message),
-      );
-      if (dup) {
-        return jsonFor(origin, 200, {
-          ok: true,
-          id: (dup as { id: string }).id,
-          message: "Thanks — we've already received your enquiry and will be in touch.",
-        });
-      }
-    }
-  } catch (e) {
-    console.error("website-enquiry duplicate check failed", e);
+  // Runs alongside the rate-limit round-trip; both are awaited before the
+  // enquiry is written.
+  const since = new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString();
+  const duplicatePromise = vinetrack
+    .from("support_requests")
+    .select("id, message")
+    .eq("category", CATEGORY)
+    .ilike("submitter_email", email)
+    .gte("created_at", since)
+    .limit(5);
+
+  const [limit, recent] = await Promise.all([
+    limitPromise,
+    duplicatePromise.then(
+      (r) => r,
+      (e) => {
+        console.error("website-enquiry duplicate check failed", e);
+        return { data: null, error: e } as { data: null; error: unknown };
+      },
+    ),
+  ]);
+
+  if (!limit.allowed) {
+    return jsonFor(origin, 429, {
+      ok: false,
+      error: "Too many attempts. Please try again in a few minutes.",
+    });
   }
+
+  if (!recent.error) {
+    const dup = ((recent.data ?? []) as Array<{ id: string; message?: string }>).find(
+      (r) => typeof r.message === "string" && r.message.startsWith(message),
+    );
+    if (dup) {
+      return jsonFor(origin, 200, {
+        ok: true,
+        id: dup.id,
+        message: "Thanks — we've already received your enquiry and will be in touch.",
+      });
+    }
+  }
+
 
   // Durable record first — the DB row is authoritative.
   const insert = await vinetrack
@@ -174,9 +210,8 @@ Deno.serve(async (req: Request) => {
   const submittedAt = (insert.data as { created_at?: string }).created_at ??
     new Date().toISOString();
 
-  const cloud = createClient(CLOUD_URL, CLOUD_SERVICE, { auth: { persistSession: false } });
-
   // Sends through Lovable's managed email API. Suppression, retries and rate
+
   // limits are enforced server-side; a suppressed recipient is an expected
   // outcome, not a failure.
   async function sendTemplate(
@@ -214,68 +249,91 @@ Deno.serve(async (req: Request) => {
   }
 
 
-  // Staff notification — existing shared support_request template/recipient.
-  const staff = await sendTemplate(
-    STAFF_TEMPLATE,
-    STAFF_FALLBACK_RECIPIENT,
-    `support_request:${requestId}`,
-    {
-      request_type: CATEGORY,
-      subject: `WEBSITE DEMO REQUEST — ${fullName}`,
-      message:
-        `${message}\n\nName: ${fullName}\nEmail: ${email}\nPhone: ${phone || "—"}\n` +
-        `Source page: ${sourcePage}\nSubmitted: ${submittedAt}\nSupport Request ID: ${requestId}`,
-      request_id: requestId,
-      user_name: fullName,
-      user_email: email,
-      user_role: "website visitor",
-      vineyard_name: null,
-      vineyard_id: null,
-      page_path: sourcePage,
-      browser_info: browserInfo || null,
-      attachments: [],
-      admin_url: `${ADMIN_BASE}/${requestId}`,
-    },
-  );
+  // ---------------------------------------------------------------------
+  // Post-persistence work. The enquiry row is already durable and
+  // authoritative, so none of this can lose it and the public browser is not
+  // held open for the email round-trips. email_status / email_error
+  // bookkeeping and the existing sync-support-request-emails retry behaviour
+  // are unchanged.
+  // ---------------------------------------------------------------------
+  async function finishEnquiry(): Promise<void> {
+    // Staff notification — existing shared support_request template/recipient.
+    const staff = await sendTemplate(
+      STAFF_TEMPLATE,
+      STAFF_FALLBACK_RECIPIENT,
+      `support_request:${requestId}`,
+      {
+        request_type: CATEGORY,
+        subject: `WEBSITE DEMO REQUEST — ${fullName}`,
+        message:
+          `${message}\n\nName: ${fullName}\nEmail: ${email}\nPhone: ${phone || "—"}\n` +
+          `Source page: ${sourcePage}\nSubmitted: ${submittedAt}\nSupport Request ID: ${requestId}`,
+        request_id: requestId,
+        user_name: fullName,
+        user_email: email,
+        user_role: "website visitor",
+        vineyard_name: null,
+        vineyard_id: null,
+        page_path: sourcePage,
+        browser_info: browserInfo || null,
+        attachments: [],
+        admin_url: `${ADMIN_BASE}/${requestId}`,
+      },
+    );
 
-  // Visitor receipt — no admin links, no private information.
-  const receipt = await sendTemplate(
-    RECEIPT_TEMPLATE,
-    email,
-    `website_enquiry_receipt:${requestId}`,
-    { first_name: firstName },
-  );
+    // Visitor receipt — no admin links, no private information.
+    const receipt = await sendTemplate(
+      RECEIPT_TEMPLATE,
+      email,
+      `website_enquiry_receipt:${requestId}`,
+      { first_name: firstName },
+    );
 
-  if (!staff.ok) console.error("website-enquiry staff email failed", staff.error);
-  if (!receipt.ok) console.error("website-enquiry receipt email failed", receipt.error);
+    if (!staff.ok) console.error("website-enquiry staff email failed", staff.error);
+    if (!receipt.ok) console.error("website-enquiry receipt email failed", receipt.error);
 
-  // Email status bookkeeping only — never undo the saved enquiry. A failed
-  // staff notification stays "pending" so the existing retry cron picks it up.
-  try {
-    const patch: Record<string, unknown> = staff.ok
-      ? {
-        email_status: staff.suppressed ? "suppressed" : "sent",
-        email_sent_at: staff.suppressed ? null : new Date().toISOString(),
-        email_error: receipt.ok ? null : `receipt: ${receipt.error}`,
-      }
-      : { email_status: "pending", email_error: `staff: ${staff.error}`.slice(0, 1000) };
+    // Email status bookkeeping only — never undo the saved enquiry. A failed
+    // staff notification stays "pending" so the existing retry cron picks it up.
+    try {
+      const patch: Record<string, unknown> = staff.ok
+        ? {
+          email_status: staff.suppressed ? "suppressed" : "sent",
+          email_sent_at: staff.suppressed ? null : new Date().toISOString(),
+          email_error: receipt.ok ? null : `receipt: ${receipt.error}`,
+        }
+        : { email_status: "pending", email_error: `staff: ${staff.error}`.slice(0, 1000) };
 
-    await vinetrack.from("support_requests").update(patch).eq("id", requestId);
-  } catch (e) {
-    console.error("website-enquiry email status update failed", e);
+      await vinetrack.from("support_requests").update(patch).eq("id", requestId);
+    } catch (e) {
+      console.error("website-enquiry email status update failed", e);
+    }
+
+    // Marketing list — canonical VineTrack store, only with explicit consent.
+    if (marketingOptIn) {
+      const sub = await upsertSubscriberCanonical(vinetrack, cloud, {
+        email,
+        first_name: firstName,
+        last_name: lastName,
+        source: "website_demo_opt_in",
+        source_page: sourcePage,
+        consent_text: consentText || null,
+        consent_version: consentVersion || null,
+      });
+      if (!sub.ok) console.error("website-enquiry subscriber upsert failed", sub.error);
+    }
   }
 
-  if (marketingOptIn) {
-    const sub = await upsertSubscriber(cloud, {
-      email,
-      first_name: firstName,
-      last_name: lastName,
-      source: "website_demo_opt_in",
-      source_page: sourcePage,
-      consent_text: consentText || null,
-      consent_version: consentVersion || null,
-    });
-    if (!sub.ok) console.error("website-enquiry subscriber upsert failed", sub.error);
+  const background = finishEnquiry().catch((e) => {
+    console.error("website-enquiry background work failed", e);
+  });
+  const waitUntil = (globalThis as {
+    EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void };
+  }).EdgeRuntime?.waitUntil;
+  if (typeof waitUntil === "function") {
+    waitUntil(background);
+  } else {
+    // No background support in this runtime — correctness before speed.
+    await background;
   }
 
   return jsonFor(origin, 200, {
