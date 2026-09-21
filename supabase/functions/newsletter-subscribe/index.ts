@@ -1,10 +1,12 @@
 // PUBLIC newsletter subscribe endpoint for the VineTrack marketing website.
 // Anonymous; CORS restricted to the VineTrack website origins (plus Lovable
-// preview/localhost during development).
+// preview/localhost during development), plus a conservative server-side rate
+// limit because direct HTTP callers ignore CORS and the honeypot.
 //
 // Collects and manages the list only — no campaign or marketing email is sent
-// from here. Writes go through the service role: the website never touches
-// public.email_list_subscribers directly.
+// from here. Writes go through the VineTrack service role into the canonical
+// VineTrack public.email_list_subscribers: the website never touches the table
+// directly.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import {
   cleanText,
@@ -14,7 +16,8 @@ import {
   jsonFor,
   normaliseEmail,
 } from "../_shared/website-public.ts";
-import { upsertSubscriber } from "../_shared/email-list.ts";
+import { upsertSubscriberCanonical } from "../_shared/email-list.ts";
+import { checkRateLimit } from "../_shared/public-rate-limit.ts";
 
 const OK_MESSAGE = "You're subscribed to VineTrack updates.";
 
@@ -29,9 +32,26 @@ Deno.serve(async (req: Request) => {
 
   const CLOUD_URL = Deno.env.get("SUPABASE_URL");
   const CLOUD_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!CLOUD_URL || !CLOUD_SERVICE) {
+  const VT_URL = Deno.env.get("VINETRACK_SUPABASE_URL");
+  const VT_SERVICE = Deno.env.get("VINETRACK_SERVICE_ROLE_KEY");
+  if (!CLOUD_URL || !CLOUD_SERVICE || !VT_URL || !VT_SERVICE) {
     console.error("newsletter-subscribe missing configuration");
     return jsonFor(origin, 503, { ok: false, error: "This form is temporarily unavailable." });
+  }
+
+  const cloud = createClient(CLOUD_URL, CLOUD_SERVICE, { auth: { persistSession: false } });
+  const vinetrack = createClient(VT_URL, VT_SERVICE, { auth: { persistSession: false } });
+
+  const limit = await checkRateLimit(cloud, req, {
+    form: "newsletter-subscribe",
+    limit: 10,
+    windowSeconds: 900,
+  });
+  if (!limit.allowed) {
+    return jsonFor(origin, 429, {
+      ok: false,
+      error: "Too many attempts. Please try again in a few minutes.",
+    });
   }
 
   let body: Record<string, unknown> = {};
@@ -57,8 +77,7 @@ Deno.serve(async (req: Request) => {
     return jsonFor(origin, 400, { ok: false, error: "Please enter a valid email address." });
   }
 
-  const cloud = createClient(CLOUD_URL, CLOUD_SERVICE, { auth: { persistSession: false } });
-  const result = await upsertSubscriber(cloud, {
+  const result = await upsertSubscriberCanonical(vinetrack, cloud, {
     email,
     first_name: firstName || null,
     last_name: lastName || null,

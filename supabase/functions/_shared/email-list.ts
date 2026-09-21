@@ -1,4 +1,10 @@
-// Canonical upsert for public.email_list_subscribers (Lovable Cloud project).
+// Canonical upsert for public.email_list_subscribers.
+//
+// The authoritative subscriber store is the canonical VineTrack database
+// (alongside public.support_requests) — see sql/242_email_list_subscribers.sql.
+// The Portal's own project holds a legacy copy of the table from the first
+// round of this feature; it is only used as a temporary fallback until the
+// canonical table is live, and is retired afterwards.
 //
 // One row per email address, matched case-insensitively. Re-subscribing an
 // unsubscribed address restores it instead of creating a duplicate.
@@ -16,6 +22,20 @@ export interface SubscriberInput {
 
 export type SubscriberOutcome = "created" | "updated";
 
+export const SUBSCRIBER_COLUMNS =
+  "id, email, first_name, last_name, status, source, source_page, consent_version, subscribed_at, unsubscribed_at, created_at, updated_at";
+
+/** PostgREST / Postgres codes meaning "this table does not exist here". */
+export function isMissingTableError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  if (error.code === "PGRST205" || error.code === "PGRST200" || error.code === "42P01") return true;
+  return /could not find the table/i.test(error.message ?? "");
+}
+
+export type UpsertResult =
+  | { ok: true; outcome: SubscriberOutcome }
+  | { ok: false; error: string; missingTable: boolean };
+
 /**
  * Insert or restore a subscriber. Never reveals to the caller whether the
  * address already existed — that is the caller's responsibility.
@@ -23,7 +43,7 @@ export type SubscriberOutcome = "created" | "updated";
 export async function upsertSubscriber(
   admin: SupabaseClient,
   input: SubscriberInput,
-): Promise<{ ok: true; outcome: SubscriberOutcome } | { ok: false; error: string }> {
+): Promise<UpsertResult> {
   const now = new Date().toISOString();
   const patch = {
     email: input.email,
@@ -44,7 +64,13 @@ export async function upsertSubscriber(
     .ilike("email", input.email)
     .maybeSingle();
 
-  if (existing.error) return { ok: false, error: existing.error.message };
+  if (existing.error) {
+    return {
+      ok: false,
+      error: existing.error.message,
+      missingTable: isMissingTableError(existing.error),
+    };
+  }
 
   if (existing.data) {
     const row = existing.data as { id: string; first_name: string | null; last_name: string | null };
@@ -58,7 +84,7 @@ export async function upsertSubscriber(
       .from("email_list_subscribers")
       .update(update)
       .eq("id", row.id);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: error.message, missingTable: isMissingTableError(error) };
     return { ok: true, outcome: "updated" };
   }
 
@@ -76,10 +102,35 @@ export async function upsertSubscriber(
         .from("email_list_subscribers")
         .update(patch)
         .ilike("email", input.email);
-      if (error) return { ok: false, error: error.message };
+      if (error) return { ok: false, error: error.message, missingTable: isMissingTableError(error) };
       return { ok: true, outcome: "updated" };
     }
-    return { ok: false, error: insert.error.message };
+    return {
+      ok: false,
+      error: insert.error.message,
+      missingTable: isMissingTableError(insert.error),
+    };
   }
   return { ok: true, outcome: "created" };
+}
+
+/**
+ * Write to the canonical VineTrack list. While sql/242 is not yet applied to
+ * the canonical database, fall back to the legacy Portal-project table so no
+ * genuine subscriber is ever lost during the cutover window.
+ */
+export async function upsertSubscriberCanonical(
+  canonical: SupabaseClient,
+  legacy: SupabaseClient | null,
+  input: SubscriberInput,
+): Promise<UpsertResult & { store: "vinetrack" | "legacy" }> {
+  const primary = await upsertSubscriber(canonical, input);
+  if (primary.ok) return { ...primary, store: "vinetrack" };
+  if (!primary.missingTable || !legacy) return { ...primary, store: "vinetrack" };
+
+  console.error(
+    "email_list_subscribers missing on the canonical VineTrack project — apply sql/242; using legacy table",
+  );
+  const fallback = await upsertSubscriber(legacy, input);
+  return { ...fallback, store: "legacy" };
 }
