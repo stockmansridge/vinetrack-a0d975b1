@@ -110,6 +110,57 @@ export type Database = {
         }
         Relationships: []
       }
+      email_list_subscribers: {
+        Row: {
+          consent_captured_at: string | null
+          consent_text: string | null
+          consent_version: string | null
+          created_at: string
+          email: string
+          first_name: string | null
+          id: string
+          last_name: string | null
+          source: string
+          source_page: string | null
+          status: string
+          subscribed_at: string
+          unsubscribed_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          consent_captured_at?: string | null
+          consent_text?: string | null
+          consent_version?: string | null
+          created_at?: string
+          email: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          source: string
+          source_page?: string | null
+          status?: string
+          subscribed_at?: string
+          unsubscribed_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          consent_captured_at?: string | null
+          consent_text?: string | null
+          consent_version?: string | null
+          created_at?: string
+          email?: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          source?: string
+          source_page?: string | null
+          status?: string
+          subscribed_at?: string
+          unsubscribed_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       email_send_log: {
         Row: {
           created_at: string
