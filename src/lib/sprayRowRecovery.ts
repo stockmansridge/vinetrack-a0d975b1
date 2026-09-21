@@ -5,7 +5,6 @@
 // a row identity or a confidence score, and never rewrites evidence: it asks
 // the action to run for a trip and reports the outcome plainly.
 import { supabase } from "@/integrations/ios-supabase/client";
-import { generateUuid } from "@/lib/uuid";
 import type { SprayReportRow } from "@/lib/sprayReportV1";
 
 export type RowAssignmentSource =
@@ -37,14 +36,19 @@ export interface RowRecoveryResponse {
 /**
  * Ask the authorised recovery action to attribute rows to blocks for a trip.
  * The action derives and validates the evidence; nothing is generated here.
+ *
+ * The caller must supply the operationId for the logical attempt: one press of
+ * the recovery control creates exactly one id, an uncertain retry of that same
+ * attempt reuses it, and only a new deliberate attempt creates a new id. The
+ * backend does not generate one.
  */
 export async function recoverSprayRowAssignments(input: {
   tripId: string;
-  operationId?: string;
+  operationId: string;
 }): Promise<RowRecoveryOutcome> {
   try {
     const { data, error } = await supabase.functions.invoke("spray-row-recovery", {
-      body: { tripId: input.tripId, operationId: input.operationId ?? generateUuid() },
+      body: { tripId: input.tripId, operationId: input.operationId },
     });
     if (error) {
       const msg = error.message ?? "";
