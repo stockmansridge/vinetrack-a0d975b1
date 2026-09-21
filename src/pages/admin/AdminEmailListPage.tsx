@@ -79,6 +79,44 @@ export default function AdminEmailListPage() {
   const bulkMut = useBulkSubscriberStatus();
   const deleteMut = useDeleteSubscribers();
   const importMut = useImportSubscribers();
+  const updateMut = useUpdateSubscriber();
+
+  const [editing, setEditing] = useState<EmailListSubscriber | null>(null);
+  const [editEmail, setEditEmail] = useState("");
+  const [editFirst, setEditFirst] = useState("");
+  const [editLast, setEditLast] = useState("");
+
+  const openEdit = (row: EmailListSubscriber) => {
+    setEditing(row);
+    setEditEmail(row.email ?? "");
+    setEditFirst(row.first_name ?? "");
+    setEditLast(row.last_name ?? "");
+  };
+
+  const saveEdit = () => {
+    if (!editing) return;
+    const email = editEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      toast.error("Enter a valid email address.");
+      return;
+    }
+    updateMut.mutate(
+      {
+        id: editing.id,
+        email,
+        first_name: editFirst.trim() || null,
+        last_name: editLast.trim() || null,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Details updated");
+          setEditing(null);
+        },
+        onError: (e) =>
+          toast.error(e instanceof Error ? e.message : "Could not update the details."),
+      },
+    );
+  };
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
@@ -379,16 +417,26 @@ export default function AdminEmailListPage() {
                       <td className="px-3 py-2 text-xs">{formatDate(r.subscribed_at)}</td>
                       <td className="px-3 py-2 text-xs">{formatDate(r.unsubscribed_at)}</td>
                       <td className="px-3 py-2 text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={statusMut.isPending}
-                          onClick={() =>
-                            changeStatus(r.id, isSubscribed ? "unsubscribed" : "subscribed")
-                          }
-                        >
-                          {isSubscribed ? "Unsubscribe" : "Resubscribe"}
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEdit(r)}
+                            aria-label={`Edit ${r.email}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={statusMut.isPending}
+                            onClick={() =>
+                              changeStatus(r.id, isSubscribed ? "unsubscribed" : "subscribed")
+                            }
+                          >
+                            {isSubscribed ? "Unsubscribe" : "Resubscribe"}
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
