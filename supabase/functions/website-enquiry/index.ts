@@ -235,68 +235,91 @@ Deno.serve(async (req: Request) => {
   }
 
 
-  // Staff notification — existing shared support_request template/recipient.
-  const staff = await sendTemplate(
-    STAFF_TEMPLATE,
-    STAFF_FALLBACK_RECIPIENT,
-    `support_request:${requestId}`,
-    {
-      request_type: CATEGORY,
-      subject: `WEBSITE DEMO REQUEST — ${fullName}`,
-      message:
-        `${message}\n\nName: ${fullName}\nEmail: ${email}\nPhone: ${phone || "—"}\n` +
-        `Source page: ${sourcePage}\nSubmitted: ${submittedAt}\nSupport Request ID: ${requestId}`,
-      request_id: requestId,
-      user_name: fullName,
-      user_email: email,
-      user_role: "website visitor",
-      vineyard_name: null,
-      vineyard_id: null,
-      page_path: sourcePage,
-      browser_info: browserInfo || null,
-      attachments: [],
-      admin_url: `${ADMIN_BASE}/${requestId}`,
-    },
-  );
+  // ---------------------------------------------------------------------
+  // Post-persistence work. The enquiry row is already durable and
+  // authoritative, so none of this can lose it and the public browser is not
+  // held open for the email round-trips. email_status / email_error
+  // bookkeeping and the existing sync-support-request-emails retry behaviour
+  // are unchanged.
+  // ---------------------------------------------------------------------
+  async function finishEnquiry(): Promise<void> {
+    // Staff notification — existing shared support_request template/recipient.
+    const staff = await sendTemplate(
+      STAFF_TEMPLATE,
+      STAFF_FALLBACK_RECIPIENT,
+      `support_request:${requestId}`,
+      {
+        request_type: CATEGORY,
+        subject: `WEBSITE DEMO REQUEST — ${fullName}`,
+        message:
+          `${message}\n\nName: ${fullName}\nEmail: ${email}\nPhone: ${phone || "—"}\n` +
+          `Source page: ${sourcePage}\nSubmitted: ${submittedAt}\nSupport Request ID: ${requestId}`,
+        request_id: requestId,
+        user_name: fullName,
+        user_email: email,
+        user_role: "website visitor",
+        vineyard_name: null,
+        vineyard_id: null,
+        page_path: sourcePage,
+        browser_info: browserInfo || null,
+        attachments: [],
+        admin_url: `${ADMIN_BASE}/${requestId}`,
+      },
+    );
 
-  // Visitor receipt — no admin links, no private information.
-  const receipt = await sendTemplate(
-    RECEIPT_TEMPLATE,
-    email,
-    `website_enquiry_receipt:${requestId}`,
-    { first_name: firstName },
-  );
+    // Visitor receipt — no admin links, no private information.
+    const receipt = await sendTemplate(
+      RECEIPT_TEMPLATE,
+      email,
+      `website_enquiry_receipt:${requestId}`,
+      { first_name: firstName },
+    );
 
-  if (!staff.ok) console.error("website-enquiry staff email failed", staff.error);
-  if (!receipt.ok) console.error("website-enquiry receipt email failed", receipt.error);
+    if (!staff.ok) console.error("website-enquiry staff email failed", staff.error);
+    if (!receipt.ok) console.error("website-enquiry receipt email failed", receipt.error);
 
-  // Email status bookkeeping only — never undo the saved enquiry. A failed
-  // staff notification stays "pending" so the existing retry cron picks it up.
-  try {
-    const patch: Record<string, unknown> = staff.ok
-      ? {
-        email_status: staff.suppressed ? "suppressed" : "sent",
-        email_sent_at: staff.suppressed ? null : new Date().toISOString(),
-        email_error: receipt.ok ? null : `receipt: ${receipt.error}`,
-      }
-      : { email_status: "pending", email_error: `staff: ${staff.error}`.slice(0, 1000) };
+    // Email status bookkeeping only — never undo the saved enquiry. A failed
+    // staff notification stays "pending" so the existing retry cron picks it up.
+    try {
+      const patch: Record<string, unknown> = staff.ok
+        ? {
+          email_status: staff.suppressed ? "suppressed" : "sent",
+          email_sent_at: staff.suppressed ? null : new Date().toISOString(),
+          email_error: receipt.ok ? null : `receipt: ${receipt.error}`,
+        }
+        : { email_status: "pending", email_error: `staff: ${staff.error}`.slice(0, 1000) };
 
-    await vinetrack.from("support_requests").update(patch).eq("id", requestId);
-  } catch (e) {
-    console.error("website-enquiry email status update failed", e);
+      await vinetrack.from("support_requests").update(patch).eq("id", requestId);
+    } catch (e) {
+      console.error("website-enquiry email status update failed", e);
+    }
+
+    // Marketing list — canonical VineTrack store, only with explicit consent.
+    if (marketingOptIn) {
+      const sub = await upsertSubscriberCanonical(vinetrack, cloud, {
+        email,
+        first_name: firstName,
+        last_name: lastName,
+        source: "website_demo_opt_in",
+        source_page: sourcePage,
+        consent_text: consentText || null,
+        consent_version: consentVersion || null,
+      });
+      if (!sub.ok) console.error("website-enquiry subscriber upsert failed", sub.error);
+    }
   }
 
-  if (marketingOptIn) {
-    const sub = await upsertSubscriber(cloud, {
-      email,
-      first_name: firstName,
-      last_name: lastName,
-      source: "website_demo_opt_in",
-      source_page: sourcePage,
-      consent_text: consentText || null,
-      consent_version: consentVersion || null,
-    });
-    if (!sub.ok) console.error("website-enquiry subscriber upsert failed", sub.error);
+  const background = finishEnquiry().catch((e) => {
+    console.error("website-enquiry background work failed", e);
+  });
+  const waitUntil = (globalThis as {
+    EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void };
+  }).EdgeRuntime?.waitUntil;
+  if (typeof waitUntil === "function") {
+    waitUntil(background);
+  } else {
+    // No background support in this runtime — correctness before speed.
+    await background;
   }
 
   return jsonFor(origin, 200, {
