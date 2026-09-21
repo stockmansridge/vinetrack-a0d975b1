@@ -177,6 +177,12 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
     if (!mapReady || !map || !mapkit) return;
     const t0 = performance.now();
 
+    // Preserve the user's current view across selection-driven rebuilds.
+    let prevRegion: any = null;
+    if (didFitRef.current) {
+      try { prevRegion = map.region; } catch { /* noop */ }
+    }
+
     if (overlaysRef.current.length) {
       try { map.removeOverlays(overlaysRef.current); } catch { /* noop */ }
       overlaysRef.current = [];
