@@ -64,16 +64,24 @@ Deno.serve(async (req: Request) => {
   try { body = await req.json(); } catch { /* ignore */ }
   const action = String(body.action ?? "list");
 
-  const admin = createClient(CLOUD_URL, CLOUD_SERVICE, { auth: { persistSession: false } });
+  // Canonical VineTrack database owns the subscriber data.
+  const admin = createClient(VT_URL, VT_SERVICE, { auth: { persistSession: false } });
+  // Legacy copy on the Portal's own project — cutover fallback only.
+  const legacy = createClient(CLOUD_URL, CLOUD_SERVICE, { auth: { persistSession: false } });
 
-  if (action === "list") {
-    const { data, error } = await admin
+  const listFrom = (client: ReturnType<typeof createClient>) =>
+    client
       .from("email_list_subscribers")
-      .select(
-        "id, email, first_name, last_name, status, source, source_page, consent_version, subscribed_at, unsubscribed_at, created_at, updated_at",
-      )
+      .select(SUBSCRIBER_COLUMNS)
       .order("subscribed_at", { ascending: false })
       .limit(5000);
+
+  if (action === "list") {
+    let { data, error } = await listFrom(admin);
+    if (error && isMissingTableError(error)) {
+      console.error("email_list_subscribers missing on VineTrack — apply sql/242; reading legacy");
+      ({ data, error } = await listFrom(legacy));
+    }
     if (error) return jsonError(500, `Could not load the email list: ${error.message}`);
     return json(200, { subscribers: data ?? [] });
   }
