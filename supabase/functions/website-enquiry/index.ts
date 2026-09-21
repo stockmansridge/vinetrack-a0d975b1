@@ -138,31 +138,48 @@ Deno.serve(async (req: Request) => {
   const storedMessage = `${message}\n\n---\n${contextLines.join("\n")}`;
 
   // Rapid duplicate guard — same address, same category, within the window.
-  try {
-    const since = new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString();
-    const recent = await vinetrack
-      .from("support_requests")
-      .select("id, message")
-      .eq("category", CATEGORY)
-      .ilike("submitter_email", email)
-      .gte("created_at", since)
-      .limit(5);
-    if (!recent.error) {
-      const dup = (recent.data ?? []).find(
-        (r) => typeof (r as { message?: string }).message === "string" &&
-          (r as { message: string }).message.startsWith(message),
-      );
-      if (dup) {
-        return jsonFor(origin, 200, {
-          ok: true,
-          id: (dup as { id: string }).id,
-          message: "Thanks — we've already received your enquiry and will be in touch.",
-        });
-      }
-    }
-  } catch (e) {
-    console.error("website-enquiry duplicate check failed", e);
+  // Runs alongside the rate-limit round-trip; both are awaited before the
+  // enquiry is written.
+  const since = new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString();
+  const duplicatePromise = vinetrack
+    .from("support_requests")
+    .select("id, message")
+    .eq("category", CATEGORY)
+    .ilike("submitter_email", email)
+    .gte("created_at", since)
+    .limit(5);
+
+  const [limit, recent] = await Promise.all([
+    limitPromise,
+    duplicatePromise.then(
+      (r) => r,
+      (e) => {
+        console.error("website-enquiry duplicate check failed", e);
+        return { data: null, error: e } as { data: null; error: unknown };
+      },
+    ),
+  ]);
+
+  if (!limit.allowed) {
+    return jsonFor(origin, 429, {
+      ok: false,
+      error: "Too many attempts. Please try again in a few minutes.",
+    });
   }
+
+  if (!recent.error) {
+    const dup = ((recent.data ?? []) as Array<{ id: string; message?: string }>).find(
+      (r) => typeof r.message === "string" && r.message.startsWith(message),
+    );
+    if (dup) {
+      return jsonFor(origin, 200, {
+        ok: true,
+        id: dup.id,
+        message: "Thanks — we've already received your enquiry and will be in touch.",
+      });
+    }
+  }
+
 
   // Durable record first — the DB row is authoritative.
   const insert = await vinetrack
