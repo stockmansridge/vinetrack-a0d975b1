@@ -12,13 +12,17 @@
 //      the VineTrack project (category = website_demo, app_platform = website,
 //      email_status = pending) using the VineTrack service role. This record is
 //      authoritative and is never rolled back because of an email failure.
-//   3. Send the staff notification and the visitor receipt through the managed
-//      email service. If the staff notification fails the record is left at
-//      email_status = pending so the existing sync-support-request-emails cron
-//      retries it.
-//   4. When marketing_opt_in is explicitly true, also add the submitter to
-//      public.email_list_subscribers (source = website_demo_opt_in). Without
-//      explicit consent the submitter is never added to the marketing list.
+//   3. Return success to the browser as soon as the durable record exists.
+//      The staff notification, the visitor receipt, the email_status
+//      bookkeeping and the marketing opt-in are finished in the background
+//      (EdgeRuntime.waitUntil) so the public form is not held open for the
+//      email round-trips. If the staff notification fails the record is left
+//      at email_status = pending so the existing sync-support-request-emails
+//      cron retries it — unchanged retry behaviour.
+//   4. When marketing_opt_in is explicitly true, also add the submitter to the
+//      canonical VineTrack public.email_list_subscribers (source =
+//      website_demo_opt_in). Without explicit consent the submitter is never
+//      added to the marketing list.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import {
   cleanText,
@@ -28,9 +32,11 @@ import {
   jsonFor,
   normaliseEmail,
 } from "../_shared/website-public.ts";
-import { upsertSubscriber } from "../_shared/email-list.ts";
+import { upsertSubscriberCanonical } from "../_shared/email-list.ts";
+import { checkRateLimit } from "../_shared/public-rate-limit.ts";
 import { sendTemplateEmail } from "../_shared/transactional-email-templates/send-email.ts";
 import { logEmailSend } from "../_shared/email-send-log.ts";
+
 
 
 const CATEGORY = "website_demo";
