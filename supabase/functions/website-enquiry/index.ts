@@ -140,8 +140,6 @@ Deno.serve(async (req: Request) => {
   ].filter(Boolean);
   const storedMessage = `${message}\n\n---\n${contextLines.join("\n")}`;
 
-  const vinetrack = createClient(VT_URL, VT_SERVICE, { auth: { persistSession: false } });
-
   // Rapid duplicate guard — same address, same category, within the window.
   try {
     const since = new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString();
