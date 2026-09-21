@@ -22,7 +22,21 @@ export async function updateMemberOperatorCategoryRpc(
     p_membership_id: membershipId,
     p_worker_type_id: operatorCategoryId,
   });
-  if (error) throw error;
+  if (!error) return;
+
+  // The shared VineTrack database may not have the `update_member_worker_type`
+  // RPC yet (PGRST202 = function not found in the schema cache). Fall back to
+  // a direct update — RLS on `vineyard_members` still governs who may edit.
+  const code = (error as { code?: string }).code;
+  const msg = (error as { message?: string }).message ?? "";
+  const missingFn = code === "PGRST202" || /Could not find the function/i.test(msg);
+  if (!missingFn) throw error;
+
+  const { error: updError } = await supabase
+    .from("vineyard_members")
+    .update({ worker_type_id: operatorCategoryId })
+    .eq("id", membershipId);
+  if (updError) throw updError;
 }
 
 export async function removeMember(membershipId: string): Promise<void> {
