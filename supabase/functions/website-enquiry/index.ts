@@ -69,18 +69,15 @@ Deno.serve(async (req: Request) => {
   const vinetrack = createClient(VT_URL, VT_SERVICE, { auth: { persistSession: false } });
 
   // Server-side backstop: CORS and the honeypot do not constrain direct HTTP
-  // callers. Conservative enough that a genuine visitor never sees it.
-  const limit = await checkRateLimit(cloud, req, {
+  // callers. Conservative enough that a genuine visitor never sees it. Started
+  // here and awaited before anything is written, so its round-trip overlaps
+  // request parsing and validation.
+  const limitPromise = checkRateLimit(cloud, req, {
     form: "website-enquiry",
     limit: 8,
     windowSeconds: 900,
   });
-  if (!limit.allowed) {
-    return jsonFor(origin, 429, {
-      ok: false,
-      error: "Too many attempts. Please try again in a few minutes.",
-    });
-  }
+
 
   let body: Record<string, unknown> = {};
   try {
