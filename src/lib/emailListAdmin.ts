@@ -77,6 +77,188 @@ export function useSetSubscriberStatus() {
   });
 }
 
+export function useBulkSubscriberStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { ids: string[]; status: SubscriberStatus }) => {
+      const res = await callAdmin({ action: "bulk_status", ids: vars.ids, status: vars.status });
+      return Number(res?.updated ?? 0);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [...EMAIL_LIST_QK] });
+    },
+  });
+}
+
+export function useDeleteSubscribers() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const res = await callAdmin({ action: "delete", ids });
+      return Number(res?.deleted ?? 0);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [...EMAIL_LIST_QK] });
+    },
+  });
+}
+
+export interface ImportSummary {
+  created: number;
+  updated: number;
+  skipped: number;
+  skipped_emails?: string[];
+}
+
+export function useImportSubscribers() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { rows: ImportRow[]; source: string }) => {
+      const res = await callAdmin({ action: "import", rows: vars.rows, source: vars.source });
+      return {
+        created: Number(res?.created ?? 0),
+        updated: Number(res?.updated ?? 0),
+        skipped: Number(res?.skipped ?? 0),
+        skipped_emails: (res?.skipped_emails ?? []) as string[],
+      } satisfies ImportSummary;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [...EMAIL_LIST_QK] });
+    },
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Import parsing (pure helpers, unit tested)                          */
+/* ------------------------------------------------------------------ */
+
+export interface ImportRow {
+  email: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  status?: SubscriberStatus;
+  source_page?: string | null;
+}
+
+export interface ImportParseResult {
+  rows: ImportRow[];
+  invalid: string[];
+  duplicates: number;
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+export function isImportableEmail(value: string): boolean {
+  return EMAIL_RE.test(value.trim().toLowerCase());
+}
+
+/** Split one delimited line, honouring double-quoted fields. */
+function splitLine(line: string, delimiter: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let quoted = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (quoted) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i += 1; } else quoted = false;
+      } else cur += ch;
+    } else if (ch === '"') {
+      quoted = true;
+    } else if (ch === delimiter) {
+      out.push(cur);
+      cur = "";
+    } else cur += ch;
+  }
+  out.push(cur);
+  return out.map((v) => v.trim());
+}
+
+function detectDelimiter(line: string): string {
+  const counts: Array<[string, number]> = [
+    [",", (line.match(/,/g) ?? []).length],
+    ["\t", (line.match(/\t/g) ?? []).length],
+    [";", (line.match(/;/g) ?? []).length],
+  ];
+  counts.sort((a, b) => b[1] - a[1]);
+  return counts[0][1] > 0 ? counts[0][0] : ",";
+}
+
+/**
+ * Parse pasted text or a CSV file into importable rows.
+ *
+ * Accepts a plain list of addresses (one per line) or a delimited file with or
+ * without a header row. Recognised headers: email, first name, last name,
+ * status, source page (any capitalisation, spaces or underscores).
+ */
+export function parseEmailListImport(text: string): ImportParseResult {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (lines.length === 0) return { rows: [], invalid: [], duplicates: 0 };
+
+  const delimiter = detectDelimiter(lines[0]);
+  let header: string[] | null = null;
+  const firstCells = splitLine(lines[0], delimiter).map((c) => c.toLowerCase());
+  if (firstCells.some((c) => c.replace(/[\s_]/g, "") === "email")) header = firstCells;
+
+  const indexOf = (...names: string[]) => {
+    if (!header) return -1;
+    const wanted = names.map((n) => n.replace(/[\s_]/g, ""));
+    return header.findIndex((h) => wanted.includes(h.replace(/[\s_]/g, "")));
+  };
+  const iEmail = indexOf("email", "emailaddress");
+  const iFirst = indexOf("firstname", "first", "givenname");
+  const iLast = indexOf("lastname", "last", "surname");
+  const iStatus = indexOf("status");
+  const iPage = indexOf("sourcepage", "page");
+
+  const rows: ImportRow[] = [];
+  const invalid: string[] = [];
+  const seen = new Set<string>();
+  let duplicates = 0;
+
+  for (const line of header ? lines.slice(1) : lines) {
+    const cells = splitLine(line, delimiter);
+    const emailRaw = header
+      ? (cells[iEmail] ?? "")
+      : (cells.find((c) => c.includes("@")) ?? cells[0] ?? "");
+    const email = emailRaw.trim().toLowerCase();
+    if (!isImportableEmail(email)) {
+      invalid.push(line.slice(0, 120));
+      continue;
+    }
+    if (seen.has(email)) {
+      duplicates += 1;
+      continue;
+    }
+    seen.add(email);
+
+    let first: string | null = null;
+    let last: string | null = null;
+    if (header) {
+      first = iFirst >= 0 ? (cells[iFirst] || null) : null;
+      last = iLast >= 0 ? (cells[iLast] || null) : null;
+    } else {
+      const others = cells.filter((c) => !c.includes("@") && c.length > 0);
+      first = others[0] ?? null;
+      last = others[1] ?? null;
+    }
+
+    const statusCell = header && iStatus >= 0 ? (cells[iStatus] ?? "").toLowerCase() : "";
+    rows.push({
+      email,
+      first_name: first,
+      last_name: last,
+      status: statusCell === "unsubscribed" ? "unsubscribed" : "subscribed",
+      source_page: header && iPage >= 0 ? (cells[iPage] || null) : null,
+    });
+  }
+
+  return { rows, invalid, duplicates };
+}
+
 /* ------------------------------------------------------------------ */
 /* Filtering + CSV export (pure helpers, unit tested)                  */
 /* ------------------------------------------------------------------ */
