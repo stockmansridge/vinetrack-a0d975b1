@@ -1,12 +1,19 @@
 // System-admin only: read and manage public.email_list_subscribers.
-// Caller must be an ACTIVE system admin on the VineTrack (iOS-shared) project;
-// the read/write happens on the Lovable Cloud project via the service role.
-// The table grants nothing to anon/authenticated, so this function is the only
-// way the Portal can reach it.
+// Caller must be an ACTIVE system admin on the canonical VineTrack project;
+// the read/write happens on that same canonical VineTrack database via its
+// service role, alongside support_requests (see sql/242). The table grants
+// nothing to anon/authenticated, so this function is the only way the Portal
+// can reach it.
+//
+// While sql/242 is not yet applied, reads/writes fall back to the legacy copy
+// of the table on the Portal's own project so the admin page keeps working
+// through the cutover. The legacy table is retired once canonical is live.
 //
 // POST { action: "list" } -> { subscribers: [...] }
 // POST { action: "set_status", id, status: "subscribed" | "unsubscribed" }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { isMissingTableError, SUBSCRIBER_COLUMNS } from "../_shared/email-list.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
