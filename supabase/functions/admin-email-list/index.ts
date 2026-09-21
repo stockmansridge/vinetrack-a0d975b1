@@ -12,6 +12,7 @@
 // POST { action: "list" } -> { subscribers: [...] }
 // POST { action: "set_status", id, status: "subscribed" | "unsubscribed" }
 // POST { action: "bulk_status", ids: string[], status } -> { updated }
+// POST { action: "update", id, email, first_name, last_name } -> { subscriber }
 // POST { action: "delete", ids: string[] } -> { deleted }
 // POST { action: "import", rows: [{ email, first_name?, last_name?, status?,
 //        source?, source_page? }], source? } -> { created, updated, skipped }
@@ -161,6 +162,54 @@ Deno.serve(async (req: Request) => {
       .select("id");
     if (error) return jsonError(500, `Could not update the subscribers: ${error.message}`);
     return json(200, { success: true, updated: (data ?? []).length });
+  }
+
+  if (action === "update") {
+    const id = String(body.id ?? "").trim();
+    if (!id) return jsonError(400, "A subscriber id is required.");
+    const email = String(body.email ?? "").trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 254) {
+      return jsonError(400, "Enter a valid email address.");
+    }
+    const firstRaw = body.first_name === undefined || body.first_name === null
+      ? ""
+      : String(body.first_name).trim();
+    const lastRaw = body.last_name === undefined || body.last_name === null
+      ? ""
+      : String(body.last_name).trim();
+    if (firstRaw.length > 120 || lastRaw.length > 120) {
+      return jsonError(400, "Names must be 120 characters or fewer.");
+    }
+
+    const store = await resolveStore();
+    // One canonical row per address: block a rename onto somebody else.
+    const clash = await store
+      .from("email_list_subscribers")
+      .select("id")
+      .ilike("email", email)
+      .neq("id", id)
+      .limit(1);
+    if (clash.error) {
+      return jsonError(500, `Could not update the subscriber: ${clash.error.message}`);
+    }
+    if ((clash.data ?? []).length > 0) {
+      return jsonError(409, "Another subscriber already uses that email address.");
+    }
+
+    const { data, error } = await store
+      .from("email_list_subscribers")
+      .update({
+        email,
+        first_name: firstRaw || null,
+        last_name: lastRaw || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select(SUBSCRIBER_COLUMNS)
+      .maybeSingle();
+    if (error) return jsonError(500, `Could not update the subscriber: ${error.message}`);
+    if (!data) return jsonError(404, "Subscriber not found.");
+    return json(200, { success: true, subscriber: data });
   }
 
   if (action === "delete") {
