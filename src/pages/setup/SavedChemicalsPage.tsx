@@ -9,7 +9,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PortalNotice } from "@/components/ui/PortalNotice";
 import { useToast } from "@/hooks/use-toast";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -411,11 +410,6 @@ export default function SavedChemicalsPage() {
         )}
       </div>
 
-      <PortalNotice
-        variant="warning"
-        compact
-        description="Production data — changes save immediately to the live vineyard database."
-      />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as "active" | "archived")}>
         <TabsList>
