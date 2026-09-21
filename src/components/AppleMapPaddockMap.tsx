@@ -177,6 +177,12 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
     if (!mapReady || !map || !mapkit) return;
     const t0 = performance.now();
 
+    // Preserve the user's current view across selection-driven rebuilds.
+    let prevRegion: any = null;
+    if (didFitRef.current) {
+      try { prevRegion = map.region; } catch { /* noop */ }
+    }
+
     if (overlaysRef.current.length) {
       try { map.removeOverlays(overlaysRef.current); } catch { /* noop */ }
       overlaysRef.current = [];
@@ -340,7 +346,7 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
       bounds = lastBoundsRef.current;
     }
 
-    if (bounds && (!didFitRef.current || selectedIdRef.current)) {
+    if (bounds && !didFitRef.current) {
       const { minLat, maxLat, minLng, maxLng } = bounds;
       const centerLat = (minLat + maxLat) / 2;
       const centerLng = (minLng + maxLng) / 2;
@@ -354,6 +360,13 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
         didFitRef.current = true;
       } catch (err) {
         if (import.meta.env.DEV) console.warn("[AppleMap] region set failed", err);
+      }
+    } else if (didFitRef.current && prevRegion) {
+      // Re-adding overlays must not steal the user's zoom/pan.
+      try {
+        map.region = prevRegion;
+      } catch (err) {
+        if (import.meta.env.DEV) console.warn("[AppleMap] region restore failed", err);
       }
     }
 

@@ -242,8 +242,11 @@ export function AddChemicalV2Dialog({
                   size="sm"
                   variant="outline"
                   onClick={() => {
-                    onOpenExisting(duplicate.chemical);
+                    // Close first, then hand over the existing record: batched
+                    // state updates apply in call order, so the parent's
+                    // "close" reset must not run after setEditing(chemical).
                     onOpenChange(false);
+                    onOpenExisting(duplicate.chemical);
                   }}
                 >
                   Open existing record
