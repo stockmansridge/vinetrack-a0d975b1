@@ -21,3 +21,5 @@
 - [x] Block Setup map: Apple-only provider, stable vineyard framing, compact block summary with full-details action
 
 
+- [x] Email List: edit a subscriber's name and email address
+- [x] Website Analytics: canonical page-view table (sql/243 awaiting Rork), public website-analytics endpoint, admin-website-analytics server-side report, /admin/website-analytics Portal page
