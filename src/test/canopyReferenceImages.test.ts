@@ -7,7 +7,7 @@ import {
   canopyImageSlot,
   resolveCanopyImage,
 } from "@/lib/canopyImages";
-import { parseCanopyImageMap } from "@/lib/canopyImageStore";
+import { parseCanopyImageMap, parseCanopyImagePayload } from "@/lib/canopyImageStore";
 import { recommendedDiluteLitresPer100m, canopyDiluteRange } from "@/lib/sprayCanopy";
 
 describe("canopy reference image slots", () => {
@@ -82,5 +82,85 @@ describe("images never influence the calculation", () => {
       low: recommendedDiluteLitresPer100m("vsp", "large", "low"),
       high: recommendedDiluteLitresPer100m("vsp", "large", "high"),
     }).toEqual(before);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cross-platform read contract: get_canopy_reference_images_v1()
+// ---------------------------------------------------------------------------
+describe("get_canopy_reference_images_v1 payload contract", () => {
+  const payload = (images: Record<string, unknown>) => ({
+    bucket: "guide-images",
+    config_updated_at: "2026-09-09T02:33:03.509Z",
+    images,
+  });
+
+  it("keeps every configured semantic key and its exact path/updated_at", () => {
+    const images = {
+      "canopy.vsp.small": {
+        path: "canopy-reference/canopy.vsp.small/1757383593677.png",
+        updated_at: "2026-09-09T02:26:33.677Z",
+      },
+      "canopy.sprawl.full": {
+        path: "canopy-reference/canopy.sprawl.full/1757383599999.webp",
+        updated_at: "2026-09-09T02:27:00.000Z",
+      },
+    };
+    const map = parseCanopyImagePayload(payload(images));
+    expect(map).toEqual(images);
+  });
+
+  it("returns only canopy image configuration — other feature flags are not part of the payload", () => {
+    const map = parseCanopyImagePayload(
+      payload({
+        "canopy.vsp.large": { path: "canopy-reference/canopy.vsp.large/1.png" },
+        "chemical_search_v2": { path: "should-be-ignored.png" },
+        "spray.something_else": { path: "x.png" },
+      }),
+    );
+    expect(Object.keys(map)).toEqual(["canopy.vsp.large"]);
+  });
+
+  it("a slot missing from images resolves to the bundled default", () => {
+    const map = parseCanopyImagePayload(payload({}));
+    expect(map["canopy.vsp.medium"]).toBeUndefined();
+    expect(resolveCanopyImage("canopy.vsp.medium", undefined)).toEqual({
+      url: "/canopy/vsp-medium.png",
+      source: "default",
+    });
+  });
+
+  it("replacing one image changes only that slot", () => {
+    const before = {
+      "canopy.vsp.small": { path: "canopy-reference/canopy.vsp.small/1.png", updated_at: "a" },
+      "canopy.vsp.large": { path: "canopy-reference/canopy.vsp.large/2.png", updated_at: "b" },
+    };
+    const after = parseCanopyImagePayload(
+      payload({
+        ...before,
+        "canopy.vsp.small": { path: "canopy-reference/canopy.vsp.small/3.png", updated_at: "c" },
+      }),
+    );
+    expect(after["canopy.vsp.large"]).toEqual(before["canopy.vsp.large"]);
+    expect(after["canopy.vsp.small"]).toEqual({
+      path: "canopy-reference/canopy.vsp.small/3.png",
+      updated_at: "c",
+    });
+  });
+
+  it("resetting one image removes only that slot from the custom map", () => {
+    const after = parseCanopyImagePayload(
+      payload({ "canopy.vsp.large": { path: "canopy-reference/canopy.vsp.large/2.png" } }),
+    );
+    expect(after["canopy.vsp.small"]).toBeUndefined();
+    expect(after["canopy.vsp.large"]).toBeDefined();
+    // Portal rendering still falls back custom → bundled for the reset slot.
+    expect(resolveCanopyImage("canopy.vsp.small", undefined).source).toBe("default");
+  });
+
+  it("tolerates an empty or unavailable payload (e.g. anonymous caller denied)", () => {
+    expect(parseCanopyImagePayload(null)).toEqual({});
+    expect(parseCanopyImagePayload(undefined)).toEqual({});
+    expect(parseCanopyImagePayload({ bucket: "guide-images" })).toEqual({});
   });
 });
