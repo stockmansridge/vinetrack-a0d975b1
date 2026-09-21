@@ -11,8 +11,16 @@
 //
 // POST { action: "list" } -> { subscribers: [...] }
 // POST { action: "set_status", id, status: "subscribed" | "unsubscribed" }
+// POST { action: "bulk_status", ids: string[], status } -> { updated }
+// POST { action: "delete", ids: string[] } -> { deleted }
+// POST { action: "import", rows: [{ email, first_name?, last_name?, status?,
+//        source?, source_page? }], source? } -> { created, updated, skipped }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { isMissingTableError, SUBSCRIBER_COLUMNS } from "../_shared/email-list.ts";
+import {
+  isMissingTableError,
+  SUBSCRIBER_COLUMNS,
+  upsertSubscriber,
+} from "../_shared/email-list.ts";
 
 
 const corsHeaders = {
