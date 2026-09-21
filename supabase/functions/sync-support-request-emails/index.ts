@@ -1,4 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { sendTemplateEmail } from "../_shared/transactional-email-templates/send-email.ts";
+import { logEmailSend } from "../_shared/email-send-log.ts";
+
 
 const SUPPORT_EMAIL = "support@vinetrack.com.au";
 const BUCKET = "support-attachments";
@@ -131,6 +134,9 @@ Deno.serve(async (req: Request) => {
   const batchSize = Math.min(Math.max(Math.floor(body.batch_size ?? DEFAULT_BATCH_SIZE), 1), 50);
 
   const iosAdmin = createClient(iosUrl, iosServiceKey, { auth: { persistSession: false } });
+  // Local project client — email send audit log lives here.
+  const localAdmin = createClient(localUrl, localServiceKey, { auth: { persistSession: false } });
+
 
   const { data: rows, error: fetchError } = await iosAdmin
     .from("support_requests")
@@ -169,62 +175,66 @@ Deno.serve(async (req: Request) => {
     try {
       const attachments = await signAttachments(iosAdmin, row.attachment_paths);
       const adminUrl = `https://portal.vinetrack.com.au/admin/support-requests/${row.id}`;
-      const res = await fetch(`${localUrl}/functions/v1/send-transactional-email`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localServiceKey}`,
+      const result = await sendTemplateEmail("support_request", SUPPORT_EMAIL, {
+        idempotencyKey: `support_request:${row.id}`,
+        templateData: {
+          request_type: row.category ?? "support",
+          subject: row.subject ?? "(no subject)",
+          message: row.message ?? "",
+          request_id: row.id,
+          user_name: row.submitter_name ?? null,
+          user_email: row.submitter_email ?? null,
+          user_role: null,
+          vineyard_name: row.vineyard_name ?? null,
+          vineyard_id: row.vineyard_id ?? null,
+          page_path: null,
+          browser_info: appContext(row) || null,
+          attachments,
+          admin_url: adminUrl,
         },
-        body: JSON.stringify({
-          templateName: "support_request",
-          recipientEmail: SUPPORT_EMAIL,
-          purpose: "transactional",
-          idempotencyKey: `support_request:${row.id}`,
-          templateData: {
-            request_type: row.category ?? "support",
-            subject: row.subject ?? "(no subject)",
-            message: row.message ?? "",
-            request_id: row.id,
-            user_name: row.submitter_name ?? null,
-            user_email: row.submitter_email ?? null,
-            user_role: null,
-            vineyard_name: row.vineyard_name ?? null,
-            vineyard_id: row.vineyard_id ?? null,
-            page_path: null,
-            browser_info: appContext(row) || null,
-            attachments,
-            admin_url: adminUrl,
-          },
-        }),
       });
 
-      const text = await res.text();
-      let responseBody: Record<string, unknown> | null = null;
-      try {
-        responseBody = text ? JSON.parse(text) : null;
-      } catch {
-        responseBody = null;
-      }
-
-      if (!res.ok || responseBody?.success === false) {
-        const message = responseBody?.reason || responseBody?.error || text || `HTTP ${res.status}`;
-        await markEmailStatus(iosAdmin, row.id, {
-          email_status: responseBody?.reason === "email_suppressed" ? "suppressed" : "failed",
-          email_error: String(message).slice(0, 1000),
+      if (!result.sent) {
+        await logEmailSend(localAdmin, {
+          templateName: "support_request",
+          recipientEmail: SUPPORT_EMAIL,
+          status: "suppressed",
+          errorMessage: result.reason,
         });
-        results.push({ id: row.id, status: "failed", error: String(message) });
+        await markEmailStatus(iosAdmin, row.id, {
+          email_status: "suppressed",
+          email_error: result.reason,
+        });
+        results.push({ id: row.id, status: "suppressed" });
         continue;
       }
 
-      results.push({ id: row.id, status: "queued" });
+      await logEmailSend(localAdmin, {
+        templateName: "support_request",
+        recipientEmail: SUPPORT_EMAIL,
+        status: "sent",
+      });
+      await markEmailStatus(iosAdmin, row.id, {
+        email_status: "sent",
+        email_sent_at: new Date().toISOString(),
+        email_error: null,
+      });
+      results.push({ id: row.id, status: "sent" });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
+      await logEmailSend(localAdmin, {
+        templateName: "support_request",
+        recipientEmail: SUPPORT_EMAIL,
+        status: "failed",
+        errorMessage: message,
+      });
       await markEmailStatus(iosAdmin, row.id, {
         email_status: "failed",
         email_error: message.slice(0, 1000),
       });
       results.push({ id: row.id, status: "failed", error: message });
     }
+
   }
 
   return jsonResponse({ ok: true, processed: results.length, results });

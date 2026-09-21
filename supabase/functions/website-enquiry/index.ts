@@ -12,11 +12,10 @@
 //      the VineTrack project (category = website_demo, app_platform = website,
 //      email_status = pending) using the VineTrack service role. This record is
 //      authoritative and is never rolled back because of an email failure.
-//   3. Send the staff notification and the visitor receipt through the existing
-//      shared transactional email pipeline (send-transactional-email on the
-//      Lovable Cloud project). If the staff notification fails the record is
-//      left at email_status = pending so the existing
-//      sync-support-request-emails cron retries it.
+//   3. Send the staff notification and the visitor receipt through the managed
+//      email service. If the staff notification fails the record is left at
+//      email_status = pending so the existing sync-support-request-emails cron
+//      retries it.
 //   4. When marketing_opt_in is explicitly true, also add the submitter to
 //      public.email_list_subscribers (source = website_demo_opt_in). Without
 //      explicit consent the submitter is never added to the marketing list.
@@ -30,6 +29,9 @@ import {
   normaliseEmail,
 } from "../_shared/website-public.ts";
 import { upsertSubscriber } from "../_shared/email-list.ts";
+import { sendTemplateEmail } from "../_shared/transactional-email-templates/send-email.ts";
+import { logEmailSend } from "../_shared/email-send-log.ts";
+
 
 const CATEGORY = "website_demo";
 const PLATFORM = "website";
@@ -174,41 +176,43 @@ Deno.serve(async (req: Request) => {
 
   const cloud = createClient(CLOUD_URL, CLOUD_SERVICE, { auth: { persistSession: false } });
 
+  // Sends through Lovable's managed email API. Suppression, retries and rate
+  // limits are enforced server-side; a suppressed recipient is an expected
+  // outcome, not a failure.
   async function sendTemplate(
     templateName: string,
     recipientEmail: string,
     idempotencyKey: string,
     templateData: Record<string, unknown>,
-  ): Promise<{ ok: boolean; error?: string }> {
+  ): Promise<{ ok: boolean; suppressed?: boolean; error?: string }> {
     try {
-      const res = await fetch(`${CLOUD_URL}/functions/v1/send-transactional-email`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${CLOUD_SERVICE}`,
-        },
-        body: JSON.stringify({
+      const result = await sendTemplateEmail(templateName, recipientEmail, {
+        templateData,
+        idempotencyKey,
+      });
+      if (!result.sent) {
+        await logEmailSend(cloud, {
           templateName,
           recipientEmail,
-          purpose: "transactional",
-          idempotencyKey,
-          templateData,
-        }),
-      });
-      const text = await res.text();
-      let parsed: Record<string, unknown> | null = null;
-      try {
-        parsed = text ? (JSON.parse(text) as Record<string, unknown>) : null;
-      } catch { /* non-JSON body */ }
-      if (!res.ok || parsed?.success === false) {
-        const reason = parsed?.reason ?? parsed?.error ?? text ?? `HTTP ${res.status}`;
-        return { ok: false, error: String(reason).slice(0, 500) };
+          status: "suppressed",
+          errorMessage: result.reason,
+        });
+        return { ok: true, suppressed: true };
       }
+      await logEmailSend(cloud, { templateName, recipientEmail, status: "sent" });
       return { ok: true };
     } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      const message = e instanceof Error ? e.message : String(e);
+      await logEmailSend(cloud, {
+        templateName,
+        recipientEmail,
+        status: "failed",
+        errorMessage: message,
+      });
+      return { ok: false, error: message.slice(0, 500) };
     }
   }
+
 
   // Staff notification — existing shared support_request template/recipient.
   const staff = await sendTemplate(
@@ -249,8 +253,13 @@ Deno.serve(async (req: Request) => {
   // staff notification stays "pending" so the existing retry cron picks it up.
   try {
     const patch: Record<string, unknown> = staff.ok
-      ? { email_status: "queued", email_error: receipt.ok ? null : `receipt: ${receipt.error}` }
+      ? {
+        email_status: staff.suppressed ? "suppressed" : "sent",
+        email_sent_at: staff.suppressed ? null : new Date().toISOString(),
+        email_error: receipt.ok ? null : `receipt: ${receipt.error}`,
+      }
       : { email_status: "pending", email_error: `staff: ${staff.error}`.slice(0, 1000) };
+
     await vinetrack.from("support_requests").update(patch).eq("id", requestId);
   } catch (e) {
     console.error("website-enquiry email status update failed", e);

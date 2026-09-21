@@ -3,13 +3,16 @@
 // - Uploads attachments (base64) to the private support-request-attachments bucket
 // - Inserts a row into public.support_requests using the service role
 // - Generates 7-day signed URLs for attachments
-// - Enqueues a notification email via the send-transactional-email function
+// - Sends a notification email through the managed email service
 //   (template: "support_request"). The template defines the team recipient.
 //
 // CORS: open. Auth: not required — captures whatever identity metadata the
 // client supplies as best-effort context.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { sendTemplateEmail } from "../_shared/transactional-email-templates/send-email.ts";
+import { logEmailSend } from "../_shared/email-send-log.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -176,64 +179,71 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: `Save failed: ${insErr.message}` }, 500);
     }
 
-    // Enqueue notification email via the transactional pipeline.
+    // Send the staff notification through Lovable's managed email API.
     // The "support_request" template defines its own recipient (team inbox).
     let emailQueued = false;
     let emailError: string | null = null;
     if (body.skip_email) {
       emailError = null;
-      console.log('skip_email set — legacy email pipeline not triggered');
+      console.log('skip_email set — no notification email sent from this function');
     } else try {
-      const sendUrl = `${url}/functions/v1/send-transactional-email`;
-      const res = await fetch(sendUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${serviceKey}`,
+      const adminUrl = `${
+        (() => {
+          const origin = req.headers.get("origin") ?? "";
+          const isPortal = /^https?:\/\/(localhost|.*vinetrack\.com\.au)/i.test(origin);
+          return isPortal ? origin : "https://portal.vinetrack.com.au";
+        })()
+      }/admin/support-requests/${requestId}`;
+
+      const result = await sendTemplateEmail(EMAIL_TEMPLATE, "support@vinetrack.com.au", {
+        idempotencyKey: `support_request:${requestId}`,
+        templateData: {
+          request_type: body.request_type,
+          subject: body.subject.trim(),
+          message: body.message.trim(),
+          request_id: requestId,
+          user_name: body.user_name ?? null,
+          user_email: body.user_email ?? null,
+          user_role: body.user_role ?? null,
+          vineyard_name: body.vineyard_name ?? null,
+          vineyard_id: body.vineyard_id ?? null,
+          page_path: body.page_path ?? null,
+          browser_info: body.browser_info ?? null,
+          attachments: signedUrls,
+          // Deep link into the admin portal. Falls back to the production
+          // portal URL when the caller is iOS/Android.
+          admin_url: adminUrl,
         },
-        body: JSON.stringify({
-          templateName: EMAIL_TEMPLATE,
-          // Fallback recipient — overridden by the template's fixed `to`.
-          recipientEmail: "support@vinetrack.com.au",
-          purpose: "transactional",
-          idempotencyKey: `support_request:${requestId}`,
-          templateData: {
-            request_type: body.request_type,
-            subject: body.subject.trim(),
-            message: body.message.trim(),
-            request_id: requestId,
-            user_name: body.user_name ?? null,
-            user_email: body.user_email ?? null,
-            user_role: body.user_role ?? null,
-            vineyard_name: body.vineyard_name ?? null,
-            vineyard_id: body.vineyard_id ?? null,
-            page_path: body.page_path ?? null,
-            browser_info: body.browser_info ?? null,
-            attachments: signedUrls,
-            // Deep link into the admin portal. Falls back to the production
-            // portal URL when the caller is iOS/Android (no Origin header that
-            // matches the web portal).
-            admin_url: `${
-              (() => {
-                const origin = req.headers.get("origin") ?? "";
-                const isPortal = /^https?:\/\/(localhost|.*vinetrack\.com\.au)/i.test(origin);
-                return isPortal ? origin : "https://portal.vinetrack.com.au";
-              })()
-            }/admin/support-requests/${requestId}`,
-          },
-        }),
       });
-      if (!res.ok) {
-        const text = await res.text();
-        emailError = `send-transactional-email ${res.status}: ${text}`;
-        console.error(emailError);
+
+      if (!result.sent) {
+        // Expected outcome — the recipient bounced, complained or unsubscribed.
+        await logEmailSend(sb, {
+          templateName: EMAIL_TEMPLATE,
+          recipientEmail: "support@vinetrack.com.au",
+          status: "suppressed",
+          errorMessage: result.reason,
+        });
+        emailError = result.reason;
       } else {
+        await logEmailSend(sb, {
+          templateName: EMAIL_TEMPLATE,
+          recipientEmail: "support@vinetrack.com.au",
+          status: "sent",
+        });
         emailQueued = true;
       }
     } catch (e) {
       emailError = e instanceof Error ? e.message : String(e);
-      console.error("email enqueue error", e);
+      console.error("support notification email failed", emailError);
+      await logEmailSend(sb, {
+        templateName: EMAIL_TEMPLATE,
+        recipientEmail: "support@vinetrack.com.au",
+        status: "failed",
+        errorMessage: emailError,
+      });
     }
+
 
     return jsonResponse(
       {
