@@ -23,6 +23,7 @@ import {
   Grape,
   LayoutDashboard,
   Layers,
+  Mail,
   Map,
   MapPin,
   Plug,
