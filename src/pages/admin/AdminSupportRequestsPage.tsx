@@ -202,9 +202,10 @@ function DetailSheet({
             </span>
             {(row.category || row.request_type) && (
               <Badge variant="outline" className="text-xs">
-                {row.category ?? row.request_type}
+                {categoryLabel(row.category ?? row.request_type ?? "")}
               </Badge>
             )}
+            {isWebsiteRequest(row) && <WebsiteBadge />}
             <span className="text-xs text-muted-foreground ml-auto">
               {formatDate(row.created_at)}
             </span>
@@ -469,7 +470,7 @@ export default function AdminSupportRequestsPage() {
               <SelectContent>
                 <SelectItem value="all">All categories</SelectItem>
                 {categories.map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                  <SelectItem key={c} value={c}>{categoryLabel(c)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -514,7 +515,7 @@ export default function AdminSupportRequestsPage() {
                           {r.subject || "(no subject)"}
                         </span>
                         {cat && (
-                          <Badge variant="outline" className="text-[10px]">{cat}</Badge>
+                          <Badge variant="outline" className="text-[10px]">{categoryLabel(cat)}</Badge>
                         )}
                         {attCount > 0 && (
                           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
