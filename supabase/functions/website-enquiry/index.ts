@@ -196,9 +196,8 @@ Deno.serve(async (req: Request) => {
   const submittedAt = (insert.data as { created_at?: string }).created_at ??
     new Date().toISOString();
 
-  const cloud = createClient(CLOUD_URL, CLOUD_SERVICE, { auth: { persistSession: false } });
-
   // Sends through Lovable's managed email API. Suppression, retries and rate
+
   // limits are enforced server-side; a suppressed recipient is an expected
   // outcome, not a failure.
   async function sendTemplate(
