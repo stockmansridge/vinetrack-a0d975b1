@@ -1,11 +1,15 @@
 // System Admin access to the VineTrack website email list.
 //
-// public.email_list_subscribers lives on the Lovable Cloud project and grants
-// nothing to anon/authenticated — every read and write goes through the
-// `admin-email-list` Edge Function, which verifies VineTrack system-admin
-// status before touching the table.
+// Subscriber data lives in the canonical VineTrack database
+// (public.email_list_subscribers, alongside support_requests — see
+// sql/242_email_list_subscribers.sql). The table grants nothing to
+// anon/authenticated, so no client ever reads it directly: every read and
+// write goes through the `admin-email-list` Edge Function, which verifies the
+// caller's VineTrack system-admin status and then uses the VineTrack service
+// role. The Portal only uses the Lovable Cloud client to *invoke* that
+// function (it is hosted there) — never as a subscriber data source.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase as cloudSupabase } from "@/integrations/supabase/client";
+import { supabase as functionsHost } from "@/integrations/supabase/client";
 import { iosSupabase } from "@/integrations/ios-supabase/client";
 
 export type SubscriberStatus = "subscribed" | "unsubscribed";
