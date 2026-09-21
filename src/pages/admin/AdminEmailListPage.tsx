@@ -498,6 +498,58 @@ export default function AdminEmailListPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={editing !== null} onOpenChange={(o) => { if (!o) setEditing(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit subscriber</DialogTitle>
+            <DialogDescription>
+              Update this person's name and email address. Their status, source and history stay
+              as they are.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground" htmlFor="el-first">First name</label>
+                <Input
+                  id="el-first"
+                  value={editFirst}
+                  onChange={(e) => setEditFirst(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground" htmlFor="el-last">Last name</label>
+                <Input
+                  id="el-last"
+                  value={editLast}
+                  onChange={(e) => setEditLast(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground" htmlFor="el-email">Email</label>
+              <Input
+                id="el-email"
+                type="email"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                className="h-9"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
+            <Button onClick={saveEdit} disabled={updateMut.isPending}>
+              {updateMut.isPending ? "Saving…" : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
