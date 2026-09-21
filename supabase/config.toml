@@ -90,3 +90,12 @@ verify_jwt = false
 
 [functions.admin-portal-notices]
 verify_jwt = false
+
+[functions.website-enquiry]
+verify_jwt = false
+
+[functions.newsletter-subscribe]
+verify_jwt = false
+
+[functions.admin-email-list]
+verify_jwt = false

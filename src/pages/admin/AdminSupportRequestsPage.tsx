@@ -52,6 +52,7 @@ interface SupportRequestRow {
   browser_info?: string | null;
   app_version?: string | null;
   platform?: string | null;
+  app_platform?: string | null;
   device?: string | null;
   os_version?: string | null;
   email_status?: string | null;
@@ -62,6 +63,27 @@ interface SupportRequestRow {
 }
 
 const STATUS_OPTIONS = ["new", "open", "in_progress", "resolved", "closed"] as const;
+
+/** Public-website enquiries are submitted anonymously via `website-enquiry`. */
+function isWebsiteRequest(r: SupportRequestRow): boolean {
+  const platform = (r.app_platform ?? r.platform ?? "").toLowerCase();
+  const category = (r.category ?? r.request_type ?? "").toLowerCase();
+  return platform === "website" || category.startsWith("website");
+}
+
+/** Friendly label for the category badge/filter (e.g. website_demo). */
+function categoryLabel(value: string): string {
+  if (value === "website_demo") return "Website Demo";
+  return value;
+}
+
+function WebsiteBadge() {
+  return (
+    <Badge className="text-[10px] bg-sky-500/15 text-sky-600 border border-sky-500/30 hover:bg-sky-500/15">
+      Website
+    </Badge>
+  );
+}
 
 function statusClass(s: string | null | undefined) {
   switch ((s ?? "").toLowerCase()) {
@@ -180,9 +202,10 @@ function DetailSheet({
             </span>
             {(row.category || row.request_type) && (
               <Badge variant="outline" className="text-xs">
-                {row.category ?? row.request_type}
+                {categoryLabel(row.category ?? row.request_type ?? "")}
               </Badge>
             )}
+            {isWebsiteRequest(row) && <WebsiteBadge />}
             <span className="text-xs text-muted-foreground ml-auto">
               {formatDate(row.created_at)}
             </span>
@@ -447,7 +470,7 @@ export default function AdminSupportRequestsPage() {
               <SelectContent>
                 <SelectItem value="all">All categories</SelectItem>
                 {categories.map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                  <SelectItem key={c} value={c}>{categoryLabel(c)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -492,8 +515,9 @@ export default function AdminSupportRequestsPage() {
                           {r.subject || "(no subject)"}
                         </span>
                         {cat && (
-                          <Badge variant="outline" className="text-[10px]">{cat}</Badge>
+                          <Badge variant="outline" className="text-[10px]">{categoryLabel(cat)}</Badge>
                         )}
+                        {isWebsiteRequest(r) && <WebsiteBadge />}
                         {attCount > 0 && (
                           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                             <Paperclip className="h-3 w-3" />

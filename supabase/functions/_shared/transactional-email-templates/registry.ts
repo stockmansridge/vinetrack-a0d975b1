@@ -1,6 +1,7 @@
 /// <reference types="npm:@types/react@18.3.1" />
 import type * as React from 'npm:react@18.3.1'
 import { template as supportRequest } from './support-request.tsx'
+import { template as websiteEnquiryReceipt } from './website-enquiry-receipt.tsx'
 
 export interface TemplateEntry {
   // React Email component rendered to HTML/text
@@ -17,4 +18,5 @@ export interface TemplateEntry {
 
 export const TEMPLATES: Record<string, TemplateEntry> = {
   support_request: supportRequest,
+  website_enquiry_receipt: websiteEnquiryReceipt,
 }
