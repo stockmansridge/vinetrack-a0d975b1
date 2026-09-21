@@ -59,7 +59,23 @@ export function canopyImagePublicUrl(asset: CanopyImageAsset | undefined): strin
     : data.publicUrl;
 }
 
+/**
+ * Parse the narrow cross-platform read contract
+ * (`get_canopy_reference_images_v1` → `{ bucket, config_updated_at, images }`).
+ * Mobile and the portal share these exact `path` + `updated_at` values, so they
+ * are passed through unchanged — no cache-busting token is invented on read.
+ */
+export function parseCanopyImagePayload(payload: unknown): CanopyImageMap {
+  if (!payload || typeof payload !== "object") return {};
+  return parseCanopyImageMap((payload as Record<string, unknown>).images);
+}
+
 async function readCanopyImageMap(): Promise<CanopyImageMap> {
+  // Preferred: the narrow read-only RPC shared with iOS/Android.
+  const narrow = await (supabase as any).rpc("get_canopy_reference_images_v1");
+  if (!narrow.error) return parseCanopyImagePayload(narrow.data);
+
+  // Fallback for backends where migration 244 is not applied yet.
   const { data, error } = await (supabase as any).rpc("get_system_feature_flags");
   if (error) {
     // eslint-disable-next-line no-console
