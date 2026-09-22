@@ -90,6 +90,7 @@ import OperationalToolGuidePage from "./pages/dashboard/OperationalToolGuidePage
 import FuelPurchasesPage from "./pages/FuelPurchasesPage";
 import TractorFuelLogsPage from "./pages/TractorFuelLogsPage";
 import FuelPage from "./pages/FuelPage";
+import FeatureRequestsPage from "./pages/FeatureRequestsPage";
 import UnsubscribePage from "./pages/UnsubscribePage";
 import FeatureFlagsPage from "./pages/admin/FeatureFlagsPage";
 import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
@@ -210,6 +211,7 @@ const App = () => (
                     <Route path="/yield" element={<YieldReportsPage />} />
                     <Route path="/damage-records" element={<DamageRecordsPage />} />
                     <Route path="/fuel" element={<FuelPage />} />
+                    <Route path="/feature-requests" element={<FeatureRequestsPage />} />
                     <Route path="/fuel-purchases" element={<FuelPurchasesPage />} />
                     <Route path="/tractor-fuel-logs" element={<TractorFuelLogsPage />} />
                     <Route path="/setup/chemicals" element={<SavedChemicalsPage />} />
