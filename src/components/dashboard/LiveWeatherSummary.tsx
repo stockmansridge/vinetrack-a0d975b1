@@ -1,11 +1,11 @@
-// Live Weather + Rain Forecast summary card for the Live Dashboard.
-// Read-only. Uses safe RPCs only — no direct provider calls from the browser.
+// Vineyard weather for the Live Dashboard.
 //
-// The card is split into two clearly labelled sections so observed values
-// (Davis WeatherLink) are never confused with forecast values (WillyWeather):
-//   1. "Live observations" — Davis WeatherLink
-//   2. "5-day forecast"    — configured provider, with genuine detailed trends when available
-import { useState } from "react";
+// Two distinct data products, in two separate inner cards:
+//   1. "Live observations" — MEASURED data from Davis WeatherLink
+//   2. "5-day forecast"    — FORECAST data from the configured provider
+// Observations are never called forecasts and forecast samples are never
+// called observations.
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { formatDistanceToNowStrict } from "date-fns";
@@ -22,8 +22,10 @@ import {
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   fetchLiveWeather,
+  refreshDavisObservations,
   type LiveWeatherReading,
 } from "@/lib/weatherStatusQuery";
 import {
@@ -87,18 +89,19 @@ interface MetricProps {
   label: string;
   value: string;
   hint?: string | null;
+  iconClass: string;
 }
-function Metric({ Icon, label, value, hint }: MetricProps) {
+function Metric({ Icon, label, value, hint, iconClass }: MetricProps) {
   return (
-    <div className="flex items-start gap-2">
-      <Icon className="h-4 w-4 mt-0.5 text-muted-foreground" />
+    <div className="flex items-center gap-2.5">
+      <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", iconClass)}>
+        <Icon className="h-4.5 w-4.5" />
+      </span>
       <div className="min-w-0">
-        <div className="text-xs text-muted-foreground">{label}</div>
-        <div className="text-sm font-medium leading-tight">
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+        <div className="text-sm font-semibold leading-tight">
           {value}
-          {hint && (
-            <span className="text-xs text-muted-foreground font-normal ml-1">{hint}</span>
-          )}
+          {hint && <span className="ml-1 text-xs font-normal text-muted-foreground">{hint}</span>}
         </div>
       </div>
     </div>
@@ -107,11 +110,17 @@ function Metric({ Icon, label, value, hint }: MetricProps) {
 
 interface Props {
   vineyardId: string;
+  /** How often the cached observation is re-read from the server (cheap). */
   refetchIntervalMs?: number;
 }
 
 export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: Props) {
   const rf = useRegionFormatters();
+  // Forecast fetch mode: set to true only for a manual Refresh so the shared
+  // server-side cache is bypassed for that one request.
+  const forceForecast = useRef(false);
+  const autoDavisAt = useRef(0);
+
   const weatherQ = useQuery({
     queryKey: ["live-weather", vineyardId],
     enabled: !!vineyardId,
@@ -122,23 +131,48 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   const forecastQ = useQuery({
     queryKey: ["five-day-forecast", vineyardId],
     enabled: !!vineyardId,
-    queryFn: () => fetchFiveDayForecast(vineyardId),
+    queryFn: async () => {
+      const force = forceForecast.current;
+      forceForecast.current = false;
+      return fetchFiveDayForecast(vineyardId, { force });
+    },
     refetchInterval: 15 * 60_000,
     refetchIntervalInBackground: false,
   });
 
-  // Only update after a successful refresh request completes.
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
+  const [davisRefreshing, setDavisRefreshing] = useState(false);
 
   const weather = weatherQ.data;
   const forecast = forecastQ.data;
 
   const reading: LiveWeatherReading | null =
     weather && weather.available ? weather.reading : null;
+  // Server-authoritative staleness (SQL contract: 20 minutes).
   const stale = weather && weather.available ? weather.stale : false;
 
   const observationsOk = !!(weather && weather.available && reading);
   const forecastOk = !!(forecast && forecast.available && forecast.forecast.days?.length);
+
+  // Automatic top-up: only ask Davis for new data when the server says its
+  // cached observation is stale — never every polling tick.
+  useEffect(() => {
+    if (!vineyardId || !weather || !weather.available || !weather.stale) return;
+    if (davisRefreshing) return;
+    if (Date.now() - autoDavisAt.current < 5 * 60_000) return;
+    autoDavisAt.current = Date.now();
+    let cancelled = false;
+    (async () => {
+      setDavisRefreshing(true);
+      const res = await refreshDavisObservations(vineyardId);
+      if (!cancelled && res.ok) await weatherQ.refetch({ cancelRefetch: true });
+      if (!cancelled) setDavisRefreshing(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vineyardId, weather?.available, (weather as any)?.stale]);
 
   const forecastBadge = (() => {
     if (forecastQ.isLoading) return { label: "Loading forecast…", title: undefined as string | undefined };
@@ -159,75 +193,84 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   })();
   const forecastIsWilly = forecastSourceLabel === "WillyWeather";
 
-  const refreshing = weatherQ.isFetching || forecastQ.isFetching;
+  const refreshing = weatherQ.isFetching || forecastQ.isFetching || davisRefreshing;
+
+  const forecastFreshness = (() => {
+    if (forecastQ.isFetching) return "Refreshing…";
+    if (forecast && forecast.available && forecast.cache?.fetchedAt) {
+      return `Updated ${formatDistanceToNowStrict(new Date(forecast.cache.fetchedAt))} ago`;
+    }
+    return null;
+  })();
+  const forecastCacheNotice =
+    forecast && forecast.available && (forecast as any).refreshFailed
+      ? "Showing last forecast · refresh failed"
+      : null;
+
+  /**
+   * Manual Refresh. The two sources are refreshed independently and cannot
+   * fail each other:
+   *   Davis:    davis-proxy action "current" (real WeatherLink fetch, updates
+   *             vineyard_weather_observations) → re-read
+   *             get_vineyard_current_weather() → update Live observations.
+   *   Forecast: bypass the shared forecast cache, fetch the provider, replace
+   *             the cache. On failure the previous cached forecast stays.
+   */
   const refreshAll = async () => {
-    const previousObservedAt =
-      weatherQ.data && weatherQ.data.available
-        ? weatherQ.data.reading.observed_at ?? null
-        : null;
-    try {
-      const [weatherRes, forecastRes] = await Promise.all([
-        weatherQ.refetch({ cancelRefetch: true }),
-        forecastQ.refetch({ cancelRefetch: true }),
-      ]);
+    const previousObservedAt = reading?.observed_at ?? null;
+    setDavisRefreshing(true);
+    forceForecast.current = true;
 
-      const weatherResult = weatherRes.data;
-      const forecastResult = forecastRes.data;
+    const davisTask = (async () => {
+      const proxy = await refreshDavisObservations(vineyardId);
+      const res = await weatherQ.refetch({ cancelRefetch: true });
+      return { proxy, result: res.data };
+    })();
+    const forecastTask = forecastQ.refetch({ cancelRefetch: true });
 
-      const weatherSuccess = !!(weatherResult && weatherResult.available);
-      const forecastSuccess = !!(forecastResult && forecastResult.available);
+    const [davisOutcome, forecastOutcome] = await Promise.allSettled([davisTask, forecastTask]);
+    setDavisRefreshing(false);
+    forceForecast.current = false;
 
-      // Only stamp last-refreshed once at least one request returned cleanly.
-      if (weatherSuccess || forecastSuccess) {
-        setLastRefreshedAt(new Date());
-      }
+    const davis = davisOutcome.status === "fulfilled" ? davisOutcome.value : null;
+    const forecastResult = forecastOutcome.status === "fulfilled" ? forecastOutcome.value.data : undefined;
 
-      // Per-source feedback so one failing source doesn't make the whole card
-      // appear stale.
-      if (!weatherSuccess && !forecastSuccess) {
-        toast({
-          title: "Weather refresh failed",
-          description: "Neither live observations nor forecast could be refreshed.",
-          variant: "destructive",
-        });
-        return;
-      }
-      if (!weatherSuccess) {
-        const why =
-          weatherResult && weatherResult.available === false
-            ? weatherResult.reason === "rpc_missing"
+    const observationsSuccess = !!(davis?.proxy.ok && davis.result && davis.result.available);
+    const forecastSuccess = !!(forecastResult && forecastResult.available && !(forecastResult as any).refreshFailed);
+
+    if (observationsSuccess || forecastSuccess) setLastRefreshedAt(new Date());
+
+    if (!observationsSuccess) {
+      const why = davis
+        ? !davis.proxy.ok
+          ? davis.proxy.message || "Davis WeatherLink could not be reached."
+          : davis.result && davis.result.available === false
+            ? davis.result.reason === "rpc_missing"
               ? "Server-side weather function is not deployed."
-              : weatherResult.reason === "not_configured"
-                ? "No weather provider is configured for this vineyard."
-                : weatherResult.reason === "no_data"
-                  ? "Weather provider has no observations yet."
-                  : weatherResult.message || "Live readings could not be fetched."
-            : "Live readings could not be fetched.";
-        toast({ title: "Live observations unavailable (Davis)", description: why });
-      } else if (previousObservedAt && weatherResult!.reading.observed_at === previousObservedAt) {
-        toast({
-          title: "No newer observations",
-          description:
-            "Davis WeatherLink returned no newer data. The station hasn't reported since the last update.",
-        });
-      }
-      if (!forecastSuccess) {
-        const why =
-          forecastResult && forecastResult.available === false
-            ? forecastUnavailableReason(forecastResult.reason, forecastResult.message)
-            : "Forecast could not be refreshed.";
-        toast({ title: "Forecast unavailable (WillyWeather)", description: why });
-      }
-      if (weatherSuccess && forecastSuccess) {
-        toast({ title: "Weather updated" });
-      }
-    } catch (e: unknown) {
+              : davis.result.reason === "not_configured"
+                ? "No weather station is configured for this vineyard."
+                : davis.result.reason === "no_data"
+                  ? "The station has not reported an observation yet."
+                  : davis.result.message || "Live readings could not be fetched."
+            : "Live readings could not be fetched."
+        : "Live readings could not be fetched.";
+      toast({ title: "Live observations not refreshed (Davis WeatherLink)", description: why });
+    } else if (previousObservedAt && davis?.result && davis.result.available && davis.result.reading.observed_at === previousObservedAt) {
       toast({
-        title: "Weather refresh failed",
-        description: e instanceof Error ? e.message : "Unexpected error.",
-        variant: "destructive",
+        title: "No newer observations",
+        description: "Davis WeatherLink returned no newer data — the station hasn't reported since the last update.",
       });
     }
+
+    if (!forecastSuccess) {
+      const why =
+        forecastResult && forecastResult.available === false
+          ? forecastUnavailableReason(forecastResult.reason, forecastResult.message)
+          : "Showing the last forecast instead.";
+      toast({ title: `Forecast not refreshed (${forecastSourceLabel})`, description: why });
+    }
+
+    if (observationsSuccess && forecastSuccess) toast({ title: "Weather updated" });
   };
 
   const headerRight = (
@@ -241,13 +284,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
           last refreshed {formatDistanceToNowStrict(lastRefreshedAt)} ago
         </span>
       )}
-      <Button
-        size="sm"
-        variant="outline"
-        className="h-7 px-2"
-        onClick={refreshAll}
-        disabled={refreshing}
-      >
+      <Button size="sm" variant="outline" className="h-7 px-2" onClick={refreshAll} disabled={refreshing}>
         <RefreshCw className={`h-3.5 w-3.5 mr-1 ${refreshing ? "animate-spin" : ""}`} />
         Refresh
       </Button>
@@ -255,11 +292,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   );
 
   if (weatherQ.isLoading && forecastQ.isLoading) {
-    return (
-      <Card className="p-4 text-sm text-muted-foreground">
-        Loading vineyard weather…
-      </Card>
-    );
+    return <Card className="p-4 text-sm text-muted-foreground">Loading vineyard weather…</Card>;
   }
 
   const wind = reading?.wind_speed_kmh;
@@ -267,37 +300,36 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   const observedAgo = reading?.observed_at
     ? formatDistanceToNowStrict(new Date(reading.observed_at))
     : null;
-
   const observationSourceLabel = reading ? sourceLabel(reading.source) : "Davis WeatherLink";
 
   return (
-    <Card className={`p-4 space-y-4 ${stale ? "border-amber-500/40 bg-amber-500/5" : ""}`}>
+    <Card className="space-y-5 bg-muted/20 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-sm font-medium">Vineyard weather</div>
         {headerRight}
       </div>
 
-      {/* ---------- Section 1: Live observations (Davis) ---------- */}
-      <section className="space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Live observations
-            </div>
-            <Badge variant="outline" className="text-[10px]">
-              Source: {observationSourceLabel}
-            </Badge>
+      {/* ---------- Measured: Live observations (Davis WeatherLink) ---------- */}
+      <section
+        className={cn(
+          "rounded-xl border bg-card p-4 shadow-sm",
+          stale && "border-amber-500/40 bg-amber-500/5",
+        )}
+        data-testid="live-observations-card"
+      >
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-xs font-semibold uppercase tracking-wide">Live observations</div>
+            <Badge variant="outline" className="text-[10px]">Source: {observationSourceLabel}</Badge>
             {reading?.station_name && (
               <span className="text-xs text-muted-foreground">{reading.station_name}</span>
             )}
-            {observedAgo && (
-              <span className="text-xs text-muted-foreground">
-                updated {observedAgo} ago
-              </span>
-            )}
+            <span className="text-xs text-muted-foreground">
+              {davisRefreshing ? "Refreshing…" : observedAgo ? `Updated ${observedAgo} ago` : ""}
+            </span>
           </div>
           {stale && observationsOk && (
-            <span className="inline-flex items-center gap-1 text-xs text-amber-700">
+            <span className="inline-flex items-center gap-1 text-xs text-amber-600">
               <AlertTriangle className="h-3.5 w-3.5" />
               Observations are stale
             </span>
@@ -305,40 +337,42 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
         </div>
 
         {observationsOk && reading ? (
-          <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
             <Metric
               Icon={Thermometer}
+              iconClass="bg-amber-500/15 text-amber-500"
               label="Temperature"
               value={reading.temperature_c != null ? rf.temperature(reading.temperature_c, 1) : "—"}
             />
             <Metric
               Icon={Droplets}
+              iconClass="bg-sky-500/15 text-sky-500"
               label="Humidity"
               value={reading.humidity_pct != null ? `${fmt(reading.humidity_pct, 0)}%` : "—"}
             />
             <Metric
               Icon={Wind}
+              iconClass="bg-emerald-500/15 text-emerald-500"
               label="Current wind"
               value={wind != null ? rf.wind(wind, 1) : "—"}
               hint={dir}
             />
             <Metric
               Icon={Wind}
+              iconClass="bg-orange-500/15 text-orange-500"
               label="Current gust"
-              value={
-                reading.wind_gust_kmh != null
-                  ? rf.wind(reading.wind_gust_kmh, 1)
-                  : "—"
-              }
+              value={reading.wind_gust_kmh != null ? rf.wind(reading.wind_gust_kmh, 1) : "—"}
             />
             <Metric
               Icon={CloudRain}
-              label="Rain recorded today"
+              iconClass="bg-blue-500/15 text-blue-500"
+              label="Rain today"
               value={reading.rain_today_mm != null ? rf.rainfall(reading.rain_today_mm, 1) : "—"}
             />
             <Metric
               Icon={CloudRain}
-              label="Current rain rate"
+              iconClass="bg-cyan-500/15 text-cyan-500"
+              label="Rain rate"
               value={
                 reading.rain_rate_mm_per_hr != null
                   ? `${rf.rainfall(reading.rain_rate_mm_per_hr)}/h`
@@ -357,7 +391,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
                   : weather.reason === "no_data"
                     ? " — no recent observations"
                     : weather.reason === "not_configured"
-                      ? " — no weather provider configured"
+                      ? " — no weather station configured"
                       : weather.message
                         ? ` — ${weather.message}`
                         : ""
@@ -367,14 +401,20 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
         )}
       </section>
 
-      {/* ---------- Section 2: provider-neutral 5-day forecast ---------- */}
-      <section className="space-y-2 border-t pt-3">
+      {/* ---------- Forecast: provider-neutral 5-day forecast ---------- */}
+      <section className="space-y-2" data-testid="forecast-card">
         {forecastOk && forecast?.available ? (
-          <FiveDayForecastPanel vineyardId={vineyardId} forecast={forecast.forecast} rf={rf} />
+          <FiveDayForecastPanel
+            vineyardId={vineyardId}
+            forecast={forecast.forecast}
+            rf={rf}
+            freshnessLabel={forecastFreshness}
+            cacheNotice={forecastCacheNotice}
+          />
         ) : forecastQ.isLoading ? (
-          <div className="text-xs text-muted-foreground">Loading 5-day forecast…</div>
+          <div className="rounded-xl border bg-card p-4 text-xs text-muted-foreground">Loading 5-day forecast…</div>
         ) : (
-          <div className="flex items-center gap-2 rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 rounded-xl border border-dashed bg-card px-3 py-3 text-xs text-muted-foreground">
             <CloudOff className="h-4 w-4" />
             <span>5-day forecast unavailable{forecastBadge.title ? ` — ${forecastBadge.title}` : ""}</span>
           </div>
