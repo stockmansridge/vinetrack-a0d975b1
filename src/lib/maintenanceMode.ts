@@ -38,7 +38,9 @@ export interface PortalMaintenance {
 export async function fetchMaintenance(): Promise<PortalMaintenance> {
   const { data, error } = await cloudSupabase
     .from("portal_maintenance")
-    .select("is_enabled, message, updated_at, updated_by_email")
+    // updated_by_email is deliberately NOT selected: that column is not
+    // readable by anon/authenticated (admin email addresses stay private).
+    .select("is_enabled, message, updated_at")
     .eq("id", 1)
     .maybeSingle();
   if (error) throw error;
@@ -46,7 +48,7 @@ export async function fetchMaintenance(): Promise<PortalMaintenance> {
     is_enabled: data?.is_enabled ?? false,
     message: data?.message?.trim() || DEFAULT_MAINTENANCE_MESSAGE,
     updated_at: data?.updated_at ?? null,
-    updated_by_email: data?.updated_by_email ?? null,
+    updated_by_email: null,
   };
 }
 
