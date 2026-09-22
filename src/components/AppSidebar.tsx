@@ -200,9 +200,9 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              isActive={location.pathname === "/feature-requests"}
+              isActive={pathname === "/feature-requests"}
               tooltip="Feature Requests"
-              className={buttonClass(location.pathname === "/feature-requests")}
+              className={buttonClass(pathname === "/feature-requests")}
             >
               <NavLink to="/feature-requests" className="flex items-center gap-2.5">
                 <Lightbulb className="h-4 w-4" />

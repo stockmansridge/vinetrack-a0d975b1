@@ -23,7 +23,6 @@ import {
   Grape,
   LayoutDashboard,
   Layers,
-  Lightbulb,
   Mail,
   Map,
   MapPin,
