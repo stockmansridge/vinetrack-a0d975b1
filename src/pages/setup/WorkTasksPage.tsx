@@ -1137,6 +1137,13 @@ function WorkTaskDrawer({
   });
 
   const drawerCanSeeCosts = useCanSeeCosts();
+  // Material Costs (Phase 3) — temporarily System Admin only; see
+  // src/lib/materialCostsAccess.ts for the single gate.
+  const materialCostsAccess = useMaterialCostsEnabled();
+  const { data: vineyardMaterialLines = [] } = useWorkTaskMaterials(
+    vineyardId,
+    materialCostsAccess.enabled,
+  );
   const displayedLabourLines = useMemo(() => {
     const byId = new Map<string, WorkTaskLabourLine>();
     labourLines.forEach((line) => byId.set(line.id, line));
