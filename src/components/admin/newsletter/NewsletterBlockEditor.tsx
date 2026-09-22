@@ -12,6 +12,17 @@ import {
   type NewsletterImageRef,
 } from "@/lib/newsletter/blocks";
 import { uploadNewsletterImage } from "@/lib/newsletter/imageUpload";
+import {
+  BACKGROUND_OPTIONS,
+  BUTTON_BACKGROUND_OPTIONS,
+  BUTTON_TEXT_OPTIONS,
+  NEWSLETTER_BRAND,
+  TEXT_OPTIONS,
+  colourHex,
+  contrastWarning,
+  isValidHexColour,
+  type ColourOption,
+} from "@/lib/newsletter/palette";
 import { useToast } from "@/hooks/use-toast";
 
 interface Props {
@@ -151,6 +162,77 @@ function Choice({
   );
 }
 
+const CUSTOM = "__custom";
+
+/** Preset-first colour control with an optional validated hex. */
+function ColourField({
+  label,
+  options,
+  value,
+  fallback,
+  readOnly,
+  onChange,
+}: {
+  label: string;
+  options: ColourOption[];
+  value: string;
+  fallback: string;
+  readOnly?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const custom = isValidHexColour(value) || (!!value && !options.some((o) => o.value === value));
+  const [hex, setHex] = useState(custom ? value : fallback);
+  const swatch = colourHex(options, value, fallback);
+
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs">{label}</Label>
+      <div className="flex items-center gap-2">
+        <span
+          aria-hidden
+          className="h-8 w-8 shrink-0 rounded-md border"
+          style={{ backgroundColor: swatch }}
+        />
+        <select
+          className="h-9 flex-1 rounded-md border bg-background px-2 text-sm"
+          aria-label={label}
+          disabled={readOnly}
+          value={custom ? CUSTOM : value}
+          onChange={(e) => {
+            if (e.target.value === CUSTOM) onChange(isValidHexColour(hex) ? hex : fallback);
+            else onChange(e.target.value);
+          }}
+        >
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+          <option value={CUSTOM}>Custom colour…</option>
+        </select>
+      </div>
+      {custom && (
+        <div className="space-y-1">
+          <Input
+            className="h-8 font-mono text-xs"
+            placeholder="#2A7140"
+            value={hex}
+            disabled={readOnly}
+            onChange={(e) => {
+              const next = e.target.value;
+              setHex(next);
+              if (isValidHexColour(next)) onChange(next);
+            }}
+          />
+          {!isValidHexColour(hex) && (
+            <p className="text-xs text-destructive">Use a hex colour such as #2A7140.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function NewsletterBlockEditor({
   block,
   index,
@@ -165,6 +247,14 @@ export function NewsletterBlockEditor({
   const showBullets = block.type === "feature" || block.type === "text";
   const showImage = block.type === "hero" || block.type === "feature";
   const showCta = ["hero", "feature", "button"].includes(block.type);
+  const colourable = !["divider", "footer"].includes(block.type);
+  const bgHex = colourHex(
+    BACKGROUND_OPTIONS,
+    block.bgColor ?? block.background ?? "white",
+    NEWSLETTER_BRAND.white,
+  );
+  const textHex = colourHex(TEXT_OPTIONS, block.textColor ?? "ink", NEWSLETTER_BRAND.ink);
+  const warning = colourable ? contrastWarning(bgHex, textHex) : null;
 
   const updateCard = (i: number, patch: Partial<NewsletterCardBlock>) => {
     const cards = [...(block.cards ?? [])];
@@ -313,18 +403,6 @@ export function NewsletterBlockEditor({
       )}
 
       <div className="flex flex-wrap gap-4 pt-1">
-        {block.type !== "divider" && (
-          <Choice
-            label="Section background"
-            value={block.background ?? "white"}
-            readOnly={readOnly}
-            options={[
-              { value: "white", label: "White" },
-              { value: "soft", label: "Soft green" },
-            ]}
-            onChange={(v) => onChange({ background: v as "white" | "soft" })}
-          />
-        )}
         {["hero", "text", "button"].includes(block.type) && (
           <Choice
             label="Alignment"
@@ -350,6 +428,59 @@ export function NewsletterBlockEditor({
           />
         )}
       </div>
+
+      {colourable && (
+        <div className="space-y-2 border-t pt-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <ColourField
+              label="Background"
+              options={BACKGROUND_OPTIONS}
+              value={block.bgColor ?? block.background ?? "white"}
+              fallback={NEWSLETTER_BRAND.white}
+              readOnly={readOnly}
+              onChange={(v) =>
+                onChange({
+                  bgColor: v,
+                  background: v === "white" ? "white" : "soft",
+                })
+              }
+            />
+            <ColourField
+              label="Text"
+              options={TEXT_OPTIONS}
+              value={block.textColor ?? "ink"}
+              fallback={NEWSLETTER_BRAND.ink}
+              readOnly={readOnly}
+              onChange={(v) => onChange({ textColor: v })}
+            />
+          </div>
+          {warning && (
+            <p className="text-xs text-amber-600 dark:text-amber-400" data-testid="contrast-warning">
+              {warning}
+            </p>
+          )}
+          {showCta && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ColourField
+                label="Button background"
+                options={BUTTON_BACKGROUND_OPTIONS}
+                value={block.buttonBgColor ?? "green"}
+                fallback={NEWSLETTER_BRAND.green}
+                readOnly={readOnly}
+                onChange={(v) => onChange({ buttonBgColor: v })}
+              />
+              <ColourField
+                label="Button text"
+                options={BUTTON_TEXT_OPTIONS}
+                value={block.buttonTextColor ?? "white"}
+                fallback={NEWSLETTER_BRAND.white}
+                readOnly={readOnly}
+                onChange={(v) => onChange({ buttonTextColor: v })}
+              />
+            </div>
+          )}
+        </div>
+      )}
     </Card>
   );
 }

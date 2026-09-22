@@ -42,7 +42,14 @@ export interface NewsletterBlock {
   ctaUrl?: string;
   align?: "left" | "center";
   layout?: "image-left" | "image-right";
-  background?: "white" | "soft";
+  /** Legacy two-choice background; still honoured by the renderer. */
+  background?: "white" | "soft" | string;
+  /** Colour preset key (see palette.ts) or #hex. Saved in the block JSON and
+   *  frozen into the sent version; rendered as inline email styles. */
+  bgColor?: string;
+  textColor?: string;
+  buttonBgColor?: string;
+  buttonTextColor?: string;
   cards?: NewsletterCardBlock[];
 }
 
@@ -76,7 +83,7 @@ export function newBlockId(): string {
 }
 
 export function emptyBlock(type: NewsletterBlockType): NewsletterBlock {
-  const base: NewsletterBlock = { id: newBlockId(), type, background: "white" };
+  const base: NewsletterBlock = { id: newBlockId(), type, background: "white", bgColor: "white" };
   switch (type) {
     case "hero":
       return { ...base, eyebrow: "", heading: "What's new in VineTrack", body: "", align: "left" };
@@ -115,8 +122,25 @@ export interface NewsletterTemplate {
   blocks: NewsletterBlock[];
 }
 
-function feature(heading: string, body: string, bullets: string[], layout: "image-left" | "image-right", background: "white" | "soft"): NewsletterBlock {
-  return { id: newBlockId(), type: "feature", heading, body, bullets, layout, background };
+function feature(
+  heading: string,
+  body: string,
+  bullets: string[],
+  layout: "image-left" | "image-right",
+  bgColor: string,
+  textColor?: string,
+): NewsletterBlock {
+  return {
+    id: newBlockId(),
+    type: "feature",
+    heading,
+    body,
+    bullets,
+    layout,
+    background: bgColor === "white" ? "white" : "soft",
+    bgColor,
+    textColor,
+  };
 }
 
 export function productUpdateTemplate(): NewsletterTemplate {
@@ -135,7 +159,11 @@ export function productUpdateTemplate(): NewsletterTemplate {
         heading: "What's new in VineTrack",
         body: "A round-up of the latest improvements across the app, the Portal and the website.",
         align: "left",
-        background: "soft",
+        background: "white",
+        bgColor: "white",
+        textColor: "ink",
+        buttonBgColor: "green",
+        buttonTextColor: "white",
         ctaLabel: "Open the Portal",
         ctaUrl: "https://portal.vinetrack.com.au",
       },
@@ -165,13 +193,17 @@ export function productUpdateTemplate(): NewsletterTemplate {
         "Season-wide numbers you can act on, not just data you have to read.",
         ["Yield estimates", "Damage adjustments", "Cost reporting"],
         "image-right",
-        "soft",
+        "deep",
+        "white",
       ),
       {
         id: newBlockId(),
         type: "cards",
+        eyebrow: "More from VineTrack",
         heading: "Explore VineTrack",
-        background: "white",
+        background: "soft",
+        bgColor: "soft",
+        textColor: "deep",
         cards: [
           {
             heading: "VineTrack Portal",

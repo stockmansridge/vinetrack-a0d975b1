@@ -15,11 +15,13 @@
 // POST { action: "run_due" }                  -> { processed }  (scheduler pass)
 import {
   corsHeaders,
+  cronAuthorised,
   emailHash,
   json,
   jsonError,
   requireSystemAdmin,
   resolveLiveAudience,
+  systemContext,
   type AdminContext,
 } from "../_shared/newsletter/admin.ts";
 import { renderNewsletterHtml, renderNewsletterText } from "../_shared/newsletter/render.ts";
@@ -70,8 +72,15 @@ async function createVersion(
   }
 
   const resolved = await resolveLiveAudience(ctx, { includeCurrentUsers, includeSubscribers });
-  if (resolved.warnings.length > 0 && resolved.recipients.length === 0) {
-    return { ok: false, status: 503, error: resolved.warnings.join(" ") };
+  // FAIL CLOSED: any warning means a source (users, subscribers or the
+  // suppression list) could not be read in full. Sending on a partial audience
+  // could email someone who has unsubscribed, so it is refused outright.
+  if (resolved.warnings.length > 0) {
+    return {
+      ok: false,
+      status: 503,
+      error: `${resolved.warnings.join(" ")} Nothing was sent — try again once the data can be read.`,
+    };
   }
   if (resolved.recipients.length === 0) {
     return { ok: false, status: 400, error: "This audience resolves to zero recipients." };
@@ -151,12 +160,28 @@ async function deliverBatch(ctx: AdminContext, version: Row) {
     .update({ status: "sending" })
     .eq("id", version.campaign_id);
 
+  // CONCURRENCY: two overlapping passes (a resume loop and the scheduler, say)
+  // must not work the same rows. Each pass CLAIMS its rows with a conditional
+  // update — only rows still 'pending' are returned, so a row can be claimed
+  // once. The provider idempotency key remains the final backstop.
+  const claimId = crypto.randomUUID();
   const pending = await ctx.portal
     .from("newsletter_campaign_recipients")
-    .select("id, email, idempotency_key")
+    .update({ status: "sending", claim_id: claimId, claimed_at: new Date().toISOString() })
     .eq("version_id", version.id)
     .eq("status", "pending")
-    .limit(BATCH_SIZE);
+    .in(
+      "id",
+      ((
+        await ctx.portal
+          .from("newsletter_campaign_recipients")
+          .select("id")
+          .eq("version_id", version.id)
+          .eq("status", "pending")
+          .limit(BATCH_SIZE)
+      ).data ?? []).map((r: Row) => r.id),
+    )
+    .select("id, email, idempotency_key");
   if (pending.error) return { error: pending.error.message, sent: 0, failed: 0, remaining: -1 };
 
   const label = `newsletter_${version.campaign_id}`;
@@ -196,7 +221,7 @@ async function deliverBatch(ctx: AdminContext, version: Row) {
     .select("status")
     .eq("version_id", version.id);
   const statuses = ((tally.data ?? []) as Row[]).map((r) => r.status);
-  const remaining = statuses.filter((s) => s === "pending").length;
+  const remaining = statuses.filter((s) => s === "pending" || s === "sending").length;
   const totalSent = statuses.filter((s) => s === "sent").length;
   const totalFailed = statuses.filter((s) => s === "failed").length;
 
@@ -224,26 +249,65 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return jsonError(405, "Method not allowed");
 
-  const auth = await requireSystemAdmin(req);
-  if (!auth.ok) return auth.response;
-  const ctx = auth.ctx;
-
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch { /* ignore */ }
   const action = String(body.action ?? "send");
 
+  // The scheduler pass has no signed-in admin: it delivers versions whose
+  // content and recipients a system admin already froze. It is authorised by
+  // the cron secret (or the service role key) instead.
+  let ctx: AdminContext;
+  if (action === "run_due" && cronAuthorised(req)) {
+    const system = systemContext();
+    if (!system) return jsonError(503, "Backend is not configured.");
+    ctx = system;
+  } else {
+    const auth = await requireSystemAdmin(req);
+    if (!auth.ok) return auth.response;
+    ctx = auth.ctx;
+  }
+
   try {
     if (action === "run_due") {
-      const now = new Date().toISOString();
+      const now = Date.now();
       const due = await ctx.portal
         .from("newsletter_campaign_versions")
         .select("*")
         .eq("status", "scheduled")
-        .lte("scheduled_at", now)
+        .lte("scheduled_at", new Date(now).toISOString())
         .limit(3);
+
+      // INTERRUPTED SEND RECOVERY: a version left 'sending' because an earlier
+      // invocation was cut short (timeout, deploy, crash) is picked up again.
+      // Delivery resumes on the SAME frozen version, and rows claimed by the
+      // dead pass are released so they can be retried; the provider
+      // idempotency key prevents any duplicate email.
+      const STALE_MS = 10 * 60 * 1000;
+      const stuck = await ctx.portal
+        .from("newsletter_campaign_versions")
+        .select("*")
+        .eq("status", "sending")
+        .lte("started_at", new Date(now - STALE_MS).toISOString())
+        .limit(3);
+
+      const versions = [...((due.data ?? []) as Row[]), ...((stuck.data ?? []) as Row[])];
       let processed = 0;
-      for (const version of (due.data ?? []) as Row[]) {
-        await deliverBatch(ctx, version);
+      for (const version of versions) {
+        await ctx.portal
+          .from("newsletter_campaign_recipients")
+          .update({ status: "pending", claim_id: null, claimed_at: null })
+          .eq("version_id", version.id)
+          .eq("status", "sending")
+          .lte("claimed_at", new Date(now - STALE_MS).toISOString());
+
+        // Drain this version within the invocation; the next pass continues if
+        // the batch budget runs out.
+        let guard = 0;
+        let result = await deliverBatch(ctx, version);
+        while (!("error" in result && result.error) && result.remaining > 0 && guard < 20) {
+          guard += 1;
+          result = await deliverBatch(ctx, { ...version, started_at: version.started_at ?? new Date().toISOString() });
+        }
         processed += 1;
       }
       return json(200, { processed });

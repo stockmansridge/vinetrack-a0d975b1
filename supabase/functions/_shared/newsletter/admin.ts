@@ -23,7 +23,7 @@ import {
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-vinetrack-token",
+    "authorization, x-client-info, apikey, content-type, x-vinetrack-token, x-newsletter-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -47,6 +47,42 @@ export interface AdminContext {
 }
 
 export type AdminResult = { ok: true; ctx: AdminContext } | { ok: false; response: Response };
+
+/**
+ * Scheduler context — NO user token.
+ *
+ * Used only by the run_due scheduler pass, which delivers versions whose
+ * content and recipient list were already frozen by a system admin. It never
+ * resolves an audience, so no admin RPC is required. Callers must pass the
+ * cron secret (see cronAuthorised) before using this.
+ */
+export function systemContext(): AdminContext | null {
+  const VT_URL = Deno.env.get("VINETRACK_SUPABASE_URL");
+  const VT_SERVICE = Deno.env.get("VINETRACK_SERVICE_ROLE_KEY");
+  const CLOUD_URL = Deno.env.get("SUPABASE_URL");
+  const CLOUD_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!VT_URL || !VT_SERVICE || !CLOUD_URL || !CLOUD_SERVICE) return null;
+  const vinetrack = createClient(VT_URL, VT_SERVICE, { auth: { persistSession: false } });
+  return {
+    portal: createClient(CLOUD_URL, CLOUD_SERVICE, { auth: { persistSession: false } }),
+    vinetrack,
+    asAdmin: vinetrack,
+    userId: "",
+    userEmail: "scheduler",
+  };
+}
+
+/** True when the request carries the scheduler secret or the service role key. */
+export function cronAuthorised(req: Request): boolean {
+  const secret = Deno.env.get("NEWSLETTER_CRON_SECRET") ?? "";
+  const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const provided = (req.headers.get("x-newsletter-cron-secret") ?? "").trim();
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+  if (secret && provided && provided === secret) return true;
+  if (service && bearer && bearer === service) return true;
+  return false;
+}
 
 export async function requireSystemAdmin(req: Request): Promise<AdminResult> {
   const VT_URL = Deno.env.get("VINETRACK_SUPABASE_URL");
@@ -117,7 +153,13 @@ export async function resolveLiveAudience(
     if (error) {
       warnings.push("Current Users could not be read from the VineTrack database.");
     } else {
-      currentUsers = ((data ?? []) as { email?: string | null }[]).map((u) => u.email ?? "");
+      // "Current Users" = every row admin_list_users returns, i.e. every
+      // VineTrack auth account, regardless of vineyard membership or last
+      // sign-in. Rows without a usable address are dropped here and counted as
+      // invalid by resolveAudience.
+      currentUsers = ((data ?? []) as { email?: string | null }[])
+        .map((u) => (u.email ?? "").trim())
+        .filter((e) => e.length > 0);
     }
   }
 

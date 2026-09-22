@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -41,6 +40,8 @@ import {
   useSendTestNewsletter,
   type SaveCampaignInput,
 } from "@/lib/newsletterAdmin";
+import { ensureNewsletterBrandingLogo } from "@/lib/newsletter/imageUpload";
+import vinetrackLogo from "@/assets/vinetrack-logo.png";
 import { useToast } from "@/hooks/use-toast";
 
 const TZ = "Australia/Sydney";
@@ -56,7 +57,6 @@ function CountRow({ label, value, strong }: { label: string; value: number | str
 
 export default function AdminNewsletterEditorPage() {
   const { id } = useParams<{ id: string }>();
-  const [params] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -80,7 +80,6 @@ export default function AdminNewsletterEditorPage() {
     blocks: [],
     timezone: TZ,
   });
-  const [tab, setTab] = useState(params.get("tab") === "preview" ? "preview" : "content");
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [testAddresses, setTestAddresses] = useState("");
   const [confirmSend, setConfirmSend] = useState(false);
@@ -107,8 +106,23 @@ export default function AdminNewsletterEditorPage() {
     });
   }, [data?.campaign]);
 
+  // The delivered email needs a durable public logo URL, so make sure the
+  // branded copy exists in the shared image bucket before any send.
+  useEffect(() => {
+    void ensureNewsletterBrandingLogo(vinetrackLogo);
+  }, []);
+
   const audience = useAudienceCounts(form.audience_current_users, form.audience_subscribers);
-  const preview = useNewsletterPreview(form, tab === "preview");
+
+  // Live preview: debounced so typing doesn't hammer the renderer, but always
+  // rendered by the SAME server renderer that produces the delivered email.
+  const [previewForm, setPreviewForm] = useState<SaveCampaignInput>(form);
+  useEffect(() => {
+    const t = setTimeout(() => setPreviewForm(form), 300);
+    return () => clearTimeout(t);
+  }, [form]);
+  const preview = useNewsletterPreview(previewForm, true);
+  const previewStale = previewForm !== form || preview.isFetching;
 
   const anyAudience = form.audience_current_users || form.audience_subscribers;
   const finalCount = audience.data?.counts.final ?? 0;
@@ -192,7 +206,7 @@ export default function AdminNewsletterEditorPage() {
       <AdminError error={error} />
       {isLoading && <Card className="p-4 text-sm text-muted-foreground">Loading…</Card>}
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+      <div className="grid gap-4 xl:grid-cols-[1fr_340px]">
         <div className="space-y-4">
           <Card className="p-4 space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -223,114 +237,8 @@ export default function AdminNewsletterEditorPage() {
               never affected.
             </p>
           </Card>
-
-          <Tabs value={tab} onValueChange={setTab}>
-            <TabsList>
-              <TabsTrigger value="content">Content</TabsTrigger>
-              <TabsTrigger value="preview">Preview &amp; test</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="content" className="space-y-3 pt-3">
-              {form.blocks.map((block, index) => (
-                <NewsletterBlockEditor
-                  key={block.id}
-                  block={block}
-                  index={index}
-                  total={form.blocks.length}
-                  readOnly={readOnly}
-                  onChange={(patch) => setForm((f) => ({ ...f, blocks: updateBlock(f.blocks, block.id, patch) }))}
-                  onMove={(delta) => setForm((f) => ({ ...f, blocks: moveBlock(f.blocks, block.id, delta) }))}
-                  onDuplicate={() => setForm((f) => ({ ...f, blocks: duplicateBlock(f.blocks, block.id) }))}
-                  onDelete={() => setForm((f) => ({ ...f, blocks: removeBlock(f.blocks, block.id) }))}
-                />
-              ))}
-              {!readOnly && (
-                <Card className="p-3">
-                  <div className="text-xs font-semibold text-muted-foreground mb-2">Add a block</div>
-                  <div className="flex flex-wrap gap-2">
-                    {ADDABLE_BLOCKS.map((type) => (
-                      <Button
-                        key={type}
-                        size="sm"
-                        variant="outline"
-                        className="gap-1"
-                        onClick={() => setForm((f) => ({ ...f, blocks: addBlock(f.blocks, type) }))}
-                      >
-                        <Plus className="h-3.5 w-3.5" /> {BLOCK_LABELS[type]}
-                      </Button>
-                    ))}
-                  </div>
-                </Card>
-              )}
-            </TabsContent>
-
-            <TabsContent value="preview" className="space-y-3 pt-3">
-              <Card className="p-3 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant={device === "desktop" ? "default" : "outline"} className="gap-1" onClick={() => setDevice("desktop")}>
-                    <Monitor className="h-4 w-4" /> Desktop
-                  </Button>
-                  <Button size="sm" variant={device === "mobile" ? "default" : "outline"} className="gap-1" onClick={() => setDevice("mobile")}>
-                    <Smartphone className="h-4 w-4" /> Mobile
-                  </Button>
-                  {preview.isFetching && <span className="text-xs text-muted-foreground">Rendering…</span>}
-                </div>
-                <div className="flex justify-center bg-muted/40 rounded-md p-3 overflow-auto">
-                  <iframe
-                    title="Newsletter preview"
-                    srcDoc={preview.data?.html ?? "<p style='font-family:sans-serif;padding:24px'>Preview loading…</p>"}
-                    style={{
-                      width: device === "mobile" ? 390 : 720,
-                      height: 640,
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: 8,
-                      background: "#fff",
-                    }}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  This is the exact email that will be delivered — it is rendered by the same engine
-                  used for the real send.
-                </p>
-              </Card>
-
-              <Card className="p-4 space-y-2">
-                <Label className="text-xs">Send a test (one address per line, up to 5)</Label>
-                <Input
-                  placeholder="you@vinetrack.com.au"
-                  value={testAddresses}
-                  onChange={(e) => setTestAddresses(e.target.value)}
-                />
-                <Button
-                  size="sm"
-                  className="gap-1"
-                  disabled={sendTest.isPending || !testAddresses.trim()}
-                  onClick={async () => {
-                    const recipients = testAddresses.split(/[\n,;]/).map((s) => s.trim()).filter(Boolean);
-                    try {
-                      const res = await sendTest.mutateAsync({ campaign: form, recipients });
-                      toast({
-                        title: `Test sent to ${res.sent} address${res.sent === 1 ? "" : "es"}`,
-                        description: res.failed.length
-                          ? `Failed: ${res.failed.map((f) => f.email).join(", ")}`
-                          : "Marked as a test — the newsletter audience and subscriber list are untouched.",
-                        variant: res.failed.length ? "destructive" : undefined,
-                      });
-                    } catch (e) {
-                      toast({
-                        title: "Couldn't send the test",
-                        description: e instanceof Error ? e.message : String(e),
-                        variant: "destructive",
-                      });
-                    }
-                  }}
-                >
-                  <Send className="h-4 w-4" /> {sendTest.isPending ? "Sending…" : "Send test"}
-                </Button>
-              </Card>
-            </TabsContent>
-          </Tabs>
         </div>
+
 
         <div className="space-y-4">
           <Card className="p-4 space-y-3">
@@ -467,6 +375,141 @@ export default function AdminNewsletterEditorPage() {
           )}
         </div>
       </div>
+
+      {/* Build newsletter — full page width, editor beside the live preview on
+          wide System Admin screens, stacked below ~1280px. */}
+      <section className="mt-6 space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Build newsletter
+        </h2>
+        <div className="grid gap-4 xl:grid-cols-[55fr_45fr] items-start">
+          <div className="space-y-3 min-w-0">
+            {form.blocks.map((block, index) => (
+              <NewsletterBlockEditor
+                key={block.id}
+                block={block}
+                index={index}
+                total={form.blocks.length}
+                readOnly={readOnly}
+                onChange={(patch: Partial<NewsletterBlock>) =>
+                  setForm((f) => ({ ...f, blocks: updateBlock(f.blocks, block.id, patch) }))
+                }
+                onMove={(delta: number) =>
+                  setForm((f) => ({ ...f, blocks: moveBlock(f.blocks, block.id, delta) }))
+                }
+                onDuplicate={() =>
+                  setForm((f) => ({ ...f, blocks: duplicateBlock(f.blocks, block.id) }))
+                }
+                onDelete={() => setForm((f) => ({ ...f, blocks: removeBlock(f.blocks, block.id) }))}
+              />
+            ))}
+            {!readOnly && (
+              <Card className="p-3">
+                <div className="text-xs font-semibold text-muted-foreground mb-2">Add a block</div>
+                <div className="flex flex-wrap gap-2">
+                  {ADDABLE_BLOCKS.map((type) => (
+                    <Button
+                      key={type}
+                      size="sm"
+                      variant="outline"
+                      className="gap-1"
+                      onClick={() => setForm((f) => ({ ...f, blocks: addBlock(f.blocks, type) }))}
+                    >
+                      <Plus className="h-3.5 w-3.5" /> {BLOCK_LABELS[type]}
+                    </Button>
+                  ))}
+                </div>
+              </Card>
+            )}
+          </div>
+
+          <div className="min-w-0 xl:sticky xl:top-4 space-y-3">
+            <Card className="p-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant={device === "desktop" ? "default" : "outline"}
+                  className="gap-1"
+                  onClick={() => setDevice("desktop")}
+                >
+                  <Monitor className="h-4 w-4" /> Desktop
+                </Button>
+                <Button
+                  size="sm"
+                  variant={device === "mobile" ? "default" : "outline"}
+                  className="gap-1"
+                  onClick={() => setDevice("mobile")}
+                >
+                  <Smartphone className="h-4 w-4" /> Mobile
+                </Button>
+                {previewStale && (
+                  <span className="text-xs text-muted-foreground">Updating preview…</span>
+                )}
+              </div>
+              <div className="flex justify-center bg-muted/40 rounded-md p-3 overflow-auto max-h-[calc(100vh-14rem)]">
+                <iframe
+                  title="Newsletter preview"
+                  srcDoc={
+                    preview.data?.html ??
+                    "<p style='font-family:sans-serif;padding:24px'>Preview loading…</p>"
+                  }
+                  style={{
+                    width: device === "mobile" ? 390 : 640,
+                    flex: "none",
+                    height: 900,
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: 8,
+                    background: "#fff",
+                  }}
+                />
+              </div>
+            </Card>
+
+            <Card className="p-3 space-y-2">
+              <div className="text-sm font-semibold">Send a test</div>
+              <Input
+                placeholder="you@example.com, someone@example.com"
+                value={testAddresses}
+                onChange={(e) => setTestAddresses(e.target.value)}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1"
+                disabled={!testAddresses.trim() || sendTest.isPending}
+                onClick={async () => {
+                  try {
+                    const res = await sendTest.mutateAsync({
+                      campaign: form,
+                      recipients: testAddresses
+                        .split(/[,\s;]+/)
+                        .map((a) => a.trim())
+                        .filter(Boolean),
+                    });
+                    toast({
+                      title: "Test sent",
+                      description: `${res.sent} test email${res.sent === 1 ? "" : "s"} on the way.`,
+                    });
+                  } catch (e) {
+                    toast({
+                      title: "Couldn't send the test",
+                      description: e instanceof Error ? e.message : String(e),
+                      variant: "destructive",
+                    });
+                  }
+                }}
+              >
+                {sendTest.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Send test
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Test emails use the real newsletter renderer and sender, and never touch the audience.
+              </p>
+            </Card>
+          </div>
+        </div>
+      </section>
+
 
       <Dialog open={confirmSend} onOpenChange={setConfirmSend}>
         <DialogContent>
