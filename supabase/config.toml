@@ -93,3 +93,9 @@ verify_jwt = false
 
 [functions.admin-website-analytics]
 verify_jwt = false
+
+[functions.admin-newsletters]
+verify_jwt = false
+
+[functions.admin-newsletter-send]
+verify_jwt = false
