@@ -1308,7 +1308,19 @@ function WorkTaskDrawer({
                 onSaved();
               }}
             />
+            {materialCostsAccess.enabled && (
+              <Section title="Materials">
+                <WorkTaskMaterialsSection
+                  vineyardId={vineyardId}
+                  workTaskId={savedTaskId}
+                  lines={taskMaterialLines}
+                  canSeeCosts={drawerCanSeeCosts}
+                  money={money}
+                />
+              </Section>
+            )}
           </div>
+
 
           <div className="space-y-3 min-w-0">
             <Section title="Totals">
