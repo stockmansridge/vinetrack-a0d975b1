@@ -1,5 +1,6 @@
 import { fetchRainForecast, getVineyardCoords, type RainForecastDay } from "@/lib/rainForecastQuery";
 import { getForecastProvider } from "@/lib/willyWeatherProxy";
+import { fetchVineyardRegionSettings } from "@/lib/vineyardRegionSettingsQuery";
 
 export const FORECAST_DAYS = 5;
 export const BUCKETS_PER_DAY = 6;
@@ -171,7 +172,7 @@ export function normaliseOpenMeteo(payload: OpenMeteoPayload, updatedAt: string)
   };
 }
 
-function normaliseDaily(days: RainForecastDay[], source: string | null): FiveDayForecast {
+function normaliseDaily(days: RainForecastDay[], source: string | null, timezone: string | null): FiveDayForecast {
   return {
     days: days.slice(0, FORECAST_DAYS).map((day) => ({
       date: day.date,
@@ -185,17 +186,21 @@ function normaliseDaily(days: RainForecastDay[], source: string | null): FiveDay
       windMaxKmh: day.wind_max_kmh ?? null,
       periods: [],
     })),
-    source: source?.toLowerCase().includes("open_meteo") ? "Open-Meteo" : "WillyWeather",
+    source: source?.toLowerCase().includes("open_meteo")
+      ? "Open-Meteo"
+      : source?.toLowerCase().includes("willyweather")
+        ? "WillyWeather"
+        : source ?? "Configured forecast service",
     sourceDetail: "daily",
-    timezone: null,
+    timezone,
     updatedAt: null,
   };
 }
 
-async function fetchDetailedOpenMeteo(lat: number, lon: number): Promise<FiveDayForecastResult> {
+async function fetchDetailedOpenMeteo(lat: number, lon: number, timezone: string | null): Promise<FiveDayForecastResult> {
   const daily = "weather_code,precipitation_sum,precipitation_probability_max,temperature_2m_max,temperature_2m_min,wind_speed_10m_max";
   const hourly = "temperature_2m,relative_humidity_2m,wind_speed_10m";
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&daily=${daily}&hourly=${hourly}&wind_speed_unit=kmh&timezone=auto&forecast_days=${FORECAST_DAYS}`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&daily=${daily}&hourly=${hourly}&wind_speed_unit=kmh&timezone=${encodeURIComponent(timezone || "auto")}&forecast_days=${FORECAST_DAYS}`;
   try {
     const response = await fetch(url);
     if (!response.ok) return { available: false, reason: "error", message: `Open-Meteo HTTP ${response.status}` };
@@ -207,7 +212,10 @@ async function fetchDetailedOpenMeteo(lat: number, lon: number): Promise<FiveDay
 }
 
 export async function fetchFiveDayForecast(vineyardId: string): Promise<FiveDayForecastResult> {
-  const daily = await fetchRainForecast(vineyardId, FORECAST_DAYS);
+  const [daily, region] = await Promise.all([
+    fetchRainForecast(vineyardId, FORECAST_DAYS),
+    fetchVineyardRegionSettings(vineyardId).catch(() => null),
+  ]);
   if (!daily.available) {
     const failure = daily as Extract<Awaited<ReturnType<typeof fetchRainForecast>>, { available: false }>;
     return { available: false, reason: failure.reason === "rpc_missing" ? "error" : failure.reason, message: failure.message };
@@ -224,10 +232,10 @@ export async function fetchFiveDayForecast(vineyardId: string): Promise<FiveDayF
   if (preference === "open_meteo" || resolvedOpenMeteo) {
     const coords = await getVineyardCoords(vineyardId);
     if (coords) {
-      const detailed = await fetchDetailedOpenMeteo(coords.lat, coords.lon);
+      const detailed = await fetchDetailedOpenMeteo(coords.lat, coords.lon, region?.timezone ?? null);
       if (detailed.available) return detailed;
     }
   }
 
-  return { available: true, forecast: normaliseDaily(daily.days, daily.source) };
+  return { available: true, forecast: normaliseDaily(daily.days, daily.source, region?.timezone ?? null) };
 }

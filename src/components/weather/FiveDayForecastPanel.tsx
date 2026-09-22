@@ -182,7 +182,7 @@ export function FiveDayForecastPanel({ vineyardId, forecast, rf }: Props) {
 
   const days = forecast.days.slice(0, 5);
   const rows = useMemo(() => chartRows(days), [days]);
-  const hasThirtyPositions = rows.length === 30;
+  const hasThirtyPositions = rows.length === 30 && rows.some((row) => row.tempMinC != null || row.tempMaxC != null || row.windMaxKmh != null);
   const rainDisplay = rf.settings.distance_unit === "imperial" ? preferences.rain.threshold / 25.4 : preferences.rain.threshold;
   const windDisplay = rf.settings.distance_unit === "imperial" ? preferences.wind.threshold / 1.609344 : preferences.wind.threshold;
 

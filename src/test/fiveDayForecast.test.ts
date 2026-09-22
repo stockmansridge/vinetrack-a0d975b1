@@ -54,4 +54,8 @@ describe("five-day forecast normalisation", () => {
     expect(grouped.get("2026-10-04")?.[5].observationCount).toBe(1);
     expect(grouped.get("2026-10-05")?.[0].observationCount).toBe(1);
   });
+
+  it("preserves the provider timezone used for vineyard-local buckets", () => {
+    expect(normaliseOpenMeteo(payload(), "2026-10-02T12:00:00Z")?.timezone).toBe("Australia/Sydney");
+  });
 });

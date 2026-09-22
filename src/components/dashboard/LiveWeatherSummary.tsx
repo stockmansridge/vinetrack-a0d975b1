@@ -4,7 +4,7 @@
 // The card is split into two clearly labelled sections so observed values
 // (Davis WeatherLink) are never confused with forecast values (WillyWeather):
 //   1. "Live observations" — Davis WeatherLink
-//   2. "7-day forecast"    — WillyWeather (or Open-Meteo fallback)
+//   2. "5-day forecast"    — configured provider, with genuine detailed trends when available
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
@@ -27,7 +27,6 @@ import {
   type LiveWeatherReading,
 } from "@/lib/weatherStatusQuery";
 import {
-  fetchRainForecast,
   summarizeForecast,
   forecastUnavailableReason,
 } from "@/lib/rainForecastQuery";
@@ -75,7 +74,7 @@ const WEEKDAY = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday
 function forecastBadgeLabel(days: Array<{ date: string; rainfall_mm: number | null }>, rf: RegionFormatters): string {
   const s = summarizeForecast(days);
   if (!s.firstRainDay || s.totalMm < 1) {
-    return "No significant rain in next 7 days";
+    return "No significant rain in next 5 days";
   }
   const d = new Date(s.firstRainDay.date);
   const day = isNaN(d.getTime()) ? s.firstRainDay.date : WEEKDAY[d.getDay()];
