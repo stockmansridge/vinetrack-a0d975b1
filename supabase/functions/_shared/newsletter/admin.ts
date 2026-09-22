@@ -5,8 +5,14 @@
 // resolves to a user for whom public.is_system_admin() is true. The UI gate is
 // never trusted. Campaign rows live on the Portal's own project (service role);
 // audience data is read from the canonical VineTrack project.
-import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { isMissingTableError } from "../email-list.ts";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+
+/** PostgREST / Postgres codes meaning "this table does not exist here". */
+function isMissingTableError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  if (error.code === "PGRST205" || error.code === "PGRST200" || error.code === "42P01") return true;
+  return /could not find the table/i.test(error.message ?? "");
+}
 import {
   normaliseEmail,
   resolveAudience,

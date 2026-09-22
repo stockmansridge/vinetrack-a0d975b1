@@ -118,6 +118,8 @@ import BlockTroubleshooterPage from "./pages/admin/BlockTroubleshooterPage";
 import AdminSupportRequestsPage from "./pages/admin/AdminSupportRequestsPage";
 import AdminEmailListPage from "./pages/admin/AdminEmailListPage";
 import AdminWebsiteAnalyticsPage from "./pages/admin/AdminWebsiteAnalyticsPage";
+import AdminNewslettersPage from "./pages/admin/AdminNewslettersPage";
+import AdminNewsletterEditorPage from "./pages/admin/AdminNewsletterEditorPage";
 import AdminUserActivityPage from "./pages/admin/AdminUserActivityPage";
 import EmailDiagnosticsPage from "./pages/admin/EmailDiagnosticsPage";
 import AdminIntegrationsPage from "./pages/admin/AdminIntegrationsPage";
@@ -295,6 +297,8 @@ const App = () => (
                     <Route path="/admin/support-requests" element={<AdminSupportRequestsPage />} />
                     <Route path="/admin/support-requests/:id" element={<AdminSupportRequestsPage />} />
                     <Route path="/admin/email-list" element={<AdminEmailListPage />} />
+                    <Route path="/admin/newsletters" element={<AdminNewslettersPage />} />
+                    <Route path="/admin/newsletters/:id" element={<AdminNewsletterEditorPage />} />
                     <Route path="/admin/website-analytics" element={<AdminWebsiteAnalyticsPage />} />
                     <Route path="/admin/user-activity" element={<AdminUserActivityPage />} />
                     <Route path="/admin/integrations" element={<AdminIntegrationsPage />} />

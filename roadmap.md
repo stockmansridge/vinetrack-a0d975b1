@@ -23,3 +23,11 @@
 
 - [x] Email List: edit a subscriber's name and email address
 - [x] Website Analytics: canonical page-view table (sql/243 awaiting Rork), public website-analytics endpoint, admin-website-analytics server-side report, /admin/website-analytics Portal page
+
+## Newsletter Builder (System Admin)
+- [x] Newsletter tables on the Portal backend (campaigns / frozen versions / recipients), service-role only
+- [x] admin-newsletters + admin-newsletter-send Edge Functions (system-admin verified server-side)
+- [x] Audience union of Current Users + Newsletter Subscribers, deduped, suppression applied
+- [x] Block editor, Product Update + Blank templates, desktop/mobile preview, test sends
+- [x] Send now with confirmation, scheduling, idempotent batched delivery
+- [ ] Per-newsletter open/click reporting from the email service logs (later phase)
