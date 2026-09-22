@@ -9,7 +9,17 @@ import WorkTaskLabourFields from "@/components/work-tasks/WorkTaskLabourFields";
 import { WorkTaskMaterialsSection } from "@/components/work-tasks/WorkTaskMaterialsSection";
 import { useMaterialCostsEnabled } from "@/lib/materialCostsAccess";
 import { useWorkTaskMaterials } from "@/lib/materialsQuery";
-import { materialTotalNumber, type WorkTaskMaterial } from "@/lib/materialCosts";
+import {
+  groupWorkTaskMaterialsByTask,
+  materialTotalNumber,
+  type WorkTaskMaterial,
+} from "@/lib/materialCosts";
+import {
+  buildWorkTaskCostRollup,
+  workTaskCostPerHectare,
+  type WorkTaskCostRollup,
+} from "@/lib/workTaskCostRollup";
+
 
 import { useCanSeeCosts, canSeeCosts as canSeeCostsFn } from "@/lib/permissions";
 import { Card } from "@/components/ui/card";
