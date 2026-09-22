@@ -1448,6 +1448,7 @@ function WorkTaskDrawer({
             {!isNew && task && (
               <WorkTaskSummarySection
                 task={task}
+                materialLines={materialCostsAccess.enabled ? taskMaterialLines : []}
                 labourLines={visibleLines}
                 machineLines={displayedMachineLines}
                 linkedTrips={linkedTrips}
@@ -2621,6 +2622,7 @@ function LinkedTripsSection({
 // ============================================================================
 function WorkTaskSummarySection({
   task,
+  materialLines,
   labourLines,
   machineLines,
   linkedTrips,
@@ -2629,6 +2631,8 @@ function WorkTaskSummarySection({
   money,
 }: {
   task: WorkTask | null;
+  /** Frozen Material Costs lines for this task (empty when gated off). */
+  materialLines: WorkTaskMaterial[];
   labourLines: WorkTaskLabourLine[];
   machineLines: WorkTaskMachineLine[];
   linkedTrips: Trip[];
@@ -2680,7 +2684,10 @@ function WorkTaskSummarySection({
     });
 
     const manualMachineTotal = machineCharge + machineFuel;
-    const total = manualLabourCost + manualMachineTotal + linkedTripTotal;
+    // Material Costs enter the combined total exactly once, from the
+    // backend-generated per-line totals.
+    const materialTotal = materialTotalNumber(materialLines);
+    const total = manualLabourCost + manualMachineTotal + linkedTripTotal + materialTotal;
 
     // Double-counting risk: linked GPS trip + a "non-manual" machine line
     // (i.e. one capturing a missed/failed/corrected GPS trip).
@@ -2703,10 +2710,12 @@ function WorkTaskSummarySection({
       linkedTripFuel,
       linkedTripChemical,
       linkedTripInput,
+      materialTotal,
+      materialLineCount: materialLines.filter((l) => !l.deleted_at).length,
       total,
       overlapRisk,
     };
-  }, [task, labourLines, machineLines, linkedTrips, allocByTripId, effectiveCost]);
+  }, [task, materialLines, labourLines, machineLines, linkedTrips, allocByTripId, effectiveCost]);
 
   return (
     <Section title="Work Task summary">
@@ -2716,6 +2725,9 @@ function WorkTaskSummarySection({
           <SummaryRow label="Manual machine charge" value={money(summary.machineCharge)} />
           <SummaryRow label="Manual machine fuel" value={money(summary.machineFuel)} />
           <SummaryRow label="Linked GPS trips" value={money(summary.linkedTripTotal)} />
+          {summary.materialLineCount > 0 && (
+            <SummaryRow label="Materials" value={money(summary.materialTotal)} />
+          )}
           <p className="text-xs text-muted-foreground pl-1">
             Linked GPS trip costs may include operator labour, fuel, chemicals
             and inputs.
@@ -2732,6 +2744,7 @@ function WorkTaskSummarySection({
           <SummaryRow label="Manual machine hours" value={summary.machineHours.toFixed(2)} />
           <SummaryRow label="Manual machine entries" value={String(summary.machineLineCount)} />
           <SummaryRow label="Linked GPS trips" value={String(summary.linkedTripCount)} />
+          <SummaryRow label="Material entries" value={String(summary.materialLineCount)} />
           <p className="text-xs text-muted-foreground pt-1">
             Trip costs are available to authorised cost-reporting roles.
           </p>
