@@ -465,7 +465,6 @@ export function WorkTaskMaterialsSection({
               {removeBusy ? "Removing…" : "Remove"}
             </AlertDialogAction>
           </AlertDialogFooter>
-        </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
