@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CloudRain, Droplets, Filter, Thermometer, Wind } from "lucide-react";
+import { CloudRain, Droplets, Lightbulb, Thermometer, Wind } from "lucide-react";
 import {
   Area,
   CartesianGrid,
