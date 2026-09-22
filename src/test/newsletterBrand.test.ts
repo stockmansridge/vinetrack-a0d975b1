@@ -89,6 +89,17 @@ describe("Product Update visual fixture", () => {
     expect(html).toContain('alt="VineTrack"');
   });
 
+  it("falls back to the standard logo when newsletter branding is removed", () => {
+    const withoutCustomBranding = renderNewsletterHtml({
+      subject: tpl.subject,
+      blocks,
+      logoUrl: null,
+      logoAlt: null,
+    });
+    expect(withoutCustomBranding.match(/newsletter\/branding\/vinetrack-logo\.png/g)).toHaveLength(2);
+    expect(withoutCustomBranding.match(/alt="VineTrack"/g)).toHaveLength(2);
+  });
+
   it("renders the branded footer with compliance links that need no image", () => {
     expect(html).toContain("Thanks for being part of VineTrack.");
     expect(html).toContain("Jonathan");

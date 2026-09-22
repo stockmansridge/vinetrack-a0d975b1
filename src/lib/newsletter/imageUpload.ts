@@ -42,7 +42,14 @@ export async function uploadNewsletterImage(file: File): Promise<UploadedNewslet
 export function isDurableImageUrl(url: string | null | undefined): boolean {
   const value = String(url ?? "").trim();
   if (!value) return false;
-  return /^https?:\/\//i.test(value);
+  if (!/^https?:\/\//i.test(value)) return false;
+  try {
+    const parsed = new URL(value);
+    const path = parsed.pathname.toLowerCase();
+    return !path.includes("/storage/v1/object/sign/") && !parsed.searchParams.has("token");
+  } catch {
+    return false;
+  }
 }
 
 /**
