@@ -1148,6 +1148,13 @@ function WorkTaskDrawer({
     vineyardId,
     materialCostsAccess.enabled,
   );
+  const taskMaterialLines = useMemo<WorkTaskMaterial[]>(
+    () =>
+      savedTaskId
+        ? vineyardMaterialLines.filter((l) => l.work_task_id === savedTaskId && !l.deleted_at)
+        : [],
+    [vineyardMaterialLines, savedTaskId],
+  );
   const displayedLabourLines = useMemo(() => {
     const byId = new Map<string, WorkTaskLabourLine>();
     labourLines.forEach((line) => byId.set(line.id, line));
