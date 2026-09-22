@@ -906,12 +906,25 @@ export default function WorkTasksPage() {
                 ),
                 status: <TableCell>{t.status ? <Badge variant="outline">{t.status}</Badge> : "—"}</TableCell>,
                 area_ha: <TableCell className="text-right">{(() => { const v = effectiveTaskAreaHa(t); return v == null ? "—" : rf.area(v); })()}</TableCell>,
-                hours: <TableCell className="text-right">{num(tot?.hours ?? 0)}</TableCell>,
+                hours: <TableCell className="text-right">{num(tot?.labourHours ?? 0)}</TableCell>,
                 cost: (
                   <TableCell className="text-right">
-                    {tot?.cost ? money(tot.cost) : tot?.missingRate ? <span className="text-xs text-muted-foreground">add rates</span> : "—"}
+                    {/* Total Work Task Cost: labour + machine + linked trips + materials. */}
+                    {tot?.totalKnown ? (
+                      <span>
+                        {money(tot.total)}
+                        {tot.missingRate && (
+                          <span className="block text-[10px] text-muted-foreground">add rates</span>
+                        )}
+                      </span>
+                    ) : tot?.missingRate ? (
+                      <span className="text-xs text-muted-foreground">add rates</span>
+                    ) : (
+                      "—"
+                    )}
                   </TableCell>
                 ),
+
                 notes: <TableCell className="max-w-[18rem] truncate text-xs text-muted-foreground">{summary || "—"}</TableCell>,
               };
               return (
