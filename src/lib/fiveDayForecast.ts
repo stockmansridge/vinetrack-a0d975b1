@@ -209,7 +209,8 @@ async function fetchDetailedOpenMeteo(lat: number, lon: number): Promise<FiveDay
 export async function fetchFiveDayForecast(vineyardId: string): Promise<FiveDayForecastResult> {
   const daily = await fetchRainForecast(vineyardId, FORECAST_DAYS);
   if (!daily.available) {
-    return { available: false, reason: daily.reason === "rpc_missing" ? "error" : daily.reason, message: daily.message };
+    const failure = daily as Extract<Awaited<ReturnType<typeof fetchRainForecast>>, { available: false }>;
+    return { available: false, reason: failure.reason === "rpc_missing" ? "error" : failure.reason, message: failure.message };
   }
 
   let preference: "auto" | "open_meteo" | "willyweather" = "auto";
