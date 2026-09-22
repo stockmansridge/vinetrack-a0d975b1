@@ -31,3 +31,9 @@
 - [x] Block editor, Product Update + Blank templates, desktop/mobile preview, test sends
 - [x] Send now with confirmation, scheduling, idempotent batched delivery
 - [ ] Per-newsletter open/click reporting from the email service logs (later phase)
+
+## Live Dashboard Weather Forecast
+- [ ] Replace the 7-day strip with a provider-neutral, five-day aligned forecast and genuine 4-hour temperature/wind trends
+- [ ] Add vineyard-scoped client-side Rain/Wind/Humidity presentation highlights with regional-unit editing
+- [ ] Preserve live observations, provider selection, operational alert thresholds, and mobile/backend contracts
+- [ ] Add focused forecast-model, bucketing, persistence, unit, threshold, timezone, and UI tests
