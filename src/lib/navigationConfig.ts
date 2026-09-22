@@ -553,6 +553,7 @@ export const SYSTEM_ADMIN_ITEMS: { label: string; path: string; icon: any }[] = 
   { label: "Block Troubleshooter", path: "/admin/block-troubleshooter", icon: ShieldCheck },
   { label: "Support Requests", path: "/admin/support-requests", icon: AlertTriangle },
   { label: "Email List", path: "/admin/email-list", icon: Mail },
+  { label: "Newsletters", path: "/admin/newsletters", icon: Mail },
   { label: "Website Analytics", path: "/admin/website-analytics", icon: FileBarChart },
   { label: "System Admins", path: "/admin/system-admins", icon: ShieldCheck },
   { label: "Access & Entitlements", path: "/admin/access-entitlements", icon: ShieldCheck },

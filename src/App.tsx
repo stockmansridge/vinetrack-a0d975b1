@@ -118,6 +118,8 @@ import BlockTroubleshooterPage from "./pages/admin/BlockTroubleshooterPage";
 import AdminSupportRequestsPage from "./pages/admin/AdminSupportRequestsPage";
 import AdminEmailListPage from "./pages/admin/AdminEmailListPage";
 import AdminWebsiteAnalyticsPage from "./pages/admin/AdminWebsiteAnalyticsPage";
+import AdminNewslettersPage from "./pages/admin/AdminNewslettersPage";
+import AdminNewsletterEditorPage from "./pages/admin/AdminNewsletterEditorPage";
 import AdminUserActivityPage from "./pages/admin/AdminUserActivityPage";
 import EmailDiagnosticsPage from "./pages/admin/EmailDiagnosticsPage";
 import AdminIntegrationsPage from "./pages/admin/AdminIntegrationsPage";
