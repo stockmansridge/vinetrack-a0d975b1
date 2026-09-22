@@ -6,6 +6,10 @@ import { useAuth } from "@/context/AuthContext";
 import { fetchList } from "@/lib/queries";
 import { fetchOperatorCategoriesForVineyard, type OperatorCategory } from "@/lib/operatorCategoriesQuery";
 import WorkTaskLabourFields from "@/components/work-tasks/WorkTaskLabourFields";
+import { WorkTaskMaterialsSection } from "@/components/work-tasks/WorkTaskMaterialsSection";
+import { useMaterialCostsEnabled } from "@/lib/materialCostsAccess";
+import { useWorkTaskMaterials } from "@/lib/materialsQuery";
+import { materialTotalNumber, type WorkTaskMaterial } from "@/lib/materialCosts";
 
 import { useCanSeeCosts, canSeeCosts as canSeeCostsFn } from "@/lib/permissions";
 import { Card } from "@/components/ui/card";
