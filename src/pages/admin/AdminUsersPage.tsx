@@ -45,12 +45,24 @@ export default function AdminUsersPage() {
     <AdminGate>
       <AdminPageHeader title={`Users${titleSuffix}`} subtitle={`${filtered.length} of ${data.length}`} />
       <Card className="p-4">
-        <Input
-          placeholder="Search email or name…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="max-w-xs mb-3"
-        />
+        <div className="flex items-center gap-2 mb-3">
+          <Input
+            placeholder="Search email or name…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="max-w-xs"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto gap-1"
+            disabled={filtered.length === 0}
+            onClick={() => downloadAdminUsersCsv(filtered)}
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </Button>
+        </div>
         <AdminError error={error} />
         {isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
         {!isLoading && filtered.length === 0 && <AdminEmpty>No users.</AdminEmpty>}
