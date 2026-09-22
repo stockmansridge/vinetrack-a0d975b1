@@ -3,7 +3,10 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Download } from "lucide-react";
 import { useAdminUsers } from "@/lib/adminApi";
+import { downloadAdminUsersCsv } from "@/lib/adminUsersExport";
 import { AdminGate, AdminPageHeader, AdminError, AdminEmpty, formatRelative } from "./_shared";
 
 export default function AdminUsersPage() {
