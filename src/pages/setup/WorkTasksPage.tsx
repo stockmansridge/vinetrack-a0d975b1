@@ -9,7 +9,17 @@ import WorkTaskLabourFields from "@/components/work-tasks/WorkTaskLabourFields";
 import { WorkTaskMaterialsSection } from "@/components/work-tasks/WorkTaskMaterialsSection";
 import { useMaterialCostsEnabled } from "@/lib/materialCostsAccess";
 import { useWorkTaskMaterials } from "@/lib/materialsQuery";
-import { materialTotalNumber, type WorkTaskMaterial } from "@/lib/materialCosts";
+import {
+  groupWorkTaskMaterialsByTask,
+  type WorkTaskMaterial,
+} from "@/lib/materialCosts";
+
+import {
+  buildWorkTaskCostRollup,
+  workTaskCostPerHectare,
+  type WorkTaskCostRollup,
+} from "@/lib/workTaskCostRollup";
+
 
 import { useCanSeeCosts, canSeeCosts as canSeeCostsFn } from "@/lib/permissions";
 import { Card } from "@/components/ui/card";
@@ -430,34 +440,56 @@ export default function WorkTasksPage() {
     return m;
   }, [labourLines]);
 
+  // Material Costs (Phase 3) — temporarily System Admin only; see
+  // src/lib/materialCostsAccess.ts for the single gate. ONE vineyard-scoped
+  // query supplies material lines for every visible task (never per task), and
+  // its query key is vineyard-scoped so switching vineyards cannot leak totals.
+  const materialCostsAccess = useMaterialCostsEnabled();
+  const { data: vineyardMaterialLines = [] } = useWorkTaskMaterials(
+    selectedVineyardId,
+    materialCostsAccess.enabled,
+  );
+  const materialLinesByTask = useMemo(
+    () =>
+      materialCostsAccess.enabled
+        ? groupWorkTaskMaterialsByTask(vineyardMaterialLines)
+        : new Map<string, WorkTaskMaterial[]>(),
+    [vineyardMaterialLines, materialCostsAccess.enabled],
+  );
+
+  // Total Work Task Cost for every task — single shared roll-up helper
+  // (src/lib/workTaskCostRollup.ts) used by the table, sorting, CSV, the
+  // season aggregate and the drawer. No labour-only cost path remains.
   const totalsByTask = useMemo(() => {
-    const m = new Map<string, { hours: number; cost: number; costKnown?: boolean; missingRate: boolean; workerTypes: Set<string> }>();
-    labourLines.forEach((l) => {
-      const t = m.get(l.work_task_id) ?? { hours: 0, cost: 0, missingRate: false, workerTypes: new Set<string>() };
-      t.hours += Number(l.total_hours ?? 0) || 0;
-      if (l.total_cost != null) t.cost += Number(l.total_cost) || 0;
-      else if (l.worker_count && l.hours_per_worker) t.missingRate = true;
-      if (l.worker_type) t.workerTypes.add(l.worker_type);
-      m.set(l.work_task_id, t);
-    });
-    // SQL 189: the backend defines the effective labour cost of every task.
-    // Piece-rate tasks read their saved snapshot total; hourly/legacy tasks
-    // read their rated labour lines. The two are never summed.
+    const m = new Map<string, WorkTaskCostRollup>();
     tasks.forEach((t) => {
-      const cur = m.get(t.id) ?? { hours: 0, cost: 0, missingRate: false, workerTypes: new Set<string>() };
-      const hadLines = m.has(t.id);
-      const resolved = resolveEffectiveLabourCost(
-        t as any,
-        hadLines ? cur.cost : null,
-        effectiveCostByTask.get(t.id) ?? null,
+      const tripAllocations = (tripsByTask.get(t.id) ?? []).flatMap(
+        (trip) => allocByTripId.get(trip.id) ?? [],
       );
-      cur.cost = resolved.cost ?? 0;
-      cur.costKnown = resolved.cost != null;
-      if (resolved.costingMethod === "piece_rate") cur.missingRate = false;
-      m.set(t.id, cur);
+      m.set(
+        t.id,
+        buildWorkTaskCostRollup({
+          task: t,
+          labourLines: linesByTask.get(t.id) ?? [],
+          effectiveLabourCost: effectiveCostByTask.get(t.id) ?? null,
+          machineLines: machineLinesByTask.get(t.id) ?? [],
+          tripAllocations,
+          linkedTripCount: tripsByTask.get(t.id)?.length ?? 0,
+          materialLines: materialLinesByTask.get(t.id) ?? [],
+        }),
+      );
     });
     return m;
-  }, [labourLines, tasks, effectiveCostByTask]);
+  }, [
+    tasks,
+    linesByTask,
+    effectiveCostByTask,
+    machineLinesByTask,
+    tripsByTask,
+    allocByTripId,
+    materialLinesByTask,
+  ]);
+
 
   const taskTypes = useMemo(() => {
     const s = new Set<string>();
@@ -583,8 +615,9 @@ export default function WorkTasksPage() {
       taskCount++;
       const tot = totalsByTask.get(t.id);
       if (tot) {
-        totalHours += tot.hours;
-        totalCost += tot.cost;
+        totalHours += tot.labourHours;
+        totalCost += tot.total;
+
       }
     });
     return { taskCount, totalHours, totalCost };
@@ -631,8 +664,10 @@ export default function WorkTasksPage() {
         const v = effectiveTaskAreaHa(r);
         return v == null ? null : v;
       },
-      hours: (r: WorkTask) => totalsByTask.get(r.id)?.hours ?? 0,
-      cost: (r: WorkTask) => totalsByTask.get(r.id)?.cost ?? 0,
+      hours: (r: WorkTask) => totalsByTask.get(r.id)?.labourHours ?? 0,
+      // Sorting uses Total Work Task Cost, never labour-only cost.
+      cost: (r: WorkTask) => totalsByTask.get(r.id)?.total ?? 0,
+
       finalized: (r: WorkTask) => (r.is_finalized ? 1 : 0),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -662,7 +697,10 @@ export default function WorkTasksPage() {
       const tot = totalsByTask.get(t.id);
       const padNames = taskPaddockNames(t.id);
       const areaHa = effectiveTaskAreaHa(t);
-      const costPerHa = areaHa && tot?.cost ? (tot.cost / areaHa).toFixed(2) : "";
+      // CSV shares the Total Work Task Cost roll-up — no export-only formula.
+      const totalCost = tot?.totalKnown ? tot.total : null;
+      const cphNum = tot ? workTaskCostPerHectare(tot, areaHa) : null;
+      const costPerHa = cphNum == null ? "" : cphNum.toFixed(2);
       const base = [
         t.id,
         effectiveStart(t) ?? "",
@@ -671,7 +709,7 @@ export default function WorkTasksPage() {
         t.task_type ?? "",
         t.status ?? "",
         areaHa == null ? "" : areaHa.toFixed(4),
-        tot?.hours?.toFixed(2) ?? "0",
+        tot?.labourHours?.toFixed(2) ?? "0",
       ];
       const tail = [
         Array.from(tot?.workerTypes ?? []).join("; "),
@@ -679,9 +717,10 @@ export default function WorkTasksPage() {
         (t.notes ?? "").replace(/\s+/g, " "),
       ];
       const cells = (canSeeCosts
-        ? [...base, tot?.cost?.toFixed(2) ?? "", costPerHa, ...tail]
+        ? [...base, totalCost == null ? "" : totalCost.toFixed(2), costPerHa, ...tail]
         : [...base, ...tail]
       ).map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`);
+
       lines.push(cells.join(","));
     });
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -867,12 +906,25 @@ export default function WorkTasksPage() {
                 ),
                 status: <TableCell>{t.status ? <Badge variant="outline">{t.status}</Badge> : "—"}</TableCell>,
                 area_ha: <TableCell className="text-right">{(() => { const v = effectiveTaskAreaHa(t); return v == null ? "—" : rf.area(v); })()}</TableCell>,
-                hours: <TableCell className="text-right">{num(tot?.hours ?? 0)}</TableCell>,
+                hours: <TableCell className="text-right">{num(tot?.labourHours ?? 0)}</TableCell>,
                 cost: (
                   <TableCell className="text-right">
-                    {tot?.cost ? money(tot.cost) : tot?.missingRate ? <span className="text-xs text-muted-foreground">add rates</span> : "—"}
+                    {/* Total Work Task Cost: labour + machine + linked trips + materials. */}
+                    {tot?.totalKnown ? (
+                      <span>
+                        {money(tot.total)}
+                        {tot.missingRate && (
+                          <span className="block text-[10px] text-muted-foreground">add rates</span>
+                        )}
+                      </span>
+                    ) : tot?.missingRate ? (
+                      <span className="text-xs text-muted-foreground">add rates</span>
+                    ) : (
+                      "—"
+                    )}
                   </TableCell>
                 ),
+
                 notes: <TableCell className="max-w-[18rem] truncate text-xs text-muted-foreground">{summary || "—"}</TableCell>,
               };
               return (
@@ -1169,22 +1221,42 @@ function WorkTaskDrawer({
   }, [machineLines, localMachineLines]);
   const drawerEffectiveCost = useEffectiveLabourCosts(vineyardId).data?.get(task?.id ?? "") ?? null;
   const visibleLines = displayedLabourLines.filter((l) => !l.deleted_at);
-  const totalHours = visibleLines.reduce((s, l) => s + (Number(l.total_hours ?? 0) || 0), 0);
   const taskCostingMethod = resolveCostingMethod(task);
   const isPieceRateTask = taskCostingMethod === "piece_rate";
-  const labourLineCost = visibleLines.reduce((s, l) => s + (l.total_cost == null ? 0 : Number(l.total_cost) || 0), 0);
-  // Exactly one labour total applies — SQL 189 is the source of truth.
-  const resolvedTaskLabour = resolveEffectiveLabourCost(
-    task ?? null,
-    visibleLines.length ? labourLineCost : null,
-    drawerEffectiveCost ?? null,
+  const drawerTripAllocations = useMemo(
+    () => linkedTrips.flatMap((t) => allocByTripId.get(t.id) ?? []),
+    [linkedTrips, allocByTripId],
   );
-  const totalCostRaw = resolvedTaskLabour.cost;
-  const totalCost = totalCostRaw ?? 0;
-  const missingRate = !isPieceRateTask
-    && visibleLines.some((l) => l.total_cost == null && l.worker_count && l.hours_per_worker);
+  // ONE definition of Total Work Task Cost, shared with the table, sorting,
+  // CSV, the block breakdown and the Work Task summary.
+  const rollup = useMemo(
+    () =>
+      buildWorkTaskCostRollup({
+        task: task ?? null,
+        labourLines: displayedLabourLines,
+        effectiveLabourCost: drawerEffectiveCost,
+        machineLines: displayedMachineLines,
+        tripAllocations: drawerTripAllocations,
+        linkedTripCount: linkedTrips.length,
+        materialLines: taskMaterialLines,
+      }),
+    [
+      task,
+      displayedLabourLines,
+      drawerEffectiveCost,
+      displayedMachineLines,
+      drawerTripAllocations,
+      linkedTrips.length,
+      taskMaterialLines,
+    ],
+  );
+  const totalHours = rollup.labourHours;
+  const totalCostRaw = rollup.totalKnown ? rollup.total : null;
+  const totalCost = rollup.total;
+  const missingRate = rollup.missingRate;
   const areaNum = totalAreaHa > 0 ? totalAreaHa : null;
-  const costPerHa = areaNum && totalCost ? totalCost / areaNum : null;
+  const costPerHa = workTaskCostPerHectare(rollup, areaNum);
+
 
   const paddocksLabel = paddockIds.length === 0
     ? "No block"
@@ -2644,78 +2716,37 @@ function WorkTaskSummarySection({
   const effectiveCost = useEffectiveLabourCosts(task?.vineyard_id ?? null)
     .data?.get(task?.id ?? "") ?? null;
   const summary = useMemo(() => {
-    const num = (v: unknown) => {
-      const n = Number(v);
-      return Number.isFinite(n) ? n : 0;
-    };
-
-    const visibleLabour = labourLines.filter((l) => !l.deleted_at);
-    // SQL 188: piece-rate tasks cost from the saved snapshot; labour-line cost
-    // is ignored so there is never a second competing labour total.
-    const manualLabourCost = resolveEffectiveLabourCost(
+    // Same shared roll-up as the table / drawer / CSV — one definition only.
+    const r = buildWorkTaskCostRollup({
       task,
-      visibleLabour.length ? visibleLabour.reduce((s, l) => s + num(l.total_cost), 0) : null,
-      effectiveCost ?? null,
-    ).cost ?? 0;
-    const manualLabourHours = visibleLabour.reduce((s, l) => s + num(l.total_hours), 0);
-
-    const visibleMachine = machineLines.filter((l) => !l.deleted_at);
-    const machineCharge = visibleMachine.reduce((s, l) => s + num(l.total_machine_cost), 0);
-    const machineFuel = visibleMachine.reduce((s, l) => s + num(l.fuel_cost), 0);
-    const machineHours = visibleMachine.reduce(
-      (s, l) => s + num(l.duration_hours ?? l.engine_hours_used),
-      0,
-    );
-
-    let linkedTripTotal = 0;
-    let linkedTripLabour = 0;
-    let linkedTripFuel = 0;
-    let linkedTripChemical = 0;
-    let linkedTripInput = 0;
-    linkedTrips.forEach((t) => {
-      const allocs = allocByTripId.get(t.id) ?? [];
-      allocs.forEach((a) => {
-        linkedTripTotal += num(a.total_cost);
-        linkedTripLabour += num(a.labour_cost);
-        linkedTripFuel += num(a.fuel_cost);
-        linkedTripChemical += num(a.chemical_cost);
-        linkedTripInput += num(a.input_cost);
-      });
-    });
-
-    const manualMachineTotal = machineCharge + machineFuel;
-    // Material Costs enter the combined total exactly once, from the
-    // backend-generated per-line totals.
-    const materialTotal = materialTotalNumber(materialLines);
-    const total = manualLabourCost + manualMachineTotal + linkedTripTotal + materialTotal;
-
-    // Double-counting risk: linked GPS trip + a "non-manual" machine line
-    // (i.e. one capturing a missed/failed/corrected GPS trip).
-    const overlapSources = new Set(["missed_trip", "trip_failed", "correction"]);
-    const overlapRisk =
-      linkedTrips.length > 0 &&
-      visibleMachine.some((l) => overlapSources.has(String(l.entry_source ?? "")));
-
-    return {
-      manualLabourCost,
-      manualLabourHours,
-      machineCharge,
-      machineFuel,
-      manualMachineTotal,
-      machineHours,
+      labourLines,
+      effectiveLabourCost: effectiveCost,
+      machineLines,
+      tripAllocations: linkedTrips.flatMap((t) => allocByTripId.get(t.id) ?? []),
       linkedTripCount: linkedTrips.length,
-      machineLineCount: visibleMachine.length,
-      linkedTripTotal,
-      linkedTripLabour,
-      linkedTripFuel,
-      linkedTripChemical,
-      linkedTripInput,
-      materialTotal,
-      materialLineCount: materialLines.filter((l) => !l.deleted_at).length,
-      total,
-      overlapRisk,
+      materialLines,
+    });
+    return {
+      manualLabourCost: r.labourCost,
+      manualLabourHours: r.labourHours,
+      machineCharge: r.machineCharge,
+      machineFuel: r.machineFuel,
+      manualMachineTotal: r.machineCost,
+      machineHours: r.machineHours,
+      linkedTripCount: r.linkedTripCount,
+      machineLineCount: r.machineLineCount,
+      linkedTripTotal: r.linkedTripCost,
+      linkedTripLabour: r.linkedTripLabour,
+      linkedTripFuel: r.linkedTripFuel,
+      linkedTripChemical: r.linkedTripChemical,
+      linkedTripInput: r.linkedTripInput,
+      materialTotal: r.materialCost,
+      materialLineCount: r.materialLineCount,
+      total: r.total,
+      overlapRisk: r.overlapRisk,
     };
   }, [task, materialLines, labourLines, machineLines, linkedTrips, allocByTripId, effectiveCost]);
+
 
   return (
     <Section title="Work Task summary">
