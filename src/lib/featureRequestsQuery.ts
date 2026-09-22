@@ -122,7 +122,7 @@ export function useFeatureRequests() {
     staleTime: 30_000,
     refetchOnWindowFocus: true,
     queryFn: async (): Promise<FeatureRequestsResult> => {
-      const [reqRes, voteRes] = await Promise.all([
+      const [reqRes, voteRes, commentRes] = await Promise.all([
         (iosSupabase as any)
           .from("feature_requests")
           .select(
@@ -134,6 +134,10 @@ export function useFeatureRequests() {
           .from("feature_request_votes")
           .select("feature_request_id,user_id")
           .limit(20000),
+        (iosSupabase as any)
+          .from("feature_request_comments")
+          .select("feature_request_id")
+          .limit(20000),
       ]);
       if (reqRes.error) {
         if (isBackendPendingError(reqRes.error)) {
@@ -142,14 +146,101 @@ export function useFeatureRequests() {
         throw reqRes.error;
       }
       if (voteRes.error && !isBackendPendingError(voteRes.error)) throw voteRes.error;
+      if (commentRes.error && !isBackendPendingError(commentRes.error)) throw commentRes.error;
       return {
         requests: decorateFeatureRequests(
           (reqRes.data ?? []) as FeatureRequestRow[],
           (voteRes.data ?? []) as FeatureRequestVoteRow[],
           user?.id ?? null,
+          (commentRes.data ?? []) as { feature_request_id: string }[],
         ),
         backendPending: false,
       };
+    },
+  });
+}
+
+// --------------------------------------------------------------------------
+// Comments — discussion on a single request so the required functionality is
+// captured before it is built (public.feature_request_comments, sql/246).
+// --------------------------------------------------------------------------
+
+export interface FeatureRequestComment {
+  id: string;
+  feature_request_id: string;
+  body: string;
+  created_by: string | null;
+  created_by_name: string | null;
+  created_at: string;
+}
+
+export interface FeatureRequestCommentsResult {
+  comments: FeatureRequestComment[];
+  backendPending: boolean;
+}
+
+export function useFeatureRequestComments(requestId: string | null) {
+  return useQuery({
+    queryKey: ["feature-request-comments", requestId],
+    enabled: !!requestId,
+    staleTime: 15_000,
+    queryFn: async (): Promise<FeatureRequestCommentsResult> => {
+      const { data, error } = await (iosSupabase as any)
+        .from("feature_request_comments")
+        .select("id,feature_request_id,body,created_by,created_by_name,created_at")
+        .eq("feature_request_id", requestId)
+        .order("created_at", { ascending: true })
+        .limit(500);
+      if (error) {
+        if (isBackendPendingError(error)) return { comments: [], backendPending: true };
+        throw error;
+      }
+      return { comments: (data ?? []) as FeatureRequestComment[], backendPending: false };
+    },
+  });
+}
+
+export function useAddFeatureRequestComment() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (args: {
+      requestId: string;
+      body: string;
+      createdByName: string | null;
+    }) => {
+      const body = args.body.trim();
+      if (!body) throw new Error("Please write a comment first");
+      const { error } = await (iosSupabase as any)
+        .from("feature_request_comments")
+        .insert({
+          feature_request_id: args.requestId,
+          body,
+          created_by: user?.id ?? null,
+          created_by_name: args.createdByName,
+        });
+      if (error) throw error;
+    },
+    onSuccess: (_d, args) => {
+      qc.invalidateQueries({ queryKey: ["feature-request-comments", args.requestId] });
+      qc.invalidateQueries({ queryKey: QK });
+    },
+  });
+}
+
+export function useDeleteFeatureRequestComment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; requestId: string }) => {
+      const { error } = await (iosSupabase as any)
+        .from("feature_request_comments")
+        .delete()
+        .eq("id", args.id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, args) => {
+      qc.invalidateQueries({ queryKey: ["feature-request-comments", args.requestId] });
+      qc.invalidateQueries({ queryKey: QK });
     },
   });
 }
