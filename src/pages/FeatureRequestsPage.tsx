@@ -25,7 +25,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ChevronUp, EyeOff, Loader2, Lightbulb, Plus, RefreshCw } from "lucide-react";
+import { ChevronUp, EyeOff, Loader2, Lightbulb, MessageSquare, Plus, RefreshCw } from "lucide-react";
+import { FeatureRequestComments } from "@/components/feature/FeatureRequestComments";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
@@ -69,6 +70,7 @@ export default function FeatureRequestsPage() {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [details, setDetails] = useState("");
+  const [openThread, setOpenThread] = useState<string | null>(null);
 
   const requests = data?.requests ?? [];
   const visible = useMemo(
@@ -213,10 +215,24 @@ export default function FeatureRequestsPage() {
                       <span className="font-medium">VineTrack:</span> {r.admin_note}
                     </p>
                   )}
-                  <p className="text-xs text-muted-foreground">
-                    {r.created_by_name ?? "VineTrack user"} ·{" "}
-                    {new Date(r.created_at).toLocaleDateString()}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <p className="text-xs text-muted-foreground">
+                      {r.created_by_name ?? "VineTrack user"} ·{" "}
+                      {new Date(r.created_at).toLocaleDateString()}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => setOpenThread(openThread === r.id ? null : r.id)}
+                    >
+                      <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
+                      {r.comments > 0
+                        ? `${r.comments} ${r.comments === 1 ? "comment" : "comments"}`
+                        : "Add comment"}
+                    </Button>
+                  </div>
+                  {openThread === r.id && <FeatureRequestComments requestId={r.id} />}
                   {isAdmin && (
                     <div className="flex flex-wrap items-center gap-2 pt-1">
                       <Select
