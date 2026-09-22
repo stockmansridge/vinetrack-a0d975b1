@@ -51,6 +51,7 @@ export interface FeatureRequestVoteRow {
 export interface FeatureRequest extends FeatureRequestRow {
   votes: number;
   hasVoted: boolean;
+  comments: number;
 }
 
 /** Missing table / unknown relation — SQL 245 not applied yet. */
@@ -71,8 +72,13 @@ export function decorateFeatureRequests(
   rows: FeatureRequestRow[],
   votes: FeatureRequestVoteRow[],
   userId: string | null,
+  comments: { feature_request_id: string }[] = [],
 ): FeatureRequest[] {
   const counts = new Map<string, number>();
+  const commentCounts = new Map<string, number>();
+  for (const c of comments) {
+    commentCounts.set(c.feature_request_id, (commentCounts.get(c.feature_request_id) ?? 0) + 1);
+  }
   const mine = new Set<string>();
   for (const v of votes) {
     counts.set(v.feature_request_id, (counts.get(v.feature_request_id) ?? 0) + 1);
@@ -83,6 +89,7 @@ export function decorateFeatureRequests(
       ...r,
       votes: counts.get(r.id) ?? 0,
       hasVoted: mine.has(r.id),
+      comments: commentCounts.get(r.id) ?? 0,
     }))
     .sort((a, b) => {
       if (b.votes !== a.votes) return b.votes - a.votes;
