@@ -1221,22 +1221,42 @@ function WorkTaskDrawer({
   }, [machineLines, localMachineLines]);
   const drawerEffectiveCost = useEffectiveLabourCosts(vineyardId).data?.get(task?.id ?? "") ?? null;
   const visibleLines = displayedLabourLines.filter((l) => !l.deleted_at);
-  const totalHours = visibleLines.reduce((s, l) => s + (Number(l.total_hours ?? 0) || 0), 0);
   const taskCostingMethod = resolveCostingMethod(task);
   const isPieceRateTask = taskCostingMethod === "piece_rate";
-  const labourLineCost = visibleLines.reduce((s, l) => s + (l.total_cost == null ? 0 : Number(l.total_cost) || 0), 0);
-  // Exactly one labour total applies — SQL 189 is the source of truth.
-  const resolvedTaskLabour = resolveEffectiveLabourCost(
-    task ?? null,
-    visibleLines.length ? labourLineCost : null,
-    drawerEffectiveCost ?? null,
+  const drawerTripAllocations = useMemo(
+    () => linkedTrips.flatMap((t) => allocByTripId.get(t.id) ?? []),
+    [linkedTrips, allocByTripId],
   );
-  const totalCostRaw = resolvedTaskLabour.cost;
-  const totalCost = totalCostRaw ?? 0;
-  const missingRate = !isPieceRateTask
-    && visibleLines.some((l) => l.total_cost == null && l.worker_count && l.hours_per_worker);
+  // ONE definition of Total Work Task Cost, shared with the table, sorting,
+  // CSV, the block breakdown and the Work Task summary.
+  const rollup = useMemo(
+    () =>
+      buildWorkTaskCostRollup({
+        task: task ?? null,
+        labourLines: displayedLabourLines,
+        effectiveLabourCost: drawerEffectiveCost,
+        machineLines: displayedMachineLines,
+        tripAllocations: drawerTripAllocations,
+        linkedTripCount: linkedTrips.length,
+        materialLines: taskMaterialLines,
+      }),
+    [
+      task,
+      displayedLabourLines,
+      drawerEffectiveCost,
+      displayedMachineLines,
+      drawerTripAllocations,
+      linkedTrips.length,
+      taskMaterialLines,
+    ],
+  );
+  const totalHours = rollup.labourHours;
+  const totalCostRaw = rollup.totalKnown ? rollup.total : null;
+  const totalCost = rollup.total;
+  const missingRate = rollup.missingRate;
   const areaNum = totalAreaHa > 0 ? totalAreaHa : null;
-  const costPerHa = areaNum && totalCost ? totalCost / areaNum : null;
+  const costPerHa = workTaskCostPerHectare(rollup, areaNum);
+
 
   const paddocksLabel = paddockIds.length === 0
     ? "No block"
