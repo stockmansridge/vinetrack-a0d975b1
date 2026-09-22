@@ -450,20 +450,6 @@ export const ACTIVITIES: NavActivity[] = [
     ],
   },
   {
-    id: "feature-requests",
-    label: "Feature Requests",
-    group: "Resources",
-    icon: Lightbulb,
-    views: [
-      {
-        id: "featureRequests.board",
-        label: "Feature Requests",
-        path: "/feature-requests",
-        keywords: ["feature request", "suggestion", "idea", "vote", "roadmap", "new feature"],
-      },
-    ],
-  },
-  {
     id: "settings",
     label: "Vineyard Settings",
     group: "Settings",
