@@ -11,7 +11,7 @@ import {
   Sun,
   Wind,
 } from "lucide-react";
-import { CartesianGrid, Line, LineChart, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -101,7 +101,8 @@ function TrendChart({ rows, rf, kind }: { rows: ChartRow[]; rf: RegionFormatters
   const boundaries = [5.5, 11.5, 17.5, 23.5];
   return (
     <div className="h-36 w-full" data-testid={`${kind}-trend`} data-point-count={rows.length}>
-      <LineChart width={1000} height={144} data={rows} margin={{ top: 10, right: 12, bottom: 4, left: -18 }} className="h-full w-full" responsive>
+      <ResponsiveContainer width="100%" height="100%">
+      <LineChart data={rows} margin={{ top: 10, right: 12, bottom: 4, left: -18 }}>
         <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 4" />
         <XAxis dataKey="index" hide domain={[0, 29]} />
         <YAxis
@@ -120,6 +121,7 @@ function TrendChart({ rows, rf, kind }: { rows: ChartRow[]; rf: RegionFormatters
           <Line connectNulls={false} type="monotone" dataKey="windMaxKmh" stroke="hsl(var(--accent))" strokeWidth={2.5} dot={{ r: 2.5 }} activeDot={{ r: 5 }} isAnimationActive={false} />
         )}
       </LineChart>
+      </ResponsiveContainer>
     </div>
   );
 }
