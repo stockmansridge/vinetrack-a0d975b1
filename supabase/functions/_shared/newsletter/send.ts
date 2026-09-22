@@ -48,7 +48,9 @@ export async function sendNewsletterEmail(
         subject: args.subject,
         html: args.html,
         text: args.text,
-        purpose: "marketing",
+        // The managed send API accepts "transactional" with an idempotency key;
+        // it appends the unsubscribe footer and honours opt-outs regardless.
+        purpose: "transactional",
         label: args.label,
         idempotency_key: args.idempotencyKey,
         reply_to: args.replyTo,
