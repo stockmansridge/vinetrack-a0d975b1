@@ -11,9 +11,9 @@ import { useMaterialCostsEnabled } from "@/lib/materialCostsAccess";
 import { useWorkTaskMaterials } from "@/lib/materialsQuery";
 import {
   groupWorkTaskMaterialsByTask,
-  materialTotalNumber,
   type WorkTaskMaterial,
 } from "@/lib/materialCosts";
+
 import {
   buildWorkTaskCostRollup,
   workTaskCostPerHectare,
