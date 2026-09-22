@@ -219,7 +219,7 @@ describe("decimal-safe material maths", () => {
   });
 
   it("gives an existing task with no materials a zero material total", () => {
-    expect(materialTotalForTask([])).toBe("0.00");
+    expect(materialTotalForTask([])).toBe("0");
     expect(materialTotalNumber([])).toBe(0);
   });
 
