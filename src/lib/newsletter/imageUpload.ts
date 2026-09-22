@@ -44,3 +44,44 @@ export function isDurableImageUrl(url: string | null | undefined): boolean {
   if (!value) return false;
   return /^https?:\/\//i.test(value);
 }
+
+/**
+ * The standard newsletter header/footer logo.
+ *
+ * Email needs a DURABLE public URL — no blob:, no expiring signed URL — so the
+ * bundled VineTrack wordmark is copied once into the public `guide-images`
+ * bucket at BRANDING_LOGO_PATH. Idempotent: if the object already exists the
+ * upload is skipped. The renderer points at the same fixed public URL, and
+ * falls back to a text wordmark if the image ever fails to load.
+ */
+export const BRANDING_LOGO_PATH = "newsletter/branding/vinetrack-logo.png";
+
+export function brandingLogoUrl(): string {
+  const { data } = supabase.storage.from(GUIDE_IMAGE_BUCKET).getPublicUrl(BRANDING_LOGO_PATH);
+  return data?.publicUrl ?? "";
+}
+
+export async function ensureNewsletterBrandingLogo(logoAssetUrl: string): Promise<boolean> {
+  const publicUrl = brandingLogoUrl();
+  try {
+    const head = await fetch(publicUrl, { method: "HEAD" });
+    if (head.ok) return true;
+  } catch {
+    /* fall through to upload */
+  }
+  try {
+    const res = await fetch(logoAssetUrl);
+    if (!res.ok) return false;
+    const blob = await res.blob();
+    const { error } = await supabase.storage
+      .from(GUIDE_IMAGE_BUCKET)
+      .upload(BRANDING_LOGO_PATH, blob, {
+        upsert: true,
+        contentType: "image/png",
+        cacheControl: "31536000",
+      });
+    return !error;
+  } catch {
+    return false;
+  }
+}

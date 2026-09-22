@@ -250,6 +250,8 @@ export type Database = {
       }
       newsletter_campaign_recipients: {
         Row: {
+          claim_id: string | null
+          claimed_at: string | null
           created_at: string
           email: string
           email_hash: string
@@ -264,6 +266,8 @@ export type Database = {
           version_id: string
         }
         Insert: {
+          claim_id?: string | null
+          claimed_at?: string | null
           created_at?: string
           email: string
           email_hash: string
@@ -278,6 +282,8 @@ export type Database = {
           version_id: string
         }
         Update: {
+          claim_id?: string | null
+          claimed_at?: string | null
           created_at?: string
           email?: string
           email_hash?: string
