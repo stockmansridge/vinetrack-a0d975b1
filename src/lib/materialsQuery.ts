@@ -22,6 +22,8 @@ import {
   type WorkTaskMaterial,
 } from "./materialCosts";
 
+// Migration 247's tables are not in the generated client types yet.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = () => supabase as any;
 
 export const materialQueryKeys = {
