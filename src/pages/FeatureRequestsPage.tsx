@@ -110,6 +110,7 @@ export default function FeatureRequestsPage() {
       <PageHead
         title="Feature Requests — VineTrack"
         description="Suggest new VineTrack features and vote on the ideas you want most."
+        path="/feature-requests"
       />
 
       <div className="flex flex-wrap items-start justify-between gap-3">
