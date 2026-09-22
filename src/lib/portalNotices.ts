@@ -56,7 +56,11 @@ export function usePortalNotices() {
     queryFn: async (): Promise<PortalNotice[]> => {
       const { data, error } = await (cloudSupabase as any)
         .from("portal_notices")
-        .select("*")
+        // created_by_email excluded on purpose — only the admin function
+        // (service role) may read staff email addresses.
+        .select(
+          "id, title, message, tone, priority, is_active, starts_at, ends_at, created_at, updated_at",
+        )
         .eq("is_active", true)
         .order("priority", { ascending: false })
         .order("created_at", { ascending: false });
