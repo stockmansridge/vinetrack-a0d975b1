@@ -185,7 +185,7 @@ export default function AppLayout() {
           <PortalNoticesBanner />
           <PortalInfoBanner />
           <PendingInvitesBanner />
-          <main className="relative flex-1 bg-transparent min-w-0 w-full max-w-full overflow-x-hidden">
+          <main className="relative flex-1 bg-transparent min-w-0 w-full max-w-full overflow-x-clip">
             <div
               aria-hidden="true"
               className="pointer-events-none absolute inset-x-0 top-0 h-[280px] md:h-[330px] xl:h-[380px] overflow-hidden dark:hidden"

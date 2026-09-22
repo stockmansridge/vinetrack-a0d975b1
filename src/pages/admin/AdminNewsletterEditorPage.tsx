@@ -454,7 +454,7 @@ export default function AdminNewsletterEditorPage() {
             )}
           </div>
 
-          <div className="min-w-0 xl:sticky xl:top-4 space-y-3">
+          <div className="min-w-0 xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto space-y-3">
             <Card className="p-3 space-y-3">
               <div className="flex items-center gap-2">
                 <Button
