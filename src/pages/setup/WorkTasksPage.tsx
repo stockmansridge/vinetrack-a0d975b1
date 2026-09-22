@@ -469,7 +469,7 @@ export default function WorkTasksPage() {
       m.set(
         t.id,
         buildWorkTaskCostRollup({
-          task: t as any,
+          task: t,
           labourLines: linesByTask.get(t.id) ?? [],
           effectiveLabourCost: effectiveCostByTask.get(t.id) ?? null,
           machineLines: machineLinesByTask.get(t.id) ?? [],

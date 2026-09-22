@@ -3,8 +3,14 @@ import {
   buildWorkTaskCostRollup,
   workTaskCostPerHectare,
 } from "@/lib/workTaskCostRollup";
+import type { WorkTaskMaterial } from "@/lib/materialCosts";
+import type { WorkTask, WorkTaskLabourLine } from "@/lib/workTasksQuery";
+import type { WorkTaskMachineLine } from "@/lib/workTaskMachineLinesQuery";
+import type { TripCostAllocation } from "@/lib/tripCostAllocationsQuery";
 
-const material = (over: Partial<any> = {}): any => ({
+type Over = Record<string, unknown>;
+
+const material = (over: Over = {}) => (({
   id: crypto.randomUUID(),
   work_task_id: "task-1",
   vineyard_id: "v1",
@@ -13,9 +19,9 @@ const material = (over: Partial<any> = {}): any => ({
   total_cost: "180.00",
   deleted_at: null,
   ...over,
-});
+}) as unknown as WorkTaskMaterial);
 
-const labour = (over: Partial<any> = {}): any => ({
+const labour = (over: Over = {}) => (({
   id: crypto.randomUUID(),
   work_task_id: "task-1",
   total_hours: 4,
@@ -25,9 +31,9 @@ const labour = (over: Partial<any> = {}): any => ({
   hours_per_worker: 4,
   deleted_at: null,
   ...over,
-});
+}) as unknown as WorkTaskLabourLine);
 
-const machine = (over: Partial<any> = {}): any => ({
+const machine = (over: Over = {}) => (({
   id: crypto.randomUUID(),
   work_task_id: "task-1",
   total_machine_cost: 50,
@@ -36,9 +42,9 @@ const machine = (over: Partial<any> = {}): any => ({
   entry_source: "manual",
   deleted_at: null,
   ...over,
-});
+}) as unknown as WorkTaskMachineLine);
 
-const alloc = (over: Partial<any> = {}): any => ({
+const alloc = (over: Over = {}) => (({
   id: crypto.randomUUID(),
   trip_id: "trip-1",
   total_cost: 75,
@@ -47,14 +53,14 @@ const alloc = (over: Partial<any> = {}): any => ({
   chemical_cost: 0,
   input_cost: 0,
   ...over,
-});
+}) as unknown as TripCostAllocation);
 
-const task = (over: Partial<any> = {}): any => ({
+const task = (over: Over = {}) => (({
   id: "task-1",
   vineyard_id: "v1",
   costing_method: "hourly",
   ...over,
-});
+}) as unknown as WorkTask);
 
 describe("Total Work Task Cost roll-up", () => {
   it("material-only task totals $180 (never a dash)", () => {
