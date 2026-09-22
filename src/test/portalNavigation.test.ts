@@ -57,6 +57,7 @@ describe("Portal navigation — destinations", () => {
       "Irrigation",
       "Equipment & Fuel",
       "Reports & Exports",
+      "Feature Requests",
       "Vineyard Settings",
     ]);
   });

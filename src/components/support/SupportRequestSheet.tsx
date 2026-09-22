@@ -1,5 +1,5 @@
 import { useState, useRef, ChangeEvent, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   submitSupportRequest,
   type SupportSubmitResult,
@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Paperclip, X } from "lucide-react";
+import { Lightbulb, Loader2, Paperclip, X } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -111,6 +111,7 @@ export function SupportRequestSheet({ open, onOpenChange, prefill }: Props) {
   const { user } = useAuth();
   const { selectedVineyardId, memberships, currentRole } = useVineyard();
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [category, setCategory] = useState("general");
@@ -256,6 +257,26 @@ export function SupportRequestSheet({ open, onOpenChange, prefill }: Props) {
           <SheetDescription>What can we help with?</SheetDescription>
         </SheetHeader>
         <div className="mt-6 space-y-4">
+          <div className="rounded-md border bg-muted/30 p-3 text-sm">
+            <p className="font-medium">Want a new feature or function?</p>
+            <p className="mt-0.5 text-muted-foreground">
+              Post it on the Feature Requests board so other growers can vote it up
+              the priority list.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() => {
+                onOpenChange(false);
+                navigate("/feature-requests");
+              }}
+            >
+              <Lightbulb className="mr-2 h-4 w-4" />
+              Request a new feature
+            </Button>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="sr-category">Category</Label>
             <Select value={category} onValueChange={setCategory}>
