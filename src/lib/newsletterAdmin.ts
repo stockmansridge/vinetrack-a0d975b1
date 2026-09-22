@@ -30,6 +30,9 @@ export interface NewsletterCampaign {
   preheader: string | null;
   from_name: string | null;
   reply_to: string | null;
+  logo_url: string | null;
+  logo_path: string | null;
+  logo_alt: string | null;
   audience_current_users: boolean;
   audience_subscribers: boolean;
   blocks: NewsletterBlock[];
@@ -134,6 +137,9 @@ export interface SaveCampaignInput {
   preheader?: string | null;
   from_name?: string | null;
   reply_to?: string | null;
+  logo_url?: string | null;
+  logo_path?: string | null;
+  logo_alt?: string | null;
   audience_current_users: boolean;
   audience_subscribers: boolean;
   blocks: NewsletterBlock[];

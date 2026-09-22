@@ -168,6 +168,8 @@ export interface RenderOptions {
   isTest?: boolean;
   /** Durable public logo URL; defaults to BRAND_LOGO_URL. */
   logoUrl?: string | null;
+  /** Accessible description used by the same logo in the header and footer. */
+  logoAlt?: string | null;
 }
 
 interface Theme {
@@ -277,12 +279,17 @@ function button(
   )}</a></td></tr></table><div style="clear:both;line-height:0;">&nbsp;</div>`;
 }
 
-function image(img: NewsletterImage | null | undefined, width = BRAND.maxWidth - 64): string {
+function image(
+  img: NewsletterImage | null | undefined,
+  width: number | string = BRAND.maxWidth - 64,
+  radius = 12,
+): string {
   const url = safeUrl(img?.url);
   if (!url) return "";
+  const maxWidth = width === "100%" ? "100%" : `${width}px`;
   return `<img src="${url}" alt="${escapeHtml(
     img?.alt ?? "",
-  )}" width="${width}" style="display:block;width:100%;max-width:${width}px;height:auto;border:0;outline:none;text-decoration:none;border-radius:12px;" />`;
+  )}" width="${width}" style="display:block;width:100%;max-width:${maxWidth};height:auto;border:0;outline:none;text-decoration:none;border-radius:${radius}px;" />`;
 }
 
 function eyebrow(value: string | null | undefined, align: string, colour: string): string {
@@ -313,8 +320,9 @@ function section(inner: string, theme: Theme, pad = "30px 32px"): string {
 
 function renderHeader(opts: RenderOptions): string {
   const logo = safeUrl(opts.logoUrl ?? BRAND_LOGO_URL);
+  const logoAlt = String(opts.logoAlt ?? "VineTrack").trim() || "VineTrack";
   const wordmark = logo
-    ? `<img src="${logo}" alt="VineTrack" width="150" height="38" style="display:block;width:150px;max-width:150px;height:auto;border:0;outline:none;text-decoration:none;" />`
+    ? `<img src="${logo}" alt="${escapeHtml(logoAlt)}" width="150" height="38" style="display:block;width:150px;max-width:150px;height:auto;border:0;outline:none;text-decoration:none;" />`
     : `<span style="font-family:${FONT};font-size:22px;font-weight:700;color:${BRAND.greenDark};letter-spacing:0.2px;">VineTrack</span>`;
   return `<tr><td bgcolor="${BRAND.white}" class="vt-pad" style="padding:22px 32px 18px 32px;background-color:${BRAND.white};border-bottom:1px solid ${BRAND.border};">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
@@ -329,15 +337,16 @@ function renderHeader(opts: RenderOptions): string {
 function renderHero(block: NewsletterBlock): string {
   const theme = themeFor(block);
   const align = block.align === "center" ? "center" : "left";
-  const inner = [
-    image(block.image),
-    block.image?.url ? `<div style="height:22px;line-height:22px;">&nbsp;</div>` : "",
+  const text = [
     eyebrow(block.eyebrow, align, theme.eyebrow),
     heading(block.heading, align, theme.heading, 40, "h1"),
     paragraphs(block.body, align, theme.text, 17),
     button(block.ctaLabel, block.ctaUrl, theme, align),
   ].join("");
-  return section(inner, theme, "32px 32px 34px 32px");
+  const heroImage = image(block.image, "100%", 0);
+  return heroImage
+    ? `<tr><td bgcolor="${theme.bg}" style="padding:0;background-color:${theme.bg};">${heroImage}</td></tr>${section(text, theme, "28px 32px 34px 32px")}`
+    : section(text, theme, "32px 32px 34px 32px");
 }
 
 function renderFeature(block: NewsletterBlock): string {
@@ -350,14 +359,13 @@ function renderFeature(block: NewsletterBlock): string {
     bulletList(block.bullets, theme.text),
     button(block.ctaLabel, block.ctaUrl, theme, align),
   ].join("");
-  const imgCol = image(block.image, 240);
+  const imgCol = image(block.image, "100%", 10);
   if (!imgCol) return section(textCol, theme);
   const imageLeft = block.layout !== "image-right";
-  const left = imageLeft ? imgCol : textCol;
-  const right = imageLeft ? textCol : imgCol;
-  const inner = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-<td class="vt-col" width="${imageLeft ? "45%" : "55%"}" valign="top" style="padding:0 14px 0 0;">${left}</td>
-<td class="vt-col" width="${imageLeft ? "55%" : "45%"}" valign="top" style="padding:0 0 0 14px;">${right}</td>
+  const direction = imageLeft ? "ltr" : "rtl";
+  const inner = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" dir="${direction}"><tr>
+<td class="vt-col vt-feature-image" width="45%" valign="top" dir="ltr" style="padding:0 14px 0 0;">${imgCol}</td>
+<td class="vt-col" width="55%" valign="top" dir="ltr" style="padding:0 0 0 14px;">${textCol}</td>
 </tr></table>`;
   return section(inner, theme);
 }
@@ -381,16 +389,16 @@ function renderCards(block: NewsletterBlock): string {
   if (cards.length === 0) return "";
   const cells = cards
     .map((card) => {
-      const inner = [
-        image(card.image, 160),
-        card.image?.url ? `<div style="height:12px;line-height:12px;">&nbsp;</div>` : "",
+      const content = [
         heading(card.heading, "left", BRAND.greenDark, 18, "h3"),
         paragraphs(card.body, "left", BRAND.ink, 15),
         button(card.ctaLabel, card.ctaUrl, { ...theme, btnBg: BRAND.green, btnText: BRAND.white }, "left"),
       ].join("");
+      const cardImage = image(card.image, "100%", 0);
       return `<td class="vt-col" valign="top" width="33.33%" style="padding:6px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${theme.cardBg}" style="background-color:${theme.cardBg};border:1px solid ${theme.cardBorder};border-radius:14px;">
-<tr><td style="padding:18px;">${inner}</td></tr></table></td>`;
+${cardImage ? `<tr><td style="padding:0;overflow:hidden;border-radius:13px 13px 0 0;">${cardImage}</td></tr>` : ""}
+<tr><td style="padding:18px;">${content}</td></tr></table></td>`;
     })
     .join("");
   const inner = [
@@ -424,6 +432,7 @@ function renderFooter(block: NewsletterBlock, opts: RenderOptions): string {
   const support = escapeHtml(opts.supportEmail ?? "support@vinetrack.com.au");
   const extra = String(block.body ?? "").trim();
   const logo = safeUrl(opts.logoUrl ?? BRAND_LOGO_URL);
+  const logoAlt = String(opts.logoAlt ?? "VineTrack").trim() || "VineTrack";
   const link = (label: string, href: string | null) =>
     href
       ? `<a href="${href}" style="color:${BRAND.greenDark};text-decoration:underline;font-weight:600;">${label}</a>`
@@ -446,7 +455,7 @@ ${
 <td class="vt-col vt-right" width="45%" valign="top" align="right" style="padding:0;">
 ${
     logo
-      ? `<img src="${logo}" alt="VineTrack" width="128" height="32" style="display:inline-block;width:128px;max-width:128px;height:auto;border:0;outline:none;text-decoration:none;" />`
+      ? `<img src="${logo}" alt="${escapeHtml(logoAlt)}" width="128" height="32" style="display:inline-block;width:128px;max-width:128px;height:auto;border:0;outline:none;text-decoration:none;" />`
       : `<span style="font-family:${FONT};font-size:17px;font-weight:700;color:${BRAND.greenDark};">VineTrack</span>`
   }
 <p style="margin:8px 0 0 0;font-family:${FONT};font-size:12px;line-height:19px;color:${BRAND.muted};">${escapeHtml(
@@ -511,6 +520,7 @@ h1,h2,h3 { font-family:${FONT}; }
   .vt-col { display:block !important; width:100% !important; padding:0 0 18px 0 !important; }
   .vt-right { text-align:left !important; }
   .vt-pad { padding-left:20px !important; padding-right:20px !important; }
+  .vt-feature-image { display:table-header-group !important; width:100% !important; }
   h1 { font-size:32px !important; line-height:38px !important; }
   h2 { font-size:23px !important; line-height:30px !important; }
 }
