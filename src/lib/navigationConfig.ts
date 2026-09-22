@@ -183,6 +183,12 @@ export const ACTIVITIES: NavActivity[] = [
     icon: CloudRain,
     views: [
       {
+        id: "weather.live",
+        label: "Live Dashboard",
+        path: "/dashboard/live",
+        keywords: ["live", "realtime", "weather"],
+      },
+      {
         id: "weather.rainfall",
         label: "Rainfall",
         path: "/reports/rainfall",
@@ -196,7 +202,6 @@ export const ACTIVITIES: NavActivity[] = [
         keywords: ["weather", "station", "davis", "willyweather", "wunderground"],
       },
     ],
-    crossLinks: [{ label: "Live Dashboard", path: "/dashboard/live" }],
   },
   {
     id: "trips",
