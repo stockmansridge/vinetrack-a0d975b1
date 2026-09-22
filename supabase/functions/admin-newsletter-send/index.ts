@@ -33,6 +33,7 @@ const OPEN_VERSION_STATUSES = ["preparing", "scheduled", "sending"];
 const BATCH_SIZE = 60;
 
 // deno-lint-ignore no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>;
 
 async function loadCampaign(ctx: AdminContext, id: string): Promise<Row | null> {

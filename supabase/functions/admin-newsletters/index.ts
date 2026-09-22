@@ -35,6 +35,7 @@ function durableLogoUrl(value: unknown): string | null {
 }
 
 // deno-lint-ignore no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function renderOf(campaign: any, isTest = false) {
   return {
     subject: String(campaign?.subject ?? ""),
