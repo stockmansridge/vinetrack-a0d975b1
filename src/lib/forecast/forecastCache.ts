@@ -16,7 +16,7 @@
 //
 // Until those functions exist the helpers below report "unavailable" and the
 // caller fetches the provider directly — no browser-side substitute cache.
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/ios-supabase/client";
 import type { FiveDayForecast } from "@/lib/fiveDayForecast";
 
 export const FORECAST_CACHE_SCHEMA_VERSION = "5day-6bucket-v2";
