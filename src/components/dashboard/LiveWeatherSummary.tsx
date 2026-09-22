@@ -4,7 +4,7 @@
 // The card is split into two clearly labelled sections so observed values
 // (Davis WeatherLink) are never confused with forecast values (WillyWeather):
 //   1. "Live observations" — Davis WeatherLink
-//   2. "7-day forecast"    — WillyWeather (or Open-Meteo fallback)
+//   2. "5-day forecast"    — configured provider, with genuine detailed trends when available
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
@@ -27,11 +27,11 @@ import {
   type LiveWeatherReading,
 } from "@/lib/weatherStatusQuery";
 import {
-  fetchRainForecast,
   summarizeForecast,
   forecastUnavailableReason,
-  type RainForecastDay,
 } from "@/lib/rainForecastQuery";
+import { fetchFiveDayForecast } from "@/lib/fiveDayForecast";
+import { FiveDayForecastPanel } from "@/components/weather/FiveDayForecastPanel";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import type { RegionFormatters } from "@/lib/regionFormatters";
 
@@ -71,10 +71,10 @@ function fmt(n: number | null | undefined, digits = 0): string {
 
 const WEEKDAY = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-function forecastBadgeLabel(days: RainForecastDay[], rf: RegionFormatters): string {
+function forecastBadgeLabel(days: Array<{ date: string; rainfall_mm: number | null }>, rf: RegionFormatters): string {
   const s = summarizeForecast(days);
   if (!s.firstRainDay || s.totalMm < 1) {
-    return "No significant rain in next 7 days";
+    return "No significant rain in next 5 days";
   }
   const d = new Date(s.firstRainDay.date);
   const day = isNaN(d.getTime()) ? s.firstRainDay.date : WEEKDAY[d.getDay()];
@@ -120,9 +120,9 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
     refetchIntervalInBackground: false,
   });
   const forecastQ = useQuery({
-    queryKey: ["rain-forecast", vineyardId],
+    queryKey: ["five-day-forecast", vineyardId],
     enabled: !!vineyardId,
-    queryFn: () => fetchRainForecast(vineyardId, 7),
+    queryFn: () => fetchFiveDayForecast(vineyardId),
     refetchInterval: 15 * 60_000,
     refetchIntervalInBackground: false,
   });
@@ -138,7 +138,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   const stale = weather && weather.available ? weather.stale : false;
 
   const observationsOk = !!(weather && weather.available && reading);
-  const forecastOk = !!(forecast && forecast.available && forecast.days?.length);
+  const forecastOk = !!(forecast && forecast.available && forecast.forecast.days?.length);
 
   const forecastBadge = (() => {
     if (forecastQ.isLoading) return { label: "Loading forecast…", title: undefined as string | undefined };
@@ -149,14 +149,13 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
         title: forecastUnavailableReason(forecast.reason, forecast.message),
       };
     }
-    return { label: forecastBadgeLabel(forecast.days, rf), title: undefined };
+    const rainDays = forecast.forecast.days.map((day) => ({ date: day.date, rainfall_mm: day.rainMm }));
+    return { label: forecastBadgeLabel(rainDays, rf), title: undefined };
   })();
 
   const forecastSourceLabel = (() => {
     if (!forecast || forecast.available === false) return "WillyWeather";
-    if (forecast.via === "willyweather") return "WillyWeather";
-    if (forecast.via === "open_meteo") return "Open-Meteo";
-    return forecast.source ? sourceLabel(forecast.source) : "WillyWeather";
+    return forecast.forecast.source;
   })();
   const forecastIsWilly = forecastSourceLabel === "WillyWeather";
 
@@ -222,10 +221,10 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
       if (weatherSuccess && forecastSuccess) {
         toast({ title: "Weather updated" });
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: "Weather refresh failed",
-        description: e?.message ?? "Unexpected error.",
+        description: e instanceof Error ? e.message : "Unexpected error.",
         variant: "destructive",
       });
     }
@@ -368,23 +367,18 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
         )}
       </section>
 
-      {/* ---------- Section 2: 7-day forecast (WillyWeather) ---------- */}
+      {/* ---------- Section 2: provider-neutral 5-day forecast ---------- */}
       <section className="space-y-2 border-t pt-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            7-day forecast
+        {forecastOk && forecast?.available ? (
+          <FiveDayForecastPanel vineyardId={vineyardId} forecast={forecast.forecast} rf={rf} />
+        ) : forecastQ.isLoading ? (
+          <div className="text-xs text-muted-foreground">Loading 5-day forecast…</div>
+        ) : (
+          <div className="flex items-center gap-2 rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            <CloudOff className="h-4 w-4" />
+            <span>5-day forecast unavailable{forecastBadge.title ? ` — ${forecastBadge.title}` : ""}</span>
           </div>
-          <Badge variant="outline" className="text-[10px]">
-            Source: {forecastSourceLabel}
-          </Badge>
-        </div>
-
-        <ForecastStrip
-          days={forecastOk ? forecast!.days : null}
-          loading={forecastQ.isLoading}
-          unavailableLabel={forecastBadge.title ?? forecastBadge.label}
-          rf={rf}
-        />
+        )}
 
         {forecastIsWilly && (
           <div className="text-xs text-muted-foreground">
@@ -401,90 +395,6 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
         )}
       </section>
     </Card>
-  );
-}
-
-// ---------- 7-day forecast strip ----------
-
-const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function ForecastStrip({
-  days,
-  loading,
-  unavailableLabel,
-  rf,
-}: {
-  days: RainForecastDay[] | null;
-  loading: boolean;
-  unavailableLabel?: string;
-  rf: RegionFormatters;
-}) {
-  if (loading) {
-    return (
-      <div className="text-xs text-muted-foreground">Loading 7-day forecast…</div>
-    );
-  }
-  if (!days || !days.length) {
-    return (
-      <div className="flex items-center gap-2 rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-        <CloudOff className="h-4 w-4" />
-        <span>
-          7-day forecast unavailable{unavailableLabel ? ` — ${unavailableLabel}` : ""}
-        </span>
-      </div>
-    );
-  }
-  const week = days.slice(0, 7);
-  return (
-    <div className="grid grid-cols-7 gap-2">
-      {week.map((d) => {
-        const dt = new Date(d.date);
-        const valid = !isNaN(dt.getTime());
-        const dayLabel = valid ? WEEKDAY_SHORT[dt.getDay()] : d.date;
-        const dateLabel = valid ? `${dt.getDate()}/${dt.getMonth() + 1}` : "";
-        return (
-          <div
-            key={d.date}
-            className="rounded-md border bg-muted/30 px-2 py-2 text-center min-w-0"
-          >
-            <div className="text-xs font-medium">{dayLabel}</div>
-            <div className="text-[10px] text-muted-foreground mb-1">{dateLabel}</div>
-            <div className="flex items-center justify-center gap-1 text-xs">
-              <Thermometer className="h-3 w-3 text-muted-foreground" />
-              <span>
-                {d.temp_max_c != null ? rf.temperature(d.temp_max_c, 0) : "—"}
-                {d.temp_min_c != null ? (
-                  <span className="text-muted-foreground">/{rf.temperature(d.temp_min_c, 0)}</span>
-                ) : null}
-              </span>
-            </div>
-            <div className="flex items-center justify-center gap-1 text-xs mt-0.5">
-              <Wind className="h-3 w-3 text-muted-foreground" />
-              <span>{d.wind_max_kmh != null ? rf.wind(d.wind_max_kmh, 0) : "—"}</span>
-            </div>
-            {(() => {
-              const rain = d.rainfall_mm ?? 0;
-              const hasRain = rain >= 5;
-              return (
-                <div className="flex items-center justify-center text-xs mt-0.5">
-                  {hasRain ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white">
-                      <CloudRain className="h-3 w-3 text-white" />
-                      {rf.rainfall(rain)}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-muted-foreground">
-                      <CloudRain className="h-3 w-3 text-muted-foreground" />
-                      {d.rainfall_mm != null ? rf.rainfall(d.rainfall_mm) : "—"}
-                    </span>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-        );
-      })}
-    </div>
   );
 }
 
