@@ -88,6 +88,8 @@ describe("newsletter rendering", () => {
     expect(isDurableImageUrl("https://cdn.example.com/a.png")).toBe(true);
     expect(isDurableImageUrl("blob:http://localhost/abc")).toBe(false);
     expect(isDurableImageUrl("data:image/png;base64,AAA")).toBe(false);
+    expect(isDurableImageUrl("https://example.com/storage/v1/object/sign/logos/a.png?token=abc")).toBe(false);
+    expect(isDurableImageUrl("https://example.com/logo.png?token=abc")).toBe(false);
     expect(isDurableImageUrl("")).toBe(false);
     // An uploaded image survives a save/reload cycle because only its public URL
     // is persisted in the campaign blocks.
@@ -96,6 +98,38 @@ describe("newsletter rendering", () => {
     expect(renderNewsletterHtml({ subject: "x", blocks: saved })).toContain(
       "https://cdn.example.com/hero.png",
     );
+  });
+
+  it("uses one custom durable logo and alt text in the header and footer", () => {
+    const htmlWithLogo = renderNewsletterHtml({
+      subject: "Custom brand",
+      blocks,
+      logoUrl: "https://cdn.example.com/vinetrack-correct.png",
+      logoAlt: "VineTrack vineyard management",
+    });
+    expect(htmlWithLogo.match(/https:\/\/cdn\.example\.com\/vinetrack-correct\.png/g)).toHaveLength(2);
+    expect(htmlWithLogo.match(/alt="VineTrack vineyard management"/g)).toHaveLength(2);
+  });
+
+  it("renders hero, feature and card images at the full width of their image areas", () => {
+    const imageUrl = "https://cdn.example.com/full-width.png";
+    const imageBlocks: NewsletterBlock[] = [
+      { id: "hero", type: "hero", heading: "Hero", image: { url: imageUrl, alt: "Hero" } },
+      { id: "feature", type: "feature", heading: "Feature", layout: "image-right", image: { url: imageUrl, alt: "Feature" } },
+      {
+        id: "cards",
+        type: "cards",
+        cards: [{ heading: "Card", image: { url: imageUrl, alt: "Card" } }],
+      },
+    ];
+    const rendered = renderNewsletterHtml({ subject: "Images", blocks: imageBlocks });
+
+    expect(rendered).toContain('padding:0;background-color:');
+    expect(rendered).toContain('class="vt-col vt-feature-image" width="45%"');
+    expect(rendered).toContain('dir="rtl"');
+    expect(rendered).toContain('padding:0;overflow:hidden;border-radius:13px 13px 0 0;');
+    expect(rendered.match(/width="100%" style="display:block;width:100%;max-width:100%/g)).toHaveLength(3);
+    expect(rendered).toContain(".vt-feature-image { display:table-header-group !important; width:100% !important; }");
   });
 
   it("renders the plain-text alternative from the same blocks", () => {

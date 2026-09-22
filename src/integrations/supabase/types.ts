@@ -321,6 +321,9 @@ export type Database = {
           from_name: string | null
           html: string
           id: string
+          logo_alt: string | null
+          logo_path: string | null
+          logo_url: string | null
           preheader: string | null
           recipient_count: number
           reply_to: string | null
@@ -348,6 +351,9 @@ export type Database = {
           from_name?: string | null
           html: string
           id?: string
+          logo_alt?: string | null
+          logo_path?: string | null
+          logo_url?: string | null
           preheader?: string | null
           recipient_count?: number
           reply_to?: string | null
@@ -375,6 +381,9 @@ export type Database = {
           from_name?: string | null
           html?: string
           id?: string
+          logo_alt?: string | null
+          logo_path?: string | null
+          logo_url?: string | null
           preheader?: string | null
           recipient_count?: number
           reply_to?: string | null
@@ -411,6 +420,9 @@ export type Database = {
           current_version_id: string | null
           from_name: string | null
           id: string
+          logo_alt: string | null
+          logo_path: string | null
+          logo_url: string | null
           name: string
           preheader: string | null
           reply_to: string | null
@@ -431,6 +443,9 @@ export type Database = {
           current_version_id?: string | null
           from_name?: string | null
           id?: string
+          logo_alt?: string | null
+          logo_path?: string | null
+          logo_url?: string | null
           name?: string
           preheader?: string | null
           reply_to?: string | null
@@ -451,6 +466,9 @@ export type Database = {
           current_version_id?: string | null
           from_name?: string | null
           id?: string
+          logo_alt?: string | null
+          logo_path?: string | null
+          logo_url?: string | null
           name?: string
           preheader?: string | null
           reply_to?: string | null

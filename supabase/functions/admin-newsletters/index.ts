@@ -16,16 +16,33 @@ import { isValidEmail, normaliseEmail } from "../_shared/newsletter/audience.ts"
 import { sendNewsletterEmail } from "../_shared/newsletter/send.ts";
 
 const CAMPAIGN_COLUMNS =
-  "id, name, subject, preheader, from_name, reply_to, audience_current_users, audience_subscribers, blocks, status, scheduled_at, timezone, audience_counts, current_version_id, created_by_email, created_at, updated_at";
+  "id, name, subject, preheader, from_name, reply_to, logo_url, logo_path, logo_alt, audience_current_users, audience_subscribers, blocks, status, scheduled_at, timezone, audience_counts, current_version_id, created_by_email, created_at, updated_at";
 
 const EDITABLE_STATUSES = new Set(["draft", "scheduled", "failed"]);
 
+function durableLogoUrl(value: unknown): string | null {
+  const raw = String(value ?? "").trim();
+  if (!/^https?:\/\//i.test(raw)) return null;
+  try {
+    const url = new URL(raw);
+    if (url.pathname.toLowerCase().includes("/storage/v1/object/sign/") || url.searchParams.has("token")) {
+      return null;
+    }
+    return raw.slice(0, 2_000);
+  } catch {
+    return null;
+  }
+}
+
 // deno-lint-ignore no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function renderOf(campaign: any, isTest = false) {
   return {
     subject: String(campaign?.subject ?? ""),
     preheader: campaign?.preheader ?? null,
     blocks: Array.isArray(campaign?.blocks) ? campaign.blocks : [],
+    logoUrl: campaign?.logo_url ?? null,
+    logoAlt: campaign?.logo_alt ?? null,
     isTest,
   };
 }
@@ -87,12 +104,16 @@ Deno.serve(async (req: Request) => {
 
     if (action === "save") {
       const c = (body.campaign ?? {}) as Record<string, unknown>;
+      const logoUrl = durableLogoUrl(c.logo_url);
       const patch = {
         name: String(c.name ?? "Untitled newsletter").slice(0, 200) || "Untitled newsletter",
         subject: String(c.subject ?? "").slice(0, 300),
         preheader: c.preheader ? String(c.preheader).slice(0, 300) : null,
         from_name: c.from_name ? String(c.from_name).slice(0, 120) : null,
         reply_to: c.reply_to ? String(c.reply_to).slice(0, 200) : null,
+        logo_url: logoUrl,
+        logo_path: logoUrl && c.logo_path ? String(c.logo_path).slice(0, 500) : null,
+        logo_alt: c.logo_alt ? String(c.logo_alt).slice(0, 200) : null,
         audience_current_users: Boolean(c.audience_current_users),
         audience_subscribers: Boolean(c.audience_subscribers),
         blocks: Array.isArray(c.blocks) ? c.blocks : [],
@@ -154,6 +175,9 @@ Deno.serve(async (req: Request) => {
           preheader: s.preheader,
           from_name: s.from_name,
           reply_to: s.reply_to,
+          logo_url: s.logo_url,
+          logo_path: s.logo_path,
+          logo_alt: s.logo_alt,
           audience_current_users: s.audience_current_users,
           audience_subscribers: s.audience_subscribers,
           blocks: s.blocks,

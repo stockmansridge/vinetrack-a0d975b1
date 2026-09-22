@@ -16,6 +16,7 @@ import {
 import { Monitor, Plus, Save, Send, Smartphone, CalendarClock, Loader2 } from "lucide-react";
 import { AdminGate, AdminPageHeader, AdminError } from "./_shared";
 import { NewsletterBlockEditor } from "@/components/admin/newsletter/NewsletterBlockEditor";
+import { NewsletterImageField } from "@/components/admin/newsletter/NewsletterImageField";
 import {
   ADDABLE_BLOCKS,
   BLOCK_LABELS,
@@ -75,6 +76,9 @@ export default function AdminNewsletterEditorPage() {
     preheader: "",
     from_name: "VineTrack",
     reply_to: "support@vinetrack.com.au",
+    logo_url: null,
+    logo_path: null,
+    logo_alt: "VineTrack",
     audience_current_users: false,
     audience_subscribers: false,
     blocks: [],
@@ -98,6 +102,9 @@ export default function AdminNewsletterEditorPage() {
       preheader: c.preheader ?? "",
       from_name: c.from_name ?? "VineTrack",
       reply_to: c.reply_to ?? "support@vinetrack.com.au",
+      logo_url: c.logo_url ?? null,
+      logo_path: c.logo_path ?? null,
+      logo_alt: c.logo_alt ?? "VineTrack",
       audience_current_users: c.audience_current_users,
       audience_subscribers: c.audience_subscribers,
       blocks: Array.isArray(c.blocks) ? c.blocks : [],
@@ -237,6 +244,29 @@ export default function AdminNewsletterEditorPage() {
               never affected.
             </p>
           </Card>
+
+          <Card className="p-4 space-y-3">
+            <div>
+              <div className="font-semibold text-sm">Branding</div>
+              <p className="text-xs text-muted-foreground">
+                Used in both the newsletter header and footer. Removing it restores the standard VineTrack logo.
+              </p>
+            </div>
+            <NewsletterImageField
+              label="Logo image"
+              value={form.logo_url ? { url: form.logo_url, path: form.logo_path, alt: form.logo_alt } : null}
+              readOnly={readOnly}
+              previewClassName="h-16 w-44 rounded-md border bg-muted/30 object-contain p-2"
+              onChange={(logo) =>
+                setForm((current) => ({
+                  ...current,
+                  logo_url: logo?.url ?? null,
+                  logo_path: logo?.path ?? null,
+                  logo_alt: logo ? logo.alt ?? current.logo_alt ?? "VineTrack" : "VineTrack",
+                }))
+              }
+            />
+          </Card>
         </div>
 
 
@@ -307,7 +337,8 @@ export default function AdminNewsletterEditorPage() {
                   disabled={cancelSchedule.isPending || !form.id}
                   onClick={async () => {
                     try {
-                      await cancelSchedule.mutateAsync(form.id!);
+                      if (!form.id) return;
+                      await cancelSchedule.mutateAsync(form.id);
                       toast({ title: "Schedule cancelled — back to draft" });
                     } catch (e) {
                       toast({

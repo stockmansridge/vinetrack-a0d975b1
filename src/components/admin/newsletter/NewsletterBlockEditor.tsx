@@ -1,17 +1,16 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { ArrowDown, ArrowUp, Copy, ImagePlus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, Trash2 } from "lucide-react";
 import {
   BLOCK_LABELS,
   type NewsletterBlock,
   type NewsletterCardBlock,
-  type NewsletterImageRef,
 } from "@/lib/newsletter/blocks";
-import { uploadNewsletterImage } from "@/lib/newsletter/imageUpload";
+import { NewsletterImageField } from "@/components/admin/newsletter/NewsletterImageField";
 import {
   BACKGROUND_OPTIONS,
   BUTTON_BACKGROUND_OPTIONS,
@@ -23,7 +22,6 @@ import {
   isValidHexColour,
   type ColourOption,
 } from "@/lib/newsletter/palette";
-import { useToast } from "@/hooks/use-toast";
 
 interface Props {
   block: NewsletterBlock;
@@ -34,98 +32,6 @@ interface Props {
   onMove: (delta: number) => void;
   onDuplicate: () => void;
   onDelete: () => void;
-}
-
-function ImageField({
-  value,
-  readOnly,
-  onChange,
-}: {
-  value: NewsletterImageRef | null | undefined;
-  readOnly?: boolean;
-  onChange: (next: NewsletterImageRef | null) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  const { toast } = useToast();
-
-  return (
-    <div className="space-y-2">
-      <Label className="text-xs">Image</Label>
-      {value?.url ? (
-        <div className="flex items-start gap-3">
-          <img
-            src={value.url}
-            alt={value.alt ?? ""}
-            className="h-20 w-28 rounded-md object-cover border"
-          />
-          <div className="flex-1 space-y-2">
-            <Input
-              placeholder="Alt text (described for screen readers)"
-              value={value.alt ?? ""}
-              disabled={readOnly}
-              onChange={(e) => onChange({ ...value, alt: e.target.value })}
-            />
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={readOnly || busy}
-                onClick={() => inputRef.current?.click()}
-              >
-                Replace
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                disabled={readOnly}
-                onClick={() => onChange(null)}
-              >
-                <X className="h-4 w-4 mr-1" /> Remove
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="gap-1"
-          disabled={readOnly || busy}
-          onClick={() => inputRef.current?.click()}
-        >
-          <ImagePlus className="h-4 w-4" /> {busy ? "Uploading…" : "Upload image"}
-        </Button>
-      )}
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={async (e) => {
-          const file = e.target.files?.[0];
-          e.target.value = "";
-          if (!file) return;
-          setBusy(true);
-          try {
-            const uploaded = await uploadNewsletterImage(file);
-            onChange({ url: uploaded.url, path: uploaded.path, alt: value?.alt ?? "" });
-          } catch (err) {
-            toast({
-              title: "Couldn't upload the image",
-              description: err instanceof Error ? err.message : String(err),
-              variant: "destructive",
-            });
-          } finally {
-            setBusy(false);
-          }
-        }}
-      />
-    </div>
-  );
 }
 
 function Choice({
@@ -285,7 +191,7 @@ export function NewsletterBlockEditor({
       </div>
 
       {showImage && (
-        <ImageField value={block.image} readOnly={readOnly} onChange={(image) => onChange({ image })} />
+        <NewsletterImageField value={block.image} readOnly={readOnly} onChange={(image) => onChange({ image })} />
       )}
 
       {showText && (
@@ -365,7 +271,7 @@ export function NewsletterBlockEditor({
           {(block.cards ?? []).map((card, i) => (
             <Card key={i} className="p-3 space-y-2 bg-muted/40">
               <div className="text-xs font-semibold text-muted-foreground">Card {i + 1}</div>
-              <ImageField
+              <NewsletterImageField
                 value={card.image}
                 readOnly={readOnly}
                 onChange={(image) => updateCard(i, { image })}

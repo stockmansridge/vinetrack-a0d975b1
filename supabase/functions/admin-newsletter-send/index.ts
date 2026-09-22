@@ -33,6 +33,7 @@ const OPEN_VERSION_STATUSES = ["preparing", "scheduled", "sending"];
 const BATCH_SIZE = 60;
 
 // deno-lint-ignore no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>;
 
 async function loadCampaign(ctx: AdminContext, id: string): Promise<Row | null> {
@@ -90,6 +91,8 @@ async function createVersion(
     subject: String(campaign.subject ?? ""),
     preheader: campaign.preheader ?? null,
     blocks: Array.isArray(campaign.blocks) ? campaign.blocks : [],
+    logoUrl: campaign.logo_url ?? null,
+    logoAlt: campaign.logo_alt ?? null,
   };
 
   const insert = await ctx.portal
@@ -101,6 +104,9 @@ async function createVersion(
       from_name: campaign.from_name ?? null,
       reply_to: campaign.reply_to ?? null,
       blocks: renderOpts.blocks,
+      logo_url: campaign.logo_url ?? null,
+      logo_path: campaign.logo_path ?? null,
+      logo_alt: campaign.logo_alt ?? null,
       html: renderNewsletterHtml(renderOpts),
       text_body: renderNewsletterText(renderOpts),
       audience_current_users: includeCurrentUsers,
