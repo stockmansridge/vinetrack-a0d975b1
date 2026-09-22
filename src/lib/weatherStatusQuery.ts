@@ -352,6 +352,82 @@ export type LiveWeatherResult =
   | { available: true; reading: LiveWeatherReading; stale: boolean }
   | { available: false; reason: "rpc_missing" | "not_configured" | "no_data" | "error"; message?: string };
 
+/**
+ * Maps the RPC's row status into the Portal result. The RPC returns a row even
+ * when it has nothing to show (status `not_configured` / `no_data`), so the
+ * mere presence of a row must never be read as available: true.
+ * Staleness is the server's decision — the SQL contract defines stale as 20
+ * minutes and returns `is_stale`; the Portal keeps no separate rule.
+ */
+export function mapLiveWeatherRow(row: any): LiveWeatherResult {
+  if (!row) return { available: false, reason: "no_data" };
+  const status = String(row.status ?? row.result_status ?? "").toLowerCase();
+  if (status === "not_configured") {
+    return { available: false, reason: "not_configured", message: row.message ?? undefined };
+  }
+  if (status === "no_data") {
+    return { available: false, reason: "no_data", message: row.message ?? undefined };
+  }
+  if (status && status !== "ok") {
+    return { available: false, reason: "error", message: row.message ?? status };
+  }
+  const observed = row.observed_at ?? row.last_observation_at ?? null;
+  const hasReading =
+    row.temperature_c != null ||
+    row.temperature != null ||
+    row.humidity_pct != null ||
+    row.wind_speed_kmh != null ||
+    observed != null;
+  if (!hasReading) return { available: false, reason: "no_data", message: row.message ?? undefined };
+  return {
+    available: true,
+    // Server-returned is_stale is authoritative. Without it, an observation
+    // with no timestamp is treated as stale.
+    stale: typeof row.is_stale === "boolean" ? row.is_stale : observed == null,
+    reading: {
+      source: row.source ?? null,
+      station_name: row.station_name ?? null,
+      observed_at: observed,
+      temperature_c: row.temperature_c ?? row.temperature ?? null,
+      humidity_pct: row.humidity_pct ?? row.humidity ?? null,
+      wind_speed_kmh: row.wind_speed_kmh ?? row.wind_speed ?? null,
+      wind_direction_deg: row.wind_direction_deg ?? row.wind_direction ?? null,
+      wind_gust_kmh: row.wind_gust_kmh ?? row.wind_gust ?? row.wind_speed_hi_kmh ?? null,
+      rain_today_mm: row.rain_today_mm ?? row.rain_today ?? null,
+      rain_rate_mm_per_hr: row.rain_rate_mm_per_hr ?? row.rain_rate ?? null,
+    },
+  };
+}
+
+/**
+ * Forces a Davis WeatherLink fetch through the authenticated davis-proxy
+ * (action `current`). The proxy writes the fresh observation into
+ * vineyard_weather_observations; the caller then re-reads
+ * get_vineyard_current_weather() to pick it up.
+ */
+export async function refreshDavisObservations(
+  vineyardId: string,
+): Promise<DavisTestResult> {
+  return callDavisProxy({ action: "current", vineyardId });
+}
+
+/**
+ * Manual Davis refresh: provider fetch first, then re-read the server cache.
+ * A provider failure still returns the last cached observation so useful
+ * measured data is never replaced by an empty state.
+ */
+export async function refreshLiveWeather(
+  vineyardId: string,
+): Promise<{ result: LiveWeatherResult; providerRefreshed: boolean; providerMessage?: string }> {
+  const proxy = await refreshDavisObservations(vineyardId);
+  const result = await fetchLiveWeather(vineyardId);
+  return {
+    result,
+    providerRefreshed: proxy.ok,
+    providerMessage: proxy.ok ? undefined : proxy.message,
+  };
+}
+
 export async function fetchLiveWeather(vineyardId: string): Promise<LiveWeatherResult> {
   const res = await (supabase.rpc as any)("get_vineyard_current_weather", {
     p_vineyard_id: vineyardId,
@@ -366,25 +442,5 @@ export async function fetchLiveWeather(vineyardId: string): Promise<LiveWeatherR
     return { available: false, reason: "error", message: msg };
   }
   const row = Array.isArray(res.data) ? res.data[0] : res.data;
-  if (!row) return { available: false, reason: "no_data" };
-  const observed = row.observed_at ?? row.last_observation_at ?? null;
-  const ageMs = observed ? Date.now() - new Date(observed).getTime() : null;
-  const stale = ageMs == null ? true : ageMs > 60 * 60 * 1000; // >1h
-  return {
-    available: true,
-    stale,
-    reading: {
-      source: row.source ?? null,
-      station_name: row.station_name ?? null,
-      observed_at: observed,
-      temperature_c: row.temperature_c ?? row.temperature ?? null,
-      humidity_pct: row.humidity_pct ?? row.humidity ?? null,
-      wind_speed_kmh: row.wind_speed_kmh ?? row.wind_speed ?? null,
-      wind_direction_deg: row.wind_direction_deg ?? row.wind_direction ?? null,
-      wind_gust_kmh:
-        row.wind_gust_kmh ?? row.wind_gust ?? row.wind_speed_hi_kmh ?? null,
-      rain_today_mm: row.rain_today_mm ?? row.rain_today ?? null,
-      rain_rate_mm_per_hr: row.rain_rate_mm_per_hr ?? row.rain_rate ?? null,
-    },
-  };
+  return mapLiveWeatherRow(row);
 }

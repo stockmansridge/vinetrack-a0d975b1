@@ -29,7 +29,7 @@ describe("five-day forecast normalisation", () => {
     const result = normaliseOpenMeteo(payload(), "2026-10-02T12:00:00Z");
     expect(result?.days).toHaveLength(5);
     expect(result?.days.flatMap((day) => day.periods)).toHaveLength(30);
-    expect(result?.days.every((day) => day.periods.every((period) => period.observationCount === 4))).toBe(true);
+    expect(result?.days.every((day) => day.periods.every((period) => period.sampleCount === 4))).toBe(true);
   });
 
   it("calculates min/max temperature and maximum wind from actual readings", () => {
@@ -46,13 +46,13 @@ describe("five-day forecast normalisation", () => {
       input.hourly.wind_speed_10m = input.hourly.wind_speed_10m?.filter((_, index) => index >= 4);
     }
     const first = bucketHourlyForecast(input).get("2026-10-03")?.[0];
-    expect(first).toMatchObject({ observationCount: 0, tempMinC: null, tempMaxC: null, windMaxKmh: null });
+    expect(first).toMatchObject({ sampleCount: 0, tempMinC: null, tempMaxC: null, windMaxKmh: null });
   });
 
   it("groups provider-local timestamps by their written local date across midnight", () => {
     const grouped = bucketHourlyForecast({ hourly: { time: ["2026-10-04T23:00", "2026-10-05T00:00"], temperature_2m: [10, 9], wind_speed_10m: [4, 5], relative_humidity_2m: [80, 81] } });
-    expect(grouped.get("2026-10-04")?.[5].observationCount).toBe(1);
-    expect(grouped.get("2026-10-05")?.[0].observationCount).toBe(1);
+    expect(grouped.get("2026-10-04")?.[5].sampleCount).toBe(1);
+    expect(grouped.get("2026-10-05")?.[0].sampleCount).toBe(1);
   });
 
   it("preserves the provider timezone used for vineyard-local buckets", () => {

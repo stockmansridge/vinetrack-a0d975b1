@@ -286,3 +286,37 @@ export async function deleteWillyIntegration(
   if (!r.ok) return { ok: false, message: (r as WillyProxyError).message };
   return { ok: true };
 }
+
+/**
+ * Capability audit for the vineyard's configured WillyWeather location.
+ * Never returns or logs the API key — the key lives only as an edge function
+ * secret in the canonical project.
+ */
+export async function debugWillyWeatherCapabilities(
+  vineyardId: string,
+): Promise<{ ok: true; data: any } | { ok: false; message: string }> {
+  const r = await callProxy({ action: "debug_capabilities", vineyardId });
+  if (!r.ok) return { ok: false, message: (r as WillyProxyError).message };
+  return { ok: true, data: (r as { ok: true; data: any }).data };
+}
+
+/**
+ * Requests the five-day forecast including the provider's timestamped
+ * temperature / wind / humidity entries. `includeDetail` is additive: a proxy
+ * that ignores it still returns today's daily summaries, so the Portal
+ * degrades to daily-only rather than failing.
+ */
+export async function fetchWillyWeatherForecastPayload(
+  vineyardId: string,
+  days: number,
+): Promise<{ ok: true; data: any } | { ok: false; message: string }> {
+  const r = await callProxy({
+    action: "fetch_forecast",
+    vineyardId,
+    days,
+    includeDetail: true,
+    forecastTypes: ["temperature", "wind", "humidity", "rainfall", "rainfallprobability", "weather", "precis"],
+  });
+  if (!r.ok) return { ok: false, message: (r as WillyProxyError).message };
+  return { ok: true, data: (r as { ok: true; data: any }).data };
+}

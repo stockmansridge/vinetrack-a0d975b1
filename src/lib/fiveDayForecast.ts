@@ -1,10 +1,27 @@
 import { fetchRainForecast, getVineyardCoords, type RainForecastDay } from "@/lib/rainForecastQuery";
-import { getForecastProvider } from "@/lib/willyWeatherProxy";
+import {
+  getForecastProvider,
+  fetchWillyWeatherForecastPayload,
+} from "@/lib/willyWeatherProxy";
 import { fetchVineyardRegionSettings } from "@/lib/vineyardRegionSettingsQuery";
 
 export const FORECAST_DAYS = 5;
 export const BUCKETS_PER_DAY = 6;
 
+/** Which service supplied a given forecast field. Field-level provenance so a
+ *  supplementary provider is never presented as the primary one. */
+export type ForecastFieldSource = string | null;
+
+export interface ForecastFieldSources {
+  temperature: ForecastFieldSource;
+  wind: ForecastFieldSource;
+  rain: ForecastFieldSource;
+  humidity: ForecastFieldSource;
+  condition: ForecastFieldSource;
+}
+
+/** One four-hour vineyard-local forecast bucket. `sampleCount` counts genuine
+ *  provider forecast samples — these are forecasts, never observations. */
 export interface ForecastPeriod {
   date: string;
   startHour: number;
@@ -14,11 +31,13 @@ export interface ForecastPeriod {
   tempMaxC: number | null;
   windMaxKmh: number | null;
   humidityMaxPct: number | null;
-  observationCount: number;
+  sampleCount: number;
 }
 
 export interface ForecastDay {
   date: string;
+  /** Canonical condition key for the weather glyph (clear, rain, storm, …). */
+  conditionKey?: string | null;
   conditionCode: number | string | null;
   conditionDescription: string | null;
   tempMinC: number | null;
@@ -33,13 +52,20 @@ export interface ForecastDay {
 export interface FiveDayForecast {
   days: ForecastDay[];
   source: string;
-  sourceDetail: "daily" | "hourly";
+  /** "samples" = genuine intra-day provider samples; "daily" = daily only. */
+  sourceDetail: "daily" | "samples";
+  fieldSources?: ForecastFieldSources;
   timezone: string | null;
   updatedAt: string | null;
 }
 
 export type FiveDayForecastResult =
-  | { available: true; forecast: FiveDayForecast }
+  | {
+      available: true;
+      forecast: FiveDayForecast;
+      /** Present when the forecast came from the shared server-side cache. */
+      cache?: { fetchedAt: string | null; fromCache: boolean; isStale: boolean };
+    }
   | { available: false; reason: "no_coords" | "no_data" | "error"; message?: string };
 
 export interface OpenMeteoPayload {
@@ -94,6 +120,21 @@ export function conditionDescription(code: number | string | null): string | nul
   return "Mixed conditions";
 }
 
+/** Canonical glyph key for an Open-Meteo WMO code. */
+export function conditionKeyFromCode(code: number | string | null): string | null {
+  const value = typeof code === "string" ? Number(code) : code;
+  if (value == null || !Number.isFinite(value)) return null;
+  if (value === 0 || value === 1) return "clear";
+  if (value === 2) return "partly_cloudy";
+  if (value === 3) return "cloudy";
+  if (value === 45 || value === 48) return "fog";
+  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67].includes(value)) return "rain";
+  if ([80, 81, 82].includes(value)) return "showers";
+  if ([71, 73, 75, 77, 85, 86].includes(value)) return "snow";
+  if ([95, 96, 99].includes(value)) return "storm";
+  return "cloudy";
+}
+
 export function bucketHourlyForecast(payload: OpenMeteoPayload): Map<string, ForecastPeriod[]> {
   const times = payload.hourly?.time ?? [];
   const temperatures = payload.hourly?.temperature_2m ?? [];
@@ -133,7 +174,7 @@ export function bucketHourlyForecast(payload: OpenMeteoPayload): Map<string, For
         tempMaxC: max(values.map((value) => value.temp)),
         windMaxKmh: max(values.map((value) => value.wind)),
         humidityMaxPct: max(values.map((value) => value.humidity)),
-        observationCount: values.length,
+        sampleCount: values.length,
       });
     }
     byDate.set(date, periods);
@@ -147,35 +188,52 @@ export function normaliseOpenMeteo(payload: OpenMeteoPayload, updatedAt: string)
   const periodsByDate = bucketHourlyForecast(payload);
   const days = dates.slice(0, FORECAST_DAYS).map((date, index): ForecastDay => {
     const periods = periodsByDate.get(date) ?? [];
-    const hourlyTemps = periods.flatMap((period) => [period.tempMinC, period.tempMaxC]);
-    const hourlyWinds = periods.map((period) => period.windMaxKmh);
-    const hourlyHumidity = periods.map((period) => period.humidityMaxPct);
+    const sampleTemps = periods.flatMap((period) => [period.tempMinC, period.tempMaxC]);
+    const sampleWinds = periods.map((period) => period.windMaxKmh);
+    const sampleHumidity = periods.map((period) => period.humidityMaxPct);
+    const code = payload.daily?.weather_code?.[index] ?? null;
     return {
       date,
-      conditionCode: payload.daily?.weather_code?.[index] ?? null,
-      conditionDescription: conditionDescription(payload.daily?.weather_code?.[index] ?? null),
-      tempMinC: finite(payload.daily?.temperature_2m_min?.[index]) ?? min(hourlyTemps),
-      tempMaxC: finite(payload.daily?.temperature_2m_max?.[index]) ?? max(hourlyTemps),
+      conditionKey: conditionKeyFromCode(code),
+      conditionCode: code,
+      conditionDescription: conditionDescription(code),
+      tempMinC: finite(payload.daily?.temperature_2m_min?.[index]) ?? min(sampleTemps),
+      tempMaxC: finite(payload.daily?.temperature_2m_max?.[index]) ?? max(sampleTemps),
       rainMm: finite(payload.daily?.precipitation_sum?.[index]),
       rainProbabilityPct: finite(payload.daily?.precipitation_probability_max?.[index]),
-      humidityMaxPct: max(hourlyHumidity),
-      windMaxKmh: finite(payload.daily?.wind_speed_10m_max?.[index]) ?? max(hourlyWinds),
+      humidityMaxPct: max(sampleHumidity),
+      windMaxKmh: finite(payload.daily?.wind_speed_10m_max?.[index]) ?? max(sampleWinds),
       periods,
     };
   });
   return {
     days,
     source: "Open-Meteo",
-    sourceDetail: "hourly",
+    sourceDetail: days.some((day) => day.periods.some((period) => period.sampleCount > 0))
+      ? "samples"
+      : "daily",
+    fieldSources: {
+      temperature: "Open-Meteo",
+      wind: "Open-Meteo",
+      rain: "Open-Meteo",
+      humidity: "Open-Meteo",
+      condition: "Open-Meteo",
+    },
     timezone: payload.timezone ?? null,
     updatedAt,
   };
 }
 
 function normaliseDaily(days: RainForecastDay[], source: string | null, timezone: string | null): FiveDayForecast {
+  const resolved = source?.toLowerCase().includes("open_meteo")
+    ? "Open-Meteo"
+    : source?.toLowerCase().includes("willyweather")
+      ? "WillyWeather"
+      : source ?? "Configured forecast service";
   return {
     days: days.slice(0, FORECAST_DAYS).map((day) => ({
       date: day.date,
+      conditionKey: null,
       conditionCode: null,
       conditionDescription: null,
       tempMinC: day.temp_min_c ?? null,
@@ -186,14 +244,69 @@ function normaliseDaily(days: RainForecastDay[], source: string | null, timezone
       windMaxKmh: day.wind_max_kmh ?? null,
       periods: [],
     })),
-    source: source?.toLowerCase().includes("open_meteo")
-      ? "Open-Meteo"
-      : source?.toLowerCase().includes("willyweather")
-        ? "WillyWeather"
-        : source ?? "Configured forecast service",
+    source: resolved,
     sourceDetail: "daily",
+    fieldSources: {
+      temperature: resolved,
+      wind: resolved,
+      rain: resolved,
+      humidity: null,
+      condition: null,
+    },
     timezone,
     updatedAt: null,
+  };
+}
+
+/**
+ * Supplements a primary forecast with humidity (and, if the primary has none,
+ * condition) from Open-Meteo. Field-level provenance is recorded so the UI can
+ * say "Humidity: Open-Meteo" while the main source stays the primary provider.
+ * Temperature and wind are never substituted.
+ */
+export function supplementForecast(
+  primary: FiveDayForecast,
+  supplementary: FiveDayForecast,
+): FiveDayForecast {
+  const needsHumidity = primary.days.every((day) => day.humidityMaxPct == null);
+  const needsCondition = primary.days.every((day) => !day.conditionDescription);
+  if (!needsHumidity && !needsCondition) return primary;
+
+  const byDate = new Map(supplementary.days.map((day) => [day.date, day]));
+  const days = primary.days.map((day) => {
+    const extra = byDate.get(day.date);
+    if (!extra) return day;
+    const periods = needsHumidity
+      ? day.periods.map((period) => {
+          const match = extra.periods.find((p) => p.startHour === period.startHour);
+          return match ? { ...period, humidityMaxPct: match.humidityMaxPct } : period;
+        })
+      : day.periods;
+    return {
+      ...day,
+      periods,
+      humidityMaxPct: needsHumidity ? extra.humidityMaxPct : day.humidityMaxPct,
+      conditionKey: needsCondition ? extra.conditionKey ?? null : day.conditionKey,
+      conditionCode: needsCondition ? extra.conditionCode : day.conditionCode,
+      conditionDescription: needsCondition ? extra.conditionDescription : day.conditionDescription,
+    };
+  });
+
+  const base = primary.fieldSources ?? {
+    temperature: primary.source,
+    wind: primary.source,
+    rain: primary.source,
+    humidity: null,
+    condition: null,
+  };
+  return {
+    ...primary,
+    days,
+    fieldSources: {
+      ...base,
+      humidity: needsHumidity ? supplementary.source : base.humidity,
+      condition: needsCondition ? supplementary.source : base.condition,
+    },
   };
 }
 
@@ -211,31 +324,123 @@ async function fetchDetailedOpenMeteo(lat: number, lon: number, timezone: string
   }
 }
 
-export async function fetchFiveDayForecast(vineyardId: string): Promise<FiveDayForecastResult> {
-  const [daily, region] = await Promise.all([
-    fetchRainForecast(vineyardId, FORECAST_DAYS),
-    fetchVineyardRegionSettings(vineyardId).catch(() => null),
-  ]);
-  if (!daily.available) {
-    const failure = daily as Extract<Awaited<ReturnType<typeof fetchRainForecast>>, { available: false }>;
-    return { available: false, reason: failure.reason === "rpc_missing" ? "error" : failure.reason, message: failure.message };
-  }
+async function fetchWillyWeather(
+  vineyardId: string,
+  timezone: string | null,
+): Promise<FiveDayForecast | null> {
+  const { normaliseWillyWeatherForecast } = await import("@/lib/forecast/willyWeatherForecast");
+  const payload = await fetchWillyWeatherForecastPayload(vineyardId, FORECAST_DAYS);
+  if (!payload.ok) return null;
+  const forecast = normaliseWillyWeatherForecast(payload.data ?? {}, new Date().toISOString());
+  if (!forecast) return null;
+  return { ...forecast, timezone: forecast.timezone ?? timezone };
+}
+
+/** Fetches directly from the configured provider, bypassing the shared cache. */
+export async function fetchFiveDayForecastFromProvider(
+  vineyardId: string,
+): Promise<FiveDayForecastResult> {
+  const region = await fetchVineyardRegionSettings(vineyardId).catch(() => null);
+  const timezone = region?.timezone ?? null;
 
   let preference: "auto" | "open_meteo" | "willyweather" = "auto";
   try {
     preference = await getForecastProvider(vineyardId);
   } catch {
-    // The resolved daily source remains authoritative if preference lookup fails.
+    // Preference lookup failure falls back to the resolved daily source.
+  }
+
+  if (preference === "willyweather") {
+    const willy = await fetchWillyWeather(vineyardId, timezone);
+    if (willy) {
+      // WillyWeather remains primary for everything it actually provides.
+      const needsSupplement =
+        willy.days.every((day) => day.humidityMaxPct == null) ||
+        willy.days.every((day) => !day.conditionDescription);
+      if (needsSupplement) {
+        const coords = await getVineyardCoords(vineyardId);
+        if (coords) {
+          const extra = await fetchDetailedOpenMeteo(coords.lat, coords.lon, timezone);
+          if (extra.available) return { available: true, forecast: supplementForecast(willy, extra.forecast) };
+        }
+      }
+      return { available: true, forecast: willy };
+    }
+  }
+
+  const daily = await fetchRainForecast(vineyardId, FORECAST_DAYS);
+  if (!daily.available) {
+    const failure = daily as Extract<Awaited<ReturnType<typeof fetchRainForecast>>, { available: false }>;
+    return {
+      available: false,
+      reason: failure.reason === "rpc_missing" ? "error" : failure.reason,
+      message: failure.message,
+    };
   }
 
   const resolvedOpenMeteo = daily.via === "open_meteo" || daily.source?.toLowerCase().includes("open_meteo");
   if (preference === "open_meteo" || resolvedOpenMeteo) {
     const coords = await getVineyardCoords(vineyardId);
     if (coords) {
-      const detailed = await fetchDetailedOpenMeteo(coords.lat, coords.lon, region?.timezone ?? null);
+      const detailed = await fetchDetailedOpenMeteo(coords.lat, coords.lon, timezone);
       if (detailed.available) return detailed;
     }
   }
 
-  return { available: true, forecast: normaliseDaily(daily.days, daily.source, region?.timezone ?? null) };
+  return { available: true, forecast: normaliseDaily(daily.days, daily.source, timezone) };
+}
+
+/**
+ * Cache-aware forecast read.
+ *  - normal load: fresh shared cache → return it; stale/missing → fetch,
+ *    normalise, cache, return.
+ *  - `force` (manual Refresh): always fetch the provider and replace the cache.
+ * A failed provider fetch never discards a usable cached forecast.
+ */
+export async function fetchFiveDayForecast(
+  vineyardId: string,
+  options: { force?: boolean } = {},
+): Promise<FiveDayForecastResult & { staleCache?: boolean; refreshFailed?: boolean }> {
+  const { readForecastCache, writeForecastCache } = await import("@/lib/forecast/forecastCache");
+  let providerKey = "auto";
+  try {
+    providerKey = await getForecastProvider(vineyardId);
+  } catch {
+    // keep "auto"
+  }
+
+  const cached = await readForecastCache(vineyardId, providerKey);
+  if (!options.force && cached && !cached.isStale) {
+    return {
+      available: true,
+      forecast: cached.forecast,
+      cache: { fetchedAt: cached.fetchedAt, fromCache: true, isStale: false },
+    };
+  }
+
+  const fresh = await fetchFiveDayForecastFromProvider(vineyardId);
+  if (fresh.available) {
+    await writeForecastCache({
+      vineyardId,
+      provider: providerKey,
+      timezone: fresh.forecast.timezone,
+      forecast: fresh.forecast,
+    });
+    return {
+      available: true,
+      forecast: fresh.forecast,
+      cache: { fetchedAt: new Date().toISOString(), fromCache: false, isStale: false },
+    };
+  }
+
+  if (cached) {
+    return {
+      available: true,
+      forecast: cached.forecast,
+      cache: { fetchedAt: cached.fetchedAt, fromCache: true, isStale: cached.isStale },
+      staleCache: cached.isStale,
+      refreshFailed: true,
+    };
+  }
+  return fresh;
 }
