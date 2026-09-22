@@ -330,7 +330,7 @@ export function FiveDayForecastPanel({ vineyardId, forecast, rf, freshnessLabel,
         </div>
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="outline" size="sm"><Filter className="mr-2 h-4 w-4" />Highlights</Button>
+            <Button variant="outline" size="sm"><Lightbulb className="mr-2 h-4 w-4" />Highlights</Button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-80">
             <div className="font-semibold">Forecast highlights</div>
