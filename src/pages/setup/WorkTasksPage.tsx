@@ -2716,78 +2716,37 @@ function WorkTaskSummarySection({
   const effectiveCost = useEffectiveLabourCosts(task?.vineyard_id ?? null)
     .data?.get(task?.id ?? "") ?? null;
   const summary = useMemo(() => {
-    const num = (v: unknown) => {
-      const n = Number(v);
-      return Number.isFinite(n) ? n : 0;
-    };
-
-    const visibleLabour = labourLines.filter((l) => !l.deleted_at);
-    // SQL 188: piece-rate tasks cost from the saved snapshot; labour-line cost
-    // is ignored so there is never a second competing labour total.
-    const manualLabourCost = resolveEffectiveLabourCost(
+    // Same shared roll-up as the table / drawer / CSV — one definition only.
+    const r = buildWorkTaskCostRollup({
       task,
-      visibleLabour.length ? visibleLabour.reduce((s, l) => s + num(l.total_cost), 0) : null,
-      effectiveCost ?? null,
-    ).cost ?? 0;
-    const manualLabourHours = visibleLabour.reduce((s, l) => s + num(l.total_hours), 0);
-
-    const visibleMachine = machineLines.filter((l) => !l.deleted_at);
-    const machineCharge = visibleMachine.reduce((s, l) => s + num(l.total_machine_cost), 0);
-    const machineFuel = visibleMachine.reduce((s, l) => s + num(l.fuel_cost), 0);
-    const machineHours = visibleMachine.reduce(
-      (s, l) => s + num(l.duration_hours ?? l.engine_hours_used),
-      0,
-    );
-
-    let linkedTripTotal = 0;
-    let linkedTripLabour = 0;
-    let linkedTripFuel = 0;
-    let linkedTripChemical = 0;
-    let linkedTripInput = 0;
-    linkedTrips.forEach((t) => {
-      const allocs = allocByTripId.get(t.id) ?? [];
-      allocs.forEach((a) => {
-        linkedTripTotal += num(a.total_cost);
-        linkedTripLabour += num(a.labour_cost);
-        linkedTripFuel += num(a.fuel_cost);
-        linkedTripChemical += num(a.chemical_cost);
-        linkedTripInput += num(a.input_cost);
-      });
-    });
-
-    const manualMachineTotal = machineCharge + machineFuel;
-    // Material Costs enter the combined total exactly once, from the
-    // backend-generated per-line totals.
-    const materialTotal = materialTotalNumber(materialLines);
-    const total = manualLabourCost + manualMachineTotal + linkedTripTotal + materialTotal;
-
-    // Double-counting risk: linked GPS trip + a "non-manual" machine line
-    // (i.e. one capturing a missed/failed/corrected GPS trip).
-    const overlapSources = new Set(["missed_trip", "trip_failed", "correction"]);
-    const overlapRisk =
-      linkedTrips.length > 0 &&
-      visibleMachine.some((l) => overlapSources.has(String(l.entry_source ?? "")));
-
-    return {
-      manualLabourCost,
-      manualLabourHours,
-      machineCharge,
-      machineFuel,
-      manualMachineTotal,
-      machineHours,
+      labourLines,
+      effectiveLabourCost: effectiveCost,
+      machineLines,
+      tripAllocations: linkedTrips.flatMap((t) => allocByTripId.get(t.id) ?? []),
       linkedTripCount: linkedTrips.length,
-      machineLineCount: visibleMachine.length,
-      linkedTripTotal,
-      linkedTripLabour,
-      linkedTripFuel,
-      linkedTripChemical,
-      linkedTripInput,
-      materialTotal,
-      materialLineCount: materialLines.filter((l) => !l.deleted_at).length,
-      total,
-      overlapRisk,
+      materialLines,
+    });
+    return {
+      manualLabourCost: r.labourCost,
+      manualLabourHours: r.labourHours,
+      machineCharge: r.machineCharge,
+      machineFuel: r.machineFuel,
+      manualMachineTotal: r.machineCost,
+      machineHours: r.machineHours,
+      linkedTripCount: r.linkedTripCount,
+      machineLineCount: r.machineLineCount,
+      linkedTripTotal: r.linkedTripCost,
+      linkedTripLabour: r.linkedTripLabour,
+      linkedTripFuel: r.linkedTripFuel,
+      linkedTripChemical: r.linkedTripChemical,
+      linkedTripInput: r.linkedTripInput,
+      materialTotal: r.materialCost,
+      materialLineCount: r.materialLineCount,
+      total: r.total,
+      overlapRisk: r.overlapRisk,
     };
   }, [task, materialLines, labourLines, machineLines, linkedTrips, allocByTripId, effectiveCost]);
+
 
   return (
     <Section title="Work Task summary">
