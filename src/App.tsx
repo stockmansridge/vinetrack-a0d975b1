@@ -297,6 +297,8 @@ const App = () => (
                     <Route path="/admin/support-requests" element={<AdminSupportRequestsPage />} />
                     <Route path="/admin/support-requests/:id" element={<AdminSupportRequestsPage />} />
                     <Route path="/admin/email-list" element={<AdminEmailListPage />} />
+                    <Route path="/admin/newsletters" element={<AdminNewslettersPage />} />
+                    <Route path="/admin/newsletters/:id" element={<AdminNewsletterEditorPage />} />
                     <Route path="/admin/website-analytics" element={<AdminWebsiteAnalyticsPage />} />
                     <Route path="/admin/user-activity" element={<AdminUserActivityPage />} />
                     <Route path="/admin/integrations" element={<AdminIntegrationsPage />} />
