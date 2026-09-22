@@ -111,6 +111,7 @@ export function SupportRequestSheet({ open, onOpenChange, prefill }: Props) {
   const { user } = useAuth();
   const { selectedVineyardId, memberships, currentRole } = useVineyard();
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [category, setCategory] = useState("general");
