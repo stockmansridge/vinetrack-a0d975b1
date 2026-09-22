@@ -486,6 +486,15 @@ export const ACTIVITIES: NavActivity[] = [
         keywords: ["operators", "worker types", "categories"],
       },
       {
+        id: "settings.materialLibrary",
+        label: "Material Library",
+        path: "/setup/materials",
+        family: ["/setup/materials"],
+        visible: systemAdminOnly,
+        adminSurface: true,
+        keywords: ["materials", "material costs", "material library", "consumables"],
+      },
+      {
         id: "settings.savedInputs",
         label: "Saved Inputs",
         path: "/setup/saved-inputs",
