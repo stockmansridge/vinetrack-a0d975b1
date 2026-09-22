@@ -221,10 +221,10 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
       if (weatherSuccess && forecastSuccess) {
         toast({ title: "Weather updated" });
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: "Weather refresh failed",
-        description: e?.message ?? "Unexpected error.",
+        description: e instanceof Error ? e.message : "Unexpected error.",
         variant: "destructive",
       });
     }

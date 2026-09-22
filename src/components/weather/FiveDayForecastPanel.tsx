@@ -73,7 +73,14 @@ function chartRows(days: ForecastDay[]): ChartRow[] {
   );
 }
 
-function TooltipCard({ active, payload, rf, kind }: any) {
+interface TooltipCardProps {
+  active?: boolean;
+  payload?: Array<{ payload?: ChartRow }>;
+  rf: RegionFormatters;
+  kind: "temperature" | "wind";
+}
+
+function TooltipCard({ active, payload, rf, kind }: TooltipCardProps) {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload as ChartRow | undefined;
   if (!row) return null;
