@@ -132,6 +132,27 @@ describe("newsletter rendering", () => {
     expect(rendered).toContain(".vt-feature-image { display:table-header-group !important; width:100% !important; }");
   });
 
+  it("stretches every three-card item to the shared desktop row height", () => {
+    const rendered = renderNewsletterHtml({
+      subject: "Balanced cards",
+      blocks: [
+        {
+          id: "cards",
+          type: "cards",
+          cards: [
+            { heading: "Short" },
+            { heading: "Detailed", body: "A longer card with more information than the others." },
+            { heading: "Action", ctaLabel: "Read more", ctaUrl: "https://example.com" },
+          ],
+        },
+      ],
+    });
+
+    expect(rendered.match(/class="vt-col vt-card-cell"[^>]*height="100%"/g)).toHaveLength(3);
+    expect(rendered.match(/class="vt-card"[^>]*height="100%"/g)).toHaveLength(3);
+    expect(rendered).toContain(".vt-card { height:auto !important; }");
+  });
+
   it("renders the plain-text alternative from the same blocks", () => {
     const text = renderNewsletterText({ subject: "Sub", blocks });
     expect(text).toContain("Sub");

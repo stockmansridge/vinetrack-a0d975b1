@@ -395,10 +395,10 @@ function renderCards(block: NewsletterBlock): string {
         button(card.ctaLabel, card.ctaUrl, { ...theme, btnBg: BRAND.green, btnText: BRAND.white }, "left"),
       ].join("");
       const cardImage = image(card.image, "100%", 0);
-      return `<td class="vt-col" valign="top" width="33.33%" style="padding:6px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${theme.cardBg}" style="background-color:${theme.cardBg};border:1px solid ${theme.cardBorder};border-radius:14px;">
+      return `<td class="vt-col vt-card-cell" valign="top" height="100%" width="33.33%" style="height:100%;padding:6px;">
+<table role="presentation" class="vt-card" width="100%" height="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${theme.cardBg}" style="width:100%;height:100%;background-color:${theme.cardBg};border:1px solid ${theme.cardBorder};border-radius:14px;">
 ${cardImage ? `<tr><td style="padding:0;overflow:hidden;border-radius:13px 13px 0 0;">${cardImage}</td></tr>` : ""}
-<tr><td style="padding:18px;">${content}</td></tr></table></td>`;
+<tr><td height="100%" valign="top" style="height:100%;padding:18px;">${content}</td></tr></table></td>`;
     })
     .join("");
   const inner = [
@@ -521,6 +521,8 @@ h1,h2,h3 { font-family:${FONT}; }
   .vt-right { text-align:left !important; }
   .vt-pad { padding-left:20px !important; padding-right:20px !important; }
   .vt-feature-image { display:table-header-group !important; width:100% !important; }
+  .vt-card-cell { height:auto !important; }
+  .vt-card { height:auto !important; }
   h1 { font-size:32px !important; line-height:38px !important; }
   h2 { font-size:23px !important; line-height:30px !important; }
 }
