@@ -615,8 +615,9 @@ export default function WorkTasksPage() {
       taskCount++;
       const tot = totalsByTask.get(t.id);
       if (tot) {
-        totalHours += tot.hours;
-        totalCost += tot.cost;
+        totalHours += tot.labourHours;
+        totalCost += tot.total;
+
       }
     });
     return { taskCount, totalHours, totalCost };
@@ -663,8 +664,10 @@ export default function WorkTasksPage() {
         const v = effectiveTaskAreaHa(r);
         return v == null ? null : v;
       },
-      hours: (r: WorkTask) => totalsByTask.get(r.id)?.hours ?? 0,
-      cost: (r: WorkTask) => totalsByTask.get(r.id)?.cost ?? 0,
+      hours: (r: WorkTask) => totalsByTask.get(r.id)?.labourHours ?? 0,
+      // Sorting uses Total Work Task Cost, never labour-only cost.
+      cost: (r: WorkTask) => totalsByTask.get(r.id)?.total ?? 0,
+
       finalized: (r: WorkTask) => (r.is_finalized ? 1 : 0),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -694,7 +697,10 @@ export default function WorkTasksPage() {
       const tot = totalsByTask.get(t.id);
       const padNames = taskPaddockNames(t.id);
       const areaHa = effectiveTaskAreaHa(t);
-      const costPerHa = areaHa && tot?.cost ? (tot.cost / areaHa).toFixed(2) : "";
+      // CSV shares the Total Work Task Cost roll-up — no export-only formula.
+      const totalCost = tot?.totalKnown ? tot.total : null;
+      const cphNum = tot ? workTaskCostPerHectare(tot, areaHa) : null;
+      const costPerHa = cphNum == null ? "" : cphNum.toFixed(2);
       const base = [
         t.id,
         effectiveStart(t) ?? "",
@@ -703,7 +709,7 @@ export default function WorkTasksPage() {
         t.task_type ?? "",
         t.status ?? "",
         areaHa == null ? "" : areaHa.toFixed(4),
-        tot?.hours?.toFixed(2) ?? "0",
+        tot?.labourHours?.toFixed(2) ?? "0",
       ];
       const tail = [
         Array.from(tot?.workerTypes ?? []).join("; "),
@@ -711,9 +717,10 @@ export default function WorkTasksPage() {
         (t.notes ?? "").replace(/\s+/g, " "),
       ];
       const cells = (canSeeCosts
-        ? [...base, tot?.cost?.toFixed(2) ?? "", costPerHa, ...tail]
+        ? [...base, totalCost == null ? "" : totalCost.toFixed(2), costPerHa, ...tail]
         : [...base, ...tail]
       ).map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`);
+
       lines.push(cells.join(","));
     });
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
