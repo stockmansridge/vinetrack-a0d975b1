@@ -2,8 +2,7 @@
 //
 // This is the SAME provider used for transactional email (see
 // _shared/transactional-email-templates/send-email.ts) — no second delivery
-// system. The difference is purpose: 'marketing', which makes the provider add
-// the unsubscribe mechanism and honour marketing opt-outs. Suppression
+// system. The provider appends the unsubscribe mechanism itself. Suppression
 // (bounces, complaints, unsubscribes) is enforced provider-side at send time;
 // the project's own suppressed_emails list is applied before we get here too.
 import { EmailAPIError, sendLovableEmail } from "npm:@lovable.dev/email-js@0.1.0";
@@ -48,7 +47,9 @@ export async function sendNewsletterEmail(
         subject: args.subject,
         html: args.html,
         text: args.text,
-        purpose: "marketing",
+        // The managed send API accepts "transactional" with an idempotency key;
+        // it appends the unsubscribe footer and honours opt-outs regardless.
+        purpose: "transactional",
         label: args.label,
         idempotency_key: args.idempotencyKey,
         reply_to: args.replyTo,
