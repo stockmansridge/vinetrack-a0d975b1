@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { BrandName } from "@/components/BrandName";
-import { ChevronDown, LifeBuoy, ShieldCheck, Settings2 } from "lucide-react";
+import { ChevronDown, LifeBuoy, Lightbulb, ShieldCheck, Settings2 } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -197,6 +197,19 @@ export function AppSidebar() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           )}
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              isActive={pathname === "/feature-requests"}
+              tooltip="Feature Requests"
+              className={buttonClass(pathname === "/feature-requests")}
+            >
+              <NavLink to="/feature-requests" className="flex items-center gap-2.5">
+                <Lightbulb className="h-4 w-4" />
+                <span>Feature Requests</span>
+              </NavLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
               onClick={() => setSupportOpen(true)}
