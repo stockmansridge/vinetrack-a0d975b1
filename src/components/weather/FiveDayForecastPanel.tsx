@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CloudRain, Droplets, Filter, Wind } from "lucide-react";
+import { CloudRain, Droplets, Filter, Thermometer, Wind } from "lucide-react";
 import {
   Area,
   CartesianGrid,
@@ -383,7 +383,8 @@ export function FiveDayForecastPanel({ vineyardId, forecast, rf, freshnessLabel,
 
       <section className="border-t px-3 py-4">
         <div className="mb-2 flex items-center gap-2 text-xs font-semibold">
-          <span className="h-2 w-2 rounded-full bg-destructive" />Temperature high
+          <Thermometer className="h-4 w-4 text-destructive" />Temperature
+          <span className="ml-2 h-2 w-2 rounded-full bg-destructive" />high
           <span className="ml-2 h-2 w-2 rounded-full bg-foreground" />low
           <span className="ml-auto font-normal text-muted-foreground">Four-hourly forecast samples</span>
         </div>
