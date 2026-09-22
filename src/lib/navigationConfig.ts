@@ -102,7 +102,6 @@ export const ACTIVITIES: NavActivity[] = [
     icon: LayoutDashboard,
     views: [
       { id: "dashboard.overview", label: "Overview", path: "/dashboard", keywords: ["home", "summary"] },
-      { id: "dashboard.live", label: "Live Dashboard", path: "/dashboard/live", keywords: ["live", "realtime", "weather"] },
       {
         id: "dashboard.guide",
         label: "How VineTrack Works",
