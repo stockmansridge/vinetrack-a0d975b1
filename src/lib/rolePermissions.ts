@@ -24,6 +24,7 @@ const ROUTE_ALLOW: Record<string, Role[]> = {
   "/setup/equipment-other": ADMIN_ROLES,
   "/setup/chemicals": ADMIN_ROLES,
   "/setup/saved-inputs": ADMIN_ROLES,
+  "/setup/materials": ADMIN_ROLES,
   "/setup/weather": ADMIN_ROLES,
   "/setup/tractors": ADMIN_ROLES,
   "/settings/data-coverage": ADMIN_ROLES,
