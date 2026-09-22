@@ -517,10 +517,21 @@ export default function AdminNewsletterEditorPage() {
                         .map((a) => a.trim())
                         .filter(Boolean),
                     });
-                    toast({
-                      title: "Test sent",
-                      description: `${res.sent} test email${res.sent === 1 ? "" : "s"} on the way.`,
-                    });
+                    if (res.sent === 0) {
+                      toast({
+                        title: "Couldn't send the test",
+                        description:
+                          res.failed[0]?.error ?? "The email service rejected the test send.",
+                        variant: "destructive",
+                      });
+                    } else {
+                      toast({
+                        title: "Test sent",
+                        description: `${res.sent} test email${res.sent === 1 ? "" : "s"} on the way.${
+                          res.failed.length ? ` ${res.failed.length} failed.` : ""
+                        }`,
+                      });
+                    }
                   } catch (e) {
                     toast({
                       title: "Couldn't send the test",
