@@ -430,34 +430,56 @@ export default function WorkTasksPage() {
     return m;
   }, [labourLines]);
 
+  // Material Costs (Phase 3) — temporarily System Admin only; see
+  // src/lib/materialCostsAccess.ts for the single gate. ONE vineyard-scoped
+  // query supplies material lines for every visible task (never per task), and
+  // its query key is vineyard-scoped so switching vineyards cannot leak totals.
+  const materialCostsAccess = useMaterialCostsEnabled();
+  const { data: vineyardMaterialLines = [] } = useWorkTaskMaterials(
+    selectedVineyardId,
+    materialCostsAccess.enabled,
+  );
+  const materialLinesByTask = useMemo(
+    () =>
+      materialCostsAccess.enabled
+        ? groupWorkTaskMaterialsByTask(vineyardMaterialLines)
+        : new Map<string, WorkTaskMaterial[]>(),
+    [vineyardMaterialLines, materialCostsAccess.enabled],
+  );
+
+  // Total Work Task Cost for every task — single shared roll-up helper
+  // (src/lib/workTaskCostRollup.ts) used by the table, sorting, CSV, the
+  // season aggregate and the drawer. No labour-only cost path remains.
   const totalsByTask = useMemo(() => {
-    const m = new Map<string, { hours: number; cost: number; costKnown?: boolean; missingRate: boolean; workerTypes: Set<string> }>();
-    labourLines.forEach((l) => {
-      const t = m.get(l.work_task_id) ?? { hours: 0, cost: 0, missingRate: false, workerTypes: new Set<string>() };
-      t.hours += Number(l.total_hours ?? 0) || 0;
-      if (l.total_cost != null) t.cost += Number(l.total_cost) || 0;
-      else if (l.worker_count && l.hours_per_worker) t.missingRate = true;
-      if (l.worker_type) t.workerTypes.add(l.worker_type);
-      m.set(l.work_task_id, t);
-    });
-    // SQL 189: the backend defines the effective labour cost of every task.
-    // Piece-rate tasks read their saved snapshot total; hourly/legacy tasks
-    // read their rated labour lines. The two are never summed.
+    const m = new Map<string, WorkTaskCostRollup>();
     tasks.forEach((t) => {
-      const cur = m.get(t.id) ?? { hours: 0, cost: 0, missingRate: false, workerTypes: new Set<string>() };
-      const hadLines = m.has(t.id);
-      const resolved = resolveEffectiveLabourCost(
-        t as any,
-        hadLines ? cur.cost : null,
-        effectiveCostByTask.get(t.id) ?? null,
+      const tripAllocations = (tripsByTask.get(t.id) ?? []).flatMap(
+        (trip) => allocByTripId.get(trip.id) ?? [],
       );
-      cur.cost = resolved.cost ?? 0;
-      cur.costKnown = resolved.cost != null;
-      if (resolved.costingMethod === "piece_rate") cur.missingRate = false;
-      m.set(t.id, cur);
+      m.set(
+        t.id,
+        buildWorkTaskCostRollup({
+          task: t as any,
+          labourLines: linesByTask.get(t.id) ?? [],
+          effectiveLabourCost: effectiveCostByTask.get(t.id) ?? null,
+          machineLines: machineLinesByTask.get(t.id) ?? [],
+          tripAllocations,
+          linkedTripCount: tripsByTask.get(t.id)?.length ?? 0,
+          materialLines: materialLinesByTask.get(t.id) ?? [],
+        }),
+      );
     });
     return m;
-  }, [labourLines, tasks, effectiveCostByTask]);
+  }, [
+    tasks,
+    linesByTask,
+    effectiveCostByTask,
+    machineLinesByTask,
+    tripsByTask,
+    allocByTripId,
+    materialLinesByTask,
+  ]);
+
 
   const taskTypes = useMemo(() => {
     const s = new Set<string>();
