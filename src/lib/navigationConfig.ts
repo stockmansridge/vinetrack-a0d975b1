@@ -102,7 +102,6 @@ export const ACTIVITIES: NavActivity[] = [
     icon: LayoutDashboard,
     views: [
       { id: "dashboard.overview", label: "Overview", path: "/dashboard", keywords: ["home", "summary"] },
-      { id: "dashboard.live", label: "Live Dashboard", path: "/dashboard/live", keywords: ["live", "realtime", "weather"] },
       {
         id: "dashboard.guide",
         label: "How VineTrack Works",
@@ -184,6 +183,12 @@ export const ACTIVITIES: NavActivity[] = [
     icon: CloudRain,
     views: [
       {
+        id: "weather.live",
+        label: "Live Dashboard",
+        path: "/dashboard/live",
+        keywords: ["live", "realtime", "weather"],
+      },
+      {
         id: "weather.rainfall",
         label: "Rainfall",
         path: "/reports/rainfall",
@@ -197,7 +202,6 @@ export const ACTIVITIES: NavActivity[] = [
         keywords: ["weather", "station", "davis", "willyweather", "wunderground"],
       },
     ],
-    crossLinks: [{ label: "Live Dashboard", path: "/dashboard/live" }],
   },
   {
     id: "trips",

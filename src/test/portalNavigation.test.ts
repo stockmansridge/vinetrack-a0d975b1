@@ -82,6 +82,7 @@ describe("Portal navigation — current location", () => {
     ["/irrigation/history", "Irrigation", "Records & History"],
     ["/setup/tractors/7", "Equipment & Fuel", "Tractors"],
     ["/account/billing", "Billing", "Billing & Invoices"],
+    ["/dashboard/live", "Weather", "Live Dashboard"],
   ];
 
   it.each(cases)("resolves %s to %s → %s", (path, activity, view) => {
