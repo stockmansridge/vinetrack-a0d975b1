@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- test double for the Supabase query builder */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 interface Call {
