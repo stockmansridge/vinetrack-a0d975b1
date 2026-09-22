@@ -248,6 +248,214 @@ export type Database = {
         }
         Relationships: []
       }
+      newsletter_campaign_recipients: {
+        Row: {
+          created_at: string
+          email: string
+          email_hash: string
+          error_message: string | null
+          id: string
+          idempotency_key: string
+          message_id: string | null
+          sent_at: string | null
+          source: string
+          status: string
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          email_hash: string
+          error_message?: string | null
+          id?: string
+          idempotency_key: string
+          message_id?: string | null
+          sent_at?: string | null
+          source: string
+          status?: string
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          email_hash?: string
+          error_message?: string | null
+          id?: string
+          idempotency_key?: string
+          message_id?: string | null
+          sent_at?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "newsletter_campaign_recipients_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "newsletter_campaign_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      newsletter_campaign_versions: {
+        Row: {
+          audience_counts: Json | null
+          audience_current_users: boolean
+          audience_subscribers: boolean
+          blocks: Json
+          campaign_id: string
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          failed_count: number
+          from_name: string | null
+          html: string
+          id: string
+          preheader: string | null
+          recipient_count: number
+          reply_to: string | null
+          scheduled_at: string | null
+          sender_email: string | null
+          sender_user_id: string | null
+          sent_count: number
+          started_at: string | null
+          status: string
+          subject: string
+          suppressed_count: number
+          text_body: string | null
+          updated_at: string
+        }
+        Insert: {
+          audience_counts?: Json | null
+          audience_current_users?: boolean
+          audience_subscribers?: boolean
+          blocks: Json
+          campaign_id: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          failed_count?: number
+          from_name?: string | null
+          html: string
+          id?: string
+          preheader?: string | null
+          recipient_count?: number
+          reply_to?: string | null
+          scheduled_at?: string | null
+          sender_email?: string | null
+          sender_user_id?: string | null
+          sent_count?: number
+          started_at?: string | null
+          status?: string
+          subject: string
+          suppressed_count?: number
+          text_body?: string | null
+          updated_at?: string
+        }
+        Update: {
+          audience_counts?: Json | null
+          audience_current_users?: boolean
+          audience_subscribers?: boolean
+          blocks?: Json
+          campaign_id?: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          failed_count?: number
+          from_name?: string | null
+          html?: string
+          id?: string
+          preheader?: string | null
+          recipient_count?: number
+          reply_to?: string | null
+          scheduled_at?: string | null
+          sender_email?: string | null
+          sender_user_id?: string | null
+          sent_count?: number
+          started_at?: string | null
+          status?: string
+          subject?: string
+          suppressed_count?: number
+          text_body?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "newsletter_campaign_versions_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "newsletter_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      newsletter_campaigns: {
+        Row: {
+          audience_counts: Json | null
+          audience_current_users: boolean
+          audience_subscribers: boolean
+          blocks: Json
+          created_at: string
+          created_by: string | null
+          created_by_email: string | null
+          current_version_id: string | null
+          from_name: string | null
+          id: string
+          name: string
+          preheader: string | null
+          reply_to: string | null
+          scheduled_at: string | null
+          status: string
+          subject: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          audience_counts?: Json | null
+          audience_current_users?: boolean
+          audience_subscribers?: boolean
+          blocks?: Json
+          created_at?: string
+          created_by?: string | null
+          created_by_email?: string | null
+          current_version_id?: string | null
+          from_name?: string | null
+          id?: string
+          name?: string
+          preheader?: string | null
+          reply_to?: string | null
+          scheduled_at?: string | null
+          status?: string
+          subject?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          audience_counts?: Json | null
+          audience_current_users?: boolean
+          audience_subscribers?: boolean
+          blocks?: Json
+          created_at?: string
+          created_by?: string | null
+          created_by_email?: string | null
+          current_version_id?: string | null
+          from_name?: string | null
+          id?: string
+          name?: string
+          preheader?: string | null
+          reply_to?: string | null
+          scheduled_at?: string | null
+          status?: string
+          subject?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       portal_maintenance: {
         Row: {
           created_at: string
