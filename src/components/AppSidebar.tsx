@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { BrandName } from "@/components/BrandName";
 import { ChevronDown, LifeBuoy, Lightbulb, ShieldCheck, Settings2 } from "lucide-react";
@@ -30,15 +30,54 @@ import { useUnresolvedSupportCount } from "@/lib/supportRequestsCount";
 import { useNavViewer } from "@/hooks/useNavViewer";
 import {
   ACTIVITIES,
-  SYSTEM_ADMIN_ITEMS,
+  SYSTEM_ADMIN_DASHBOARD,
+  SYSTEM_ADMIN_GROUPS,
   accessibleViews,
   defaultPathFor,
   resolveLocation,
+  systemAdminItemMatchesPath,
   type NavActivity,
   type NavGroup,
+  type SystemAdminGroup,
+  type SystemAdminItem,
 } from "@/lib/navigationConfig";
 
 const CUSTOMER_GROUPS: NavGroup[] = ["Overview", "Vineyard", "Work", "Resources"];
+
+function SystemAdminNavGroup({
+  group,
+  pathname,
+  renderItem,
+}: {
+  group: SystemAdminGroup;
+  pathname: string;
+  renderItem: (item: SystemAdminItem) => React.ReactNode;
+}) {
+  const active = group.items.some((item) => systemAdminItemMatchesPath(item, pathname));
+  const [open, setOpen] = useState(active);
+
+  useEffect(() => {
+    if (active) setOpen(true);
+  }, [active, pathname]);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="group/admin-nav">
+      <SidebarGroup className="py-0.5">
+        <SidebarGroupLabel asChild>
+          <CollapsibleTrigger className="flex w-full items-center justify-between text-[10px] font-medium uppercase tracking-[0.08em] text-sidebar-foreground/50 hover:text-sidebar-foreground/75">
+            {group.label}
+            <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=closed]/admin-nav:-rotate-90" />
+          </CollapsibleTrigger>
+        </SidebarGroupLabel>
+        <CollapsibleContent>
+          <SidebarGroupContent>
+            <SidebarMenu>{group.items.map(renderItem)}</SidebarMenu>
+          </SidebarGroupContent>
+        </CollapsibleContent>
+      </SidebarGroup>
+    </Collapsible>
+  );
+}
 
 export function AppSidebar() {
   const { pathname } = useLocation();
@@ -103,6 +142,31 @@ export function AppSidebar() {
   const settingsTarget = defaultPathFor(settingsActivity, viewer);
   const settingsActive = active.activity?.id === "settings";
 
+  const renderSystemAdminItem = (item: SystemAdminItem) => {
+    const Icon = item.icon ?? ShieldCheck;
+    const isActive = systemAdminItemMatchesPath(item, pathname);
+    return (
+      <SidebarMenuItem key={item.path}>
+        <SidebarMenuButton
+          asChild
+          isActive={isActive}
+          tooltip={item.label}
+          className={buttonClass(isActive, true)}
+        >
+          <NavLink to={item.path} className="flex items-center gap-2.5">
+            <Icon className="h-4 w-4" />
+            <span className="flex-1 truncate">{item.label}</span>
+            {item.path === "/admin/support-requests" && unresolvedSupport > 0 && (
+              <span className="ml-auto inline-flex min-w-[20px] items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white dark:bg-amber-400 dark:text-amber-950">
+                {unresolvedSupport}
+              </span>
+            )}
+          </NavLink>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  };
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="px-3 py-3 border-b border-sidebar-border">
@@ -137,46 +201,22 @@ export function AppSidebar() {
         {CUSTOMER_GROUPS.map(renderGroup)}
 
         {isSystemAdmin && (
-          <Collapsible defaultOpen={pathname.startsWith("/admin")} className="group/collapsible">
-            <SidebarGroup>
-              <SidebarGroupLabel asChild>
-                <CollapsibleTrigger className="flex w-full items-center justify-between text-[10.5px] font-semibold uppercase tracking-[0.08em] text-amber-600 hover:text-amber-500 dark:text-amber-400">
-                  System Admin
-                  <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
-                </CollapsibleTrigger>
-              </SidebarGroupLabel>
-              <CollapsibleContent>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {SYSTEM_ADMIN_ITEMS.map((item) => {
-                      const Icon = item.icon ?? ShieldCheck;
-                      const isActive = pathname === item.path;
-                      return (
-                        <SidebarMenuItem key={item.path}>
-                          <SidebarMenuButton
-                            asChild
-                            isActive={isActive}
-                            tooltip={item.label}
-                            className={buttonClass(isActive, true)}
-                          >
-                            <NavLink to={item.path} className="flex items-center gap-2.5">
-                              <Icon className="h-4 w-4" />
-                              <span className="flex-1 truncate">{item.label}</span>
-                              {item.path === "/admin/support-requests" && unresolvedSupport > 0 && (
-                                <span className="ml-auto inline-flex min-w-[20px] items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white dark:bg-amber-400 dark:text-amber-950">
-                                  {unresolvedSupport}
-                                </span>
-                              )}
-                            </NavLink>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      );
-                    })}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </CollapsibleContent>
-            </SidebarGroup>
-          </Collapsible>
+          <SidebarGroup className="gap-1">
+            <SidebarGroupLabel className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-amber-600 dark:text-amber-400">
+              System Admin
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>{renderSystemAdminItem(SYSTEM_ADMIN_DASHBOARD)}</SidebarMenu>
+            </SidebarGroupContent>
+            {SYSTEM_ADMIN_GROUPS.map((group) => (
+              <SystemAdminNavGroup
+                key={group.label}
+                group={group}
+                pathname={pathname}
+                renderItem={renderSystemAdminItem}
+              />
+            ))}
+          </SidebarGroup>
         )}
       </SidebarContent>
 

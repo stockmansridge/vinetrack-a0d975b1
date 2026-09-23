@@ -41,4 +41,4 @@
 ## Navigation presentation
 - [x] Style Yield & Harvest cross-links as buttons matching Records, Analytics and Comparison
 - [x] Style the Spray Equipment cross-link as a matching button
-- [ ] Reorganise all 28 System Admin destinations into concise collapsible groups without changing routes or permissions
+- [x] Reorganise all 28 System Admin destinations into concise collapsible groups without changing routes or permissions
