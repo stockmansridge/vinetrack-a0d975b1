@@ -254,7 +254,14 @@ function TrendChart({
             tickFormatter={(value) => (kind === "temperature" ? rf.temperature(value, 0) : rf.wind(value, 0))}
           />
           {boundaries.map((value) => (
-            <ReferenceLine key={value} x={value} stroke="hsl(var(--border))" strokeDasharray="4 4" />
+            <ReferenceLine
+              key={value}
+              className="day-boundary"
+              x={value}
+              stroke="hsl(var(--muted-foreground))"
+              strokeOpacity={0.28}
+              strokeWidth={1}
+            />
           ))}
           {kind === "wind" && windThreshold != null && (
             <ReferenceLine y={windThreshold} stroke="hsl(var(--warning))" strokeDasharray="5 5" strokeOpacity={0.8} />
