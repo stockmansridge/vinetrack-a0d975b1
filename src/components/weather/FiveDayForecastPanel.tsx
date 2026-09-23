@@ -522,6 +522,7 @@ export function FiveDayForecastPanel({ vineyardId, forecast, rf, freshnessLabel,
             rf={rf}
             kind="wind"
             windThreshold={preferences.wind.enabled ? preferences.wind.threshold : null}
+            sprayWindows={sprayWindowsForCharts}
           />
         ) : (
           <div className="flex h-16 items-center justify-center text-xs text-muted-foreground">
