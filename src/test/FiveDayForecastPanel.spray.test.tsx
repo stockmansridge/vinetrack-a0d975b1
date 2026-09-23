@@ -46,8 +46,17 @@ function forecast(detailed: boolean): FiveDayForecast {
   } as unknown as FiveDayForecast;
 }
 
+class TestResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
 describe("spray windows on the forecast graphs", () => {
-  beforeEach(() => window.localStorage.clear());
+  beforeEach(() => {
+    window.localStorage.clear();
+    (globalThis as { ResizeObserver?: unknown }).ResizeObserver = TestResizeObserver;
+  });
 
   it("gives the temperature and wind graphs identical spray ranges", () => {
     render(<FiveDayForecastPanel vineyardId="v1" forecast={forecast(true)} rf={rf} />);
