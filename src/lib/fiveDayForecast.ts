@@ -184,6 +184,10 @@ export function bucketHourlyForecast(payload: OpenMeteoPayload): Map<string, For
         tempMaxC: max(values.map((value) => value.temp)),
         windMaxKmh: max(values.map((value) => value.wind)),
         humidityMaxPct: max(values.map((value) => value.humidity)),
+        humidityMinPct: min(values.map((value) => value.humidity)),
+        // Genuine hourly precipitation summed across the period; null when the
+        // provider supplied no hourly precipitation for it.
+        rainMm: sumOrNull(values.map((value) => value.rain)),
         sampleCount: values.length,
       });
     }
