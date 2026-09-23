@@ -89,6 +89,7 @@ export interface OpenMeteoPayload {
     temperature_2m?: Array<number | null>;
     relative_humidity_2m?: Array<number | null>;
     wind_speed_10m?: Array<number | null>;
+    precipitation?: Array<number | null>;
   };
 }
 
