@@ -85,6 +85,16 @@ export interface WillyDayDetail {
   temperatureEntries?: Entry[];
   windEntries?: Entry[];
   humidityEntries?: Entry[];
+  /** Genuine timestamped intra-day rainfall entries only. */
+  rainEntries?: Entry[];
+}
+
+/** Upper bound of a provider rainfall range, matching the daily treatment. */
+function rainAmount(entry: Entry): number | null {
+  const end = finite(entry.endRange);
+  const start = finite(entry.startRange);
+  const amount = finite(entry.amount) ?? finite(entry.rainfall_mm) ?? finite(entry.value);
+  return end ?? amount ?? start;
 }
 
 export interface WillyForecastPayload {
@@ -154,6 +164,7 @@ export function bucketDayDetail(detail: WillyDayDetail): ForecastPeriod[] {
   const temps = new Map<number, Array<number | null>>();
   const winds = new Map<number, Array<number | null>>();
   const humidity = new Map<number, Array<number | null>>();
+  const rain = new Map<number, Array<number | null>>();
   const counts = new Map<number, number>();
 
   const add = (
@@ -174,6 +185,19 @@ export function bucketDayDetail(detail: WillyDayDetail): ForecastPeriod[] {
   add(temps, detail.temperatureEntries, TEMP_KEYS);
   add(winds, detail.windEntries, WIND_KEYS);
   add(humidity, detail.humidityEntries, HUMIDITY_KEYS);
+  // Rainfall: genuine timestamped intra-day entries only. A day carrying a
+  // single entry is a daily figure, never spread across four-hour periods.
+  const rainEntries = detail.rainEntries ?? [];
+  const intraDayRain = rainEntries.filter((entry) => entryTime(entry)?.date === detail.date);
+  if (intraDayRain.length > 1) {
+    intraDayRain.forEach((entry) => {
+      const t = entryTime(entry)!;
+      const bucket = Math.floor(t.hour / 4);
+      const list = rain.get(bucket) ?? [];
+      list.push(rainAmount(entry));
+      rain.set(bucket, list);
+    });
+  }
 
   const periods: ForecastPeriod[] = [];
   for (let bucket = 0; bucket < BUCKETS_PER_DAY; bucket += 1) {
@@ -187,6 +211,8 @@ export function bucketDayDetail(detail: WillyDayDetail): ForecastPeriod[] {
       tempMaxC: max(temps.get(bucket) ?? []),
       windMaxKmh: max(winds.get(bucket) ?? []),
       humidityMaxPct: max(humidity.get(bucket) ?? []),
+      humidityMinPct: min(humidity.get(bucket) ?? []),
+      rainMm: sum(rain.get(bucket) ?? []),
       sampleCount: counts.get(bucket) ?? 0,
     });
   }
@@ -277,6 +303,7 @@ export function normaliseWillyWeatherForecast(
       temperatureEntries:
         summary.temperatureEntries ?? envelopeDetail.get(date)?.temperatureEntries,
       windEntries: summary.windEntries ?? envelopeDetail.get(date)?.windEntries,
+      rainEntries: rainByDate.get(date),
       humidityEntries: summary.humidityEntries ?? envelopeDetail.get(date)?.humidityEntries,
     };
     const periods = bucketDayDetail(detail);

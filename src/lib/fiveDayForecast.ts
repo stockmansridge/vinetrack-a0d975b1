@@ -31,6 +31,10 @@ export interface ForecastPeriod {
   tempMaxC: number | null;
   windMaxKmh: number | null;
   humidityMaxPct: number | null;
+  /** Minimum forecast humidity across the period; needed for spray windows. */
+  humidityMinPct: number | null;
+  /** Genuine forecast rainfall for this period only. Never derived from a daily total. */
+  rainMm: number | null;
   sampleCount: number;
 }
 
@@ -85,6 +89,7 @@ export interface OpenMeteoPayload {
     temperature_2m?: Array<number | null>;
     relative_humidity_2m?: Array<number | null>;
     wind_speed_10m?: Array<number | null>;
+    precipitation?: Array<number | null>;
   };
 }
 
@@ -99,6 +104,12 @@ function min(values: Array<number | null>): number | null {
 function max(values: Array<number | null>): number | null {
   const valid = values.filter((value): value is number => value != null);
   return valid.length ? Math.max(...valid) : null;
+}
+
+/** Sums only genuine values; null when the provider supplied none. */
+function sumOrNull(values: Array<number | null>): number | null {
+  const valid = values.filter((value): value is number => value != null);
+  return valid.length ? valid.reduce((a, b) => a + b, 0) : null;
 }
 
 function two(value: number): string {
@@ -140,7 +151,11 @@ export function bucketHourlyForecast(payload: OpenMeteoPayload): Map<string, For
   const temperatures = payload.hourly?.temperature_2m ?? [];
   const winds = payload.hourly?.wind_speed_10m ?? [];
   const humidities = payload.hourly?.relative_humidity_2m ?? [];
-  const raw = new Map<string, Array<{ temp: number | null; wind: number | null; humidity: number | null }>>();
+  const rains = payload.hourly?.precipitation ?? [];
+  const raw = new Map<
+    string,
+    Array<{ temp: number | null; wind: number | null; humidity: number | null; rain: number | null }>
+  >();
 
   times.forEach((timestamp, index) => {
     const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):/.exec(timestamp);
@@ -155,6 +170,7 @@ export function bucketHourlyForecast(payload: OpenMeteoPayload): Map<string, For
       temp: finite(temperatures[index]),
       wind: finite(winds[index]),
       humidity: finite(humidities[index]),
+      rain: finite(rains[index]),
     });
     raw.set(key, values);
   });
@@ -174,6 +190,10 @@ export function bucketHourlyForecast(payload: OpenMeteoPayload): Map<string, For
         tempMaxC: max(values.map((value) => value.temp)),
         windMaxKmh: max(values.map((value) => value.wind)),
         humidityMaxPct: max(values.map((value) => value.humidity)),
+        humidityMinPct: min(values.map((value) => value.humidity)),
+        // Genuine hourly precipitation summed across the period; null when the
+        // provider supplied no hourly precipitation for it.
+        rainMm: sumOrNull(values.map((value) => value.rain)),
         sampleCount: values.length,
       });
     }
@@ -279,7 +299,9 @@ export function supplementForecast(
     const periods = needsHumidity
       ? day.periods.map((period) => {
           const match = extra.periods.find((p) => p.startHour === period.startHour);
-          return match ? { ...period, humidityMaxPct: match.humidityMaxPct } : period;
+          return match
+            ? { ...period, humidityMaxPct: match.humidityMaxPct, humidityMinPct: match.humidityMinPct }
+            : period;
         })
       : day.periods;
     return {
@@ -312,7 +334,7 @@ export function supplementForecast(
 
 async function fetchDetailedOpenMeteo(lat: number, lon: number, timezone: string | null): Promise<FiveDayForecastResult> {
   const daily = "weather_code,precipitation_sum,precipitation_probability_max,temperature_2m_max,temperature_2m_min,wind_speed_10m_max";
-  const hourly = "temperature_2m,relative_humidity_2m,wind_speed_10m";
+  const hourly = "temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation";
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&daily=${daily}&hourly=${hourly}&wind_speed_unit=kmh&timezone=${encodeURIComponent(timezone || "auto")}&forecast_days=${FORECAST_DAYS}`;
   try {
     const response = await fetch(url);

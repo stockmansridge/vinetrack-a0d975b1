@@ -69,6 +69,7 @@ export interface RegionFormatters {
   wind: (kmh: unknown, dp?: number) => string;            // km/h in → km/h or mph
   rainfallToCanonical: (displayValue: unknown) => number | null; // mm/in → mm
   windToCanonical: (displayValue: unknown) => number | null;     // km/h/mph → km/h
+  temperatureToCanonical: (displayValue: unknown) => number | null; // °C/°F → °C
   date: (value: Date | string | number | null | undefined) => string;
   dateShort: (value: Date | string | number | null | undefined) => string;
   dateTime: (value: Date | string | number | null | undefined) => string;
@@ -255,6 +256,10 @@ export function createRegionFormatters(
     windToCanonical: (v) => {
       const x = n(v);
       return x == null ? null : distImperial ? x * KM_PER_MI : x;
+    },
+    temperatureToCanonical: (v) => {
+      const x = n(v);
+      return x == null ? null : distImperial ? ((x - 32) * 5) / 9 : x;
     },
     date: fmtDate,
     dateShort: fmtDateShort,

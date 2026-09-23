@@ -5,6 +5,7 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
+  ReferenceArea,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -23,8 +24,10 @@ import {
   forecastHighlightStorageKey,
   parseForecastHighlightPreferences,
   shouldHighlight,
+  sprayThresholdsFrom,
   type ForecastHighlightPreferences,
 } from "@/lib/forecastHighlightPreferences";
+import { calculateSprayWindows, sprayDisplayBands, type SprayWindow } from "@/lib/sprayForecastWindows";
 import type { RegionFormatters } from "@/lib/regionFormatters";
 
 interface Props {
@@ -79,9 +82,40 @@ interface TooltipCardProps {
   payload?: Array<{ payload?: ChartRow }>;
   rf: RegionFormatters;
   kind: "temperature" | "wind";
+  windows?: SprayWindow[];
 }
 
-function TooltipCard({ active, payload, rf, kind }: TooltipCardProps) {
+/** Window detail shown when the hovered period sits inside a spray band. */
+function SprayWindowDetail({ window, rf }: { window: SprayWindow; rf: RegionFormatters }) {
+  const humid = window.kind === "high_humidity";
+  return (
+    <div className="mt-2 border-t pt-2" data-testid="spray-window-tooltip">
+      <div className="font-semibold">
+        {humid ? "High-humidity spray window" : "Optimal spray window"}
+      </div>
+      <div className="mb-1 text-muted-foreground">
+        {window.startTimeLocal}–{window.endTimeLocal}
+      </div>
+      {humid && window.humidityMinPct != null && (
+        <div>Humidity: ≥{Math.round(window.humidityMinPct)}% ✓</div>
+      )}
+      <div>
+        Temperature:{" "}
+        {window.tempMinC == null || window.tempMaxC == null
+          ? "—"
+          : `${rf.temperature(window.tempMinC, 0)}–${rf.temperature(window.tempMaxC, 0)}`}{" "}
+        ✓
+      </div>
+      <div>Maximum wind: {window.windMaxKmh == null ? "—" : rf.wind(window.windMaxKmh, 0)} ✓</div>
+      <div>Rain: {window.rainMm == null ? "—" : rf.rainfall(window.rainMm)} ✓</div>
+      <div className="mt-1 text-[10px] text-muted-foreground">
+        Weather suitability only — always follow the chemical label.
+      </div>
+    </div>
+  );
+}
+
+function TooltipCard({ active, payload, rf, kind, windows }: TooltipCardProps) {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload as ChartRow | undefined;
   if (!row) return null;
@@ -107,6 +141,14 @@ function TooltipCard({ active, payload, rf, kind }: TooltipCardProps) {
       ) : (
         <div>Wind: {row.windMaxKmh == null ? "—" : rf.wind(row.windMaxKmh, 1)}</div>
       )}
+      {(() => {
+        const covering = (windows ?? []).filter(
+          (window) => row.index >= window.startIndex && row.index <= window.endIndex,
+        );
+        // High humidity takes precedence where it overlaps a standard window.
+        const window = covering.find((w) => w.kind === "high_humidity") ?? covering[0];
+        return window ? <SprayWindowDetail window={window} rf={rf} /> : null;
+      })()}
     </div>
   );
 }
@@ -119,16 +161,23 @@ function niceDomain(values: Array<number | null>, pad: number): [number, number]
   return [lo, hi];
 }
 
+/** "optimal:0-3|high_humidity:2-3" — asserted identical across both charts. */
+export function sprayRangeSignature(windows: SprayWindow[]): string {
+  return windows.map((w) => `${w.kind}:${w.startIndex}-${w.endIndex}`).join("|");
+}
+
 function TrendChart({
   rows,
   rf,
   kind,
   windThreshold,
+  sprayWindows = [],
 }: {
   rows: ChartRow[];
   rf: RegionFormatters;
   kind: "temperature" | "wind";
   windThreshold?: number | null;
+  sprayWindows?: SprayWindow[];
 }) {
   // Day separators sit between the last bucket of one day and the first of the next.
   const boundaries = [5.5, 11.5, 17.5, 23.5];
@@ -142,6 +191,7 @@ function TrendChart({
       className="h-44 w-full rounded-lg bg-background/60 p-1 shadow-inner"
       data-testid={`${kind}-trend`}
       data-point-count={rows.length}
+      data-spray-ranges={sprayRangeSignature(sprayWindows)}
     >
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={rows} margin={{ top: 12, right: 12, bottom: 4, left: -18 }}>
@@ -169,8 +219,32 @@ function TrendChart({
           {kind === "wind" && windThreshold != null && (
             <ReferenceLine y={windThreshold} stroke="hsl(var(--warning))" strokeDasharray="5 5" strokeOpacity={0.8} />
           )}
+          {/* Spray windows: identical X ranges on the temperature and wind charts.
+              High humidity is drawn after the standard shade so overlaps show one colour. */}
+          {[...sprayWindows]
+            .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "optimal" ? -1 : 1))
+            .map((window) => (
+              <ReferenceArea
+                key={`${window.kind}-${window.startIndex}`}
+                x1={window.startIndex - 0.5}
+                x2={window.endIndex + 0.5}
+                fill={window.kind === "high_humidity" ? "hsl(var(--primary))" : "hsl(var(--success, var(--accent)))"}
+                fillOpacity={window.kind === "high_humidity" ? 0.16 : 0.1}
+                ifOverflow="extendDomain"
+              />
+            ))}
+          {sprayWindows.flatMap((window) =>
+            [window.startIndex - 0.5, window.endIndex + 0.5].map((x, edge) => (
+              <ReferenceLine
+                key={`${window.kind}-edge-${window.startIndex}-${edge}`}
+                x={x}
+                stroke={window.kind === "high_humidity" ? "hsl(var(--primary))" : "hsl(var(--accent))"}
+                strokeOpacity={0.55}
+              />
+            )),
+          )}
           <Tooltip
-            content={<TooltipCard rf={rf} kind={kind} />}
+            content={<TooltipCard rf={rf} kind={kind} windows={sprayWindows} />}
             cursor={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1, strokeDasharray: "3 3" }}
           />
           {kind === "temperature" ? (
@@ -274,11 +348,11 @@ function HighlightSetting({
             value={Number(displayValue.toFixed(2))}
             onChange={(event) => onValue(Number(event.target.value))}
             className="h-8 w-24"
-            disabled={!setting.enabled}
           />
           <span className="text-xs text-muted-foreground">{unit}</span>
         </div>
       </div>
+      {/* Visual highlighting only — spray-window criteria always use the value. */}
       <Switch aria-label={`${label} highlights`} checked={setting.enabled} onCheckedChange={onToggle} />
     </div>
   );
@@ -309,6 +383,24 @@ export function FiveDayForecastPanel({ vineyardId, forecast, rf, freshnessLabel,
   const windDisplay = rf.settings.distance_unit === "imperial" ? preferences.wind.threshold / 1.609344 : preferences.wind.threshold;
   const humiditySource = forecast.fieldSources?.humidity ?? null;
   const humidityIsSupplementary = !!humiditySource && humiditySource !== forecast.source;
+  const sprayRainDisplay =
+    rf.settings.distance_unit === "imperial" ? preferences.sprayRain.threshold / 25.4 : preferences.sprayRain.threshold;
+  const tempMinDisplay =
+    rf.settings.distance_unit === "imperial" ? preferences.tempMin.threshold * 9 / 5 + 32 : preferences.tempMin.threshold;
+  const tempMaxDisplay =
+    rf.settings.distance_unit === "imperial" ? preferences.tempMax.threshold * 9 / 5 + 32 : preferences.tempMax.threshold;
+
+  // Spray windows are calculated from the normalised periods and the configured
+  // threshold VALUES only — the visual Highlight switches are ignored here.
+  const spray = useMemo(() => {
+    const periods = days.flatMap((day) => day.periods);
+    return calculateSprayWindows(periods, sprayThresholdsFrom(preferences));
+  }, [days, preferences]);
+  const sprayBands = useMemo(
+    () => sprayDisplayBands(spray.optimal, spray.highHumidity),
+    [spray],
+  );
+  const sprayWindowsForCharts = hasThirtyPositions ? sprayBands : [];
 
   const update = (key: keyof ForecastHighlightPreferences, patch: Partial<{ enabled: boolean; threshold: number }>) => {
     setPreferences((current) => ({ ...current, [key]: { ...current[key], ...patch } }));
@@ -338,10 +430,33 @@ export function FiveDayForecastPanel({ vineyardId, forecast, rf, freshnessLabel,
             <HighlightSetting label="Rain" unit={rf.rainfallUnitLabel} setting={preferences.rain} displayValue={rainDisplay} onToggle={(enabled) => update("rain", { enabled })} onValue={(value) => { const canonical = rf.rainfallToCanonical(value); if (canonical != null) update("rain", { threshold: canonical }); }} />
             <HighlightSetting label="Wind" unit={rf.windUnitLabel} setting={preferences.wind} displayValue={windDisplay} onToggle={(enabled) => update("wind", { enabled })} onValue={(value) => { const canonical = rf.windToCanonical(value); if (canonical != null) update("wind", { threshold: canonical }); }} />
             <HighlightSetting label="Humidity" unit="%" setting={preferences.humidity} displayValue={preferences.humidity.threshold} onToggle={(enabled) => update("humidity", { enabled })} onValue={(value) => { if (Number.isFinite(value) && value >= 0) update("humidity", { threshold: value }); }} />
+            <div className="mt-3 border-t pt-2 text-sm font-semibold">Spray window criteria</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Used for the shaded spray bands on the graphs. Switches above affect highlighting only.
+            </p>
+            <HighlightSetting label="Minimum temperature" unit={rf.temperatureUnitLabel} setting={preferences.tempMin} displayValue={tempMinDisplay} onToggle={(enabled) => update("tempMin", { enabled })} onValue={(value) => { const canonical = rf.temperatureToCanonical(value); if (canonical != null) update("tempMin", { threshold: canonical }); }} />
+            <HighlightSetting label="Maximum temperature" unit={rf.temperatureUnitLabel} setting={preferences.tempMax} displayValue={tempMaxDisplay} onToggle={(enabled) => update("tempMax", { enabled })} onValue={(value) => { const canonical = rf.temperatureToCanonical(value); if (canonical != null) update("tempMax", { threshold: canonical }); }} />
+            <HighlightSetting label="Spray rain limit (per 4-hour period)" unit={rf.rainfallUnitLabel} setting={preferences.sprayRain} displayValue={sprayRainDisplay} onToggle={(enabled) => update("sprayRain", { enabled })} onValue={(value) => { const canonical = rf.rainfallToCanonical(value); if (canonical != null) update("sprayRain", { threshold: canonical }); }} />
             <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={() => setPreferences(structuredClone(DEFAULT_FORECAST_HIGHLIGHTS))}>Reset to defaults</Button>
           </PopoverContent>
         </Popover>
+        <div className="flex w-full flex-wrap items-center gap-3 text-[11px] text-muted-foreground" data-testid="spray-window-legend">
+          {spray.hasDetail ? (
+            <>
+              <span className="font-medium text-foreground/80">Spray windows</span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-4 rounded-sm bg-accent/30 ring-1 ring-accent/50" />Optimal
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-4 rounded-sm bg-primary/30 ring-1 ring-primary/50" />High humidity
+              </span>
+            </>
+          ) : (
+            <span>Detailed spray windows unavailable from this forecast source.</span>
+          )}
+        </div>
       </div>
+
 
       <div className="grid grid-cols-5" data-testid="forecast-day-headers">
         {days.map((day, index) => {
@@ -389,7 +504,7 @@ export function FiveDayForecastPanel({ vineyardId, forecast, rf, freshnessLabel,
           <span className="ml-auto font-normal text-muted-foreground">Four-hourly forecast samples</span>
         </div>
         {hasThirtyPositions ? (
-          <TrendChart rows={rows} rf={rf} kind="temperature" />
+          <TrendChart rows={rows} rf={rf} kind="temperature" sprayWindows={sprayWindowsForCharts} />
         ) : (
           <div className="flex h-20 items-center justify-center text-xs text-muted-foreground">
             Detailed temperature trend is not available from {forecast.source}.
@@ -407,6 +522,7 @@ export function FiveDayForecastPanel({ vineyardId, forecast, rf, freshnessLabel,
             rf={rf}
             kind="wind"
             windThreshold={preferences.wind.enabled ? preferences.wind.threshold : null}
+            sprayWindows={sprayWindowsForCharts}
           />
         ) : (
           <div className="flex h-16 items-center justify-center text-xs text-muted-foreground">
