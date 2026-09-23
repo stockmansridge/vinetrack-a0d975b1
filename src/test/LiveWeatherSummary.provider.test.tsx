@@ -1,8 +1,7 @@
 // Focused behavioural proof that the Live Dashboard weather Refresh respects
 // the vineyard's configured LOCAL OBSERVATION provider.
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const refreshDavisObservations = vi.fn();
@@ -89,7 +88,7 @@ function renderPanel() {
 
 const pressRefresh = async () => {
   const button = await screen.findByRole("button", { name: /refresh/i });
-  await userEvent.click(button);
+  fireEvent.click(button);
 };
 
 beforeEach(() => {
