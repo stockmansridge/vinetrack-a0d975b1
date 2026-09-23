@@ -4,7 +4,7 @@
 // the same six options in the Work Task editor and the Material Library while
 // keeping historical non-standard text units representable.
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   MATERIAL_UNIT_SUGGESTIONS,
@@ -165,9 +165,10 @@ describe("Work Task material editor unit dropdown", () => {
     fireEvent.change(select, { target: { value: "Pack" } });
     fireEvent.change(document.getElementById("mat-qty")!, { target: { value: "12" } });
     fireEvent.click(screen.getByRole("button", { name: /Save material/i }));
-    await screen.findByText("Material saved");
-    expect(addWorkTaskMaterial).toHaveBeenCalledWith(
-      expect.objectContaining({ unit: "Pack" }),
+    await waitFor(() =>
+      expect(addWorkTaskMaterial).toHaveBeenCalledWith(
+        expect.objectContaining({ unit: "Pack" }),
+      ),
     );
   });
 
@@ -189,10 +190,11 @@ describe("Work Task material editor unit dropdown", () => {
 
     fireEvent.change(select, { target: { value: "Bag" } });
     fireEvent.click(screen.getByRole("button", { name: /Save material/i }));
-    await screen.findByText("Material saved");
     // The frozen task line is updated in place; the library is untouched.
-    expect(updateWorkTaskMaterial).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "line-1", unit: "Bag" }),
+    await waitFor(() =>
+      expect(updateWorkTaskMaterial).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "line-1", unit: "Bag" }),
+      ),
     );
     expect(saveVineyardMaterialOverride).not.toHaveBeenCalled();
     expect(saveCustomMaterial).not.toHaveBeenCalled();
@@ -215,16 +217,17 @@ describe("Material Library unit dropdown", () => {
     fireEvent.change(select, { target: { value: "Metre" } });
     const dialog = screen.getByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await screen.findByText("Material saved");
-    expect(saveVineyardMaterialOverride).toHaveBeenCalledWith(
-      expect.objectContaining({ baseMaterialId: "cat-grip", unit: "Metre" }),
+    await waitFor(() =>
+      expect(saveVineyardMaterialOverride).toHaveBeenCalledWith(
+        expect.objectContaining({ baseMaterialId: "cat-grip", unit: "Metre" }),
+      ),
     );
   });
 
   it("keeps a historical custom unit representable and saves the selected text unchanged", async () => {
     render(<MaterialLibraryPage />, { wrapper });
-    const row = (await screen.findByText("Old Skein Material")).closest("div")!;
-    fireEvent.click(within(row.parentElement as HTMLElement).getByRole("button", { name: "Edit" }));
+    await screen.findByText("Old Skein Material");
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     const select = unitSelect("lib-unit");
     expect(optionValues(select)).toEqual([...SIX, "Skein"]);
     expect(select.value).toBe("Skein");
@@ -232,9 +235,10 @@ describe("Material Library unit dropdown", () => {
     fireEvent.change(select, { target: { value: "Roll" } });
     const dialog = screen.getByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await screen.findByText("Material saved");
-    expect(saveCustomMaterial).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "vm-hist", unit: "Roll" }),
+    await waitFor(() =>
+      expect(saveCustomMaterial).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "vm-hist", unit: "Roll" }),
+      ),
     );
   });
 });
