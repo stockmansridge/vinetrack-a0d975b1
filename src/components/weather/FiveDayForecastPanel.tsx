@@ -161,16 +161,23 @@ function niceDomain(values: Array<number | null>, pad: number): [number, number]
   return [lo, hi];
 }
 
+/** "optimal:0-3|high_humidity:2-3" — asserted identical across both charts. */
+export function sprayRangeSignature(windows: SprayWindow[]): string {
+  return windows.map((w) => `${w.kind}:${w.startIndex}-${w.endIndex}`).join("|");
+}
+
 function TrendChart({
   rows,
   rf,
   kind,
   windThreshold,
+  sprayWindows = [],
 }: {
   rows: ChartRow[];
   rf: RegionFormatters;
   kind: "temperature" | "wind";
   windThreshold?: number | null;
+  sprayWindows?: SprayWindow[];
 }) {
   // Day separators sit between the last bucket of one day and the first of the next.
   const boundaries = [5.5, 11.5, 17.5, 23.5];
