@@ -251,6 +251,24 @@ async function callWuProxy<T = any>(
   return { ok: true, code, message: body?.message, data: (body?.data ?? body) as T };
 }
 
+/**
+ * Refresh the vineyard's CURRENT Weather Underground observation.
+ *
+ * Routed through the authenticated `wunderground-proxy` edge function
+ * (action "current"), which resolves the configured station server-side and
+ * writes the observation to vineyard_weather_observations with
+ * source = 'wunderground_pws'. The browser never calls api.weather.com and
+ * never supplies a station id for this action.
+ */
+export async function refreshWundergroundObservations(
+  vineyardId: string,
+): Promise<WuActionResult> {
+  return callWuProxy({
+    action: WU_PROXY_ACTIONS.current,
+    vineyardId,
+  });
+}
+
 /** Nearest Weather Underground personal weather stations near lat/lon.
  *  Routed through the dedicated `weather-nearby-stations` edge function
  *  (the same one iOS uses), NOT through `wunderground-proxy`. */
