@@ -333,7 +333,11 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   const observedAgo = reading?.observed_at
     ? formatDistanceToNowStrict(new Date(reading.observed_at))
     : null;
-  const observationSourceLabel = reading ? sourceLabel(reading.source) : "Davis WeatherLink";
+  // The observation row's own source stays authoritative; the configured
+  // provider label is only a fallback before any reading exists.
+  const observationSourceLabel = reading
+    ? sourceLabel(reading.source)
+    : observationProviderLabel(observationProvider);
 
   return (
     <Card className="space-y-5 bg-muted/20 p-4">
