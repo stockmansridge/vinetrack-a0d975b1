@@ -1382,17 +1382,15 @@ function WorkTaskDrawer({
                 onSaved();
               }}
             />
-            {materialCostsAccess.enabled && (
-              <Section title="Materials">
-                <WorkTaskMaterialsSection
-                  vineyardId={vineyardId}
-                  workTaskId={savedTaskId}
-                  lines={taskMaterialLines}
-                  canSeeCosts={drawerCanSeeCosts}
-                  money={money}
-                />
-              </Section>
-            )}
+            <Section title="Materials">
+              <WorkTaskMaterialsSection
+                vineyardId={vineyardId}
+                workTaskId={savedTaskId}
+                lines={taskMaterialLines}
+                canSeeCosts={drawerCanSeeCosts}
+                money={money}
+              />
+            </Section>
           </div>
 
 
@@ -1515,7 +1513,7 @@ function WorkTaskDrawer({
             {!isNew && task && (
               <WorkTaskSummarySection
                 task={task}
-                materialLines={materialCostsAccess.enabled ? taskMaterialLines : []}
+                materialLines={taskMaterialLines}
                 labourLines={visibleLines}
                 machineLines={displayedMachineLines}
                 linkedTrips={linkedTrips}
