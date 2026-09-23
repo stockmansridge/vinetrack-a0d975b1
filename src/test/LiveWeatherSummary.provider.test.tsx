@@ -24,12 +24,9 @@ vi.mock("@/components/weather/FiveDayForecastPanel", () => ({
 vi.mock("@/hooks/use-toast", () => ({ toast: (...a: unknown[]) => toast(...a) }));
 vi.mock("@/lib/useRegionFormatters", () => ({
   useRegionFormatters: () => ({
-    temp: (v: number | null | undefined) => (v == null ? "—" : `${v}°C`),
-    speed: (v: number | null | undefined) => (v == null ? "—" : `${v} km/h`),
-    rain: (v: number | null | undefined) => (v == null ? "—" : `${v} mm`),
-    rainRate: (v: number | null | undefined) => (v == null ? "—" : `${v} mm/h`),
-    date: (v: string) => v,
-    dateTime: (v: string) => v,
+    temperature: (v: number | null | undefined) => (v == null ? "—" : `${v}°C`),
+    wind: (v: number | null | undefined) => (v == null ? "—" : `${v} km/h`),
+    rainfall: (v: number | null | undefined) => (v == null ? "—" : `${v} mm`),
   }),
 }));
 
