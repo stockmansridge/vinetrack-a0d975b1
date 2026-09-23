@@ -106,6 +106,12 @@ function max(values: Array<number | null>): number | null {
   return valid.length ? Math.max(...valid) : null;
 }
 
+/** Sums only genuine values; null when the provider supplied none. */
+function sumOrNull(values: Array<number | null>): number | null {
+  const valid = values.filter((value): value is number => value != null);
+  return valid.length ? valid.reduce((a, b) => a + b, 0) : null;
+}
+
 function two(value: number): string {
   return String(value).padStart(2, "0");
 }
