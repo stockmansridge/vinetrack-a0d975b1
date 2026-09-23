@@ -87,7 +87,8 @@ describe("Live Dashboard trip status display", () => {
       trip({ id: "saved", is_active: false, end_time: null, person_name: "Unused" }),
     ]);
     await waitFor(() => expect(screen.getByText("Active trips")).toBeTruthy());
-    expect(screen.getByText("2")).toBeTruthy();
+    const activeCard = screen.getByTestId("summary-active");
+    expect(activeCard.textContent).toContain("2");
     expect(screen.getByTestId("trip-row-active-1")).toBeTruthy();
     expect(screen.getByTestId("trip-row-active-2")).toBeTruthy();
     expect(screen.queryByTestId("trip-row-saved")).toBeNull();
@@ -102,7 +103,7 @@ describe("Live Dashboard trip status display", () => {
     const row1 = screen.getByTestId("trip-row-active-1");
     const row2 = screen.getByTestId("trip-row-active-2");
     fireEvent.click(row2);
-    await waitFor(() => expect(row2.className).toContain("bg-muted/50"));
-    expect(row1.className).not.toContain("bg-muted/50");
+    await waitFor(() => expect(row2).toHaveClass("bg-muted/50"));
+    expect(row1).not.toHaveClass("bg-muted/50");
   });
 });
