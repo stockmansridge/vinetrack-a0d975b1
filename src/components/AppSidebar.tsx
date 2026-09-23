@@ -32,7 +32,6 @@ import {
   ACTIVITIES,
   SYSTEM_ADMIN_DASHBOARD,
   SYSTEM_ADMIN_GROUPS,
-  SYSTEM_ADMIN_ITEMS,
   accessibleViews,
   defaultPathFor,
   resolveLocation,
