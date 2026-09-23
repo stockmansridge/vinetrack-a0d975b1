@@ -64,15 +64,15 @@ export function ActivityNavigation() {
           );
         })}
 
-        {crossLinks.length ? (
-          <span className="ml-1 flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
-            {crossLinks.map((l) => (
-              <Link key={l.path} to={l.path} className="underline-offset-2 hover:text-foreground hover:underline">
-                {l.label}
-              </Link>
-            ))}
-          </span>
-        ) : null}
+        {crossLinks.map((l) => (
+          <Link
+            key={l.path}
+            to={l.path}
+            className="rounded-full border border-border bg-card/70 px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            {l.label}
+          </Link>
+        ))}
       </div>
     </nav>
   );
