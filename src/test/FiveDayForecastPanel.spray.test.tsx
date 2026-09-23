@@ -98,6 +98,10 @@ function sprayEdges(testId: string) {
   return Array.from(screen.getByTestId(testId).querySelectorAll(".spray-edge .recharts-reference-line-line"));
 }
 
+function dayBoundaryLines(testId: string) {
+  return Array.from(screen.getByTestId(testId).querySelectorAll(".day-boundary .recharts-reference-line-line"));
+}
+
 function rectBounds(rects: Element[]) {
   return rects.map((rect) => ({
     x: rect.getAttribute("x"),
@@ -194,6 +198,18 @@ describe("spray windows on the forecast graphs", () => {
     expect(screen.getByTestId("temperature-trend")).toHaveTextContent("12PM");
     expect(screen.getByTestId("wind-trend")).toHaveTextContent("4AM");
     expect(screen.getByTestId("wind-trend")).toHaveTextContent("12PM");
+  });
+
+  it("renders subtle day boundary lines on both charts", async () => {
+    render(<FiveDayForecastPanel vineyardId="v1" forecast={forecast(true)} rf={rf} />);
+
+    await waitFor(() => expect(dayBoundaryLines("temperature-trend")).toHaveLength(4));
+    expect(dayBoundaryLines("wind-trend")).toHaveLength(4);
+    expect(dayBoundaryLines("temperature-trend").map((line) => line.getAttribute("x1"))).toEqual(
+      dayBoundaryLines("wind-trend").map((line) => line.getAttribute("x1")),
+    );
+    expect(dayBoundaryLines("temperature-trend").every((line) => line.getAttribute("stroke") === "hsl(var(--muted-foreground))")).toBe(true);
+    expect(dayBoundaryLines("temperature-trend").every((line) => line.getAttribute("stroke-opacity") === "0.28")).toBe(true);
   });
 
   it("formats chart hour labels as 9AM and 1PM style", () => {
