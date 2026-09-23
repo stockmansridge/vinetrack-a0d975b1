@@ -32,6 +32,7 @@ import {
   fetchLocalObservationProvider,
   refreshObservationProvider,
   observationFailureTitle,
+  observationProviderLabel,
   noNewerObservationsMessage,
   type LocalObservationProvider,
 } from "@/lib/localObservationProvider";
