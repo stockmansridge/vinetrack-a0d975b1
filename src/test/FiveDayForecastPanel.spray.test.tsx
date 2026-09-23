@@ -68,10 +68,27 @@ describe("spray windows on the forecast graphs", () => {
     expect(screen.getByTestId("spray-window-legend")).toHaveTextContent("Spray windows");
   });
 
-  it("invents no bands when the source has no intra-day detail", () => {
+  it("invents no bands when no detailed data is available at all", () => {
     render(<FiveDayForecastPanel vineyardId="v1" forecast={forecast(false)} rf={rf} />);
+    // Provider-neutral wording: a data-availability problem, not a provider limit.
     expect(screen.getByTestId("spray-window-legend")).toHaveTextContent(
-      "Detailed spray windows unavailable from this forecast source.",
+      "Detailed forecast data is currently unavailable for spray-window calculation.",
     );
+  });
+
+  it("renders identical bands for a supplemented primary provider", () => {
+    const willy = {
+      ...forecast(true),
+      source: "WillyWeather",
+      fieldSources: { temperature: "WillyWeather", wind: "WillyWeather", rain: "WillyWeather", humidity: "Open-Meteo", condition: "WillyWeather" },
+    } as unknown as Parameters<typeof FiveDayForecastPanel>[0]["forecast"];
+    render(<FiveDayForecastPanel vineyardId="v1" forecast={willy} rf={rf} />);
+    expect(screen.getByTestId("temperature-trend").getAttribute("data-spray-ranges")).toBe(
+      "optimal:1-1|optimal:3-3|high_humidity:2-2",
+    );
+    expect(screen.getByTestId("wind-trend").getAttribute("data-spray-ranges")).toBe(
+      "optimal:1-1|optimal:3-3|high_humidity:2-2",
+    );
+    expect(screen.getByText(/Forecast: WillyWeather/)).toBeTruthy();
   });
 });
