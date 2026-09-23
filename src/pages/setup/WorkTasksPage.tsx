@@ -7,7 +7,6 @@ import { fetchList } from "@/lib/queries";
 import { fetchOperatorCategoriesForVineyard, type OperatorCategory } from "@/lib/operatorCategoriesQuery";
 import WorkTaskLabourFields from "@/components/work-tasks/WorkTaskLabourFields";
 import { WorkTaskMaterialsSection } from "@/components/work-tasks/WorkTaskMaterialsSection";
-import { useMaterialCostsEnabled } from "@/lib/materialCostsAccess";
 import { useWorkTaskMaterials } from "@/lib/materialsQuery";
 import {
   groupWorkTaskMaterialsByTask,
@@ -440,21 +439,18 @@ export default function WorkTasksPage() {
     return m;
   }, [labourLines]);
 
-  // Material Costs (Phase 3) — temporarily System Admin only; see
-  // src/lib/materialCostsAccess.ts for the single gate. ONE vineyard-scoped
+  // Material Costs are available to anyone who can edit Work Tasks (the
+  // temporary System Admin gate was removed; the Material Library stays
+  // System Admin only via src/lib/materialCostsAccess.ts). ONE vineyard-scoped
   // query supplies material lines for every visible task (never per task), and
   // its query key is vineyard-scoped so switching vineyards cannot leak totals.
-  const materialCostsAccess = useMaterialCostsEnabled();
   const { data: vineyardMaterialLines = [] } = useWorkTaskMaterials(
     selectedVineyardId,
-    materialCostsAccess.enabled,
+    true,
   );
   const materialLinesByTask = useMemo(
-    () =>
-      materialCostsAccess.enabled
-        ? groupWorkTaskMaterialsByTask(vineyardMaterialLines)
-        : new Map<string, WorkTaskMaterial[]>(),
-    [vineyardMaterialLines, materialCostsAccess.enabled],
+    () => groupWorkTaskMaterialsByTask(vineyardMaterialLines),
+    [vineyardMaterialLines],
   );
 
   // Total Work Task Cost for every task — single shared roll-up helper
