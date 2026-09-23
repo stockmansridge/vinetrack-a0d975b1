@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import {
   ACCOUNT_ACTIVITY,
   ACTIVITIES,
+  SYSTEM_ADMIN_DASHBOARD,
+  SYSTEM_ADMIN_GROUPS,
   SYSTEM_ADMIN_ITEMS,
   accessibleActivities,
   accessibleViews,
@@ -10,6 +12,7 @@ import {
   reportDestinations,
   resolveLocation,
   searchDestinations,
+  systemAdminItemMatchesPath,
   type NavViewer,
 } from "@/lib/navigationConfig";
 
@@ -138,6 +141,37 @@ describe("Portal navigation — access", () => {
     expect(admin).toContain("/dashboard/how-vinetrack-works");
     expect(admin).toContain("/settings/data-coverage");
     expect(admin).toContain("/tools/fertiliser-calculator");
+  });
+});
+
+describe("Portal navigation — System Admin grouping", () => {
+  it("keeps all 28 destinations represented exactly once", () => {
+    const grouped = [
+      SYSTEM_ADMIN_DASHBOARD,
+      ...SYSTEM_ADMIN_GROUPS.flatMap((group) => group.items),
+    ];
+    expect(grouped).toHaveLength(28);
+    expect(new Set(grouped.map((item) => item.path)).size).toBe(28);
+    expect(grouped.map((item) => item.path)).toEqual(SYSTEM_ADMIN_ITEMS.map((item) => item.path));
+  });
+
+  it("keeps Newsletters in Communications", () => {
+    const communications = SYSTEM_ADMIN_GROUPS.find((group) => group.label === "Communications");
+    expect(communications?.items.map((item) => item.label)).toContain("Newsletters");
+  });
+
+  it("matches direct and detail routes for active highlighting and group expansion", () => {
+    const users = SYSTEM_ADMIN_ITEMS.find((item) => item.label === "Users");
+    const newsletters = SYSTEM_ADMIN_ITEMS.find((item) => item.label === "Newsletters");
+    expect(users && systemAdminItemMatchesPath(users, "/admin/users/member-1")).toBe(true);
+    expect(newsletters && systemAdminItemMatchesPath(newsletters, "/admin/newsletters/campaign-1")).toBe(true);
+    expect(users && systemAdminItemMatchesPath(users, "/admin/vineyards")).toBe(false);
+  });
+
+  it("retains the Support Requests destination used by the count badge", () => {
+    expect(SYSTEM_ADMIN_GROUPS.flatMap((group) => group.items)).toContainEqual(
+      expect.objectContaining({ label: "Support Requests", path: "/admin/support-requests" }),
+    );
   });
 });
 

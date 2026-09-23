@@ -551,7 +551,18 @@ export const ACCOUNT_ACTIVITY: NavActivity = {
   ],
 };
 
-export const SYSTEM_ADMIN_ITEMS: { label: string; path: string; icon: any }[] = [
+export interface SystemAdminItem {
+  label: string;
+  path: string;
+  icon: any;
+}
+
+export interface SystemAdminGroup {
+  label: string;
+  items: SystemAdminItem[];
+}
+
+const SYSTEM_ADMIN_ITEM_LIST: SystemAdminItem[] = [
   { label: "Admin Dashboard", path: "/admin/dashboard", icon: LayoutDashboard },
   { label: "User Activity", path: "/admin/user-activity", icon: Activity },
   { label: "Users", path: "/admin/users", icon: Users },
@@ -581,6 +592,84 @@ export const SYSTEM_ADMIN_ITEMS: { label: string; path: string; icon: any }[] = 
   { label: "How VineTrack Works", path: "/dashboard/how-vinetrack-works", icon: BookOpen },
   { label: "Portal Field Reference", path: "/settings/data-coverage", icon: Database },
 ];
+
+const systemAdminItem = (label: string): SystemAdminItem => {
+  const item = SYSTEM_ADMIN_ITEM_LIST.find((candidate) => candidate.label === label);
+  if (!item) throw new Error(`Unknown System Admin navigation item: ${label}`);
+  return item;
+};
+
+export const SYSTEM_ADMIN_DASHBOARD = systemAdminItem("Admin Dashboard");
+
+export const SYSTEM_ADMIN_GROUPS: SystemAdminGroup[] = [
+  {
+    label: "Customers & Access",
+    items: [
+      systemAdminItem("Users"),
+      systemAdminItem("Vineyards"),
+      systemAdminItem("Invitations"),
+      systemAdminItem("Access & Entitlements"),
+      systemAdminItem("Billing Grants"),
+      systemAdminItem("System Admins"),
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      systemAdminItem("Blocks"),
+      systemAdminItem("Pins"),
+      systemAdminItem("Spray Records"),
+      systemAdminItem("Work Tasks"),
+      systemAdminItem("Master Catalogue"),
+    ],
+  },
+  {
+    label: "Support & Diagnostics",
+    items: [
+      systemAdminItem("Support Requests"),
+      systemAdminItem("Block Troubleshooter"),
+      systemAdminItem("User Activity"),
+      systemAdminItem("Email Test"),
+    ],
+  },
+  {
+    label: "Communications",
+    items: [
+      systemAdminItem("Email List"),
+      systemAdminItem("Newsletters"),
+      systemAdminItem("App Notices"),
+    ],
+  },
+  { label: "Analytics", items: [systemAdminItem("Website Analytics")] },
+  {
+    label: "Platform",
+    items: [
+      systemAdminItem("Integrations"),
+      systemAdminItem("Feature Flags"),
+      systemAdminItem("Maintenance Mode"),
+      systemAdminItem("Canopy Reference Images"),
+    ],
+  },
+  {
+    label: "Content & Reference",
+    items: [
+      systemAdminItem("Guide Content"),
+      systemAdminItem("How VineTrack Works"),
+      systemAdminItem("Portal Field Reference"),
+    ],
+  },
+  { label: "Tools", items: [systemAdminItem("Fertiliser Calculator")] },
+];
+
+/** Flat compatibility export used by search and destination validation. */
+export const SYSTEM_ADMIN_ITEMS: SystemAdminItem[] = [
+  SYSTEM_ADMIN_DASHBOARD,
+  ...SYSTEM_ADMIN_GROUPS.flatMap((group) => group.items),
+];
+
+export function systemAdminItemMatchesPath(item: SystemAdminItem, pathname: string): boolean {
+  return pathname === item.path || pathname.startsWith(`${item.path}/`);
+}
 
 /** Unused icon references kept for tree-shaking clarity. */
 void [Route, Fuel, Wrench, Sprout];
