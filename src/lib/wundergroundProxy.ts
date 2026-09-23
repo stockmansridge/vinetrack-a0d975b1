@@ -257,8 +257,8 @@ async function callWuProxy<T = any>(
  * Routed through the authenticated `wunderground-proxy` edge function
  * (action "current"), which resolves the configured station server-side and
  * writes the observation to vineyard_weather_observations with
- * source = 'wunderground_pws'. The browser never calls api.weather.com and
- * never supplies a station id for this action.
+ * source = 'wunderground_pws'. The browser never calls the Weather
+ * Underground HTTP API directly and never supplies a station id here.
  */
 export async function refreshWundergroundObservations(
   vineyardId: string,
