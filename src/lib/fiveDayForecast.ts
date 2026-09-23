@@ -442,22 +442,26 @@ export async function fetchFiveDayForecastFromProvider(
     // Preference lookup failure falls back to the resolved daily source.
   }
 
+  /**
+   * Completes any primary forecast with the supplementary detailed service.
+   * The primary provider stays displayed and authoritative; only missing
+   * fields are filled. Applied to every primary provider, present and future.
+   */
+  const complete = async (primary: FiveDayForecast): Promise<FiveDayForecast> => {
+    const needsSupplement =
+      needsSprayDetailSupplement(primary) ||
+      primary.days.every((day) => day.humidityMaxPct == null) ||
+      primary.days.every((day) => !day.conditionDescription);
+    if (!needsSupplement) return primary;
+    const coords = await getVineyardCoords(vineyardId);
+    if (!coords) return primary;
+    const extra = await fetchDetailedOpenMeteo(coords.lat, coords.lon, timezone);
+    return extra.available ? supplementForecast(primary, extra.forecast) : primary;
+  };
+
   if (preference === "willyweather") {
     const willy = await fetchWillyWeather(vineyardId, timezone);
-    if (willy) {
-      // WillyWeather remains primary for everything it actually provides.
-      const needsSupplement =
-        willy.days.every((day) => day.humidityMaxPct == null) ||
-        willy.days.every((day) => !day.conditionDescription);
-      if (needsSupplement) {
-        const coords = await getVineyardCoords(vineyardId);
-        if (coords) {
-          const extra = await fetchDetailedOpenMeteo(coords.lat, coords.lon, timezone);
-          if (extra.available) return { available: true, forecast: supplementForecast(willy, extra.forecast) };
-        }
-      }
-      return { available: true, forecast: willy };
-    }
+    if (willy) return { available: true, forecast: await complete(willy) };
   }
 
   const daily = await fetchRainForecast(vineyardId, FORECAST_DAYS);
