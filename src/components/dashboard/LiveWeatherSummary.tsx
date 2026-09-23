@@ -363,7 +363,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
               <span className="text-xs text-muted-foreground">{reading.station_name}</span>
             )}
             <span className="text-xs text-muted-foreground">
-              {davisRefreshing ? "Refreshing…" : observedAgo ? `Updated ${observedAgo} ago` : ""}
+              {observationsRefreshing ? "Refreshing…" : observedAgo ? `Updated ${observedAgo} ago` : ""}
             </span>
           </div>
           {stale && observationsOk && (
