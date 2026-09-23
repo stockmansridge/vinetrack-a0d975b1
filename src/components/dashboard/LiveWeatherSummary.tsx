@@ -1,8 +1,9 @@
 // Vineyard weather for the Live Dashboard.
 //
 // Two distinct data products, in two separate inner cards:
-//   1. "Live observations" — MEASURED data from Davis WeatherLink
-//   2. "5-day forecast"    — FORECAST data from the configured provider
+//   1. "Live observations" — MEASURED data from the vineyard's configured
+//      local observation provider (Davis WeatherLink or Weather Underground)
+//   2. "5-day forecast"    — FORECAST data from the configured forecast provider
 // Observations are never called forecasts and forecast samples are never
 // called observations.
 import { useEffect, useRef, useState } from "react";
@@ -25,9 +26,16 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   fetchLiveWeather,
-  refreshDavisObservations,
   type LiveWeatherReading,
 } from "@/lib/weatherStatusQuery";
+import {
+  fetchLocalObservationProvider,
+  refreshObservationProvider,
+  observationFailureTitle,
+  observationProviderLabel,
+  noNewerObservationsMessage,
+  type LocalObservationProvider,
+} from "@/lib/localObservationProvider";
 import {
   summarizeForecast,
   forecastUnavailableReason,
@@ -119,7 +127,8 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   // Forecast fetch mode: set to true only for a manual Refresh so the shared
   // server-side cache is bypassed for that one request.
   const forceForecast = useRef(false);
-  const autoDavisAt = useRef(0);
+  // Throttle for the provider-neutral automatic stale top-up.
+  const autoObservationRefreshAt = useRef(0);
 
   const weatherQ = useQuery({
     queryKey: ["live-weather", vineyardId],
@@ -141,7 +150,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   });
 
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
-  const [davisRefreshing, setDavisRefreshing] = useState(false);
+  const [observationsRefreshing, setObservationsRefreshing] = useState(false);
 
   const weather = weatherQ.data;
   const forecast = forecastQ.data;
@@ -154,25 +163,37 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   const observationsOk = !!(weather && weather.available && reading);
   const forecastOk = !!(forecast && forecast.available && forecast.forecast.days?.length);
 
-  // Automatic top-up: only ask Davis for new data when the server says its
-  // cached observation is stale — never every polling tick.
+  // Which local observation provider is configured/active for this vineyard.
+  // Resolved from the existing weather-integration status, never assumed.
+  const providerQ = useQuery({
+    queryKey: ["local-observation-provider", vineyardId],
+    enabled: !!vineyardId,
+    staleTime: 5 * 60_000,
+    queryFn: () => fetchLocalObservationProvider(vineyardId, reading?.source ?? null),
+  });
+  const observationProvider: LocalObservationProvider = providerQ.data ?? "none";
+
+  // Automatic top-up: only ask the ACTIVE provider for new data when the
+  // server says its cached observation is stale — never every polling tick,
+  // and never a provider that is not configured for this vineyard.
   useEffect(() => {
     if (!vineyardId || !weather || !weather.available || !weather.stale) return;
-    if (davisRefreshing) return;
-    if (Date.now() - autoDavisAt.current < 5 * 60_000) return;
-    autoDavisAt.current = Date.now();
+    if (observationsRefreshing) return;
+    if (Date.now() - autoObservationRefreshAt.current < 5 * 60_000) return;
+    autoObservationRefreshAt.current = Date.now();
     let cancelled = false;
     (async () => {
-      setDavisRefreshing(true);
-      const res = await refreshDavisObservations(vineyardId);
+      setObservationsRefreshing(true);
+      const res = await refreshObservationProvider(vineyardId, observationProvider);
+      // Providers without an upstream refresh action simply re-read the cache.
       if (!cancelled && res.ok) await weatherQ.refetch({ cancelRefetch: true });
-      if (!cancelled) setDavisRefreshing(false);
+      if (!cancelled) setObservationsRefreshing(false);
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vineyardId, weather?.available, (weather as any)?.stale]);
+  }, [vineyardId, weather?.available, (weather as any)?.stale, observationProvider]);
 
   const forecastBadge = (() => {
     if (forecastQ.isLoading) return { label: "Loading forecast…", title: undefined as string | undefined };
@@ -193,7 +214,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   })();
   const forecastIsWilly = forecastSourceLabel === "WillyWeather";
 
-  const refreshing = weatherQ.isFetching || forecastQ.isFetching || davisRefreshing;
+  const refreshing = weatherQ.isFetching || forecastQ.isFetching || observationsRefreshing;
 
   const forecastFreshness = (() => {
     if (forecastQ.isFetching) return "Refreshing…";
@@ -210,56 +231,69 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   /**
    * Manual Refresh. The two sources are refreshed independently and cannot
    * fail each other:
-   *   Davis:    davis-proxy action "current" (real WeatherLink fetch, updates
-   *             vineyard_weather_observations) → re-read
-   *             get_vineyard_current_weather() → update Live observations.
-   *   Forecast: bypass the shared forecast cache, fetch the provider, replace
-   *             the cache. On failure the previous cached forecast stays.
+   *   Observations: the ACTIVE local observation provider is refreshed where
+   *                 the canonical backend exposes a current-fetch action
+   *                 (Davis: davis-proxy "current"). Providers without one
+   *                 (Weather Underground today) simply re-read
+   *                 get_vineyard_current_weather() — that is not an error.
+   *   Forecast:     bypass the shared forecast cache, fetch the provider,
+   *                 replace the cache. On failure the cached forecast stays.
    */
   const refreshAll = async () => {
     const previousObservedAt = reading?.observed_at ?? null;
-    setDavisRefreshing(true);
+    setObservationsRefreshing(true);
     forceForecast.current = true;
 
-    const davisTask = (async () => {
-      const proxy = await refreshDavisObservations(vineyardId);
+    const observationTask = (async () => {
+      const provider = providerQ.data ?? (await fetchLocalObservationProvider(vineyardId, reading?.source ?? null));
+      const refresh = await refreshObservationProvider(vineyardId, provider);
       const res = await weatherQ.refetch({ cancelRefetch: true });
-      return { proxy, result: res.data };
+      return { provider, refresh, result: res.data };
     })();
     const forecastTask = forecastQ.refetch({ cancelRefetch: true });
 
-    const [davisOutcome, forecastOutcome] = await Promise.allSettled([davisTask, forecastTask]);
-    setDavisRefreshing(false);
+    const [observationOutcome, forecastOutcome] = await Promise.allSettled([observationTask, forecastTask]);
+    setObservationsRefreshing(false);
     forceForecast.current = false;
 
-    const davis = davisOutcome.status === "fulfilled" ? davisOutcome.value : null;
+    const obs = observationOutcome.status === "fulfilled" ? observationOutcome.value : null;
     const forecastResult = forecastOutcome.status === "fulfilled" ? forecastOutcome.value.data : undefined;
 
-    const observationsSuccess = !!(davis?.proxy.ok && davis.result && davis.result.available);
+    const provider: LocalObservationProvider = obs?.provider ?? observationProvider;
+    const cacheUsable = !!(obs?.result && obs.result.available);
+    // Observation success = the active provider step did not fail AND usable
+    // observation data is available after the cache re-read. It is NOT
+    // "davis.proxy.ok".
+    const observationsSuccess = !!(obs && obs.refresh.ok && cacheUsable);
     const forecastSuccess = !!(forecastResult && forecastResult.available && !(forecastResult as any).refreshFailed);
 
     if (observationsSuccess || forecastSuccess) setLastRefreshedAt(new Date());
 
     if (!observationsSuccess) {
-      const why = davis
-        ? !davis.proxy.ok
-          ? davis.proxy.message || "Davis WeatherLink could not be reached."
-          : davis.result && davis.result.available === false
-            ? davis.result.reason === "rpc_missing"
-              ? "Server-side weather function is not deployed."
-              : davis.result.reason === "not_configured"
-                ? "No weather station is configured for this vineyard."
-                : davis.result.reason === "no_data"
-                  ? "The station has not reported an observation yet."
-                  : davis.result.message || "Live readings could not be fetched."
-            : "Live readings could not be fetched."
-        : "Live readings could not be fetched.";
-      toast({ title: "Live observations not refreshed (Davis WeatherLink)", description: why });
-    } else if (previousObservedAt && davis?.result && davis.result.available && davis.result.reading.observed_at === previousObservedAt) {
-      toast({
-        title: "No newer observations",
-        description: "Davis WeatherLink returned no newer data — the station hasn't reported since the last update.",
-      });
+      const providerMessage =
+        obs && !obs.refresh.ok ? obs.refresh.message || "The weather station could not be reached." : null;
+      const why =
+        providerMessage ??
+        (obs?.result && obs.result.available === false
+          ? obs.result.reason === "rpc_missing"
+            ? "Server-side weather function is not deployed."
+            : obs.result.reason === "not_configured"
+              ? "No weather station is configured for this vineyard."
+              : obs.result.reason === "no_data"
+                ? "The station has not reported an observation yet."
+                : obs.result.message || "Live readings could not be fetched."
+          : "Live readings could not be fetched.");
+      toast({ title: observationFailureTitle(provider), description: why });
+    } else if (
+      previousObservedAt &&
+      obs?.result &&
+      obs.result.available &&
+      obs.result.reading.observed_at === previousObservedAt
+    ) {
+      // Only a provider that actually performed an upstream fetch can claim
+      // there was nothing newer.
+      const description = obs ? noNewerObservationsMessage(obs.refresh) : null;
+      if (description) toast({ title: "No newer observations", description });
     }
 
     if (!forecastSuccess) {
@@ -300,7 +334,11 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   const observedAgo = reading?.observed_at
     ? formatDistanceToNowStrict(new Date(reading.observed_at))
     : null;
-  const observationSourceLabel = reading ? sourceLabel(reading.source) : "Davis WeatherLink";
+  // The observation row's own source stays authoritative; the configured
+  // provider label is only a fallback before any reading exists.
+  const observationSourceLabel = reading
+    ? sourceLabel(reading.source)
+    : observationProviderLabel(observationProvider);
 
   return (
     <Card className="space-y-5 bg-muted/20 p-4">
@@ -325,7 +363,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
               <span className="text-xs text-muted-foreground">{reading.station_name}</span>
             )}
             <span className="text-xs text-muted-foreground">
-              {davisRefreshing ? "Refreshing…" : observedAgo ? `Updated ${observedAgo} ago` : ""}
+              {observationsRefreshing ? "Refreshing…" : observedAgo ? `Updated ${observedAgo} ago` : ""}
             </span>
           </div>
           {stale && observationsOk && (
