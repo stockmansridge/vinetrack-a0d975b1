@@ -257,6 +257,10 @@ export function createRegionFormatters(
       const x = n(v);
       return x == null ? null : distImperial ? x * KM_PER_MI : x;
     },
+    temperatureToCanonical: (v) => {
+      const x = n(v);
+      return x == null ? null : distImperial ? ((x - 32) * 5) / 9 : x;
+    },
     date: fmtDate,
     dateShort: fmtDateShort,
     dateTime: fmtDateTime,
