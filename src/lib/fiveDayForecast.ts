@@ -164,6 +164,7 @@ export function bucketHourlyForecast(payload: OpenMeteoPayload): Map<string, For
       temp: finite(temperatures[index]),
       wind: finite(winds[index]),
       humidity: finite(humidities[index]),
+      rain: finite(rains[index]),
     });
     raw.set(key, values);
   });
