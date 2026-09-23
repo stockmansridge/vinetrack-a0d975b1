@@ -27,7 +27,7 @@ import {
   sprayThresholdsFrom,
   type ForecastHighlightPreferences,
 } from "@/lib/forecastHighlightPreferences";
-import { calculateSprayWindows, type SprayWindow } from "@/lib/sprayForecastWindows";
+import { calculateSprayWindows, sprayDisplayBands, type SprayWindow } from "@/lib/sprayForecastWindows";
 import type { RegionFormatters } from "@/lib/regionFormatters";
 
 interface Props {
