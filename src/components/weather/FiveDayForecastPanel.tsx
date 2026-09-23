@@ -5,6 +5,7 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
+  ReferenceArea,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
