@@ -1189,12 +1189,11 @@ function WorkTaskDrawer({
   });
 
   const drawerCanSeeCosts = useCanSeeCosts();
-  // Material Costs (Phase 3) — temporarily System Admin only; see
-  // src/lib/materialCostsAccess.ts for the single gate.
-  const materialCostsAccess = useMaterialCostsEnabled();
+  // Material Costs are available to anyone who can edit Work Tasks (System
+  // Admin gate removed; the Material Library stays gated separately).
   const { data: vineyardMaterialLines = [] } = useWorkTaskMaterials(
     vineyardId,
-    materialCostsAccess.enabled,
+    true,
   );
   const taskMaterialLines = useMemo<WorkTaskMaterial[]>(
     () =>
