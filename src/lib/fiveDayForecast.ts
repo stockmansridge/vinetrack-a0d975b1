@@ -145,7 +145,11 @@ export function bucketHourlyForecast(payload: OpenMeteoPayload): Map<string, For
   const temperatures = payload.hourly?.temperature_2m ?? [];
   const winds = payload.hourly?.wind_speed_10m ?? [];
   const humidities = payload.hourly?.relative_humidity_2m ?? [];
-  const raw = new Map<string, Array<{ temp: number | null; wind: number | null; humidity: number | null }>>();
+  const rains = payload.hourly?.precipitation ?? [];
+  const raw = new Map<
+    string,
+    Array<{ temp: number | null; wind: number | null; humidity: number | null; rain: number | null }>
+  >();
 
   times.forEach((timestamp, index) => {
     const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):/.exec(timestamp);
