@@ -483,7 +483,10 @@ export async function fetchFiveDayForecastFromProvider(
     }
   }
 
-  return { available: true, forecast: normaliseDaily(daily.days, daily.source, timezone) };
+  return {
+    available: true,
+    forecast: await complete(normaliseDaily(daily.days, daily.source, timezone)),
+  };
 }
 
 /**
