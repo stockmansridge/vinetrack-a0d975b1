@@ -98,6 +98,10 @@ export default function GrowthStageHeatmap({
   const [selectedObs, setSelectedObs] = useState<HeatObservation | null>(null);
   const [fitKey, setFitKey] = useState(0);
   const [showBoundaries, setShowBoundaries] = useState(true);
+  // Presentation-only toggle (matches mobile "Show observations"). Hides the
+  // observation markers; the heat model, interpolation, phase/vintage logic
+  // and statistics are computed from the same observations regardless.
+  const [showObservations, setShowObservations] = useState(true);
   const [mapProvider, setMapProvider] = useState<"apple" | "fallback">("apple");
   const [mapReason, setMapReason] = useState<string | null>(null);
 
@@ -238,7 +242,7 @@ export default function GrowthStageHeatmap({
   const mapProps = {
     blocks: model.blocks,
     overlays,
-    observations: model.qualifying,
+    observations: showObservations ? model.qualifying : [],
     staleIds,
     fitPoints,
     fitKey,
@@ -362,6 +366,16 @@ export default function GrowthStageHeatmap({
             />
             <Label htmlFor="heatmap-boundaries" className="text-xs">
               Block boundaries &amp; names
+            </Label>
+          </div>
+          <div className="flex items-center gap-2 pb-1">
+            <Switch
+              id="heatmap-observations"
+              checked={showObservations}
+              onCheckedChange={setShowObservations}
+            />
+            <Label htmlFor="heatmap-observations" className="text-xs">
+              Show observations
             </Label>
           </div>
           <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
