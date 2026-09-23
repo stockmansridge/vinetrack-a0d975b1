@@ -299,7 +299,9 @@ export function supplementForecast(
     const periods = needsHumidity
       ? day.periods.map((period) => {
           const match = extra.periods.find((p) => p.startHour === period.startHour);
-          return match ? { ...period, humidityMaxPct: match.humidityMaxPct } : period;
+          return match
+            ? { ...period, humidityMaxPct: match.humidityMaxPct, humidityMinPct: match.humidityMinPct }
+            : period;
         })
       : day.periods;
     return {
