@@ -185,6 +185,19 @@ export function bucketDayDetail(detail: WillyDayDetail): ForecastPeriod[] {
   add(temps, detail.temperatureEntries, TEMP_KEYS);
   add(winds, detail.windEntries, WIND_KEYS);
   add(humidity, detail.humidityEntries, HUMIDITY_KEYS);
+  // Rainfall: genuine timestamped intra-day entries only. A day carrying a
+  // single entry is a daily figure, never spread across four-hour periods.
+  const rainEntries = detail.rainEntries ?? [];
+  const intraDayRain = rainEntries.filter((entry) => entryTime(entry)?.date === detail.date);
+  if (intraDayRain.length > 1) {
+    intraDayRain.forEach((entry) => {
+      const t = entryTime(entry)!;
+      const bucket = Math.floor(t.hour / 4);
+      const list = rain.get(bucket) ?? [];
+      list.push(rainAmount(entry));
+      rain.set(bucket, list);
+    });
+  }
 
   const periods: ForecastPeriod[] = [];
   for (let bucket = 0; bucket < BUCKETS_PER_DAY; bucket += 1) {
