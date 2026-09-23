@@ -268,7 +268,7 @@ export default function LiveDashboardPage() {
     () =>
       allTrips.map((t) => ({
         trip: t,
-        status: statusOf(t),
+        status: tripStatusOf(t),
       })),
     [allTrips],
   );
