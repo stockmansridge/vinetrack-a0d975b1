@@ -11,6 +11,11 @@ import {
   RefreshCw,
   Map as MapIcon,
 } from "lucide-react";
+import {
+  tripStatusOf,
+  buildLiveDashboardSummary,
+  type LiveTripStatus as Status,
+} from "@/lib/liveDashboardStatus";
 
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
@@ -68,17 +73,6 @@ import { formatTripNameLabel } from "@/lib/tripDisplay";
 const tripDisplay = (t: Trip): string =>
   formatTripNameLabel(t.trip_title, t.tracking_pattern, tripFn(t.trip_function) ?? "Trip");
 
-type Status = "active" | "paused" | "finished" | "older";
-
-function statusOf(t: Trip): Status {
-  const ended = !!t.end_time;
-  if (!ended) {
-    return t.is_paused ? "paused" : "active";
-  }
-  const ms = new Date(t.end_time!).getTime();
-  if (!isNaN(ms) && Date.now() - ms < 24 * 3600 * 1000) return "finished";
-  return "older";
-}
 
 function fmtDuration(start?: string | null, end?: string | null): string {
   if (!start) return "—";
@@ -274,7 +268,7 @@ export default function LiveDashboardPage() {
     () =>
       allTrips.map((t) => ({
         trip: t,
-        status: statusOf(t),
+        status: tripStatusOf(t),
       })),
     [allTrips],
   );
@@ -336,19 +330,7 @@ export default function LiveDashboardPage() {
     visible.find((v) => v.trip.id === selectedTripId)?.trip ?? null;
 
   // Summary
-  const summary = useMemo(() => {
-    let active = 0,
-      paused = 0,
-      finished = 0;
-    const operators = new Set<string>();
-    for (const { trip, status } of enriched) {
-      if (status === "active") active++;
-      else if (status === "paused") paused++;
-      else if (status === "finished") finished++;
-      if (status !== "older" && trip.person_name) operators.add(trip.person_name);
-    }
-    return { active, paused, finished, operators: operators.size };
-  }, [enriched]);
+  const summary = useMemo(() => buildLiveDashboardSummary(allTrips), [allTrips]);
 
   // Filter option lists from data
   const operators = useMemo(() => {
@@ -398,10 +380,10 @@ export default function LiveDashboardPage() {
 
       {/* Summary */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-        <SummaryCard label="Active trips" value={summary.active} Icon={Activity} />
-        <SummaryCard label="Paused trips" value={summary.paused} Icon={PauseCircle} />
-        <SummaryCard label="Finished today" value={summary.finished} Icon={CheckCircle2} />
-        <SummaryCard label="Operators active today" value={summary.operators} Icon={Users} />
+        <SummaryCard label="Active trips" value={summary.active} Icon={Activity} testId="summary-active" />
+        <SummaryCard label="Paused trips" value={summary.paused} Icon={PauseCircle} testId="summary-paused" />
+        <SummaryCard label="Finished today" value={summary.finished} Icon={CheckCircle2} testId="summary-finished" />
+        <SummaryCard label="Operators active today" value={summary.operators} Icon={Users} testId="summary-operators" />
       </div>
 
       {/* Live weather + rain forecast */}
@@ -484,6 +466,7 @@ export default function LiveDashboardPage() {
                   return (
                     <TableRow
                       key={trip.id}
+                      data-testid={`trip-row-${trip.id}`}
                       className={`cursor-pointer ${
                         selectedTripId === trip.id ? "bg-muted/50" : ""
                       }`}
@@ -563,13 +546,15 @@ function SummaryCard({
   label,
   value,
   Icon,
+  testId,
 }: {
   label: string;
   value: number;
   Icon: any;
+  testId?: string;
 }) {
   return (
-    <Card>
+    <Card data-testid={testId}>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
         <Icon className="h-4 w-4 text-muted-foreground" />
