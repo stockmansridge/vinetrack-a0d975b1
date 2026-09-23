@@ -452,7 +452,8 @@ export function FiveDayForecastPanel({ vineyardId, forecast, rf, freshnessLabel,
               </span>
             </>
           ) : (
-            <span>Detailed spray windows unavailable from this forecast source.</span>
+            // Data availability, not a limitation of the selected provider.
+            <span>Detailed forecast data is currently unavailable for spray-window calculation.</span>
           )}
         </div>
       </div>
