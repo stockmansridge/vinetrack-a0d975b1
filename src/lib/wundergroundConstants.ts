@@ -14,6 +14,12 @@ export const WU_PROXY_ACTIONS = {
   backfillDates: "backfill_dates",
   /** Legacy server-driven 14-day backfill (kept as a fallback). */
   backfillLegacy: "backfill",
+  /**
+   * Fetch the station's CURRENT observation and write it to
+   * vineyard_weather_observations (source = wunderground_pws).
+   * The edge function resolves the configured station itself.
+   */
+  current: "current",
 } as const;
 
 export const WU_PROVIDER = "wunderground" as const;

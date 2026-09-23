@@ -444,3 +444,35 @@ export async function fetchLiveWeather(vineyardId: string): Promise<LiveWeatherR
   const row = Array.isArray(res.data) ? res.data[0] : res.data;
   return mapLiveWeatherRow(row);
 }
+
+/**
+ * SQL 249: the vineyard's explicitly selected current-observation provider.
+ *
+ * Returns the RAW backend value ('davis_weatherlink' | 'wunderground_pws' |
+ * 'none'), or null when the vineyard has made no explicit selection yet
+ * (legacy vineyards) or the RPC is unavailable. Mapping onto the Portal's
+ * provider union happens in localObservationProvider.ts.
+ */
+export async function fetchServerObservationProviderSelection(
+  vineyardId: string,
+): Promise<string | null> {
+  try {
+    const res = await (supabase.rpc as any)(
+      "get_vineyard_current_observation_provider",
+      { p_vineyard_id: vineyardId },
+    );
+    if (res.error) return null;
+    const row = Array.isArray(res.data) ? res.data[0] : res.data;
+    if (row == null) return null;
+    const raw =
+      typeof row === "string"
+        ? row
+        : row.current_observation_provider ??
+          row.provider ??
+          row.get_vineyard_current_observation_provider ??
+          null;
+    return raw ? String(raw) : null;
+  } catch {
+    return null;
+  }
+}

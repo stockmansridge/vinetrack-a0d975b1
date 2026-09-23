@@ -5,15 +5,19 @@
 // different role from the FORECAST provider (WillyWeather / Open-Meteo),
 // which is resolved elsewhere and is not touched here.
 //
-// Provider knowledge comes from the existing Portal weather integration
-// status (`get_vineyard_weather_integration` via
-// fetchWeatherStatusForVineyard). This module adds no second
-// provider-precedence system of its own.
+// Authority order (matches SQL 249):
+//   1. The vineyard's explicit server selection
+//      (get_vineyard_current_observation_provider).
+//   2. Legacy vineyards with no explicit selection (RPC returns null):
+//      Davis first if usable, otherwise Weather Underground.
+// No third precedence rule exists.
 import {
   fetchWeatherStatusForVineyard,
+  fetchServerObservationProviderSelection,
   refreshDavisObservations,
   type WeatherIntegrationStatus,
 } from "@/lib/weatherStatusQuery";
+import { refreshWundergroundObservations } from "@/lib/wundergroundProxy";
 
 export type LocalObservationProvider = "davis_weatherlink" | "wunderground" | "none";
 
@@ -21,12 +25,9 @@ export interface ObservationProviderRefresh {
   provider: LocalObservationProvider;
   /** True only when an upstream provider fetch was actually issued. */
   attempted: boolean;
-  /** False only for a genuine provider failure — never for "not available yet". */
+  /** False only for a genuine provider failure. */
   ok: boolean;
-  reason?:
-    | "provider_error"
-    | "backend_current_refresh_not_available"
-    | "no_provider_configured";
+  reason?: "provider_error" | "no_provider_configured";
   message?: string;
 }
 
@@ -45,40 +46,59 @@ export function providerFromObservationSource(
   return SOURCE_TO_PROVIDER[source.toLowerCase()] ?? null;
 }
 
+/**
+ * Single mapping point between the backend provider values
+ * ('davis_weatherlink' | 'wunderground_pws' | 'none') and the Portal union.
+ * Returns null when the value carries no explicit selection.
+ */
+export function mapBackendObservationProvider(
+  raw?: string | null,
+): LocalObservationProvider | null {
+  if (!raw) return null;
+  const value = raw.toLowerCase().trim();
+  if (value === "none") return "none";
+  return SOURCE_TO_PROVIDER[value] ?? null;
+}
+
 function isActive(s?: WeatherIntegrationStatus | null): boolean {
   return !!s?.configured && s.is_active !== false;
 }
 
 /**
- * Resolves the active local observation provider from existing integration
- * status. The current observation source only breaks ties between two active
- * providers; it never invents a provider that is not configured.
+ * Legacy fallback used only when the vineyard has no explicit server
+ * selection: Davis first if usable, otherwise Weather Underground.
  */
 export function resolveLocalObservationProvider(input: {
   davis?: WeatherIntegrationStatus | null;
   wunderground?: WeatherIntegrationStatus | null;
   observationSource?: string | null;
+  /** Raw value from get_vineyard_current_observation_provider, if known. */
+  serverSelection?: string | null;
 }): LocalObservationProvider {
-  const davisActive = isActive(input.davis);
-  const wuActive = isActive(input.wunderground);
-  const fromSource = providerFromObservationSource(input.observationSource);
+  const explicit = mapBackendObservationProvider(input.serverSelection);
+  if (explicit) return explicit;
 
-  if (davisActive && wuActive) {
-    return fromSource ?? "davis_weatherlink";
-  }
-  if (davisActive) return "davis_weatherlink";
-  if (wuActive) return "wunderground";
+  if (isActive(input.davis)) return "davis_weatherlink";
+  if (isActive(input.wunderground)) return "wunderground";
+  const fromSource = providerFromObservationSource(input.observationSource);
   if (fromSource) return fromSource;
   if (input.davis?.configured) return "davis_weatherlink";
   if (input.wunderground?.configured) return "wunderground";
   return "none";
 }
 
-/** Reads integration status and resolves the active observation provider. */
+/**
+ * Resolves the active observation provider: explicit server selection first,
+ * integration status only as the legacy fallback.
+ */
 export async function fetchLocalObservationProvider(
   vineyardId: string,
   observationSource?: string | null,
 ): Promise<LocalObservationProvider> {
+  const serverSelection = await fetchServerObservationProviderSelection(vineyardId);
+  const explicit = mapBackendObservationProvider(serverSelection);
+  if (explicit) return explicit;
+
   const status = await fetchWeatherStatusForVineyard(vineyardId);
   return resolveLocalObservationProvider({
     davis: status.davis,
@@ -88,13 +108,9 @@ export async function fetchLocalObservationProvider(
 }
 
 /**
- * Provider-neutral current-observation refresh.
- *
- * Davis has a canonical current-fetch action (davis-proxy `current`).
- * Weather Underground has no Portal-callable current-refresh action in the
- * canonical backend yet, and the browser must never call WU directly, so the
- * WU branch reports "not attempted" WITHOUT reporting an error; the caller
- * simply re-reads the provider-neutral current-weather cache.
+ * Provider-neutral current-observation refresh. Both Davis (davis-proxy
+ * "current") and Weather Underground (wunderground-proxy "current") perform a
+ * genuine upstream fetch and write the observation server-side.
  */
 export async function refreshObservationProvider(
   vineyardId: string,
@@ -111,13 +127,16 @@ export async function refreshObservationProvider(
         message: proxy.ok ? undefined : proxy.message,
       };
     }
-    case "wunderground":
+    case "wunderground": {
+      const proxy = await refreshWundergroundObservations(vineyardId);
       return {
         provider,
-        attempted: false,
-        ok: true,
-        reason: "backend_current_refresh_not_available",
+        attempted: true,
+        ok: proxy.ok,
+        reason: proxy.ok ? undefined : "provider_error",
+        message: proxy.ok ? undefined : proxy.message,
       };
+    }
     default:
       return { provider: "none", attempted: false, ok: true, reason: "no_provider_configured" };
   }
@@ -140,21 +159,25 @@ export function observationFailureTitle(provider: LocalObservationProvider): str
     case "davis_weatherlink":
       return "Live observations not refreshed (Davis WeatherLink)";
     case "wunderground":
-      return "Live observations unavailable (Weather Underground)";
+      return "Live observations not refreshed (Weather Underground)";
     default:
       return "No local observation source configured";
   }
 }
 
 /**
- * Provider-aware "nothing newer" wording. Only Davis performs an upstream
- * fetch today, so only Davis can truthfully report no newer data.
+ * Provider-aware "nothing newer" wording. Only truthful after a successful
+ * upstream fetch actually happened.
  */
 export function noNewerObservationsMessage(
   refresh: ObservationProviderRefresh,
 ): string | null {
-  if (refresh.provider === "davis_weatherlink" && refresh.attempted && refresh.ok) {
+  if (!refresh.attempted || !refresh.ok) return null;
+  if (refresh.provider === "davis_weatherlink") {
     return "Davis WeatherLink returned no newer data — the station hasn't reported since the last update.";
+  }
+  if (refresh.provider === "wunderground") {
+    return "Weather Underground returned no newer data — the station hasn't reported since the last update.";
   }
   return null;
 }

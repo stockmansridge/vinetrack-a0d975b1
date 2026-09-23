@@ -231,11 +231,11 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   /**
    * Manual Refresh. The two sources are refreshed independently and cannot
    * fail each other:
-   *   Observations: the ACTIVE local observation provider is refreshed where
-   *                 the canonical backend exposes a current-fetch action
-   *                 (Davis: davis-proxy "current"). Providers without one
-   *                 (Weather Underground today) simply re-read
-   *                 get_vineyard_current_weather() — that is not an error.
+   *   Observations: the ACTIVE local observation provider performs its
+   *                 canonical current fetch (Davis: davis-proxy "current",
+   *                 Weather Underground: wunderground-proxy "current"), then
+   *                 get_vineyard_current_weather() is re-read. With no
+   *                 selected provider only the cache is re-read.
    *   Forecast:     bypass the shared forecast cache, fetch the provider,
    *                 replace the cache. On failure the cached forecast stays.
    */
