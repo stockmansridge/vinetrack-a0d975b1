@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 import {
   groupMaterialsByCategory,
@@ -70,7 +70,7 @@ describe("Material Costs access gate", () => {
     // Materials, Material Total and the roll-up. Only the Material Library
     // stays gated. Guard the regression at the source level.
     const source = readFileSync(
-      fileURLToPath(new URL("../pages/setup/WorkTasksPage.tsx", import.meta.url)),
+      join(process.cwd(), "src/pages/setup/WorkTasksPage.tsx"),
       "utf8",
     );
     expect(source).not.toContain("useMaterialCostsEnabled");
