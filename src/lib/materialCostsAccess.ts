@@ -1,11 +1,15 @@
-// TEMPORARY Material Costs access gate (Phase 3).
+// Material Library access gate.
 //
-// Material Costs is System Admin only until wider release is confirmed. This is
-// the ONE place the gate lives: it reuses the existing authoritative System
-// Admin status (src/lib/systemAdmin) and adds no database role, no feature
-// column and no RLS change.
+// The Material Library (Setup → Material Library) is System Admin only until
+// wider release is confirmed. This is the ONE place that gate lives: it reuses
+// the existing authoritative System Admin status (src/lib/systemAdmin) and adds
+// no database role, no feature column and no RLS change.
 //
-// To release the feature later: make `useMaterialCostsEnabled` return
+// Work Task Materials are NOT gated here — the temporary System Admin
+// restriction on viewing/editing task material lines was removed; anyone who
+// can normally edit a Work Task can use Materials.
+//
+// To release the library later: make `useMaterialCostsEnabled` return
 // `{ enabled: true, loading: false }` (or delete it and its call sites'
 // conditionals). No backend or database change is required.
 import { useIsSystemAdmin } from "@/lib/systemAdmin";

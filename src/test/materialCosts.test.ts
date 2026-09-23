@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 import {
   groupMaterialsByCategory,
@@ -61,6 +63,19 @@ describe("Material Costs access gate", () => {
 
   it("keeps the Material Library route owner/manager restricted", () => {
     expect(getAllowedRoles("/setup/materials")).toEqual(["owner", "manager"]);
+  });
+
+  it("no longer gates Work Task Materials on System Admin status", () => {
+    // The temporary gate was removed: anyone who can edit a Work Task sees
+    // Materials, Material Total and the roll-up. Only the Material Library
+    // stays gated. Guard the regression at the source level.
+    const source = readFileSync(
+      join(process.cwd(), "src/pages/setup/WorkTasksPage.tsx"),
+      "utf8",
+    );
+    expect(source).not.toContain("useMaterialCostsEnabled");
+    expect(source).not.toContain("materialCostsAccess =");
+    expect(source).not.toContain("materialCostsAccess.enabled");
   });
 });
 
