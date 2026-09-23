@@ -348,7 +348,6 @@ function HighlightSetting({
             value={Number(displayValue.toFixed(2))}
             onChange={(event) => onValue(Number(event.target.value))}
             className="h-8 w-24"
-            disabled={!setting.enabled}
           />
           <span className="text-xs text-muted-foreground">{unit}</span>
         </div>
