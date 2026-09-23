@@ -571,6 +571,7 @@ const SYSTEM_ADMIN_ITEM_LIST: SystemAdminItem[] = [
   { label: "Pins", path: "/admin/pins", icon: MapPin },
   { label: "Spray Records", path: "/admin/spray-records", icon: Beaker },
   { label: "Work Tasks", path: "/admin/work-tasks", icon: ClipboardList },
+  { label: "Trips", path: "/admin/trips", icon: Route },
   { label: "Invitations", path: "/admin/invitations", icon: UserCog },
   { label: "Integrations", path: "/admin/integrations", icon: Plug },
   { label: "Master Catalogue", path: "/admin/master-catalogue", icon: Beaker },
@@ -620,6 +621,7 @@ export const SYSTEM_ADMIN_GROUPS: SystemAdminGroup[] = [
       systemAdminItem("Pins"),
       systemAdminItem("Spray Records"),
       systemAdminItem("Work Tasks"),
+      systemAdminItem("Trips"),
       systemAdminItem("Master Catalogue"),
     ],
   },
@@ -672,7 +674,7 @@ export function systemAdminItemMatchesPath(item: SystemAdminItem, pathname: stri
 }
 
 /** Unused icon references kept for tree-shaking clarity. */
-void [Route, Fuel, Wrench, Sprout];
+void [Fuel, Wrench, Sprout];
 
 export function isViewAccessible(view: NavView, viewer: NavViewer): boolean {
   if (!canAccessRoute(view.path, viewer.role)) return false;

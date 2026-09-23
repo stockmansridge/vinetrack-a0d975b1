@@ -145,13 +145,13 @@ describe("Portal navigation — access", () => {
 });
 
 describe("Portal navigation — System Admin grouping", () => {
-  it("keeps all 28 destinations represented exactly once", () => {
+  it("keeps all 29 destinations represented exactly once", () => {
     const grouped = [
       SYSTEM_ADMIN_DASHBOARD,
       ...SYSTEM_ADMIN_GROUPS.flatMap((group) => group.items),
     ];
-    expect(grouped).toHaveLength(28);
-    expect(new Set(grouped.map((item) => item.path)).size).toBe(28);
+    expect(grouped).toHaveLength(29);
+    expect(new Set(grouped.map((item) => item.path)).size).toBe(29);
     expect(grouped.map((item) => item.path)).toEqual(SYSTEM_ADMIN_ITEMS.map((item) => item.path));
   });
 

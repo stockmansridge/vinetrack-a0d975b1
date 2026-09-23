@@ -299,20 +299,18 @@ export function useAdminWorkTasks(limit = 500) {
   });
 }
 
+/** Global Trip list via the System Admin RPC (SQL 250) — never a direct table query. */
 export function useAdminTrips(limit = 500) {
   return useQuery({
     queryKey: QK.trips(limit),
     staleTime: 30_000,
-    queryFn: async () => {
-      const { data, error } = await (iosSupabase as any)
-        .from("trips")
-        .select("id, vineyard_id, trip_title, trip_function, start_time, end_time, created_at")
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false })
-        .limit(limit);
-      if (error) throw error;
-      return (data ?? []) as AdminTrip[];
-    },
+    queryFn: () =>
+      rpc<AdminTrip[]>("admin_list_trips", {
+        p_vineyard_id: null,
+        p_from: null,
+        p_to: null,
+        p_limit: limit,
+      }).then((d) => d ?? []),
   });
 }
 
