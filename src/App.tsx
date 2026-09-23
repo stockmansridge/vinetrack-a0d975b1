@@ -108,6 +108,7 @@ import AdminInvitationsPage from "./pages/admin/AdminInvitationsPage";
 import AdminPinsPage from "./pages/admin/AdminPinsPage";
 import AdminSprayRecordsPage from "./pages/admin/AdminSprayRecordsPage";
 import AdminWorkTasksPage from "./pages/admin/AdminWorkTasksPage";
+import AdminTripsPage from "./pages/admin/AdminTripsPage";
 import SystemAdminsPage from "./pages/admin/SystemAdminsPage";
 import GuideImagesPage from "./pages/admin/GuideImagesPage";
 import CanopyImagesPage from "./pages/admin/CanopyImagesPage";
@@ -292,6 +293,7 @@ const App = () => (
                     <Route path="/admin/pins" element={<AdminPinsPage />} />
                     <Route path="/admin/spray-records" element={<AdminSprayRecordsPage />} />
                     <Route path="/admin/work-tasks" element={<AdminWorkTasksPage />} />
+                    <Route path="/admin/trips" element={<AdminTripsPage />} />
                     <Route path="/admin/system-admins" element={<SystemAdminsPage />} />
                     <Route path="/admin/billing-grants" element={<BillingGrantsPage />} />
                     <Route path="/admin/access-entitlements" element={<AccessEntitlementsPage />} />
