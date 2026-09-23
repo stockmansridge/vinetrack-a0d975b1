@@ -164,6 +164,7 @@ export function bucketDayDetail(detail: WillyDayDetail): ForecastPeriod[] {
   const temps = new Map<number, Array<number | null>>();
   const winds = new Map<number, Array<number | null>>();
   const humidity = new Map<number, Array<number | null>>();
+  const rain = new Map<number, Array<number | null>>();
   const counts = new Map<number, number>();
 
   const add = (
