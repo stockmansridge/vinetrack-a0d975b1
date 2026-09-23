@@ -126,7 +126,8 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   // Forecast fetch mode: set to true only for a manual Refresh so the shared
   // server-side cache is bypassed for that one request.
   const forceForecast = useRef(false);
-  const autoDavisAt = useRef(0);
+  // Throttle for the provider-neutral automatic stale top-up.
+  const autoObservationRefreshAt = useRef(0);
 
   const weatherQ = useQuery({
     queryKey: ["live-weather", vineyardId],
