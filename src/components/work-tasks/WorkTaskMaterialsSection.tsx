@@ -34,6 +34,7 @@ import {
   groupMaterialsByCategory,
   isPositiveDecimal,
   materialLineSummary,
+  materialUnitOptions,
   materialTotalForTask,
   multiplyDecimals,
   normaliseDecimalInput,
@@ -401,11 +402,18 @@ export function WorkTaskMaterialsSection({
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="mat-unit">Unit</Label>
-                  <Input
+                  <select
                     id="mat-unit"
+                    className="h-9 w-full rounded-md border bg-background px-2 text-sm"
                     value={editor.unit}
                     onChange={(e) => setEditor({ ...editor, unit: e.target.value })}
-                  />
+                  >
+                    {materialUnitOptions(editor.unit).map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="space-y-1">

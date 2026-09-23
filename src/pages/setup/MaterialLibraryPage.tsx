@@ -30,6 +30,7 @@ import {
   customMaterialCategories,
   decimalToNumber,
   groupMaterialsByCategory,
+  materialUnitOptions,
   normaliseDecimalInput,
   searchMaterials,
   type EffectiveMaterial,
@@ -346,11 +347,18 @@ export default function MaterialLibraryPage() {
               )}
               <div className="space-y-1">
                 <Label htmlFor="lib-unit">Unit</Label>
-                <Input
+                <select
                   id="lib-unit"
+                  className="h-9 w-full rounded-md border bg-background px-2 text-sm"
                   value={edit.unit}
                   onChange={(e) => setEdit({ ...edit, unit: e.target.value })}
-                />
+                >
+                  {materialUnitOptions(edit.unit).map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="space-y-1">
                 <Label htmlFor="lib-cost">Default unit cost</Label>
