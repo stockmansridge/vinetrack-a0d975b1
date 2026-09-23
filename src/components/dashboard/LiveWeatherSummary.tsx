@@ -213,7 +213,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   })();
   const forecastIsWilly = forecastSourceLabel === "WillyWeather";
 
-  const refreshing = weatherQ.isFetching || forecastQ.isFetching || davisRefreshing;
+  const refreshing = weatherQ.isFetching || forecastQ.isFetching || observationsRefreshing;
 
   const forecastFreshness = (() => {
     if (forecastQ.isFetching) return "Refreshing…";
