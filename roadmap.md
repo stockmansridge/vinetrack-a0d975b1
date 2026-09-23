@@ -37,3 +37,7 @@
 - [x] Add vineyard-scoped client-side Rain/Wind/Humidity presentation highlights with regional-unit editing
 - [x] Preserve live observations, provider selection, operational alert thresholds, and mobile/backend contracts
 - [x] Add focused forecast-model, bucketing, persistence, unit, threshold, and timezone tests
+
+## Navigation presentation
+- [ ] Style Yield & Harvest cross-links as buttons matching Records, Analytics and Comparison
+- [ ] Style the Spray Equipment cross-link as a matching button
