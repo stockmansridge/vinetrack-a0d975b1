@@ -191,6 +191,7 @@ function TrendChart({
       className="h-44 w-full rounded-lg bg-background/60 p-1 shadow-inner"
       data-testid={`${kind}-trend`}
       data-point-count={rows.length}
+      data-spray-ranges={sprayRangeSignature(sprayWindows)}
     >
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={rows} margin={{ top: 12, right: 12, bottom: 4, left: -18 }}>
