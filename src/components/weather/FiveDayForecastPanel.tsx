@@ -504,7 +504,7 @@ export function FiveDayForecastPanel({ vineyardId, forecast, rf, freshnessLabel,
           <span className="ml-auto font-normal text-muted-foreground">Four-hourly forecast samples</span>
         </div>
         {hasThirtyPositions ? (
-          <TrendChart rows={rows} rf={rf} kind="temperature" />
+          <TrendChart rows={rows} rf={rf} kind="temperature" sprayWindows={sprayWindowsForCharts} />
         ) : (
           <div className="flex h-20 items-center justify-center text-xs text-muted-foreground">
             Detailed temperature trend is not available from {forecast.source}.
