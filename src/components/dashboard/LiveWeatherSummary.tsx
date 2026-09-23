@@ -1,8 +1,9 @@
 // Vineyard weather for the Live Dashboard.
 //
 // Two distinct data products, in two separate inner cards:
-//   1. "Live observations" — MEASURED data from Davis WeatherLink
-//   2. "5-day forecast"    — FORECAST data from the configured provider
+//   1. "Live observations" — MEASURED data from the vineyard's configured
+//      local observation provider (Davis WeatherLink or Weather Underground)
+//   2. "5-day forecast"    — FORECAST data from the configured forecast provider
 // Observations are never called forecasts and forecast samples are never
 // called observations.
 import { useEffect, useRef, useState } from "react";
