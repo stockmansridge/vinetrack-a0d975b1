@@ -82,9 +82,40 @@ interface TooltipCardProps {
   payload?: Array<{ payload?: ChartRow }>;
   rf: RegionFormatters;
   kind: "temperature" | "wind";
+  windows?: SprayWindow[];
 }
 
-function TooltipCard({ active, payload, rf, kind }: TooltipCardProps) {
+/** Window detail shown when the hovered period sits inside a spray band. */
+function SprayWindowDetail({ window, rf }: { window: SprayWindow; rf: RegionFormatters }) {
+  const humid = window.kind === "high_humidity";
+  return (
+    <div className="mt-2 border-t pt-2" data-testid="spray-window-tooltip">
+      <div className="font-semibold">
+        {humid ? "High-humidity spray window" : "Optimal spray window"}
+      </div>
+      <div className="mb-1 text-muted-foreground">
+        {window.startTimeLocal}–{window.endTimeLocal}
+      </div>
+      {humid && window.humidityMinPct != null && (
+        <div>Humidity: ≥{Math.round(window.humidityMinPct)}% ✓</div>
+      )}
+      <div>
+        Temperature:{" "}
+        {window.tempMinC == null || window.tempMaxC == null
+          ? "—"
+          : `${rf.temperature(window.tempMinC, 0)}–${rf.temperature(window.tempMaxC, 0)}`}{" "}
+        ✓
+      </div>
+      <div>Maximum wind: {window.windMaxKmh == null ? "—" : rf.wind(window.windMaxKmh, 0)} ✓</div>
+      <div>Rain: {window.rainMm == null ? "—" : rf.rainfall(window.rainMm)} ✓</div>
+      <div className="mt-1 text-[10px] text-muted-foreground">
+        Weather suitability only — always follow the chemical label.
+      </div>
+    </div>
+  );
+}
+
+function TooltipCard({ active, payload, rf, kind, windows }: TooltipCardProps) {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload as ChartRow | undefined;
   if (!row) return null;
