@@ -352,6 +352,7 @@ function HighlightSetting({
           <span className="text-xs text-muted-foreground">{unit}</span>
         </div>
       </div>
+      {/* Visual highlighting only — spray-window criteria always use the value. */}
       <Switch aria-label={`${label} highlights`} checked={setting.enabled} onCheckedChange={onToggle} />
     </div>
   );
