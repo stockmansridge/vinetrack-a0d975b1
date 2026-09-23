@@ -430,6 +430,13 @@ export function FiveDayForecastPanel({ vineyardId, forecast, rf, freshnessLabel,
             <HighlightSetting label="Rain" unit={rf.rainfallUnitLabel} setting={preferences.rain} displayValue={rainDisplay} onToggle={(enabled) => update("rain", { enabled })} onValue={(value) => { const canonical = rf.rainfallToCanonical(value); if (canonical != null) update("rain", { threshold: canonical }); }} />
             <HighlightSetting label="Wind" unit={rf.windUnitLabel} setting={preferences.wind} displayValue={windDisplay} onToggle={(enabled) => update("wind", { enabled })} onValue={(value) => { const canonical = rf.windToCanonical(value); if (canonical != null) update("wind", { threshold: canonical }); }} />
             <HighlightSetting label="Humidity" unit="%" setting={preferences.humidity} displayValue={preferences.humidity.threshold} onToggle={(enabled) => update("humidity", { enabled })} onValue={(value) => { if (Number.isFinite(value) && value >= 0) update("humidity", { threshold: value }); }} />
+            <div className="mt-3 border-t pt-2 text-sm font-semibold">Spray window criteria</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Used for the shaded spray bands on the graphs. Switches above affect highlighting only.
+            </p>
+            <HighlightSetting label="Minimum temperature" unit={rf.temperatureUnitLabel} setting={preferences.tempMin} displayValue={tempMinDisplay} onToggle={(enabled) => update("tempMin", { enabled })} onValue={(value) => { const canonical = rf.temperatureToCanonical(value); if (canonical != null) update("tempMin", { threshold: canonical }); }} />
+            <HighlightSetting label="Maximum temperature" unit={rf.temperatureUnitLabel} setting={preferences.tempMax} displayValue={tempMaxDisplay} onToggle={(enabled) => update("tempMax", { enabled })} onValue={(value) => { const canonical = rf.temperatureToCanonical(value); if (canonical != null) update("tempMax", { threshold: canonical }); }} />
+            <HighlightSetting label="Spray rain limit (per 4-hour period)" unit={rf.rainfallUnitLabel} setting={preferences.sprayRain} displayValue={sprayRainDisplay} onToggle={(enabled) => update("sprayRain", { enabled })} onValue={(value) => { const canonical = rf.rainfallToCanonical(value); if (canonical != null) update("sprayRain", { threshold: canonical }); }} />
             <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={() => setPreferences(structuredClone(DEFAULT_FORECAST_HIGHLIGHTS))}>Reset to defaults</Button>
           </PopoverContent>
         </Popover>
