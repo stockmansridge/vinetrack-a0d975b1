@@ -103,6 +103,20 @@ export const MATERIAL_UNIT_SUGGESTIONS = ["Each", "Metre", "Roll", "Pack", "Box"
 
 const text = (v: unknown): string => (v == null ? "" : String(v).trim());
 
+/**
+ * Options for the Unit dropdown: the six shared iOS/Android/Portal choices.
+ * Unit is stored as text and historical records may hold a value outside the
+ * standard list, so the record's current unit is appended when non-standard —
+ * editing it must never silently change or lose the stored value.
+ */
+export function materialUnitOptions(currentUnit: string | null | undefined): string[] {
+  const current = text(currentUnit);
+  if (!current || MATERIAL_UNIT_SUGGESTIONS.includes(current)) {
+    return [...MATERIAL_UNIT_SUGGESTIONS];
+  }
+  return [...MATERIAL_UNIT_SUGGESTIONS, current];
+}
+
 export function materialCategoryRank(category: string): number {
   const i = MATERIAL_CATEGORY_ORDER.indexOf(category);
   return i === -1 ? MATERIAL_CATEGORY_ORDER.length : i;
