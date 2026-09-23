@@ -332,7 +332,7 @@ export function supplementForecast(
 
 async function fetchDetailedOpenMeteo(lat: number, lon: number, timezone: string | null): Promise<FiveDayForecastResult> {
   const daily = "weather_code,precipitation_sum,precipitation_probability_max,temperature_2m_max,temperature_2m_min,wind_speed_10m_max";
-  const hourly = "temperature_2m,relative_humidity_2m,wind_speed_10m";
+  const hourly = "temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation";
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&daily=${daily}&hourly=${hourly}&wind_speed_unit=kmh&timezone=${encodeURIComponent(timezone || "auto")}&forecast_days=${FORECAST_DAYS}`;
   try {
     const response = await fetch(url);
