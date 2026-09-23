@@ -219,8 +219,32 @@ function TrendChart({
           {kind === "wind" && windThreshold != null && (
             <ReferenceLine y={windThreshold} stroke="hsl(var(--warning))" strokeDasharray="5 5" strokeOpacity={0.8} />
           )}
+          {/* Spray windows: identical X ranges on the temperature and wind charts.
+              High humidity is drawn after the standard shade so overlaps show one colour. */}
+          {[...sprayWindows]
+            .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "optimal" ? -1 : 1))
+            .map((window) => (
+              <ReferenceArea
+                key={`${window.kind}-${window.startIndex}`}
+                x1={window.startIndex - 0.5}
+                x2={window.endIndex + 0.5}
+                fill={window.kind === "high_humidity" ? "hsl(var(--primary))" : "hsl(var(--success, var(--accent)))"}
+                fillOpacity={window.kind === "high_humidity" ? 0.16 : 0.1}
+                ifOverflow="extendDomain"
+              />
+            ))}
+          {sprayWindows.flatMap((window) =>
+            [window.startIndex - 0.5, window.endIndex + 0.5].map((x, edge) => (
+              <ReferenceLine
+                key={`${window.kind}-edge-${window.startIndex}-${edge}`}
+                x={x}
+                stroke={window.kind === "high_humidity" ? "hsl(var(--primary))" : "hsl(var(--accent))"}
+                strokeOpacity={0.55}
+              />
+            )),
+          )}
           <Tooltip
-            content={<TooltipCard rf={rf} kind={kind} />}
+            content={<TooltipCard rf={rf} kind={kind} windows={sprayWindows} />}
             cursor={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1, strokeDasharray: "3 3" }}
           />
           {kind === "temperature" ? (
