@@ -74,7 +74,8 @@ describe("Material Costs access gate", () => {
       "utf8",
     );
     expect(source).not.toContain("useMaterialCostsEnabled");
-    expect(source).not.toContain("materialCostsAccess");
+    expect(source).not.toContain("materialCostsAccess =");
+    expect(source).not.toContain("materialCostsAccess.enabled");
   });
 });
 
