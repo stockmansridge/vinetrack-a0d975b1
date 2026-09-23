@@ -73,17 +73,6 @@ import { formatTripNameLabel } from "@/lib/tripDisplay";
 const tripDisplay = (t: Trip): string =>
   formatTripNameLabel(t.trip_title, t.tracking_pattern, tripFn(t.trip_function) ?? "Trip");
 
-type Status = "active" | "paused" | "finished" | "older";
-
-function statusOf(t: Trip): Status {
-  const ended = !!t.end_time;
-  if (!ended) {
-    return t.is_paused ? "paused" : "active";
-  }
-  const ms = new Date(t.end_time!).getTime();
-  if (!isNaN(ms) && Date.now() - ms < 24 * 3600 * 1000) return "finished";
-  return "older";
-}
 
 function fmtDuration(start?: string | null, end?: string | null): string {
   if (!start) return "—";
