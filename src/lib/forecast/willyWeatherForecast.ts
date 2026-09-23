@@ -211,6 +211,8 @@ export function bucketDayDetail(detail: WillyDayDetail): ForecastPeriod[] {
       tempMaxC: max(temps.get(bucket) ?? []),
       windMaxKmh: max(winds.get(bucket) ?? []),
       humidityMaxPct: max(humidity.get(bucket) ?? []),
+      humidityMinPct: min(humidity.get(bucket) ?? []),
+      rainMm: sum(rain.get(bucket) ?? []),
       sampleCount: counts.get(bucket) ?? 0,
     });
   }
