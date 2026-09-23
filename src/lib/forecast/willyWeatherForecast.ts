@@ -85,6 +85,16 @@ export interface WillyDayDetail {
   temperatureEntries?: Entry[];
   windEntries?: Entry[];
   humidityEntries?: Entry[];
+  /** Genuine timestamped intra-day rainfall entries only. */
+  rainEntries?: Entry[];
+}
+
+/** Upper bound of a provider rainfall range, matching the daily treatment. */
+function rainAmount(entry: Entry): number | null {
+  const end = finite(entry.endRange);
+  const start = finite(entry.startRange);
+  const amount = finite(entry.amount) ?? finite(entry.rainfall_mm) ?? finite(entry.value);
+  return end ?? amount ?? start;
 }
 
 export interface WillyForecastPayload {
