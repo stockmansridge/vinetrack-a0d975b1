@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import LiveDashboardPage from "@/pages/LiveDashboardPage";
-import { VineyardContext } from "@/context/VineyardContext";
 import type { Trip, TripsQueryResult } from "@/lib/tripsQuery";
 
 vi.mock("@/components/TripRouteAppleMap", () => ({ default: () => null }));
@@ -19,38 +18,24 @@ vi.mock("@/lib/useRegionFormatters", () => ({
   }),
 }));
 vi.mock("@/integrations/ios-supabase/client", () => ({ supabase: {} }));
+vi.mock("@/context/VineyardContext", () => ({
+  useVineyard: () => ({
+    memberships: [
+      {
+        vineyard_id: "11111111-1111-1111-1111-111111111111",
+        vineyard_name: "Test Vineyard",
+        role: "owner",
+      },
+    ],
+    loading: false,
+    selectedVineyardId: "11111111-1111-1111-1111-111111111111",
+    selectVineyard: () => {},
+    currentRole: "owner",
+    currentCountry: "AU",
+  }),
+}));
 
 const VID = "11111111-1111-1111-1111-111111111111";
-
-function wrap(ui: React.ReactNode) {
-  const qc = new QueryClient({
-    defaultOptions: { queries: { staleTime: Infinity, retry: false } },
-  });
-  qc.setQueryData(["paddocks-lite", VID], []);
-  qc.setQueryData(["work_tasks", VID, ""], { tasks: [] });
-  return render(
-    <QueryClientProvider client={qc}>
-      <VineyardContext.Provider
-        value={{
-          memberships: [
-            {
-              vineyard_id: VID,
-              vineyard_name: "Test Vineyard",
-              role: "owner",
-            },
-          ],
-          loading: false,
-          selectedVineyardId: VID,
-          selectVineyard: () => {},
-          currentRole: "owner",
-          currentCountry: "AU",
-        }}
-      >
-        {ui}
-      </VineyardContext.Provider>
-    </QueryClientProvider>,
-  );
-}
 
 const trip = (over: Partial<Trip>): Trip => ({
   id: "00000000-0000-0000-0000-000000000000",
@@ -70,7 +55,7 @@ const trip = (over: Partial<Trip>): Trip => ({
   ...over,
 });
 
-function setTrips(trips: Trip[]) {
+function renderWithTrips(trips: Trip[]) {
   const qc = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
   });
@@ -87,33 +72,20 @@ function setTrips(trips: Trip[]) {
     missingPaddock: 0,
   };
   qc.setQueryData(["live-trips", VID, ""], result);
-  return qc;
+  return render(
+    <QueryClientProvider client={qc}>
+      <LiveDashboardPage />
+    </QueryClientProvider>,
+  );
 }
 
 describe("Live Dashboard trip status display", () => {
   it("shows two active trips and excludes an inactive/no-end-time saved trip", async () => {
-    const trips = [
+    renderWithTrips([
       trip({ id: "active-1", person_name: "Sam" }),
       trip({ id: "active-2", person_name: "Alex" }),
       trip({ id: "saved", is_active: false, end_time: null, person_name: "Unused" }),
-    ];
-    const qc = setTrips(trips);
-    render(
-      <QueryClientProvider client={qc}>
-        <VineyardContext.Provider
-          value={{
-            memberships: [{ vineyard_id: VID, vineyard_name: "Test Vineyard", role: "owner" }],
-            loading: false,
-            selectedVineyardId: VID,
-            selectVineyard: () => {},
-            currentRole: "owner",
-            currentCountry: "AU",
-          }}
-        >
-          <LiveDashboardPage />
-        </VineyardContext.Provider>
-      </QueryClientProvider>,
-    );
+    ]);
     await waitFor(() => expect(screen.getByText("Active trips")).toBeTruthy());
     expect(screen.getByText("2")).toBeTruthy();
     expect(screen.getByTestId("trip-row-active-1")).toBeTruthy();
@@ -122,27 +94,10 @@ describe("Live Dashboard trip status display", () => {
   });
 
   it("selects one active trip independently of another", async () => {
-    const trips = [
+    renderWithTrips([
       trip({ id: "active-1", person_name: "Sam" }),
       trip({ id: "active-2", person_name: "Alex" }),
-    ];
-    const qc = setTrips(trips);
-    render(
-      <QueryClientProvider client={qc}>
-        <VineyardContext.Provider
-          value={{
-            memberships: [{ vineyard_id: VID, vineyard_name: "Test Vineyard", role: "owner" }],
-            loading: false,
-            selectedVineyardId: VID,
-            selectVineyard: () => {},
-            currentRole: "owner",
-            currentCountry: "AU",
-          }}
-        >
-          <LiveDashboardPage />
-        </VineyardContext.Provider>
-      </QueryClientProvider>,
-    );
+    ]);
     await waitFor(() => expect(screen.getByTestId("trip-row-active-1")).toBeTruthy());
     const row1 = screen.getByTestId("trip-row-active-1");
     const row2 = screen.getByTestId("trip-row-active-2");
