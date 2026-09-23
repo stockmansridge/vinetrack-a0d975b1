@@ -5,7 +5,7 @@
 // keeping historical non-standard text units representable.
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   MATERIAL_UNIT_SUGGESTIONS,
   materialUnitOptions,
