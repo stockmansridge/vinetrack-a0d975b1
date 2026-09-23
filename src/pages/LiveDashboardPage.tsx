@@ -330,19 +330,7 @@ export default function LiveDashboardPage() {
     visible.find((v) => v.trip.id === selectedTripId)?.trip ?? null;
 
   // Summary
-  const summary = useMemo(() => {
-    let active = 0,
-      paused = 0,
-      finished = 0;
-    const operators = new Set<string>();
-    for (const { trip, status } of enriched) {
-      if (status === "active") active++;
-      else if (status === "paused") paused++;
-      else if (status === "finished") finished++;
-      if (status !== "older" && trip.person_name) operators.add(trip.person_name);
-    }
-    return { active, paused, finished, operators: operators.size };
-  }, [enriched]);
+  const summary = useMemo(() => buildLiveDashboardSummary(allTrips), [allTrips]);
 
   // Filter option lists from data
   const operators = useMemo(() => {
