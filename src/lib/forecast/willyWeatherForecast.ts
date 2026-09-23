@@ -303,6 +303,7 @@ export function normaliseWillyWeatherForecast(
       temperatureEntries:
         summary.temperatureEntries ?? envelopeDetail.get(date)?.temperatureEntries,
       windEntries: summary.windEntries ?? envelopeDetail.get(date)?.windEntries,
+      rainEntries: rainByDate.get(date),
       humidityEntries: summary.humidityEntries ?? envelopeDetail.get(date)?.humidityEntries,
     };
     const periods = bucketDayDetail(detail);
