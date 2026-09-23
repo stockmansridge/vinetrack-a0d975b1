@@ -141,6 +141,14 @@ function TooltipCard({ active, payload, rf, kind, windows }: TooltipCardProps) {
       ) : (
         <div>Wind: {row.windMaxKmh == null ? "—" : rf.wind(row.windMaxKmh, 1)}</div>
       )}
+      {(() => {
+        const covering = (windows ?? []).filter(
+          (window) => row.index >= window.startIndex && row.index <= window.endIndex,
+        );
+        // High humidity takes precedence where it overlaps a standard window.
+        const window = covering.find((w) => w.kind === "high_humidity") ?? covering[0];
+        return window ? <SprayWindowDetail window={window} rf={rf} /> : null;
+      })()}
     </div>
   );
 }
