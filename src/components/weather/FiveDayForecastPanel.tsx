@@ -383,6 +383,24 @@ export function FiveDayForecastPanel({ vineyardId, forecast, rf, freshnessLabel,
   const windDisplay = rf.settings.distance_unit === "imperial" ? preferences.wind.threshold / 1.609344 : preferences.wind.threshold;
   const humiditySource = forecast.fieldSources?.humidity ?? null;
   const humidityIsSupplementary = !!humiditySource && humiditySource !== forecast.source;
+  const sprayRainDisplay =
+    rf.settings.distance_unit === "imperial" ? preferences.sprayRain.threshold / 25.4 : preferences.sprayRain.threshold;
+  const tempMinDisplay =
+    rf.settings.distance_unit === "imperial" ? preferences.tempMin.threshold * 9 / 5 + 32 : preferences.tempMin.threshold;
+  const tempMaxDisplay =
+    rf.settings.distance_unit === "imperial" ? preferences.tempMax.threshold * 9 / 5 + 32 : preferences.tempMax.threshold;
+
+  // Spray windows are calculated from the normalised periods and the configured
+  // threshold VALUES only — the visual Highlight switches are ignored here.
+  const spray = useMemo(() => {
+    const periods = days.flatMap((day) => day.periods);
+    return calculateSprayWindows(periods, sprayThresholdsFrom(preferences));
+  }, [days, preferences]);
+  const sprayBands = useMemo(
+    () => sprayDisplayBands(spray.optimal, spray.highHumidity),
+    [spray],
+  );
+  const sprayWindowsForCharts = hasThirtyPositions ? sprayBands : [];
 
   const update = (key: keyof ForecastHighlightPreferences, patch: Partial<{ enabled: boolean; threshold: number }>) => {
     setPreferences((current) => ({ ...current, [key]: { ...current[key], ...patch } }));
