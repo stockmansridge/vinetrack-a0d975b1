@@ -30,7 +30,7 @@ describe("forecast presentation highlights", () => {
 
   it("round-trips valid persisted settings and rejects corrupt values", () => {
     const saved = { rain: { enabled: false, threshold: 7 }, wind: { enabled: true, threshold: 18 }, humidity: { enabled: true, threshold: 88 } };
-    expect(parseForecastHighlightPreferences(JSON.stringify(saved))).toEqual(saved);
+    expect(parseForecastHighlightPreferences(JSON.stringify(saved))).toEqual({ ...DEFAULT_FORECAST_HIGHLIGHTS, ...saved });
     expect(parseForecastHighlightPreferences("bad json")).toEqual(DEFAULT_FORECAST_HIGHLIGHTS);
   });
 
