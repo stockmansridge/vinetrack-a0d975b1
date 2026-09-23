@@ -26,9 +26,15 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   fetchLiveWeather,
-  refreshDavisObservations,
   type LiveWeatherReading,
 } from "@/lib/weatherStatusQuery";
+import {
+  fetchLocalObservationProvider,
+  refreshObservationProvider,
+  observationFailureTitle,
+  noNewerObservationsMessage,
+  type LocalObservationProvider,
+} from "@/lib/localObservationProvider";
 import {
   summarizeForecast,
   forecastUnavailableReason,
