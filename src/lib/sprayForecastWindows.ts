@@ -116,6 +116,36 @@ function mergeRuns(
   return windows;
 }
 
+/**
+ * Non-overlapping bands for display: a high-humidity range replaces the
+ * portion of the standard window it sits inside, so two translucent shades
+ * are never stacked.
+ */
+export function sprayDisplayBands(
+  optimal: SprayWindow[],
+  highHumidity: SprayWindow[],
+): SprayWindow[] {
+  const bands: SprayWindow[] = [];
+  optimal.forEach((window) => {
+    let segments: Array<{ start: number; end: number }> = [
+      { start: window.startIndex, end: window.endIndex },
+    ];
+    highHumidity.forEach((humid) => {
+      segments = segments.flatMap((segment) => {
+        if (humid.endIndex < segment.start || humid.startIndex > segment.end) return [segment];
+        const parts: Array<{ start: number; end: number }> = [];
+        if (humid.startIndex > segment.start) parts.push({ start: segment.start, end: humid.startIndex - 1 });
+        if (humid.endIndex < segment.end) parts.push({ start: humid.endIndex + 1, end: segment.end });
+        return parts;
+      });
+    });
+    segments.forEach((segment) => {
+      bands.push({ ...window, startIndex: segment.start, endIndex: segment.end });
+    });
+  });
+  return [...bands, ...highHumidity];
+}
+
 /** True when enough intra-day detail exists for any spray-window decision. */
 export function hasSprayDetail(periods: ForecastPeriod[]): boolean {
   return periods.some(
