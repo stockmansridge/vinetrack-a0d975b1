@@ -149,7 +149,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   });
 
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
-  const [davisRefreshing, setDavisRefreshing] = useState(false);
+  const [observationsRefreshing, setObservationsRefreshing] = useState(false);
 
   const weather = weatherQ.data;
   const forecast = forecastQ.data;
@@ -162,25 +162,37 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   const observationsOk = !!(weather && weather.available && reading);
   const forecastOk = !!(forecast && forecast.available && forecast.forecast.days?.length);
 
-  // Automatic top-up: only ask Davis for new data when the server says its
-  // cached observation is stale — never every polling tick.
+  // Which local observation provider is configured/active for this vineyard.
+  // Resolved from the existing weather-integration status, never assumed.
+  const providerQ = useQuery({
+    queryKey: ["local-observation-provider", vineyardId],
+    enabled: !!vineyardId,
+    staleTime: 5 * 60_000,
+    queryFn: () => fetchLocalObservationProvider(vineyardId, reading?.source ?? null),
+  });
+  const observationProvider: LocalObservationProvider = providerQ.data ?? "none";
+
+  // Automatic top-up: only ask the ACTIVE provider for new data when the
+  // server says its cached observation is stale — never every polling tick,
+  // and never a provider that is not configured for this vineyard.
   useEffect(() => {
     if (!vineyardId || !weather || !weather.available || !weather.stale) return;
-    if (davisRefreshing) return;
-    if (Date.now() - autoDavisAt.current < 5 * 60_000) return;
-    autoDavisAt.current = Date.now();
+    if (observationsRefreshing) return;
+    if (Date.now() - autoObservationRefreshAt.current < 5 * 60_000) return;
+    autoObservationRefreshAt.current = Date.now();
     let cancelled = false;
     (async () => {
-      setDavisRefreshing(true);
-      const res = await refreshDavisObservations(vineyardId);
+      setObservationsRefreshing(true);
+      const res = await refreshObservationProvider(vineyardId, observationProvider);
+      // Providers without an upstream refresh action simply re-read the cache.
       if (!cancelled && res.ok) await weatherQ.refetch({ cancelRefetch: true });
-      if (!cancelled) setDavisRefreshing(false);
+      if (!cancelled) setObservationsRefreshing(false);
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vineyardId, weather?.available, (weather as any)?.stale]);
+  }, [vineyardId, weather?.available, (weather as any)?.stale, observationProvider]);
 
   const forecastBadge = (() => {
     if (forecastQ.isLoading) return { label: "Loading forecast…", title: undefined as string | undefined };
