@@ -31,6 +31,10 @@ export interface ForecastPeriod {
   tempMaxC: number | null;
   windMaxKmh: number | null;
   humidityMaxPct: number | null;
+  /** Minimum forecast humidity across the period; needed for spray windows. */
+  humidityMinPct: number | null;
+  /** Genuine forecast rainfall for this period only. Never derived from a daily total. */
+  rainMm: number | null;
   sampleCount: number;
 }
 
