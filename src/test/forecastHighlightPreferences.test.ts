@@ -5,7 +5,14 @@ import { DEFAULT_FORECAST_HIGHLIGHTS, forecastHighlightStorageKey, parseForecast
 
 describe("forecast presentation highlights", () => {
   it("uses the requested defaults", () => {
-    expect(DEFAULT_FORECAST_HIGHLIGHTS).toEqual({ rain: { enabled: true, threshold: 5 }, wind: { enabled: true, threshold: 15 }, humidity: { enabled: false, threshold: 90 } });
+    expect(DEFAULT_FORECAST_HIGHLIGHTS).toEqual({
+      rain: { enabled: true, threshold: 5 },
+      wind: { enabled: true, threshold: 15 },
+      humidity: { enabled: false, threshold: 90 },
+      tempMin: { enabled: false, threshold: 10 },
+      tempMax: { enabled: false, threshold: 35 },
+      sprayRain: { enabled: false, threshold: 0.1 },
+    });
   });
 
   it("uses exact inclusive thresholds and honours disabled toggles", () => {
