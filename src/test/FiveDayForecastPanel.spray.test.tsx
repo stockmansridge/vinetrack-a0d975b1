@@ -1,6 +1,6 @@
-import { describe, expect, it, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
-import { FiveDayForecastPanel } from "@/components/weather/FiveDayForecastPanel";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import { FiveDayForecastPanel, formatSprayWindowTime } from "@/components/weather/FiveDayForecastPanel";
 import { createRegionFormatters } from "@/lib/regionFormatters";
 import { AU_DEFAULTS } from "@/lib/vineyardRegionSettingsQuery";
 import type { FiveDayForecast, ForecastPeriod } from "@/lib/fiveDayForecast";
@@ -52,10 +52,70 @@ class TestResizeObserver {
   disconnect() {}
 }
 
+let restoreChartLayoutMocks: (() => void) | null = null;
+
+function installChartLayoutMocks() {
+  const original = Element.prototype.getBoundingClientRect;
+  Element.prototype.getBoundingClientRect = function getBoundingClientRect() {
+    const element = this as Element;
+    if (element.classList.contains("recharts-responsive-container")) {
+      return {
+        x: 0,
+        y: 0,
+        width: 900,
+        height: 176,
+        top: 0,
+        left: 0,
+        right: 900,
+        bottom: 176,
+        toJSON: () => ({}),
+      } as DOMRect;
+    }
+    return original.call(this);
+  };
+  restoreChartLayoutMocks = () => {
+    Element.prototype.getBoundingClientRect = original;
+    restoreChartLayoutMocks = null;
+  };
+}
+
+function nonSprayableForecast(): FiveDayForecast {
+  const base = forecast(true);
+  return {
+    ...base,
+    days: base.days.map((day) => ({
+      ...day,
+      periods: day.periods.map((period) => ({ ...period, windMaxKmh: 30 })),
+    })),
+  };
+}
+
+function sprayRects(testId: string) {
+  return Array.from(screen.getByTestId(testId).querySelectorAll(".spray-area .recharts-reference-area-rect"));
+}
+
+function sprayEdges(testId: string) {
+  return Array.from(screen.getByTestId(testId).querySelectorAll(".spray-edge .recharts-reference-line-line"));
+}
+
+function rectBounds(rects: Element[]) {
+  return rects.map((rect) => ({
+    x: rect.getAttribute("x"),
+    width: rect.getAttribute("width"),
+    fill: rect.getAttribute("fill"),
+    opacity: rect.getAttribute("fill-opacity"),
+  }));
+}
+
 describe("spray windows on the forecast graphs", () => {
   beforeEach(() => {
     window.localStorage.clear();
     (globalThis as { ResizeObserver?: unknown }).ResizeObserver = TestResizeObserver;
+    installChartLayoutMocks();
+  });
+
+  afterEach(() => {
+    restoreChartLayoutMocks?.();
   });
 
   it("gives the temperature and wind graphs identical spray ranges", () => {
@@ -90,5 +150,70 @@ describe("spray windows on the forecast graphs", () => {
       "optimal:1-1|optimal:3-3|high_humidity:2-2",
     );
     expect(screen.getByText(/Forecast: WillyWeather/)).toBeTruthy();
+  });
+
+  it("renders visible spray-area SVG bands and boundary lines on both graphs", async () => {
+    render(<FiveDayForecastPanel vineyardId="v1" forecast={forecast(true)} rf={rf} />);
+
+    await waitFor(() => expect(sprayRects("temperature-trend")).toHaveLength(3));
+
+    const tempRects = sprayRects("temperature-trend");
+    const windRects = sprayRects("wind-trend");
+    expect(windRects).toHaveLength(3);
+    expect(rectBounds(tempRects)).toEqual(rectBounds(windRects));
+    expect(tempRects.every((rect) => Number.isFinite(Number(rect.getAttribute("x"))))).toBe(true);
+    expect(tempRects.every((rect) => Number(rect.getAttribute("width")) > 0)).toBe(true);
+    expect(tempRects.every((rect) => Number(rect.getAttribute("height")) > 0)).toBe(true);
+    expect(windRects.every((rect) => Number(rect.getAttribute("height")) > 0)).toBe(true);
+    expect(tempRects.some((rect) => rect.getAttribute("fill") === "hsl(var(--primary))")).toBe(true);
+    expect(tempRects.some((rect) => rect.getAttribute("fill-opacity") === "0.2")).toBe(true);
+    expect(tempRects.some((rect) => rect.getAttribute("fill-opacity") === "0.14")).toBe(true);
+
+    const tempEdges = sprayEdges("temperature-trend");
+    const windEdges = sprayEdges("wind-trend");
+    expect(tempEdges).toHaveLength(6);
+    expect(windEdges).toHaveLength(6);
+    expect(tempEdges.map((line) => line.getAttribute("x1"))).toEqual(windEdges.map((line) => line.getAttribute("x1")));
+  });
+
+  it("renders no spray-area SVG bands when no periods qualify", async () => {
+    render(<FiveDayForecastPanel vineyardId="v1" forecast={nonSprayableForecast()} rf={rf} />);
+
+    await waitFor(() => expect(screen.getByTestId("temperature-trend").querySelector("svg")).toBeTruthy());
+    expect(sprayRects("temperature-trend")).toHaveLength(0);
+    expect(sprayRects("wind-trend")).toHaveLength(0);
+    expect(sprayEdges("temperature-trend")).toHaveLength(0);
+    expect(sprayEdges("wind-trend")).toHaveLength(0);
+  });
+
+  it("includes dates when a tooltip spray window crosses midnight", () => {
+    expect(formatSprayWindowTime({
+      kind: "optimal",
+      startIndex: 4,
+      endIndex: 7,
+      startDate: "2026-09-25",
+      endDate: "2026-09-26",
+      startTimeLocal: "16:00",
+      endTimeLocal: "08:00",
+      tempMinC: 14,
+      tempMaxC: 24,
+      windMaxKmh: 8,
+      rainMm: 0,
+      humidityMinPct: 60,
+    })).toBe("Fri 25 Sep 16:00 – Sat 26 Sep 08:00");
+    expect(formatSprayWindowTime({
+      kind: "optimal",
+      startIndex: 2,
+      endIndex: 3,
+      startDate: "2026-09-25",
+      endDate: "2026-09-25",
+      startTimeLocal: "08:00",
+      endTimeLocal: "16:00",
+      tempMinC: 14,
+      tempMaxC: 24,
+      windMaxKmh: 8,
+      rainMm: 0,
+      humidityMinPct: 60,
+    })).toBe("08:00–16:00");
   });
 });

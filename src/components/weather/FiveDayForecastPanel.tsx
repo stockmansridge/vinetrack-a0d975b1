@@ -45,6 +45,21 @@ function parseLocalDate(date: string): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+export function formatSprayWindowTime(window: SprayWindow): string {
+  if (window.startDate === window.endDate) return `${window.startTimeLocal}–${window.endTimeLocal}`;
+  const start = parseLocalDate(window.startDate);
+  const end = parseLocalDate(window.endDate);
+  const shortDate = (date: Date | null, fallback: string) => {
+    if (!date) return fallback;
+    const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return `${weekdays[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]}`;
+  };
+  const startLabel = shortDate(start, window.startDate);
+  const endLabel = shortDate(end, window.endDate);
+  return `${startLabel} ${window.startTimeLocal} – ${endLabel} ${window.endTimeLocal}`;
+}
+
 interface ChartRow {
   index: number;
   date: string;
@@ -94,7 +109,7 @@ function SprayWindowDetail({ window, rf }: { window: SprayWindow; rf: RegionForm
         {humid ? "High-humidity spray window" : "Optimal spray window"}
       </div>
       <div className="mb-1 text-muted-foreground">
-        {window.startTimeLocal}–{window.endTimeLocal}
+        {formatSprayWindowTime(window)}
       </div>
       {humid && window.humidityMinPct != null && (
         <div>Humidity: ≥{Math.round(window.humidityMinPct)}% ✓</div>
@@ -206,7 +221,7 @@ function TrendChart({
             </linearGradient>
           </defs>
           <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="2 6" />
-          <XAxis dataKey="index" hide domain={[0, 29]} />
+          <XAxis type="number" dataKey="index" hide domain={[-0.5, 29.5]} allowDataOverflow />
           <YAxis
             width={48}
             domain={domain ?? ["auto", "auto"]}
@@ -226,10 +241,11 @@ function TrendChart({
             .map((window) => (
               <ReferenceArea
                 key={`${window.kind}-${window.startIndex}`}
+                className={`spray-area spray-area-${window.kind}`}
                 x1={window.startIndex - 0.5}
                 x2={window.endIndex + 0.5}
-                fill={window.kind === "high_humidity" ? "hsl(var(--primary))" : "hsl(var(--success, var(--accent)))"}
-                fillOpacity={window.kind === "high_humidity" ? 0.16 : 0.1}
+                fill={window.kind === "high_humidity" ? "hsl(var(--primary))" : "hsl(var(--accent))"}
+                fillOpacity={window.kind === "high_humidity" ? 0.2 : 0.14}
                 ifOverflow="extendDomain"
               />
             ))}
@@ -237,9 +253,10 @@ function TrendChart({
             [window.startIndex - 0.5, window.endIndex + 0.5].map((x, edge) => (
               <ReferenceLine
                 key={`${window.kind}-edge-${window.startIndex}-${edge}`}
+                className={`spray-edge spray-edge-${window.kind}`}
                 x={x}
                 stroke={window.kind === "high_humidity" ? "hsl(var(--primary))" : "hsl(var(--accent))"}
-                strokeOpacity={0.55}
+                strokeOpacity={0.7}
               />
             )),
           )}
