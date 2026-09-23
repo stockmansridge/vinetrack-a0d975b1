@@ -39,5 +39,5 @@
 - [x] Add focused forecast-model, bucketing, persistence, unit, threshold, and timezone tests
 
 ## Navigation presentation
-- [ ] Style Yield & Harvest cross-links as buttons matching Records, Analytics and Comparison
-- [ ] Style the Spray Equipment cross-link as a matching button
+- [x] Style Yield & Harvest cross-links as buttons matching Records, Analytics and Comparison
+- [x] Style the Spray Equipment cross-link as a matching button
