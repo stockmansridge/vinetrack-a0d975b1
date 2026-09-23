@@ -278,57 +278,127 @@ function normaliseDaily(days: RainForecastDay[], source: string | null, timezone
   };
 }
 
+/** Period fields required before spray windows can be calculated. */
+export const SPRAY_PERIOD_FIELDS = [
+  "tempMinC",
+  "tempMaxC",
+  "windMaxKmh",
+  "rainMm",
+  "humidityMinPct",
+  "humidityMaxPct",
+] as const;
+
+export type SprayPeriodField = (typeof SPRAY_PERIOD_FIELDS)[number];
+
+/** Which provenance field a period field belongs to. */
+const FIELD_GROUP: Record<SprayPeriodField, keyof ForecastFieldSources> = {
+  tempMinC: "temperature",
+  tempMaxC: "temperature",
+  windMaxKmh: "wind",
+  rainMm: "rain",
+  humidityMinPct: "humidity",
+  humidityMaxPct: "humidity",
+};
+
 /**
- * Supplements a primary forecast with humidity (and, if the primary has none,
- * condition) from Open-Meteo. Field-level provenance is recorded so the UI can
- * say "Humidity: Open-Meteo" while the main source stays the primary provider.
- * Temperature and wind are never substituted.
+ * True when no period anywhere in the forecast carries a complete set of the
+ * fields the provider-neutral spray-window calculator needs. Provider agnostic.
+ */
+export function needsSprayDetailSupplement(forecast: FiveDayForecast): boolean {
+  return !forecast.days.some((day) =>
+    day.periods.some(
+      (period) => period.sampleCount > 0 && SPRAY_PERIOD_FIELDS.every((field) => period[field] != null),
+    ),
+  );
+}
+
+/**
+ * Provider-neutral merge: the primary forecast stays authoritative for every
+ * value it genuinely supplies, and ONLY missing fields are filled from the
+ * supplementary forecast. Periods are matched by vineyard-local date and
+ * four-hour start hour — never by array position. Field-level provenance is
+ * recorded so the UI can say "Humidity: Open-Meteo" while the displayed
+ * primary source remains the user's configured provider.
+ *
+ * Nothing here knows which services produced either forecast.
  */
 export function supplementForecast(
   primary: FiveDayForecast,
   supplementary: FiveDayForecast,
 ): FiveDayForecast {
-  const needsHumidity = primary.days.every((day) => day.humidityMaxPct == null);
-  const needsCondition = primary.days.every((day) => !day.conditionDescription);
-  if (!needsHumidity && !needsCondition) return primary;
-
   const byDate = new Map(supplementary.days.map((day) => [day.date, day]));
+  const supplemented = new Set<keyof ForecastFieldSources>();
+  let changed = false;
+
   const days = primary.days.map((day) => {
     const extra = byDate.get(day.date);
     if (!extra) return day;
-    const periods = needsHumidity
-      ? day.periods.map((period) => {
-          const match = extra.periods.find((p) => p.startHour === period.startHour);
-          return match
-            ? { ...period, humidityMaxPct: match.humidityMaxPct, humidityMinPct: match.humidityMinPct }
-            : period;
-        })
-      : day.periods;
+
+    const periods = day.periods.map((period) => {
+      const match = extra.periods.find((candidate) => candidate.startHour === period.startHour);
+      if (!match) return period;
+      const filled: Partial<Record<SprayPeriodField, number | null>> = {};
+      let filledAny = false;
+      SPRAY_PERIOD_FIELDS.forEach((field) => {
+        if (period[field] == null && match[field] != null) {
+          filled[field] = match[field];
+          supplemented.add(FIELD_GROUP[field]);
+          filledAny = true;
+        }
+      });
+      if (!filledAny) return period;
+      changed = true;
+      return {
+        ...period,
+        ...filled,
+        // Genuine supplementary samples now back this period.
+        sampleCount: Math.max(period.sampleCount, match.sampleCount),
+      };
+    });
+
+    const needsDayHumidity = day.humidityMaxPct == null && extra.humidityMaxPct != null;
+    const needsCondition = !day.conditionDescription && !!extra.conditionDescription;
+    if (needsDayHumidity) supplemented.add("humidity");
+    if (needsCondition) supplemented.add("condition");
+    if (needsDayHumidity || needsCondition) changed = true;
+
     return {
       ...day,
       periods,
-      humidityMaxPct: needsHumidity ? extra.humidityMaxPct : day.humidityMaxPct,
+      humidityMaxPct: needsDayHumidity ? extra.humidityMaxPct : day.humidityMaxPct,
+      tempMinC: day.tempMinC ?? extra.tempMinC,
+      tempMaxC: day.tempMaxC ?? extra.tempMaxC,
+      windMaxKmh: day.windMaxKmh ?? extra.windMaxKmh,
       conditionKey: needsCondition ? extra.conditionKey ?? null : day.conditionKey,
       conditionCode: needsCondition ? extra.conditionCode : day.conditionCode,
       conditionDescription: needsCondition ? extra.conditionDescription : day.conditionDescription,
     };
   });
 
+  if (!changed) return primary;
+
   const base = primary.fieldSources ?? {
     temperature: primary.source,
     wind: primary.source,
     rain: primary.source,
-    humidity: null,
-    condition: null,
+    humidity: primary.days.some((day) => day.humidityMaxPct != null) ? primary.source : null,
+    condition: primary.days.some((day) => day.conditionDescription) ? primary.source : null,
   };
+  const sources = { ...base };
+  supplemented.forEach((group) => {
+    sources[group] = base[group] ?? supplementary.source;
+    if (base[group] && base[group] !== supplementary.source) {
+      // Primary still supplies part of this field group; note both sources.
+      sources[group] = `${base[group]} + ${supplementary.source}`;
+    }
+  });
+
+  const hasSamples = days.some((day) => day.periods.some((period) => period.sampleCount > 0));
   return {
     ...primary,
     days,
-    fieldSources: {
-      ...base,
-      humidity: needsHumidity ? supplementary.source : base.humidity,
-      condition: needsCondition ? supplementary.source : base.condition,
-    },
+    sourceDetail: hasSamples ? "samples" : primary.sourceDetail,
+    fieldSources: sources,
   };
 }
 
