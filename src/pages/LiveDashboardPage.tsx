@@ -380,10 +380,10 @@ export default function LiveDashboardPage() {
 
       {/* Summary */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-        <SummaryCard label="Active trips" value={summary.active} Icon={Activity} />
-        <SummaryCard label="Paused trips" value={summary.paused} Icon={PauseCircle} />
-        <SummaryCard label="Finished today" value={summary.finished} Icon={CheckCircle2} />
-        <SummaryCard label="Operators active today" value={summary.operators} Icon={Users} />
+        <SummaryCard label="Active trips" value={summary.active} Icon={Activity} testId="summary-active" />
+        <SummaryCard label="Paused trips" value={summary.paused} Icon={PauseCircle} testId="summary-paused" />
+        <SummaryCard label="Finished today" value={summary.finished} Icon={CheckCircle2} testId="summary-finished" />
+        <SummaryCard label="Operators active today" value={summary.operators} Icon={Users} testId="summary-operators" />
       </div>
 
       {/* Live weather + rain forecast */}
