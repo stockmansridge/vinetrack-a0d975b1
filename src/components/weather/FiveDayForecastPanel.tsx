@@ -440,7 +440,23 @@ export function FiveDayForecastPanel({ vineyardId, forecast, rf, freshnessLabel,
             <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={() => setPreferences(structuredClone(DEFAULT_FORECAST_HIGHLIGHTS))}>Reset to defaults</Button>
           </PopoverContent>
         </Popover>
+        <div className="flex w-full flex-wrap items-center gap-3 text-[11px] text-muted-foreground" data-testid="spray-window-legend">
+          {spray.hasDetail ? (
+            <>
+              <span className="font-medium text-foreground/80">Spray windows</span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-4 rounded-sm bg-accent/30 ring-1 ring-accent/50" />Optimal
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-4 rounded-sm bg-primary/30 ring-1 ring-primary/50" />High humidity
+              </span>
+            </>
+          ) : (
+            <span>Detailed spray windows unavailable from this forecast source.</span>
+          )}
+        </div>
       </div>
+
 
       <div className="grid grid-cols-5" data-testid="forecast-day-headers">
         {days.map((day, index) => {
