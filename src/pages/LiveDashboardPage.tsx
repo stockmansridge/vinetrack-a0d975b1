@@ -466,6 +466,7 @@ export default function LiveDashboardPage() {
                   return (
                     <TableRow
                       key={trip.id}
+                      data-testid={`trip-row-${trip.id}`}
                       className={`cursor-pointer ${
                         selectedTripId === trip.id ? "bg-muted/50" : ""
                       }`}
