@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
-import { FiveDayForecastPanel, formatSprayWindowTime } from "@/components/weather/FiveDayForecastPanel";
+import { FiveDayForecastPanel, formatChartHourLabel, formatSprayWindowTime } from "@/components/weather/FiveDayForecastPanel";
 import { createRegionFormatters } from "@/lib/regionFormatters";
 import { AU_DEFAULTS } from "@/lib/vineyardRegionSettingsQuery";
 import type { FiveDayForecast, ForecastPeriod } from "@/lib/fiveDayForecast";
@@ -184,6 +184,22 @@ describe("spray windows on the forecast graphs", () => {
     expect(sprayRects("wind-trend")).toHaveLength(0);
     expect(sprayEdges("temperature-trend")).toHaveLength(0);
     expect(sprayEdges("wind-trend")).toHaveLength(0);
+  });
+
+  it("shows compact hour labels along both chart bottoms", async () => {
+    render(<FiveDayForecastPanel vineyardId="v1" forecast={forecast(true)} rf={rf} />);
+
+    await waitFor(() => expect(screen.getByTestId("temperature-trend").querySelector("svg")).toBeTruthy());
+    expect(screen.getByTestId("temperature-trend")).toHaveTextContent("4AM");
+    expect(screen.getByTestId("temperature-trend")).toHaveTextContent("12PM");
+    expect(screen.getByTestId("wind-trend")).toHaveTextContent("4AM");
+    expect(screen.getByTestId("wind-trend")).toHaveTextContent("12PM");
+  });
+
+  it("formats chart hour labels as 9AM and 1PM style", () => {
+    expect(formatChartHourLabel("09:00")).toBe("9AM");
+    expect(formatChartHourLabel("13:00")).toBe("1PM");
+    expect(formatChartHourLabel("13:30")).toBe("1:30PM");
   });
 
   it("includes dates when a tooltip spray window crosses midnight", () => {

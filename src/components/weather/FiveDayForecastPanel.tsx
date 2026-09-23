@@ -60,6 +60,18 @@ export function formatSprayWindowTime(window: SprayWindow): string {
   return `${startLabel} ${window.startTimeLocal} – ${endLabel} ${window.endTimeLocal}`;
 }
 
+export function formatChartHourLabel(time: string | null | undefined): string {
+  if (!time) return "";
+  const match = /^(\d{1,2})(?::(\d{2}))?/.exec(time);
+  if (!match) return time;
+  const hour24 = Number(match[1]);
+  if (!Number.isFinite(hour24) || hour24 < 0 || hour24 > 23) return time;
+  const minute = match[2] ?? "00";
+  const hour12 = hour24 % 12 || 12;
+  const suffix = hour24 < 12 ? "AM" : "PM";
+  return minute === "00" ? `${hour12}${suffix}` : `${hour12}:${minute}${suffix}`;
+}
+
 interface ChartRow {
   index: number;
   date: string;
@@ -200,6 +212,7 @@ function TrendChart({
     kind === "temperature"
       ? niceDomain(rows.flatMap((row) => [row.tempMinC, row.tempMaxC]), 2)
       : niceDomain([0, ...rows.map((row) => row.windMaxKmh)], 3);
+  const hourTicks = rows.map((row) => row.index);
 
   return (
     <div
@@ -209,7 +222,7 @@ function TrendChart({
       data-spray-ranges={sprayRangeSignature(sprayWindows)}
     >
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={rows} margin={{ top: 12, right: 12, bottom: 4, left: -18 }}>
+        <ComposedChart data={rows} margin={{ top: 12, right: 12, bottom: 12, left: -18 }}>
           <defs>
             <linearGradient id="vt-wind-fill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="hsl(var(--accent))" stopOpacity={0.35} />
@@ -221,7 +234,19 @@ function TrendChart({
             </linearGradient>
           </defs>
           <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="2 6" />
-          <XAxis type="number" dataKey="index" hide domain={[-0.5, 29.5]} allowDataOverflow />
+          <XAxis
+            type="number"
+            dataKey="index"
+            domain={[-0.5, 29.5]}
+            allowDataOverflow
+            ticks={hourTicks}
+            interval={0}
+            height={20}
+            axisLine={false}
+            tickLine={false}
+            tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+            tickFormatter={(value) => formatChartHourLabel(rows[Number(value)]?.time)}
+          />
           <YAxis
             width={48}
             domain={domain ?? ["auto", "auto"]}
