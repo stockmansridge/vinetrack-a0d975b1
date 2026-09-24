@@ -346,7 +346,9 @@ export function describeReconcile(r: ReconcileResult): string {
   if (r.status === "nothing_to_repair" || r.repairs.length === 0) return "Nothing to repair — runtime state was already consistent. No changes made.";
   const parts: string[] = [];
   if (r.repairs.includes("tank"))
-    parts.push(`Tank state repaired — stale active Tank ${r.previous_active_tank_number ?? ""} flag cleared. Tank Session and actual mix were unchanged.`.replace("Tank  flag", "tank flag"));
+    parts.push(
+      `Tank state repaired — stale active ${r.previous_active_tank_number != null ? `Tank ${r.previous_active_tank_number}` : "tank"} flag cleared. Tank Session and actual mix were unchanged.`,
+    );
   if (r.repairs.includes("fill"))
     parts.push("Fill state repaired — stale filling flag cleared. Fill sessions were unchanged.");
   if (r.repairs.includes("completion"))

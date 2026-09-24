@@ -1,4 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { MoreHorizontal } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -19,8 +27,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { AdminEmpty, AdminError, AdminPageHeader, formatRelative } from "./_shared";
 import {
+  actionForIssue,
   adminTripStatus,
   blockScopeDiff,
+  describeCloseSpray,
+  describeReconcile,
+  tripActions,
+  TRIP_ACTION_LABEL,
+  useCloseSprayRecordFromTrip,
+  useReconcileTripRuntime,
+  type TripActionId,
   canForceStop,
   detectTripIssues,
   formatDurationMs,
@@ -67,6 +83,12 @@ export default function AdminTripsPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<TripActionId | null>(null);
+  const { toast } = useToast();
+  const openTrip = (id: string, action: TripActionId | null = null) => {
+    setSelected(id);
+    setPendingAction(action);
+  };
 
   const list = useAdminTripsList({
     from: from ? new Date(from).toISOString() : null,
@@ -180,7 +202,7 @@ export default function AdminTripsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                {["Status", "Vineyard", "Trip", "Operator", "Started", "Last activity", "Duration", "Distance", "Mode", "Blocks", "Tanks", "Spray Record", "Issues"].map((h) => (
+                {["Status", "Vineyard", "Trip", "Operator", "Started", "Last activity", "Duration", "Distance", "Mode", "Blocks", "Tanks", "Spray Record", "Issues", "Actions"].map((h) => (
                   <TableHead key={h}>{h}</TableHead>
                 ))}
               </TableRow>
@@ -193,7 +215,7 @@ export default function AdminTripsPage() {
                 const end = parseTripTime(r.end_time);
                 const dur = start ? (end ?? new Date()).getTime() - start.getTime() : null;
                 return (
-                  <TableRow key={r.id} className="cursor-pointer" onClick={() => setSelected(r.id)} data-testid={`trip-row-${r.id}`}>
+                  <TableRow key={r.id} className="cursor-pointer" onClick={() => openTrip(r.id)} data-testid={`trip-row-${r.id}`}>
                     <TableCell><StatusBadge status={st} /></TableCell>
                     <TableCell>{r.vineyard_name ?? "—"}</TableCell>
                     <TableCell>
@@ -216,6 +238,16 @@ export default function AdminTripsPage() {
                         ))}
                       </div>
                     </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <RowActions
+                        row={r}
+                        onOpen={(a) => openTrip(r.id, a)}
+                        onCopy={() => {
+                          navigator.clipboard?.writeText(JSON.stringify(r, null, 2));
+                          toast({ title: "Diagnostic JSON copied" });
+                        }}
+                      />
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -224,16 +256,58 @@ export default function AdminTripsPage() {
         </Card>
       )}
 
-      <Sheet open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+      <Sheet open={!!selected} onOpenChange={(o) => { if (!o) { setSelected(null); setPendingAction(null); } }}>
         <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
-          {selected && <TripDetail tripId={selected} row={selectedRow} />}
+          {selected && <TripDetail key={`${selected}-${pendingAction ?? ""}`} tripId={selected} row={selectedRow} initialAction={pendingAction} />}
         </SheetContent>
       </Sheet>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+export function RowActions({
+  row,
+  onOpen,
+  onCopy,
+}: {
+  row: AdminTripRow;
+  onOpen: (a: TripActionId | null) => void;
+  onCopy: () => void;
+}) {
+  const actions = tripActions(row);
+  const contextual = actions.filter((a) => a !== "force_stop");
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label="Trip actions">
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={() => onOpen(null)}>View Details</DropdownMenuItem>
+        {contextual.map((a) => (
+          <DropdownMenuItem key={a} onSelect={() => onOpen(a)}>{TRIP_ACTION_LABEL[a]}</DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator />
+        {actions.includes("force_stop") && (
+          <DropdownMenuItem onSelect={() => onOpen("force_stop")} className="text-destructive">Force Stop Trip</DropdownMenuItem>
+        )}
+        <DropdownMenuItem onSelect={onCopy}>Copy Diagnostic JSON</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function Section({ title, children, sectionRef }: { title: string; children: React.ReactNode; sectionRef?: React.Ref<HTMLElement> }) {
+  return (
+    <section className="space-y-2" ref={sectionRef}>
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
+      <Card className="p-3 text-sm space-y-1">{children}</Card>
+    </section>
+  );
+}
+
+function _UnusedSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-2">
       <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
@@ -251,9 +325,35 @@ function KV({ k, v }: { k: string; v: React.ReactNode }) {
   );
 }
 
-export function TripDetail({ tripId, row }: { tripId: string; row: AdminTripRow | null }) {
+export function TripDetail({
+  tripId,
+  row,
+  initialAction = null,
+}: {
+  tripId: string;
+  row: AdminTripRow | null;
+  initialAction?: TripActionId | null;
+}) {
   const detail = useAdminTripDetail(tripId);
-  const [stopOpen, setStopOpen] = useState(false);
+  const [stopOpen, setStopOpen] = useState(initialAction === "force_stop");
+  const [repair, setRepair] = useState<TripActionId | null>(
+    initialAction && ["repair_tank", "repair_fill", "repair_completion", "close_spray"].includes(initialAction) ? initialAction : null,
+  );
+  const [blocksOpen, setBlocksOpen] = useState(initialAction === "compare_blocks");
+  const blocksRef = useRef<HTMLElement>(null);
+  const sprayRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (initialAction === "compare_blocks") blocksRef.current?.scrollIntoView?.({ block: "start" });
+    if (initialAction === "review_spray") sprayRef.current?.scrollIntoView?.({ block: "start" });
+  }, [initialAction]);
+  const runAction = (a: TripActionId) => {
+    if (a === "force_stop") setStopOpen(true);
+    else if (a === "compare_blocks") {
+      setBlocksOpen(true);
+      blocksRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    } else if (a === "review_spray") sprayRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    else setRepair(a);
+  };
   const { toast } = useToast();
   const d = detail.data;
   const t = d?.trip ?? (row as any) ?? {};
@@ -289,12 +389,22 @@ export function TripDetail({ tripId, row }: { tripId: string; row: AdminTripRow 
       <AdminError error={detail.error} />
       {issues.length > 0 && (
         <Card className="p-3 space-y-1" data-testid="trip-issues">
-          {issues.map((i) => (
-            <div key={i.code} className="text-sm">
-              <Badge variant={i.severity === "warning" ? "destructive" : "secondary"}>{i.label}</Badge>{" "}
-              <span className="text-muted-foreground">{i.detail}</span>
-            </div>
-          ))}
+          {issues.map((i) => {
+            const a = actionForIssue(base, i);
+            return (
+              <div key={i.code} className="text-sm flex items-start justify-between gap-3" data-testid={`issue-${i.code}`}>
+                <div>
+                  <Badge variant={i.severity === "warning" ? "destructive" : "secondary"}>{i.label}</Badge>{" "}
+                  <span className="text-muted-foreground">{i.detail}</span>
+                </div>
+                {a && (
+                  <Button size="sm" variant={a === "compare_blocks" || a === "review_spray" ? "outline" : "default"} onClick={() => runAction(a)}>
+                    {TRIP_ACTION_LABEL[a]}
+                  </Button>
+                )}
+              </div>
+            );
+          })}
         </Card>
       )}
       {canForceStop(base) && (
@@ -327,19 +437,41 @@ export function TripDetail({ tripId, row }: { tripId: string; row: AdminTripRow 
         <KV k="Current / next row" v={`${t.current_row_number ?? "—"} / ${t.next_row_number ?? "—"}`} />
       </Section>
 
-      <Section title="Blocks">
-        <KV k="Trip blocks" v={d?.blocks.length ?? base.block_ids?.length ?? 0} />
-        <KV k="Spray Record application blocks" v={base.spray_application_block_ids?.length ?? "—"} />
+      <Section title="Blocks" sectionRef={blocksRef}>
+        <KV k="Blocks currently recorded on the Trip" v={d?.blocks.length ?? base.block_ids?.length ?? 0} />
+        <KV k="Original Spray Record blocks" v={base.spray_application_block_ids?.length ?? "—"} />
         {diff && diff.added.length > 0 && (
           <div>
-            <span className="text-muted-foreground">Added during the job: </span>
+            <span className="text-muted-foreground">Added during Trip: </span>
             {diff.added.map((id) => d?.blocks.find((b) => b.id === id)?.name ?? id).join(", ")}
           </div>
         )}
         {diff && diff.missing.length > 0 && (
           <div>
-            <span className="text-muted-foreground">On Spray Record only: </span>
+            <span className="text-muted-foreground">On original Spray Record but not Trip: </span>
             {diff.missing.map((id) => d?.application_blocks.find((b) => b.id === id)?.name ?? id).join(", ")}
+          </div>
+        )}
+        {diff && (
+          <Button size="sm" variant="ghost" onClick={() => setBlocksOpen((o) => !o)}>
+            {blocksOpen ? "Hide block lists" : "Compare Blocks"}
+          </Button>
+        )}
+        {blocksOpen && (
+          <div className="grid grid-cols-2 gap-3 pt-1" data-testid="block-compare">
+            <div>
+              <div className="font-medium">Original Spray Record blocks</div>
+              {(d?.application_blocks ?? (base.spray_application_block_ids ?? []).map((id) => ({ id, name: null }))).map((b) => (
+                <div key={b.id}>{b.name ?? b.id}</div>
+              ))}
+            </div>
+            <div>
+              <div className="font-medium">Blocks on the Trip</div>
+              {(d?.blocks ?? (base.block_ids ?? []).map((id) => ({ id, name: null }))).map((b) => (
+                <div key={b.id}>{b.name ?? b.id}{diff?.added.includes(b.id) ? " (added)" : ""}</div>
+              ))}
+            </div>
+            <p className="col-span-2 text-xs text-muted-foreground">Differences are kept as planned-versus-actual evidence and are not changed from here.</p>
           </div>
         )}
       </Section>
@@ -372,7 +504,7 @@ export function TripDetail({ tripId, row }: { tripId: string; row: AdminTripRow 
         <KV k="Engine hours" v={`${t.start_engine_hours ?? "—"} → ${t.end_engine_hours ?? "—"}`} />
       </Section>
 
-      <Section title="Spray Record">
+      <Section title="Spray Record" sectionRef={sprayRef}>
         {d?.spray_record ? (
           <>
             <KV k="ID" v={<span className="font-mono">{d.spray_record.id}</span>} />
@@ -414,6 +546,9 @@ export function TripDetail({ tripId, row }: { tripId: string; row: AdminTripRow 
       </Section>
 
       <ForceStopDialog open={stopOpen} onOpenChange={setStopOpen} trip={base} detail={d ?? null} />
+      {repair && (
+        <RepairDialog action={repair} trip={base} onOpenChange={(o) => !o && setRepair(null)} />
+      )}
     </div>
   );
 }
@@ -509,6 +644,93 @@ export function ForceStopDialog({
               <Button variant="destructive" onClick={submit} disabled={stop.isPending}>
                 {stop.isPending ? "Stopping…" : "Force Stop"}
               </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function repairCopy(action: TripActionId, trip: AdminTripRow): string {
+  const n = trip.active_tank_number;
+  switch (action) {
+    case "repair_tank":
+      return `Tank ${n}'s session is already recorded as ended, but the Trip still marks Tank ${n} active. This will clear the stale active-tank flag only. Tank records and actual quantities will not change.`;
+    case "repair_fill":
+      return `The Trip says Tank ${trip.filling_tank_number ?? "?"} is filling, but no open fill session exists. This will clear the stale filling flag and filling tank only. Fill sessions, tanks and quantities will not change.`;
+    case "repair_completion":
+      return `The Trip finished at ${fmt(trip.end_time)}, but runtime fields still claim it is running. This will turn off active, paused and filling and clear the active and filling tank. The existing end time is kept; no new completion time is created.`;
+    case "close_spray":
+      return `The Trip finished at ${fmt(trip.end_time)}, but its linked Spray Record remains open. This will close the Spray Record at the same completion time. Spray quantities, tanks, blocks and weather will not change.`;
+    default:
+      return "";
+  }
+}
+
+export function RepairDialog({
+  action,
+  trip,
+  onOpenChange,
+}: {
+  action: TripActionId;
+  trip: AdminTripRow;
+  onOpenChange: (o: boolean) => void;
+}) {
+  const { toast } = useToast();
+  const reconcile = useReconcileTripRuntime();
+  const closeSpray = useCloseSprayRecordFromTrip();
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<string | null>(null);
+  const pending = reconcile.isPending || closeSpray.isPending;
+
+  const submit = async () => {
+    setError(null);
+    if (!reason.trim()) {
+      setError("A support reason is required.");
+      return;
+    }
+    try {
+      const msg =
+        action === "close_spray"
+          ? describeCloseSpray(await closeSpray.mutateAsync({ tripId: trip.id, reason }))
+          : describeReconcile(await reconcile.mutateAsync({ tripId: trip.id, reason }));
+      setResult(msg);
+      toast({ title: TRIP_ACTION_LABEL[action], description: msg });
+    } catch (e: any) {
+      setError(e?.message ?? "Repair failed. Nothing was changed.");
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{TRIP_ACTION_LABEL[action]}</DialogTitle>
+          <DialogDescription>
+            {trip.trip_title || trip.trip_function || "Trip"} · {trip.vineyard_name ?? "—"}
+          </DialogDescription>
+        </DialogHeader>
+        {result ? (
+          <div className="text-sm" data-testid="repair-result">{result}</div>
+        ) : (
+          <div className="space-y-3 text-sm">
+            <p data-testid="repair-copy">{repairCopy(action, trip)}</p>
+            <div>
+              <Label htmlFor="repair-reason">Support reason (required)</Label>
+              <Textarea id="repair-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+            </div>
+            {error && <div className="text-destructive" role="alert">{error}</div>}
+          </div>
+        )}
+        <DialogFooter>
+          {result ? (
+            <Button onClick={() => onOpenChange(false)}>Close</Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button onClick={submit} disabled={pending}>{pending ? "Working…" : TRIP_ACTION_LABEL[action]}</Button>
             </>
           )}
         </DialogFooter>
