@@ -307,15 +307,6 @@ function Section({ title, children, sectionRef }: { title: string; children: Rea
   );
 }
 
-function _UnusedSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="space-y-2">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
-      <Card className="p-3 text-sm space-y-1">{children}</Card>
-    </section>
-  );
-}
-
 function KV({ k, v }: { k: string; v: React.ReactNode }) {
   return (
     <div className="flex justify-between gap-4">
