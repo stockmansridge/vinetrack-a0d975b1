@@ -148,3 +148,19 @@ describe("SQL 251 server contract", () => {
     expect(readFileSync("sql/250_admin_trip_support_recovery.sql", "utf8")).not.toContain("admin_reconcile_trip_runtime");
   });
 });
+
+describe("SQL 252 fixes", () => {
+  const fix = readFileSync("sql/252_admin_trip_support_fixes.sql", "utf8");
+  it("builds the repairs array with array_append, never text[] || literal", () => {
+    expect(fix).toContain("array_append(v_repairs, 'tank'::text)");
+    expect(fix).not.toMatch(/v_repairs \|\| '/);
+  });
+  it("only expands real JSON arrays and matches block IDs case-insensitively", () => {
+    expect(fix).toContain("jsonb_typeof(sr->'application_block_ids') = 'array'");
+    expect(fix).toContain("lower(pd.id::text) = lower(b.id)");
+  });
+  it("block comparison ignores ID letter case", async () => {
+    const { blockScopeDiff } = await import("@/lib/adminTrips");
+    expect(blockScopeDiff(["ABC"], ["abc"])).toMatchObject({ added: [], missing: [] });
+  });
+});

@@ -437,13 +437,13 @@ export function TripDetail({
         {diff && diff.added.length > 0 && (
           <div>
             <span className="text-muted-foreground">Added during Trip: </span>
-            {diff.added.map((id) => d?.blocks.find((b) => b.id === id)?.name ?? id).join(", ")}
+            {diff.added.map((id) => d?.blocks.find((b) => b.id.toLowerCase() === id)?.name ?? id).join(", ")}
           </div>
         )}
         {diff && diff.missing.length > 0 && (
           <div>
             <span className="text-muted-foreground">On original Spray Record but not Trip: </span>
-            {diff.missing.map((id) => d?.application_blocks.find((b) => b.id === id)?.name ?? id).join(", ")}
+            {diff.missing.map((id) => d?.application_blocks.find((b) => b.id.toLowerCase() === id)?.name ?? id).join(", ")}
           </div>
         )}
         {diff && (
@@ -462,7 +462,7 @@ export function TripDetail({
             <div>
               <div className="font-medium">Blocks on the Trip</div>
               {(d?.blocks ?? (base.block_ids ?? []).map((id) => ({ id, name: null }))).map((b) => (
-                <div key={b.id}>{b.name ?? b.id}{diff?.added.includes(b.id) ? " (added)" : ""}</div>
+                <div key={b.id}>{b.name ?? b.id}{diff?.added.includes(b.id.toLowerCase()) ? " (added)" : ""}</div>
               ))}
             </div>
             <p className="col-span-2 text-xs text-muted-foreground">Differences are kept as planned-versus-actual evidence and are not changed from here.</p>
