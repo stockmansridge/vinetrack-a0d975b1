@@ -402,7 +402,10 @@ export function TripDetail({
         <Card className="p-3 flex items-center justify-between gap-3 border-destructive/40">
           <div className="text-sm">
             <div className="font-medium">Support recovery</div>
-            <div className="text-muted-foreground">Closes the runtime state of a stuck Trip. Not a customer edit.</div>
+            <div className="text-muted-foreground">
+              Ends a Trip that is genuinely still running. Not a customer edit.
+              {issues.some((i) => i.code === "stale_active_tank" || i.code === "fill_state_mismatch") && " Prefer the repair above — it restores normal operation without ending the Trip."}
+            </div>
           </div>
           <Button variant="destructive" onClick={() => setStopOpen(true)}>Force Stop Trip</Button>
         </Card>
@@ -531,6 +534,9 @@ export function TripDetail({
             <div key={a.id} className="border-b last:border-0 py-1">
               <div className="font-medium">{a.action} · {fmt(a.created_at)}</div>
               <div className="text-muted-foreground">{a.details?.reason}</div>
+              {Array.isArray(a.details?.repairs) && (
+                <div className="text-xs text-muted-foreground">Repaired: {a.details.repairs.join(", ")}</div>
+              )}
             </div>
           ))
         )}
