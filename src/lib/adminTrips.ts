@@ -242,8 +242,8 @@ export function detectTripIssues(t: IssueInput): TripIssue[] {
 
 export function blockScopeDiff(tripIds: string[] | null | undefined, sprayIds: string[] | null | undefined) {
   if (!Array.isArray(sprayIds) || sprayIds.length === 0) return null;
-  const trip = new Set((tripIds ?? []).map(String));
-  const spray = new Set(sprayIds.map(String));
+  const trip = new Set((tripIds ?? []).map((v) => String(v).toLowerCase()));
+  const spray = new Set(sprayIds.map((v) => String(v).toLowerCase()));
   return {
     tripCount: trip.size,
     sprayCount: spray.size,
