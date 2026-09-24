@@ -188,7 +188,7 @@ export function detectTripIssues(t: IssueInput): TripIssue[] {
     }
   }
 
-  if (t.is_filling_tank === true) {
+  if (t.is_filling_tank === true || t.filling_tank_number != null) {
     const openFill = sessions.some(
       (s) =>
         hasValue(s.fillStartTime) &&
@@ -205,12 +205,12 @@ export function detectTripIssues(t: IssueInput): TripIssue[] {
     }
   }
 
-  if (t.end_time && t.is_active === true) {
+  if (t.end_time && hasRuntimeState(t)) {
     issues.push({
       code: "completion_mismatch",
       severity: "warning",
       label: "Completion mismatch",
-      detail: "Trip has an end time but is still marked active.",
+      detail: "Trip has an end time but runtime fields still claim it is running.",
     });
   }
 
@@ -254,11 +254,141 @@ export function blockScopeDiff(tripIds: string[] | null | undefined, sprayIds: s
 
 export const needsAttention = (t: IssueInput) => detectTripIssues(t).some((i) => i.severity === "warning");
 
+function hasRuntimeState(t: Partial<AdminTripRow>): boolean {
+  return (
+    t.is_active === true ||
+    t.is_paused === true ||
+    t.active_tank_number != null ||
+    t.is_filling_tank === true ||
+    t.filling_tank_number != null
+  );
+}
+
+/** Force Stop is only for Trips that are genuinely still running (no end time). */
 export function canForceStop(t: Pick<AdminTripRow, "end_time" | "is_active" | "is_paused" | "active_tank_number" | "is_filling_tank" | "filling_tank_number">): boolean {
-  if (t.is_active === true || t.is_paused === true || t.is_filling_tank === true) return true;
-  // completed but runtime not closed
-  if (t.end_time && (t.active_tank_number != null || t.filling_tank_number != null)) return true;
-  return false;
+  if (t.end_time) return false;
+  return t.is_active === true || t.is_paused === true || t.is_filling_tank === true;
+}
+
+export type TripActionId =
+  | "repair_tank"
+  | "repair_fill"
+  | "repair_completion"
+  | "close_spray"
+  | "review_spray"
+  | "compare_blocks"
+  | "force_stop";
+
+export const TRIP_ACTION_LABEL: Record<TripActionId, string> = {
+  repair_tank: "Repair Tank State",
+  repair_fill: "Repair Fill State",
+  repair_completion: "Repair Completion State",
+  close_spray: "Close Spray Record",
+  review_spray: "Review Spray Record",
+  compare_blocks: "Compare Blocks",
+  force_stop: "Force Stop Trip",
+};
+
+const ISSUE_ACTION: Partial<Record<TripIssueCode, TripActionId>> = {
+  stale_active_tank: "repair_tank",
+  fill_state_mismatch: "repair_fill",
+  completion_mismatch: "repair_completion",
+  block_scope_difference: "compare_blocks",
+};
+
+function anyOpenFill(t: IssueInput) {
+  return (t.tank_sessions ?? []).some((s) => hasValue(s.fillStartTime) && !hasValue(s.fillEndTime));
+}
+
+/** Action for one issue, only if the server preconditions (SQL 251) hold. */
+export function actionForIssue(t: IssueInput, issue: TripIssue): TripActionId | null {
+  if (issue.code === "spray_lifecycle_mismatch") {
+    if (t.end_time && t.spray_record_id && !t.spray_record_end_time) return "close_spray";
+    return "review_spray"; // never an automatic reopen
+  }
+  const a = ISSUE_ACTION[issue.code] ?? null;
+  if (a === "repair_tank" && (t.end_time || anyOpenFill(t))) return null;
+  if (a === "repair_fill" && t.end_time) return null;
+  return a;
+}
+
+/** Contextual actions, surgical repairs first, Force Stop last. */
+export function tripActions(t: IssueInput & Pick<AdminTripRow, "is_paused">): TripActionId[] {
+  const out: TripActionId[] = [];
+  for (const issue of detectTripIssues(t)) {
+    const a = actionForIssue(t, issue);
+    if (a && !out.includes(a)) out.push(a);
+  }
+  const order: TripActionId[] = ["repair_tank", "repair_fill", "repair_completion", "close_spray", "review_spray", "compare_blocks"];
+  const sorted = order.filter((a) => out.includes(a));
+  if (canForceStop(t as AdminTripRow)) sorted.push("force_stop");
+  return sorted;
+}
+
+export interface ReconcileResult {
+  status: "repaired" | "nothing_to_repair";
+  trip_id: string;
+  repairs: ("tank" | "fill" | "completion")[];
+  previous_active_tank_number?: number | null;
+  previous_filling_tank_number?: number | null;
+  audit_event_id?: string;
+}
+
+export interface CloseSprayResult {
+  status: "closed" | "already_closed";
+  trip_id: string;
+  spray_record_id?: string;
+  end_time?: string;
+  audit_event_id?: string;
+}
+
+export function describeReconcile(r: ReconcileResult): string {
+  if (r.status === "nothing_to_repair" || r.repairs.length === 0) return "Nothing to repair — runtime state was already consistent. No changes made.";
+  const parts: string[] = [];
+  if (r.repairs.includes("tank"))
+    parts.push(`Tank state repaired — stale active Tank ${r.previous_active_tank_number ?? ""} flag cleared. Tank Session and actual mix were unchanged.`.replace("Tank  flag", "tank flag"));
+  if (r.repairs.includes("fill"))
+    parts.push("Fill state repaired — stale filling flag cleared. Fill sessions were unchanged.");
+  if (r.repairs.includes("completion"))
+    parts.push("Completion state repaired — runtime flags closed. The existing end time was kept.");
+  return parts.join(" ");
+}
+
+export function describeCloseSpray(r: CloseSprayResult): string {
+  if (r.status === "already_closed") return "Spray Record was already closed. No changes made.";
+  return "Spray Record closed at the Trip's completion time. Quantities, tanks, blocks and weather were unchanged.";
+}
+
+export function useReconcileTripRuntime() {
+  const qc = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: (args: { tripId: string; reason: string }) => {
+      const reason = args.reason.trim();
+      if (!reason) return Promise.reject(new Error("A support reason is required"));
+      return rpc<ReconcileResult>("admin_reconcile_trip_runtime", { p_trip_id: args.tripId, p_reason: reason });
+    },
+    onSuccess: (_d, args) => {
+      qc.invalidateQueries({ queryKey: ADMIN_TRIPS_KEY });
+      qc.invalidateQueries({ queryKey: adminTripKey(args.tripId) });
+    },
+  });
+}
+
+export function useCloseSprayRecordFromTrip() {
+  const qc = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: (args: { tripId: string; reason: string }) => {
+      const reason = args.reason.trim();
+      if (!reason) return Promise.reject(new Error("A support reason is required"));
+      return rpc<CloseSprayResult>("admin_close_spray_record_from_trip", { p_trip_id: args.tripId, p_reason: reason });
+    },
+    onSuccess: (_d, args) => {
+      qc.invalidateQueries({ queryKey: ADMIN_TRIPS_KEY });
+      qc.invalidateQueries({ queryKey: adminTripKey(args.tripId) });
+    },
+  });
 }
 
 /** Latest trustworthy operational activity (path points + tank sessions + pauses). */
