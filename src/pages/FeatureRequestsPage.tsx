@@ -217,7 +217,7 @@ export default function FeatureRequestsPage() {
                 {r.status === "done" && (
                   <CheckCircle2
                     aria-label="Completed"
-                    className="mt-4 h-8 w-8 shrink-0 text-success"
+                    className="mt-4 h-8 w-8 shrink-0 text-emerald-500"
                   />
                 )}
                 <button
