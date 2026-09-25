@@ -1,3 +1,4 @@
+import EquipmentImportExportDialog from "@/components/equipment/EquipmentImportExportDialog";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -341,11 +342,14 @@ export default function TractorsPage() {
               : "Read-only view."}
           </p>
         </div>
+        <div className="flex items-center gap-2">
+          <EquipmentImportExportDialog />
         {canEdit && (
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1" /> New tractor
           </Button>
         )}
+        </div>
       </div>
       <div className="flex justify-end">
         <Input

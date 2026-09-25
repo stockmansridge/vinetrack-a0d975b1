@@ -1,3 +1,4 @@
+import EquipmentImportExportDialog from "@/components/equipment/EquipmentImportExportDialog";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
@@ -85,11 +86,14 @@ export default function EquipmentOtherItemsPage() {
             non-fuel-tracked assets. Not used for Fuel Log or machine fuel costing.
           </p>
         </div>
+        <div className="flex items-center gap-2">
+          <EquipmentImportExportDialog />
         {canWrite && (
           <Button size="sm" onClick={() => setCreateOpen(true)} disabled={!selectedVineyardId}>
             <Plus className="h-4 w-4 mr-2" /> New item
           </Button>
         )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-end gap-2">

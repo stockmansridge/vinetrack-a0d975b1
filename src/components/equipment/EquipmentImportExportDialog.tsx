@@ -189,17 +189,6 @@ export default function EquipmentImportExportDialog() {
           await updateEquipmentItem({ ...(p as any), user_id: uid });
         },
       });
-      for (const k of [
-        ["list", "tractors"],
-        ["list", "spray_equipment"],
-        ["count"],
-        ["vineyard_machines"],
-        ["equipment_items"],
-        ["equipment_selector_options"],
-        ["equipment-import-export"],
-      ]) {
-        qc.invalidateQueries({ queryKey: k });
-      }
       qc.invalidateQueries();
       if (result.errors.length) {
         toast.error(
