@@ -97,21 +97,47 @@ export function decorateFeatureRequests(
     });
 }
 
-/** Pure: search over title, details and author name. */
+/** Statuses shown by the default "Active" filter. */
+export const ACTIVE_FEATURE_STATUSES = ["in_progress", "planned", "open"] as const;
+
+const STATUS_RANK: Record<string, number> = {
+  in_progress: 0,
+  planned: 1,
+  open: 2,
+  done: 3,
+  declined: 4,
+};
+
+/**
+ * Pure: search over title, details and author name. `status` may be "all",
+ * "active" (in progress / planned / open) or a single status. Results are
+ * ordered In progress → Planned → Open → Done → Not planned, keeping the
+ * vote order within each status.
+ */
 export function filterFeatureRequests(
   list: FeatureRequest[],
   search: string,
   status: string,
 ): FeatureRequest[] {
   const q = search.trim().toLowerCase();
-  return list.filter((r) => {
-    if (status !== "all" && r.status !== status) return false;
-    if (!q) return true;
-    return [r.title, r.details ?? "", r.created_by_name ?? ""]
-      .join(" ")
-      .toLowerCase()
-      .includes(q);
-  });
+  const active = new Set<string>(ACTIVE_FEATURE_STATUSES);
+  return list
+    .filter((r) => {
+      if (status === "active") {
+        if (!active.has(r.status)) return false;
+      } else if (status !== "all" && r.status !== status) return false;
+      if (!q) return true;
+      return [r.title, r.details ?? "", r.created_by_name ?? ""]
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
+    })
+    .map((r, i) => ({ r, i }))
+    .sort(
+      (a, b) =>
+        (STATUS_RANK[a.r.status] ?? 9) - (STATUS_RANK[b.r.status] ?? 9) || a.i - b.i,
+    )
+    .map(({ r }) => r);
 }
 
 const QK = ["feature-requests"] as const;
