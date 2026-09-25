@@ -334,6 +334,28 @@ export function supplementForecast(
     const extra = byDate.get(day.date);
     if (!extra) return day;
 
+    // A daily-only primary has no periods at all: adopt the supplementary
+    // periods for this same date so the detailed trends can render. Day-level
+    // values (the daily cards) stay the primary provider's.
+    if (day.periods.length === 0 && extra.periods.some((p) => p.sampleCount > 0)) {
+      changed = true;
+      (["temperature", "wind", "rain", "humidity"] as const).forEach((g) => supplemented.add(g));
+      const needsDayHumidity = day.humidityMaxPct == null && extra.humidityMaxPct != null;
+      const needsCondition = !day.conditionDescription && !!extra.conditionDescription;
+      if (needsCondition) supplemented.add("condition");
+      return {
+        ...day,
+        periods: extra.periods.map((p) => ({ ...p })),
+        humidityMaxPct: needsDayHumidity ? extra.humidityMaxPct : day.humidityMaxPct,
+        tempMinC: day.tempMinC ?? extra.tempMinC,
+        tempMaxC: day.tempMaxC ?? extra.tempMaxC,
+        windMaxKmh: day.windMaxKmh ?? extra.windMaxKmh,
+        conditionKey: needsCondition ? extra.conditionKey ?? null : day.conditionKey,
+        conditionCode: needsCondition ? extra.conditionCode : day.conditionCode,
+        conditionDescription: needsCondition ? extra.conditionDescription : day.conditionDescription,
+      };
+    }
+
     const periods = day.periods.map((period) => {
       const match = extra.periods.find((candidate) => candidate.startHour === period.startHour);
       if (!match) return period;
