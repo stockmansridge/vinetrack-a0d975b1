@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronDown, Search } from "lucide-react";
 import { BrandName } from "@/components/BrandName";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ELStagesButton } from "@/components/ELStagesButton";
 import { DemoModeToggle } from "@/components/DemoModeToggle";
 import { SupportAlertPill } from "@/components/support/SupportAlertPill";
 import { useCurrentProfile, displayNameFor } from "@/hooks/useCurrentProfile";
@@ -154,6 +155,7 @@ export default function AppLayout() {
               </Button>
               <SupportAlertPill />
               <DemoModeToggle />
+              <ELStagesButton />
               <ThemeToggle />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
