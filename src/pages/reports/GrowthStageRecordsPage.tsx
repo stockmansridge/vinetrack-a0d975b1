@@ -49,6 +49,8 @@ import {
   type GrowthStageRecord,
 } from "@/lib/growthStageRecordsQuery";
 
+import { phaseColourCss, ALL_PHASES } from "@/lib/growthPhases";
+
 const ANY = "__any__";
 
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
