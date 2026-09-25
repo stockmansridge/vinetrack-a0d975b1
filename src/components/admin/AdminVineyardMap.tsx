@@ -33,6 +33,21 @@ export default function AdminVineyardMap({
     )
     .filter((pts) => pts.length >= 3);
 
+  // Vine row lines (startPoint → endPoint) so row direction is visible.
+  const rowLines: Array<[{ lat: number; lng: number }, { lat: number; lng: number }]> = [];
+  for (const p of paddocks) {
+    if (p.deleted_at || !Array.isArray(p.rows)) continue;
+    for (const r of p.rows as any[]) {
+      const a = r?.startPoint, b = r?.endPoint;
+      const ok = (pt: any) =>
+        pt && Number.isFinite(pt.latitude) && Number.isFinite(pt.longitude) &&
+        Math.abs(pt.latitude) <= 90 && Math.abs(pt.longitude) <= 180;
+      if (ok(a) && ok(b)) {
+        rowLines.push([{ lat: a.latitude, lng: a.longitude }, { lat: b.latitude, lng: b.longitude }]);
+      }
+    }
+  }
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "failed">("loading");
@@ -69,7 +84,20 @@ export default function AdminVineyardMap({
               },
             ),
         );
-        map.addOverlays(overlays);
+        const rowOverlays = rowLines.map(
+          ([a, b]) =>
+            new mapkit.PolylineOverlay(
+              [new mapkit.Coordinate(a.lat, a.lng), new mapkit.Coordinate(b.lat, b.lng)],
+              {
+                style: new mapkit.Style({
+                  strokeColor: "#FFFFFF",
+                  strokeOpacity: 0.75,
+                  lineWidth: 1,
+                }),
+              },
+            ),
+        );
+        map.addOverlays([...overlays, ...rowOverlays]);
 
         let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
         for (const pts of polys) {
