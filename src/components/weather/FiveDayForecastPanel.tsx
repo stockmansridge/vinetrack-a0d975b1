@@ -225,8 +225,8 @@ function TrendChart({
         <ComposedChart data={rows} margin={{ top: 12, right: 12, bottom: 12, left: -18 }}>
           <defs>
             <linearGradient id="vt-wind-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="hsl(var(--accent))" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="hsl(var(--accent))" stopOpacity={0.02} />
+              <stop offset="0%" stopColor="hsl(var(--wind))" stopOpacity={0.35} />
+              <stop offset="100%" stopColor="hsl(var(--wind))" stopOpacity={0.02} />
             </linearGradient>
             <linearGradient id="vt-temp-band" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="hsl(var(--destructive))" stopOpacity={0.22} />
@@ -341,7 +341,7 @@ function TrendChart({
                 connectNulls={false}
                 type="monotone"
                 dataKey="windMaxKmh"
-                stroke="hsl(var(--accent))"
+                stroke="hsl(var(--wind))"
                 strokeWidth={3}
                 isAnimationActive={false}
                 dot={(props: any) => {
@@ -564,7 +564,7 @@ export function FiveDayForecastPanel({ vineyardId, forecast, rf, freshnessLabel,
 
       <section className="border-t px-3 py-4">
         <div className="mb-2 flex items-center gap-2 text-xs font-semibold">
-          <Wind className="h-4 w-4 text-accent" />Wind trend
+          <Wind className="h-4 w-4 text-wind" />Wind trend
         </div>
         {hasThirtyPositions ? (
           <TrendChart
