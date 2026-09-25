@@ -243,12 +243,12 @@ export function planEquipmentImport(
     const name = get("name");
     let match: ExistingEquipment | undefined;
     if (id) {
-      match = byId.get(id.toLowerCase());
-      if (!match || match.cls !== cls) {
-        errors.push({ line, message: `internal_id ${id} not found in ${EQUIPMENT_CLASS_LABEL[cls]}` });
-        continue;
-      }
-    } else if (name) {
+      const byIdMatch = byId.get(id.toLowerCase());
+      if (byIdMatch && byIdMatch.cls === cls) match = byIdMatch;
+    }
+    // An internal_id from another vineyard (or a deleted item) is not an
+    // error: fall back to a case-insensitive name match, otherwise create.
+    if (!match && name) {
       match = existing.find((e) => e.cls === cls && e.name.trim().toLowerCase() === name.toLowerCase());
     }
     const action: RowAction = match ? "update" : "create";
