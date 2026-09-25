@@ -91,9 +91,14 @@ export function calculateCarrier(args: {
    * "calculated when blocks are selected", never as an error.
    */
   templateMode?: boolean;
+  /** Message used for deferred values (Program Step vs Planned Spray without blocks). */
+  deferredMessage?: string;
 }): CarrierResult {
   const { geometry, mode, carrier } = args;
   const templateMode = !!args.templateMode;
+  const deferredMessage = args.deferredMessage ?? "Calculated when blocks are selected.";
+  // Banded is a direct ground application: the canopy tables are never consulted.
+  const banded = mode === "banded";
   const diagnostics: SprayDiagnostic[] = [];
   const basis = carrier.basis;
 
@@ -107,13 +112,21 @@ export function calculateCarrier(args: {
         ? {
             code: `${code}_at_plan_spray`,
             severity: "info",
-            message: "Calculated when blocks are selected.",
+            message: deferredMessage,
           }
         : { code, severity, message },
     );
 
-  // Carrier hectares are gross hectares. Treated hectares belong to products.
-  const carrierAreaHa = geometry.grossAreaHa;
+  // Foliar: carrier hectares are gross hectares. Banded: the operator says
+  // explicitly whether the water rate is per treated or per gross hectare.
+  const bandedAreaBasis = banded ? carrier.carrierAreaBasis ?? null : null;
+  const carrierAreaHa = banded
+    ? bandedAreaBasis === "treated_area"
+      ? geometry.treatedAreaHa
+      : bandedAreaBasis === "whole_block_area"
+        ? geometry.grossAreaHa
+        : null
+    : geometry.grossAreaHa;
 
   const applied100m = pos(carrier.appliedLitresPer100m);
   const dilute100m = pos(carrier.diluteLitresPer100m);
@@ -123,15 +136,16 @@ export function calculateCarrier(args: {
 
   // The canopy answer only ever produces a RECOMMENDATION. What the sprayer
   // actually applies is always the operator's recorded value.
-  const recommendedPer100m = recommendedDiluteLitresPer100m(
-    carrier.canopyType ?? null,
-    carrier.canopySize ?? null,
-    carrier.canopyDensity ?? null,
-  );
-  const recommendedPerHa = litresPerHectareFromPer100m(
-    recommendedPer100m,
-    geometry.rowSpacingMetres,
-  );
+  const recommendedPer100m = banded
+    ? null
+    : recommendedDiluteLitresPer100m(
+        carrier.canopyType ?? null,
+        carrier.canopySize ?? null,
+        carrier.canopyDensity ?? null,
+      );
+  const recommendedPerHa = banded
+    ? null
+    : litresPerHectareFromPer100m(recommendedPer100m, geometry.rowSpacingMetres);
 
   /**
    * "Use recommended volume" is an INTENT, not a number. A Program Step stores
@@ -139,7 +153,7 @@ export function calculateCarrier(args: {
    * real blocks exist the canopy recommendation becomes the actual sprayer
    * output for this job. An explicitly recorded output always wins.
    */
-  const useRecommended = carrier.sprayerOutputChoice === "recommended";
+  const useRecommended = !banded && carrier.sprayerOutputChoice === "recommended";
   const appliedPerHa = lPerHa ?? (useRecommended ? recommendedPerHa : null);
   const appliedPer100m = applied100m ?? (useRecommended ? recommendedPer100m : null);
 
@@ -183,6 +197,12 @@ export function calculateCarrier(args: {
   } else if (basis === "l_per_ha") {
     if (appliedPerHa == null) {
       note("missing_carrier_rate", "error", "Carrier rate (L/ha) is not set.");
+    } else if (banded && !bandedAreaBasis) {
+      diagnostics.push({
+        code: "missing_carrier_area_basis",
+        severity: "error",
+        message: "Choose whether the spray water rate applies to the treated area or the whole block area.",
+      });
     } else if (carrierAreaHa == null) {
       note(
         "incomplete_geometry_for_carrier",
@@ -191,13 +211,20 @@ export function calculateCarrier(args: {
       );
     } else {
       litresPerHectare = appliedPerHa;
-      // Gross hectares — banded included, per the confirmed Rork contract.
       totalCarrierLitres = appliedPerHa * carrierAreaHa;
-      if (geometry.uniformRowSpacing && geometry.rowSpacingMetres != null && geometry.rowSpacingMetres > 0) {
+      if (!banded && geometry.uniformRowSpacing && geometry.rowSpacingMetres != null && geometry.rowSpacingMetres > 0) {
         litresPer100m = (appliedPerHa * geometry.rowSpacingMetres) / 100;
       }
     }
 
+  } else if (banded && !templateMode) {
+    // Historical Banded rows may carry L/100 m. They stay readable (the saved
+    // total is untouched) but new Banded authoring uses L/ha or Manual only.
+    diagnostics.push({
+      code: "banded_l_per_100m_not_supported",
+      severity: "error",
+      message: "Banded ground sprays use L/ha or Manual total water — choose one of those.",
+    });
   } else {
     // l_per_100m — never falls back to an L/ha calculation.
     //
@@ -249,10 +276,10 @@ export function calculateCarrier(args: {
 
   // Concentration factor: a persisted value is authoritative history.
   // Manual is always 1.00 — there is no dilute reference to concentrate from.
-  let concentrationFactor = basis === "manual" ? 1 : pos(carrier.concentrationFactor);
+  let concentrationFactor = banded ? null : basis === "manual" ? 1 : pos(carrier.concentrationFactor);
   let concentrationFactorSource: CarrierResult["concentrationFactorSource"] =
     basis === "manual" ? "manual" : concentrationFactor != null ? "persisted" : null;
-  if (concentrationFactor == null) {
+  if (concentrationFactor == null && !banded) {
     const derived =
       basis === "l_per_ha"
         // The canopy answer IS the dilute reference. An explicitly stored
@@ -333,9 +360,12 @@ export function calculateProducts(args: {
   carrier: CarrierResult;
   /** Program Step: quantities are resolved at Plan Spray, not here. */
   templateMode?: boolean;
+  /** Planned Spray with no confirmed blocks: block-dependent quantities are deferred. */
+  deferGeometry?: boolean;
 }): ProductResult[] {
   const { products, geometry, carrier } = args;
   const templateMode = !!args.templateMode;
+  const deferGeometry = templateMode || !!args.deferGeometry;
   return products.map((line, index) => {
     const diagnostics: SprayDiagnostic[] = [];
     // `Number(null)` is 0 — an empty rate must never become a zero rate.
@@ -373,9 +403,9 @@ export function calculateProducts(args: {
           : null;
       if (multiplier == null) {
         diagnostics.push({
-          code: templateMode ? "per_100m_needs_row_length_at_plan_spray" : "per_100m_needs_row_length",
-          severity: templateMode ? "info" : "error",
-          message: templateMode
+          code: deferGeometry ? "per_100m_needs_row_length_at_plan_spray" : "per_100m_needs_row_length",
+          severity: deferGeometry ? "info" : "error",
+          message: deferGeometry
             ? `${line.productName ?? "Product"} quantity is calculated when blocks are selected.`
             : `${line.productName ?? "Product"} is rated per 100 m but the canonical row length is unknown.`,
           productIndex: index,
@@ -394,9 +424,9 @@ export function calculateProducts(args: {
           : null;
       if (multiplier == null) {
         diagnostics.push({
-          code: templateMode ? "per_100l_needs_carrier_at_plan_spray" : "per_100l_needs_carrier",
-          severity: templateMode ? "info" : "error",
-          message: templateMode
+          code: deferGeometry ? "per_100l_needs_carrier_at_plan_spray" : "per_100l_needs_carrier",
+          severity: deferGeometry ? "info" : "error",
+          message: deferGeometry
             ? `${line.productName ?? "Product"} quantity is calculated when blocks are selected.`
             : `${line.productName ?? "Product"} is rated per 100 L but the spray water volume is unknown.`,
           productIndex: index,
@@ -429,9 +459,9 @@ export function calculateProducts(args: {
       line.rateBasis !== "per_100_metres"
     ) {
       diagnostics.push({
-        code: templateMode ? "product_quantity_at_plan_spray" : "incomplete_geometry_for_product",
-        severity: templateMode ? "info" : "error",
-        message: templateMode
+        code: deferGeometry ? "product_quantity_at_plan_spray" : "incomplete_geometry_for_product",
+        severity: deferGeometry ? "info" : "error",
+        message: deferGeometry
           ? `${line.productName ?? "Product"} quantity is calculated when blocks are selected.`
           : `Cannot compute ${line.productName ?? "product"} quantity — this rate is per hectare and the block area is not available. Select blocks or set the area.`,
         productIndex: index,
@@ -587,12 +617,16 @@ export function calculateTanks(args: {
 
 /* ---------------------------------------------------------- orchestrator */
 
+export const BLOCKS_DEFERRED_MESSAGE = "Calculated when blocks are confirmed.";
+
 export interface SprayCalculationResult {
   geometry: ApplicationGeometry;
   carrier: CarrierResult;
   products: ProductResult[];
   tanks: TankResult;
   diagnostics: SprayDiagnostic[];
+  /** Planned Spray with no confirmed blocks: block-dependent totals are deferred. */
+  blocksDeferred: boolean;
   /** True when nothing blocks the application from being recorded. */
   canRecord: boolean;
 }
@@ -605,18 +639,26 @@ export function calculateSprayApplication(args: {
   // A Program Step is reusable configuration with no blocks by design, so
   // anything that needs block geometry is deferred to Plan Spray.
   const templateMode = !!application.isTemplate;
+  // Planning mode: a Planned Spray may be saved before blocks are confirmed.
+  // Block-dependent totals are then deferred — never invented.
+  const blocksDeferred =
+    !templateMode && application.blockIds.length === 0 && geometry.grossAreaHa == null;
   const carrier = calculateCarrier({
     geometry,
     mode: application.mode,
     operationType: application.operationType,
     carrier: application.carrier,
-    templateMode,
+    templateMode: templateMode || blocksDeferred,
+    deferredMessage: templateMode
+      ? "Calculated when blocks are selected."
+      : BLOCKS_DEFERRED_MESSAGE,
   });
   const products = calculateProducts({
     products: application.products,
     geometry,
     carrier,
     templateMode,
+    deferGeometry: blocksDeferred,
   });
   const tanks = calculateTanks({
     totalCarrierLitres: carrier.totalCarrierLitres,
@@ -625,7 +667,7 @@ export function calculateSprayApplication(args: {
   });
 
   const diagnostics: SprayDiagnostic[] = [
-    ...(templateMode
+    ...(templateMode || blocksDeferred
       ? []
       : geometry.issues.map<SprayDiagnostic>((code) => ({
           code,
@@ -657,6 +699,7 @@ export function calculateSprayApplication(args: {
     products,
     tanks,
     diagnostics,
+    blocksDeferred,
     canRecord: !diagnostics.some((d) => d.severity === "error"),
   };
 }
