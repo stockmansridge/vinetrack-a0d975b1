@@ -87,12 +87,12 @@ export default function EquipmentOtherItemsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <EquipmentImportExportDialog />
         {canWrite && (
           <Button size="sm" onClick={() => setCreateOpen(true)} disabled={!selectedVineyardId}>
             <Plus className="h-4 w-4 mr-2" /> New item
           </Button>
         )}
+          <EquipmentImportExportDialog size="sm" />
         </div>
       </div>
 

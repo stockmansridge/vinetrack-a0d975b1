@@ -100,7 +100,7 @@ async function loadAllEquipment(vineyardId: string): Promise<ExistingEquipment[]
   ];
 }
 
-export default function EquipmentImportExportDialog() {
+export default function EquipmentImportExportDialog({ size = "default" }: { size?: "default" | "sm" } = {}) {
   const { selectedVineyardId, memberships, currentRole } = useVineyard();
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -225,7 +225,7 @@ export default function EquipmentImportExportDialog() {
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1" disabled={!selectedVineyardId}>
+        <Button variant="outline" size={size} className="gap-1" disabled={!selectedVineyardId}>
           <FileDown className="h-4 w-4" /> Export / Import
         </Button>
       </DialogTrigger>

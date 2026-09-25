@@ -234,12 +234,12 @@ export default function VineyardMachinesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <EquipmentImportExportDialog />
         {canEdit && (
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1" /> New machine
           </Button>
         )}
+          <EquipmentImportExportDialog />
         </div>
       </div>
       <div className="flex justify-end">
