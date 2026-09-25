@@ -1,3 +1,4 @@
+import EquipmentImportExportDialog from "@/components/equipment/EquipmentImportExportDialog";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -232,11 +233,14 @@ export default function VineyardMachinesPage() {
             vineyard machines. Used for Fuel Log and job costing where enabled.
           </p>
         </div>
+        <div className="flex items-center gap-2">
+          <EquipmentImportExportDialog />
         {canEdit && (
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1" /> New machine
           </Button>
         )}
+        </div>
       </div>
       <div className="flex justify-end">
         <Input
