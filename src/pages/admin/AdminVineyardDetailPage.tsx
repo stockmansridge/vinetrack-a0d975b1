@@ -1,19 +1,40 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Pencil } from "lucide-react";
 import { useAdminVineyards, useAdminVineyardPaddocks, useAdminVineyardMembers } from "@/lib/adminApi";
 import { computeAdminVineyardStats, formatHa } from "@/lib/adminVineyardStats";
 import { AdminGate, AdminPageHeader, AdminError, AdminEmpty, ArchivedBadge, formatDate } from "./_shared";
 import AdminVineyardMap from "@/components/admin/AdminVineyardMap";
+import { useVineyard } from "@/context/VineyardContext";
+
+function formatDirection(d: string | number | null | undefined): string {
+  if (d === null || d === undefined || d === "") return "—";
+  const n = Number(d);
+  return Number.isFinite(n) ? `${Math.round(n * 10) / 10}°` : String(d);
+}
 
 export default function AdminVineyardDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { startAdminSupport } = useVineyard();
   const vineyardsQ = useAdminVineyards();
   const paddocksQ = useAdminVineyardPaddocks(id);
   const membersQ = useAdminVineyardMembers(id);
   const v = vineyardsQ.data?.find((x) => x.id === id);
   const stats = computeAdminVineyardStats(paddocksQ.data);
 
+
+  const openEditor = () => {
+    if (!v) return;
+    startAdminSupport({
+      vineyard_id: v.id,
+      vineyard_name: v.name ?? null,
+      vineyard_country: v.country ?? null,
+    });
+    navigate("/setup/paddocks");
+  };
 
   return (
     <AdminGate>
@@ -26,6 +47,12 @@ export default function AdminVineyardDetailPage() {
 
       {v && (
         <div className="space-y-4">
+          <div className="flex justify-end">
+            <Button onClick={openEditor} disabled={!!v.deleted_at}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit vineyard blocks
+            </Button>
+          </div>
           <Card className="p-2">
             <AdminVineyardMap paddocks={paddocksQ.data ?? []} />
           </Card>
@@ -99,7 +126,7 @@ export default function AdminVineyardDetailPage() {
                       {p.name} {p.deleted_at && <ArchivedBadge />}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {p.row_count ?? 0} rows · {p.row_direction ?? "—"}
+                      {p.row_count ?? 0} rows · Row direction {formatDirection(p.row_direction)}
                     </div>
                   </div>
                   <Badge variant="outline" className="text-xs">{formatDate(p.created_at)}</Badge>
