@@ -1,14 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { updateSpy } = vi.hoisted(() => ({ updateSpy: vi.fn() }));
-const mockClient = () => ({
+const { updateSpy, mockClient } = vi.hoisted(() => { const updateSpy = vi.fn(); return { updateSpy, mockClient: () => ({
   supabase: {
     from: () => ({
       update: (p: any) => { updateSpy(p); return { eq: () => ({ select: () => ({ single: async () => ({ data: p, error: null }) }) }) }; },
     }),
     rpc: vi.fn(),
   },
-});
+}) }; });
 vi.mock("@/integrations/supabase/client", mockClient);
 vi.mock("@/integrations/ios-supabase/client", mockClient);
 

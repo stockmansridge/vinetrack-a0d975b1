@@ -19,7 +19,7 @@ export const ROW_COUNT_ERROR = "Number of rows must be a positive whole number."
 export const ROW_RANGE_ERROR =
   `Row numbers must be between ${PHYSICAL_ROW_NUMBER_MIN} and ${PHYSICAL_ROW_NUMBER_MAX.toLocaleString("en-AU")}.`;
 
-export type ParseResult = { ok: true; value: number } | { ok: false; error: string };
+export type ParseResult = { ok: true; value: number; error?: undefined } | { ok: false; error: string };
 
 /** Strict decimal text → number. Accepts "12", "1.0", " 7 "; rejects "", "1e3", "abc", "1.5". */
 function parseWholeText(input: unknown): number | null {
