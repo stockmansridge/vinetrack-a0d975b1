@@ -77,7 +77,7 @@ const foliar = (over: Partial<SprayApplication> = {}) =>
       equipmentId: "e1",
       operatorUserId: "u1",
       tankCapacityLitres: 2000,
-      carrier: { basis: "l_per_ha", litresPerHectare: 400 },
+      carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 400 },
       products: [product({ rate: 1.5 })],
       ...over,
     }),
@@ -118,7 +118,7 @@ describe("Stage 3B — banded spray fixture", () => {
   const app = applyOperationType(
     draft({
       blockIds: ["A"], // 10 ha @ 2.5 m
-      carrier: { basis: "l_per_ha", litresPerHectare: 400 },
+      carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 400 },
       products: [product({ rate: 2.5, rateBasis: "treated_area" })],
     }),
     "banded",
@@ -227,7 +227,7 @@ describe("Stage 3B — the four product rate bases", () => {
       ...applyOperationType(
         draft({
           blockIds: ["A"],
-          carrier: { basis: "l_per_ha", litresPerHectare: 400 },
+          carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 400 },
           geometryOverride: { canonicalRowLengthMetres: 40000 },
           products: [
             product({ savedChemicalId: "c1", productName: "Whole", rate: 1, rateBasis: "whole_block_area" }),
@@ -373,7 +373,7 @@ const MODERN_JOB = {
   growth_stage_code: "EL-31",
   tractor_id: "t1",
   equipment_id: "e1",
-  carrier_volume_basis: "l_per_ha",
+  carrier_volume_basis: "l_per_ha", carrier_area_basis: "whole_block_area", carrierAreaBasis: "whole_block_area",
   spray_rate_per_ha: 400,
   concentration_factor: 2,
   band_width_total_metres: 1,

@@ -274,7 +274,7 @@ describe("carrier volume", () => {
     const c = calculateCarrier({
       geometry,
       mode: "whole_block",
-      carrier: { basis: "l_per_ha", litresPerHectare: 400 },
+      carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 400 },
     });
     expect(c.totalCarrierLitres).toBeCloseTo(600, 6); // 400 × 1.5 ha
     expect(c.litresPer100m).toBeCloseTo(12, 6); // 400 × 3 / 100
@@ -352,7 +352,7 @@ describe("carrier volume", () => {
     const c = calculateCarrier({
       geometry,
       mode: "whole_block",
-      carrier: { basis: "l_per_ha", litresPerHectare: 400, diluteLitresPerHectare: 1000 },
+      carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 400, diluteLitresPerHectare: 1000 },
     });
     expect(c.concentrationFactor).toBeCloseTo(2.5, 6);
   });
@@ -390,7 +390,7 @@ describe("carrier volume", () => {
     const c = calculateCarrier({
       geometry: bare,
       mode: "whole_block",
-      carrier: { basis: "l_per_ha", litresPerHectare: 400 },
+      carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 400 },
     });
     expect(c.totalCarrierLitres).toBeNull();
     expect(c.diagnostics.map((d) => d.code)).toContain("incomplete_geometry_for_carrier");
@@ -406,7 +406,7 @@ describe("banded L/ha carrier uses gross hectares (Rork mandatory fixture)", () 
   const carrier = calculateCarrier({
     geometry,
     mode: "banded",
-    carrier: { basis: "l_per_ha", litresPerHectare: 400 },
+    carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 400 },
   });
 
   it("resolves 10 ha gross and 4 ha treated", () => {
@@ -457,7 +457,7 @@ describe("product quantities", () => {
   const carrier = calculateCarrier({
     geometry,
     mode: "banded",
-    carrier: { basis: "l_per_ha", litresPerHectare: 400 },
+    carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 400 },
   });
 
   it("keeps whole-block and treated hectares distinct", () => {
@@ -696,7 +696,7 @@ describe("full calculation", () => {
     const app = emptySprayApplication();
     app.mode = "whole_block";
     app.operationType = "foliar";
-    app.carrier = { basis: "l_per_ha", litresPerHectare: 400 };
+    app.carrier = { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 400 };
     app.products = [line({ rate: 1.2 })];
     app.tankCapacityLitres = 400;
 
