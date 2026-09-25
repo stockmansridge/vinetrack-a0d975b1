@@ -137,3 +137,28 @@ describe("provider-neutral forecast supplementation", () => {
     expect(merged.source).toBe("Legacy RPC");
   });
 });
+
+describe("daily-only primary with empty periods", () => {
+  const full = forecast("Open-Meteo", [0, 4, 8, 12, 16, 20].map((h) => period(h)));
+  const daily = forecast("WillyWeather", [], {
+    fieldSources: { temperature: "WillyWeather", wind: "WillyWeather", rain: "WillyWeather", humidity: null, condition: null },
+  });
+  daily.days[0] = { ...daily.days[0], tempMinC: 5, tempMaxC: 30, windMaxKmh: 40 };
+
+  it("adopts supplementary periods for the same date and keeps daily cards", () => {
+    const out = supplementForecast(daily, full);
+    expect(out.days[0].periods).toHaveLength(6);
+    expect(out.days[0].tempMinC).toBe(5);
+    expect(out.days[0].tempMaxC).toBe(30);
+    expect(out.days[0].windMaxKmh).toBe(40);
+    expect(out.source).toBe("WillyWeather");
+    expect(out.sourceDetail).toBe("samples");
+    expect(out.fieldSources?.temperature).toBe("WillyWeather + Open-Meteo");
+    expect(out.fieldSources?.wind).toBe("WillyWeather + Open-Meteo");
+  });
+
+  it("leaves periods empty when no matching date exists", () => {
+    const other = { ...full, days: [{ ...full.days[0], date: "2026-09-30" }] };
+    expect(supplementForecast(daily, other).days[0].periods).toEqual([]);
+  });
+});
