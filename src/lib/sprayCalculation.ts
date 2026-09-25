@@ -685,7 +685,23 @@ export function calculateSprayApplication(args: {
       message: "Application method is not set.",
     });
   }
-  if (!application.products.length) {
+  if (application.mode === "banded") {
+    if (!application.groundApplicationTarget) {
+      diagnostics.push({
+        code: "missing_ground_application_target",
+        severity: templateMode ? "warning" : "error",
+        message: "Choose where this ground spray is applied — Undervine or Midrow.",
+      });
+    }
+    if (application.totalTreatedBandWidthMetres == null && (templateMode || blocksDeferred)) {
+      diagnostics.push({
+        code: "missing_band_width_intent",
+        severity: "warning",
+        message: "Enter the total treated band width per row.",
+      });
+    }
+  }
+    if (!application.products.length) {
     diagnostics.push({
       code: "no_products",
       severity: "error",

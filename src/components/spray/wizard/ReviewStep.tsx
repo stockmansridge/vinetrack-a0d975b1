@@ -71,7 +71,11 @@ export function ReviewStep({
             value={(app.targets ?? []).map((t) => sprayTargetLabel(t, targetLabels)).join(", ") || "—"}
           />
           {app.otherTargetNote && <Row label="Other" value={app.otherTargetNote} />}
-          <Row label="Head target" value={app.headTarget ? HEAD_TARGET_LABEL[app.headTarget] : "—"} />
+          {app.mode === "banded" ? (
+            <Row label="Ground application" value={app.groundApplicationTarget ? GROUND_APPLICATION_TARGET_LABEL[app.groundApplicationTarget] : "—"} />
+          ) : (
+            <Row label="Head target" value={app.headTarget ? HEAD_TARGET_LABEL[app.headTarget] : "—"} />
+          )}
         </Card>
 
         <Card title="Blocks & geometry">
