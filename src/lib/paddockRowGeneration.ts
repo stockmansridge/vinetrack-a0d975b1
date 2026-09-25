@@ -1,4 +1,5 @@
 import { generateUuid } from "@/lib/uuid";
+import { validateRowNumbering } from "@/lib/physicalRowNumbers";
 // Paddock row generation — direct port of iOS RowGeometry.calculateRowLines
 // Reference: docs/paddock-geometry-writer-spec.md §4
 //
@@ -84,6 +85,9 @@ export function generateRows(input: RowGenInput): GeneratedRow[] {
   if (polygonPoints.length < 3) return [];
   if (count <= 0) return [];
   if (rowWidthM <= 0) return [];
+  // Physical row numbers must be whole numbers: never generate from a
+  // fractional/invalid start or count (callers show a field error).
+  if (!validateRowNumbering(rowStartNumber, count).ok) return [];
 
   // 2. Centroid (planar arithmetic mean)
   const centroidLat = polygonPoints.reduce((s, p) => s + p.lat, 0) / polygonPoints.length;

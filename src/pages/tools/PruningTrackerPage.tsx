@@ -1,4 +1,5 @@
 // Block-driven Pruning Tracker (portal parity with iOS).
+import { describePruningSummaryError } from "@/lib/physicalRowNumbers";
 //
 // Model: paddocks first. Every active paddock in the selected vineyard
 // appears immediately as a block. A pruning_seasons row is the *supporting*
@@ -525,7 +526,7 @@ export default function PruningTrackerPage() {
                 <Alert variant="destructive">
                   <AlertTitle>Couldn't load vineyard summary</AlertTitle>
                   <AlertDescription>
-                    {(summaryQ.error as any)?.message ?? "The pruning summary service is unavailable."}
+                    {describePruningSummaryError((summaryQ.error as any)?.message, paddocks) ?? "The pruning summary service is unavailable."}
                     {" "}Figures are intentionally not calculated locally to keep parity with iOS and Android.
                   </AlertDescription>
                 </Alert>
@@ -601,7 +602,7 @@ export default function PruningTrackerPage() {
               <Alert variant="destructive">
                 <AlertTitle>Couldn't load block summaries</AlertTitle>
                 <AlertDescription>
-                  {(summaryQ.error as any)?.message ?? "The pruning summary service is unavailable."}
+                  {describePruningSummaryError((summaryQ.error as any)?.message, paddocks) ?? "The pruning summary service is unavailable."}
                   {" "}Block cards are not calculated locally because SQL 115 is the shared source of truth.
                 </AlertDescription>
               </Alert>
@@ -667,7 +668,7 @@ export default function PruningTrackerPage() {
           <Alert variant="destructive">
             <AlertTitle>Couldn't load block summary</AlertTitle>
             <AlertDescription>
-              {(summaryQ.error as any)?.message ?? "The pruning summary service is unavailable."}
+              {describePruningSummaryError((summaryQ.error as any)?.message, paddocks) ?? "The pruning summary service is unavailable."}
               {" "}This block is not calculated locally because SQL 115 is the shared source of truth.
             </AlertDescription>
           </Alert>

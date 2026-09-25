@@ -1,3 +1,4 @@
+import { findInvalidRowNumbers, InvalidPhysicalRowsError } from "@/lib/physicalRowNumbers";
 import { useMemo, useRef, useState } from "react";
 import {
   Dialog,
@@ -99,6 +100,11 @@ async function applyImportAsNew(
       }
       row[col] = v;
       written++;
+    }
+    const badRows = findInvalidRowNumbers(row.rows);
+    if ("rows" in row && badRows.length) {
+      result.errors.push(new InvalidPhysicalRowsError(badRows, row.name).message);
+      continue;
     }
     const { error } = await supabase.from("paddocks").insert(row);
     if (error) {

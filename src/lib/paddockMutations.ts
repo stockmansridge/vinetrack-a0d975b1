@@ -1,3 +1,4 @@
+import { assertValidRowsPayload } from "@/lib/physicalRowNumbers";
 // Paddock update + archive/delete helpers.
 //
 // Delete/archive/restore and reference counts must go through the shared
@@ -56,6 +57,7 @@ export async function fetchLinkedRecordCounts(paddockId: string): Promise<Linked
 }
 
 export async function updatePaddock(paddockId: string, patch: Record<string, any>) {
+  assertValidRowsPayload(patch);
   const { data, error } = await (supabase as any)
     .from("paddocks")
     .update({ ...patch, client_updated_at: new Date().toISOString() })
