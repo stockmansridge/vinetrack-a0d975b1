@@ -54,15 +54,44 @@ export function hydrateDraft(args: {
  */
 export function applyOperationType(app: SprayApplication, op: OperationType | null): SprayApplication {
   const mode = op ? OPERATION_TYPE_TO_MODE[op] : null;
+  const wasBanded = app.mode === "banded";
   const next: SprayApplication = {
     ...app,
     operationType: op,
     mode,
     headTarget: op === "foliar" ? app.headTarget : null,
+    groundApplicationTarget: mode === "banded" ? app.groundApplicationTarget : null,
     totalTreatedBandWidthMetres: mode === "banded" ? app.totalTreatedBandWidthMetres : null,
   };
   if (op === "spreader") {
     next.carrier = { basis: null };
+  } else if (mode === "banded") {
+    // Banded is a direct ground application: no canopy state may survive.
+    const c = app.carrier;
+    const basis = c.basis === "manual" ? "manual" : "l_per_ha";
+    next.carrier = {
+      basis,
+      // A foliar L/ha rate may have come from the canopy recommendation, so
+      // it is only kept when the application was already Banded.
+      litresPerHectare: wasBanded && basis === "l_per_ha" ? c.litresPerHectare ?? null : null,
+      manualTotalLitres: basis === "manual" ? c.manualTotalLitres ?? null : null,
+      carrierAreaBasis: wasBanded ? c.carrierAreaBasis ?? null : null,
+      canopyType: null,
+      canopySize: null,
+      canopyDensity: null,
+      diluteLitresPer100m: null,
+      diluteLitresPerHectare: null,
+      appliedLitresPer100m: null,
+      concentrationFactor: null,
+      sprayerOutputChoice: null,
+    };
+  } else if (wasBanded) {
+    // Leaving Banded: Banded-only carrier intent is cleared; canopy is re-answered.
+    next.carrier = {
+      basis: app.carrier.basis === "manual" ? "manual" : null,
+      manualTotalLitres: app.carrier.basis === "manual" ? app.carrier.manualTotalLitres ?? null : null,
+      carrierAreaBasis: null,
+    };
   }
   return next;
 }
@@ -225,6 +254,7 @@ export function applyTemplate(
     otherTargetNote: template.otherTargetNote,
     legacyTargetText: template.legacyTargetText,
     headTarget: template.headTarget,
+    groundApplicationTarget: template.groundApplicationTarget,
     growthStageCode: template.growthStageCode,
     tractorId: template.tractorId,
     equipmentId: template.equipmentId,
@@ -245,7 +275,7 @@ export function applyTemplate(
  * a planned job may legitimately still be missing detail that only a completed
  * record requires.
  */
-const FATAL_CODES = new Set(["missing_application_mode", "no_blocks_selected"]);
+const FATAL_CODES = new Set(["missing_application_mode"]);
 
 export interface SaveGate {
   fatal: SprayDiagnostic[];
@@ -265,8 +295,8 @@ export function evaluateSaveGate(args: {
   const info: SprayDiagnostic[] = [];
 
   for (const d of calculation.diagnostics) {
-    if (app.isTemplate && (d.code === "no_blocks_selected" || d.code.startsWith("missing_gross"))) {
-      continue; // templates are block-free by contract
+    if (d.code === "no_blocks_selected" || (app.isTemplate && d.code.startsWith("missing_gross"))) {
+      continue; // Program Steps and Planned Sprays may be saved before blocks are confirmed
     }
     if (FATAL_CODES.has(d.code)) fatal.push(d);
     else if (d.severity === "info") info.push(d);
@@ -276,7 +306,6 @@ export function evaluateSaveGate(args: {
   const blockingReasons: string[] = [];
   if (!(app.name ?? "").trim()) blockingReasons.push("Give this application a name.");
   if (!app.operationType) blockingReasons.push("Choose an application type.");
-  if (!app.isTemplate && app.blockIds.length === 0) blockingReasons.push("Select at least one block.");
   for (const d of fatal) blockingReasons.push(d.message);
 
   return {

@@ -9,6 +9,8 @@ import {
   CARRIER_BASIS_LABEL,
   HEAD_TARGET_LABEL,
   OPERATION_TYPE_LABEL,
+  GROUND_APPLICATION_TARGET_LABEL,
+  CARRIER_AREA_BASIS_LABEL,
 } from "@/lib/sprayApplicationDomain";
 import { GROWTH_STAGE_LABEL } from "@/lib/vspWaterRate";
 import {
@@ -37,6 +39,11 @@ export function ReviewStep({
 }: StepProps & { extra?: ReactNode; resistance?: ReactNode }) {
   const { labels: targetLabels } = useVineyardSprayTargets(vineyardId);
   const groups = groupDiagnostics(calc.diagnostics);
+  const bandedLater = app.isTemplate
+    ? "Calculated when blocks are selected"
+    : calc.blocksDeferred
+      ? "Calculated when blocks are confirmed"
+      : null;
   const blockNames = app.blockIds.map((id) => lookups.maps.paddocks.get(id) ?? "Block");
 
   return (
@@ -64,7 +71,11 @@ export function ReviewStep({
             value={(app.targets ?? []).map((t) => sprayTargetLabel(t, targetLabels)).join(", ") || "—"}
           />
           {app.otherTargetNote && <Row label="Other" value={app.otherTargetNote} />}
-          <Row label="Head target" value={app.headTarget ? HEAD_TARGET_LABEL[app.headTarget] : "—"} />
+          {app.mode === "banded" ? (
+            <Row label="Ground application" value={app.groundApplicationTarget ? GROUND_APPLICATION_TARGET_LABEL[app.groundApplicationTarget] : "—"} />
+          ) : (
+            <Row label="Head target" value={app.headTarget ? HEAD_TARGET_LABEL[app.headTarget] : "—"} />
+          )}
         </Card>
 
         <Card title="Blocks & geometry">
@@ -95,7 +106,41 @@ export function ReviewStep({
         </Card>
       </section>
 
-      {app.operationType !== "spreader" && (
+      {app.mode === "banded" && (
+        <Card title="Ground spray volume">
+          <div className="grid gap-2 sm:grid-cols-4">
+            <Row label="Ground application" value={app.groundApplicationTarget ? GROUND_APPLICATION_TARGET_LABEL[app.groundApplicationTarget] : "—"} />
+            <Row label="Band width" value={app.totalTreatedBandWidthMetres != null ? `${fmtNum(app.totalTreatedBandWidthMetres, 2)} m` : "—"} />
+            <Row label="Gross area" value={bandedLater ?? fmtHa(geometry.grossAreaHa)} />
+            <Row label="Treated area" value={bandedLater ?? fmtHa(geometry.treatedAreaHa)} />
+            <Row label="Spray volume basis" value={calc.carrier.basis ? CARRIER_BASIS_LABEL[calc.carrier.basis] : "—"} />
+            {calc.carrier.basis === "l_per_ha" && (
+              <>
+                <Row label="Rate applies to" value={app.carrier.carrierAreaBasis ? CARRIER_AREA_BASIS_LABEL[app.carrier.carrierAreaBasis] : "—"} />
+                <Row
+                  label="Application rate"
+                  value={app.carrier.litresPerHectare != null
+                    ? `${fmtNum(app.carrier.litresPerHectare, 0)} ${app.carrier.carrierAreaBasis === "treated_area" ? "L/treated ha" : app.carrier.carrierAreaBasis === "whole_block_area" ? "L/gross ha" : "L/ha"}`
+                    : "—"}
+                />
+                <Row label="Calculation area" value={bandedLater ?? fmtHa(calc.carrier.carrierAreaHa)} />
+              </>
+            )}
+            <Row
+              label="Total spray water"
+              value={calc.carrier.basis === "manual" ? fmtLitres(calc.carrier.totalCarrierLitres) : bandedLater ?? fmtLitres(calc.carrier.totalCarrierLitres)}
+            />
+            <Row label="Concentration factor" value="Not used" />
+          </div>
+          {!app.isTemplate && !calc.blocksDeferred && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Planning estimate — recalculated from the confirmed blocks before the trip.
+            </p>
+          )}
+        </Card>
+      )}
+
+      {app.operationType !== "spreader" && app.mode !== "banded" && (
         <Card title="Canopy & spray volume">
           <div className="grid gap-2 sm:grid-cols-4">
             <Row label="Basis" value={calc.carrier.basis ? CARRIER_BASIS_LABEL[calc.carrier.basis] : "—"} />

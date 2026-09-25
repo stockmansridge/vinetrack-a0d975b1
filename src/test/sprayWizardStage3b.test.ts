@@ -77,7 +77,7 @@ const foliar = (over: Partial<SprayApplication> = {}) =>
       equipmentId: "e1",
       operatorUserId: "u1",
       tankCapacityLitres: 2000,
-      carrier: { basis: "l_per_ha", litresPerHectare: 400 },
+      carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 400 },
       products: [product({ rate: 1.5 })],
       ...over,
     }),
@@ -118,12 +118,12 @@ describe("Stage 3B — banded spray fixture", () => {
   const app = applyOperationType(
     draft({
       blockIds: ["A"], // 10 ha @ 2.5 m
-      carrier: { basis: "l_per_ha", litresPerHectare: 400 },
+      carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 400 },
       products: [product({ rate: 2.5, rateBasis: "treated_area" })],
     }),
     "banded",
   );
-  const banded = { ...app, totalTreatedBandWidthMetres: 1.0 };
+  const banded = { ...app, totalTreatedBandWidthMetres: 1.0, carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 400 } as any };
 
   it("derives treated area, gross carrier and treated-area product totals", () => {
     const { geometry, calculation, input } = run(banded);
@@ -227,7 +227,7 @@ describe("Stage 3B — the four product rate bases", () => {
       ...applyOperationType(
         draft({
           blockIds: ["A"],
-          carrier: { basis: "l_per_ha", litresPerHectare: 400 },
+          carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 400 },
           geometryOverride: { canonicalRowLengthMetres: 40000 },
           products: [
             product({ savedChemicalId: "c1", productName: "Whole", rate: 1, rateBasis: "whole_block_area" }),
@@ -239,6 +239,7 @@ describe("Stage 3B — the four product rate bases", () => {
         "banded",
       ),
       totalTreatedBandWidthMetres: 1.0,
+      carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 400 } as any,
     };
     const { calculation, input } = run(app);
     // gross 10 ha, treated = 40000 m × 1 m = 4 ha, carrier = 4000 L, 400 × 100 m
@@ -373,7 +374,7 @@ const MODERN_JOB = {
   growth_stage_code: "EL-31",
   tractor_id: "t1",
   equipment_id: "e1",
-  carrier_volume_basis: "l_per_ha",
+  carrier_volume_basis: "l_per_ha", carrier_area_basis: "whole_block_area", carrierAreaBasis: "whole_block_area",
   spray_rate_per_ha: 400,
   concentration_factor: 2,
   band_width_total_metres: 1,
@@ -401,7 +402,8 @@ describe("Stage 3B — modern job hydrate / resave", () => {
     expect(input.growth_stage_code).toBe("EL-31");
     expect(input.carrier_volume_basis).toBe("l_per_ha");
     expect(input.spray_rate_per_ha).toBe(400);
-    expect(input.concentration_factor).toBe(2);
+    // Banded ground sprays never carry a canopy concentration factor.
+    expect(input.concentration_factor).toBeNull();
     expect(input.band_width_total_metres).toBe(1);
     expect(input.row_spacing_metres).toBe(2.5);
     expect(input.gross_area_ha).toBe(10);
@@ -611,7 +613,8 @@ describe("Stage 3B — save gating", () => {
     expect(gate.canSave).toBe(false);
     expect(gate.blockingReasons).toContain("Give this application a name.");
     expect(gate.blockingReasons).toContain("Choose an application type.");
-    expect(gate.blockingReasons).toContain("Select at least one block.");
+    // Planning mode: a Planned Spray may be saved before blocks are confirmed.
+    expect(gate.blockingReasons).not.toContain("Select at least one block.");
   });
 
   it("treats unverified chemistry and mixed spacing as warnings, not errors", () => {

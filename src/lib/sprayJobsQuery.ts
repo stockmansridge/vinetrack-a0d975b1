@@ -110,6 +110,9 @@ export interface SprayJob {
   applied_litres_per_100m?: number | null;
   dilute_litres_per_100m?: number | null;
   band_width_total_metres?: number | null;
+  /* --- sql/233 banded ground application --- */
+  ground_application_target?: string | null;
+  carrier_area_basis?: string | null;
   gross_area_ha?: number | null;
   treated_area_ha?: number | null;
   canonical_row_length_metres?: number | null;
@@ -194,6 +197,9 @@ export interface SprayJobInput {
   applied_litres_per_100m?: number | null;
   dilute_litres_per_100m?: number | null;
   band_width_total_metres?: number | null;
+  /* --- sql/233 banded ground application --- */
+  ground_application_target?: string | null;
+  carrier_area_basis?: string | null;
   gross_area_ha?: number | null;
   treated_area_ha?: number | null;
   canonical_row_length_metres?: number | null;

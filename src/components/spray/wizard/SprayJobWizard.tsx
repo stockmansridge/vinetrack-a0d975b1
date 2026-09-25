@@ -287,7 +287,7 @@ export function SprayJobWizard({
     return true;
   }).map((s) => ({
     key: s.key as (typeof STEPS)[number]["key"],
-    label: s.label as string,
+    label: (s.key === "carrier" && app.mode === "banded" ? "Ground Spray Volume" : s.label) as string,
   }));
   const current = visibleSteps[Math.min(step, visibleSteps.length - 1)];
 

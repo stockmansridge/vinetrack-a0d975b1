@@ -155,6 +155,9 @@ export function toSprayJobInput(args: {
   const headTarget = persistedHeadTarget(app.operationType, app.headTarget);
 
   const isManual = app.carrier.basis === "manual";
+  const banded = mode === "banded";
+  // Banded: canopy-only values are never written as active facts.
+  const noCanopy = isManual || banded;
   // Manual is an explicit bypass: the operator states the total water, so no
   // calibrated per-hectare rate is invented for it.
   const litresPerHectare = isManual
@@ -165,7 +168,7 @@ export function toSprayJobInput(args: {
   // `dilute_litres_per_hectare` has no column; the dilute reference survives
   // through `concentration_factor` (dilute = CF × applied) and is rebuilt on
   // reopen. Manual applications are never concentrated, so CF is exactly 1.
-  const concentrationFactor = isManual ? 1 : carrier.concentrationFactor;
+  const concentrationFactor = banded ? null : isManual ? 1 : carrier.concentrationFactor;
 
   const input: SprayJobInput = {
     vineyard_id: app.vineyardId ?? "",
@@ -189,13 +192,13 @@ export function toSprayJobInput(args: {
 
     carrier_volume_basis: app.carrier.basis,
     spray_rate_per_ha: round(litresPerHectare, 2),
-    applied_litres_per_100m: isManual ? null : round(pos(app.carrier.appliedLitresPer100m), 3),
-    dilute_litres_per_100m: isManual ? null : round(pos(app.carrier.diluteLitresPer100m), 3),
+    applied_litres_per_100m: noCanopy ? null : round(pos(app.carrier.appliedLitresPer100m), 3),
+    dilute_litres_per_100m: noCanopy ? null : round(pos(app.carrier.diluteLitresPer100m), 3),
     concentration_factor: round(concentrationFactor, 3),
     // The canopy answer that produced the recommendation. Trellis form has no
     // column, so only size and density round-trip.
-    vsp_canopy_size: isManual ? null : canopySizeForStorage(app.carrier.canopySize),
-    vsp_canopy_density: isManual ? null : canopyDensityForStorage(app.carrier.canopyDensity),
+    vsp_canopy_size: noCanopy ? null : canopySizeForStorage(app.carrier.canopySize),
+    vsp_canopy_density: noCanopy ? null : canopyDensityForStorage(app.carrier.canopyDensity),
     // Manual stores the operator's stated total verbatim; every other basis
     // stores the engine's computed total.
     water_volume: isTemplate
@@ -205,7 +208,10 @@ export function toSprayJobInput(args: {
         : round(carrier.totalCarrierLitres, 1),
 
 
-    band_width_total_metres: mode === "banded" ? pos(app.totalTreatedBandWidthMetres) : null,
+    band_width_total_metres: banded ? pos(app.totalTreatedBandWidthMetres) : null,
+    ground_application_target: banded ? app.groundApplicationTarget ?? null : null,
+    carrier_area_basis:
+      banded && app.carrier.basis === "l_per_ha" ? app.carrier.carrierAreaBasis ?? null : null,
     row_spacing_metres: isTemplate
       ? pos(app.geometryOverride.rowSpacingMetres)
       : pos(app.geometryOverride.rowSpacingMetres) ?? pos(geometry.rowSpacingMetres),

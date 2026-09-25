@@ -32,6 +32,7 @@ import { CanopyReferenceImage } from "@/components/spray/CanopyReferenceImage";
 import { fmtHa, fmtLitres, fmtNum, treatedProportionPct } from "@/lib/sprayFormat";
 import { FieldHeading, HelpTip, SelectTile } from "./controls";
 import type { StepProps } from "./types";
+import { BandedCarrierStep } from "./BandedCarrierStep";
 
 const LATER = "Calculated when blocks are selected";
 
@@ -50,6 +51,10 @@ export function CarrierStep({ app, patch, geometry, calc, canEdit }: StepProps) 
         </p>
       </div>
     );
+  }
+
+  if (app.mode === "banded") {
+    return <BandedCarrierStep app={app} patch={patch} geometry={geometry} calc={calc} canEdit={canEdit} />;
   }
 
   const isTemplate = !!app.isTemplate;
@@ -86,40 +91,6 @@ export function CarrierStep({ app, patch, geometry, calc, canEdit }: StepProps) 
 
   return (
     <div className="space-y-6">
-      {app.mode === "banded" && (
-        <section className="space-y-2">
-          <h3 className="text-sm font-semibold">Treated band</h3>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="band-width">Total treated width per row (m)</Label>
-              <Input
-                id="band-width"
-                type="number"
-                step="0.01"
-                min="0"
-                disabled={!canEdit}
-                value={app.totalTreatedBandWidthMetres ?? ""}
-                onChange={(e) => patch({ totalTreatedBandWidthMetres: numOrNull(e.target.value) })}
-              />
-              <p className="text-xs text-muted-foreground">
-                Both sides combined — not the width of a single band.
-              </p>
-            </div>
-            <div className="rounded-md border bg-muted/30 p-3 text-sm">
-              <div className="text-[11px] text-muted-foreground">Treated area</div>
-              <div className="font-medium">{isTemplate ? LATER : fmtHa(geometry.treatedAreaHa)}</div>
-              {!isTemplate && (
-                <div className="text-xs text-muted-foreground">
-                  {treatedPct != null
-                    ? `${fmtNum(treatedPct, 1)}% of ${fmtHa(geometry.grossAreaHa)} gross`
-                    : "Needs band width, row spacing and area"}
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-      )}
-
       <section className="space-y-2" role="radiogroup" aria-label="Spray volume basis">
         <FieldHeading label="How do you know your spray volume?" help={SPRAY_HELP.basis} />
         <div className="grid gap-2 sm:grid-cols-3">

@@ -105,6 +105,7 @@ export function planSprayPrefillFromProgramStep(
     operationType: step.operationType,
     mode: step.mode,
     headTarget: step.headTarget,
+    groundApplicationTarget: step.groundApplicationTarget,
     targets: step.targets ? [...step.targets] : null,
     legacyTargetText: step.legacyTargetText,
     otherTargetNote: step.otherTargetNote,

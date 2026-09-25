@@ -60,7 +60,7 @@ describe("P6A — product rate parity", () => {
   const carrier = calculateCarrier({
     geometry: g,
     mode: "whole_block",
-    carrier: { basis: "l_per_ha", litresPerHectare: 500 },
+    carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 500 },
   });
 
   it("per hectare uses gross hectares", () => {
@@ -204,7 +204,7 @@ describe("P6B — L/100 m calculation close-out", () => {
     const c = calculateCarrier({
       geometry: g,
       mode: "whole_block",
-      carrier: { basis: "l_per_ha", litresPerHectare: 400, diluteLitresPerHectare: 1000 },
+      carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 400, diluteLitresPerHectare: 1000 },
     });
     expect(c.totalCarrierLitres).toBeCloseTo(4000, 6);
     expect(c.litresPer100m).toBeCloseTo(12, 6); // 400 × 3 ÷ 100
@@ -219,7 +219,7 @@ describe("P6B — L/100 m calculation close-out", () => {
       appliedLitresPer100m: 9,
       diluteLitresPer100m: 27,
     };
-    const asHa = calculateCarrier({ geometry: g, mode: "whole_block", carrier: { basis: "l_per_ha", ...stored } });
+    const asHa = calculateCarrier({ geometry: g, mode: "whole_block", carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", ...stored } });
     const as100 = calculateCarrier({ geometry: g, mode: "whole_block", carrier: { basis: "l_per_100m", ...stored } });
     expect(asHa.litresPerHectare).toBe(400);
     expect(as100.litresPer100m).toBe(9);
@@ -255,7 +255,7 @@ describe("P6C — banded spray parity", () => {
     const c = calculateCarrier({
       geometry: g,
       mode: "banded",
-      carrier: { basis: "l_per_ha", litresPerHectare: 300 },
+      carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 300 },
     });
     expect(c.carrierAreaHa).toBe(10);
     expect(c.totalCarrierLitres).toBeCloseTo(3000, 6);
@@ -265,7 +265,7 @@ describe("P6C — banded spray parity", () => {
     const c = calculateCarrier({
       geometry: g,
       mode: "banded",
-      carrier: { basis: "l_per_ha", litresPerHectare: 300 },
+      carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 300 },
     });
     const [treated, gross] = calculateProducts({
       products: [
@@ -283,9 +283,9 @@ describe("P6C — banded spray parity", () => {
     const c = calculateCarrier({
       geometry: g,
       mode: "banded",
-      carrier: { basis: "l_per_100m", appliedLitresPer100m: 6 },
+      carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 200 },
     });
-    expect(c.totalCarrierLitres).toBeCloseTo(2000, 1); // 333.33 hundred-metres × 6
+    expect(c.totalCarrierLitres).toBeCloseTo(2000, 1); // 200 L/gross ha × 10 ha
     const [r] = calculateProducts({
       products: [line({ rate: 50, unit: "mL", rateBasis: "per_100_litres" })],
       geometry: g,
