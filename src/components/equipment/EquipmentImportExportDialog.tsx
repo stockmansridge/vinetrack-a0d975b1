@@ -225,7 +225,7 @@ export default function EquipmentImportExportDialog() {
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1" disabled={!selectedVineyardId}>
+        <Button variant="outline" size={size} className="gap-1" disabled={!selectedVineyardId}>
           <FileDown className="h-4 w-4" /> Export / Import
         </Button>
       </DialogTrigger>
