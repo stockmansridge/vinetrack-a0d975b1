@@ -18,6 +18,7 @@
 // varieties (or all). By default, non-empty existing fields are preserved;
 // the user must explicitly opt into overwriting non-empty data per group.
 
+import { findInvalidRowNumbers, InvalidPhysicalRowsError } from "@/lib/physicalRowNumbers";
 import { supabase } from "@/integrations/ios-supabase/client";
 
 export const FULL_BLOCK_FORMAT = "vinetrack.full-block-backup";
@@ -328,6 +329,11 @@ export async function applyImportPlan(
     // Safety: never let imported id / vineyard_id leak in.
     delete patch.id;
     delete patch.vineyard_id;
+    const bad = findInvalidRowNumbers(patch.rows);
+    if ("rows" in patch && bad.length) {
+      result.errors.push(new InvalidPhysicalRowsError(bad, m.targetName ?? m.source.name ?? undefined).message);
+      continue;
+    }
     const { error } = await supabase
       .from("paddocks")
       .update(patch)

@@ -109,3 +109,23 @@ export function assertValidRowsPayload(payload: Record<string, any> | null | und
 export function isFractionalRowCastError(message: unknown): boolean {
   return typeof message === "string" && /invalid input syntax for type integer: "-?\d+\.\d+"/.test(message);
 }
+
+/**
+ * Turn the raw summary error into an actionable message ONLY when it is the
+ * integer-cast failure and loaded block data actually contains invalid
+ * physical row numbers. Otherwise the original message is returned unchanged.
+ */
+export function describePruningSummaryError(
+  message: string | null | undefined,
+  blocks: ReadonlyArray<{ id: string; name: string | null; rows: unknown }>,
+): string | null {
+  if (!message || !isFractionalRowCastError(message)) return message ?? null;
+  const affected = blocks
+    .map((b) => ({ b, bad: findInvalidRowNumbers(b.rows) }))
+    .filter((x) => x.bad.length > 0);
+  if (affected.length === 0) return message;
+  const list = affected
+    .map(({ b, bad }) => `${b.name ?? b.id} (${bad.slice(0, 5).map((i) => String(i.number)).join(", ")}${bad.length > 5 ? ", …" : ""})`)
+    .join("; ");
+  return `Pruning totals can't be calculated because ${affected.length === 1 ? "this block has" : "these blocks have"} row numbers that aren't whole numbers: ${list}. Physical row numbers must be whole numbers — the block's row numbering needs correcting. (${message})`;
+}
