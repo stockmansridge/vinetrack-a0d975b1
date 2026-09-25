@@ -191,6 +191,38 @@ export function persistedHeadTarget(
   return headTargetAllowed(operationType) ? headTarget : null;
 }
 
+/* ------------------------------------------ banded ground application (SQL 233) */
+
+/** `spray_jobs.ground_application_target` — where a Banded band is physically applied. */
+export type GroundApplicationTarget = "undervine" | "midrow";
+export const GROUND_APPLICATION_TARGETS: GroundApplicationTarget[] = ["undervine", "midrow"];
+export const GROUND_APPLICATION_TARGET_LABEL: Record<GroundApplicationTarget, string> = {
+  undervine: "Undervine",
+  midrow: "Midrow",
+};
+export function normaliseGroundApplicationTarget(value: unknown): GroundApplicationTarget | null {
+  const raw = String(value ?? "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+  return raw === "undervine" ? "undervine" : raw === "midrow" ? "midrow" : null;
+}
+
+/**
+ * `spray_jobs.carrier_area_basis` — which hectares a Banded L/ha WATER rate
+ * applies to. Independent of every product's own label rate basis.
+ */
+export type CarrierAreaBasis = "treated_area" | "whole_block_area";
+export const CARRIER_AREA_BASES: CarrierAreaBasis[] = ["treated_area", "whole_block_area"];
+export const CARRIER_AREA_BASIS_LABEL: Record<CarrierAreaBasis, string> = {
+  treated_area: "Treated area",
+  whole_block_area: "Whole block area",
+};
+export function normaliseCarrierAreaBasis(value: unknown): CarrierAreaBasis | null {
+  const raw = String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return raw === "treated_area" || raw === "whole_block_area" ? raw : null;
+}
+
+/** Banded ground sprays offer only these carrier bases (never L/100 m). */
+export const BANDED_CARRIER_BASES: CarrierBasis[] = ["l_per_ha", "manual"];
+
 /* --------------------------------------------- spray volume (carrier) basis */
 
 /**
@@ -366,6 +398,8 @@ export interface SprayCarrierInput {
   sprayerOutputChoice?: "recommended" | "custom" | null;
   /** Manual basis only: the total water being mixed/applied, in litres. */
   manualTotalLitres?: number | null;
+  /** Banded L/ha only: which hectares the water rate applies to. */
+  carrierAreaBasis?: CarrierAreaBasis | null;
 }
 
 
@@ -390,6 +424,8 @@ export interface SprayApplication {
   /** Optional explanatory note for the structured `other` target. */
   otherTargetNote: string | null;
   headTarget: HeadTarget | null;
+  /** Banded only: Undervine / Midrow. Never inferred. */
+  groundApplicationTarget: GroundApplicationTarget | null;
   growthStageCode: string | null;
   tractorId: string | null;
   equipmentId: string | null;
@@ -433,6 +469,7 @@ export const emptySprayApplication = (): SprayApplication => ({
   legacyTargetText: null,
   otherTargetNote: null,
   headTarget: null,
+  groundApplicationTarget: null,
   growthStageCode: null,
   tractorId: null,
   equipmentId: null,
@@ -547,6 +584,8 @@ export function fromLegacySprayJob(
   if (job.spray_head_target && app.headTarget == null && app.operationType) {
     notes.push("Head target is foliar-only — dropped for this operation type.");
   }
+  app.groundApplicationTarget =
+    app.mode === "banded" ? normaliseGroundApplicationTarget((job as any).ground_application_target) : null;
   app.growthStageCode = job.growth_stage_code ?? null;
   app.tractorId = job.tractor_id ?? null;
   app.equipmentId = job.equipment_id ?? null;
@@ -616,7 +655,24 @@ export function fromLegacySprayJob(
             : null,
 
     manualTotalLitres: basis === "manual" ? positive(job.water_volume) : null,
+    carrierAreaBasis:
+      app.mode === "banded" ? normaliseCarrierAreaBasis((job as any).carrier_area_basis) : null,
   };
+  if (app.mode === "banded") {
+    // Banded is a direct ground application. Historical canopy columns stay in
+    // the database untouched but never drive the Banded draft or calculation.
+    app.carrier = {
+      ...app.carrier,
+      canopyType: null,
+      canopySize: null,
+      canopyDensity: null,
+      diluteLitresPer100m: null,
+      diluteLitresPerHectare: null,
+      concentrationFactor: null,
+      sprayerOutputChoice: null,
+      appliedLitresPer100m: basis === "l_per_100m" ? app.carrier.appliedLitresPer100m : null,
+    };
+  }
   if (!persistedBasis && legacyLPerHa != null) {
     notes.push("Carrier basis not recorded — inferred L/ha from the legacy spray_rate_per_ha value.");
   }
