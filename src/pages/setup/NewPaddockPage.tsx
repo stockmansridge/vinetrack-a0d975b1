@@ -128,14 +128,21 @@ export default function NewPaddockPage() {
   // Step 4
   const [showRawPayload, setShowRawPayload] = useState(false);
 
+  // Physical row numbering — whole numbers only, never silently defaulted.
+  const rowNumbering = useMemo(
+    () => validateRowNumbering(rowStartNumber, rowsCount),
+    [rowStartNumber, rowsCount],
+  );
+
   // Generated rows
   const generated: GeneratedRow[] = useMemo(() => {
     const dir = Number(rowDirection);
     const w = Number(rowWidth);
     const off = Number(rowOffset);
-    const c = Number(rowsCount);
-    const start = Number(rowStartNumber) || 1;
-    if (polygon.length < 3 || !Number.isFinite(dir) || !Number.isFinite(w) || w <= 0 || !Number.isFinite(c) || c <= 0) {
+    if (!rowNumbering.ok) return [];
+    const c = rowNumbering.count;
+    const start = rowNumbering.start;
+    if (polygon.length < 3 || !Number.isFinite(dir) || !Number.isFinite(w) || w <= 0) {
       return [];
     }
     return generateRows({
@@ -147,7 +154,7 @@ export default function NewPaddockPage() {
       rowStartNumber: start,
       rowNumberAscending,
     });
-  }, [polygon, rowDirection, rowWidth, rowOffset, rowsCount, rowStartNumber, rowNumberAscending]);
+  }, [polygon, rowDirection, rowWidth, rowOffset, rowNumbering, rowNumberAscending]);
 
   // Derived metrics
   const areaHa = useMemo(() => polygonAreaHectares(polygon), [polygon]);
@@ -202,12 +209,15 @@ export default function NewPaddockPage() {
     if (!Number.isFinite(dir) || dir < 0 || dir > 360) errors.push("Row direction must be 0–360°.");
     if (!(Number(rowWidth) > 0)) errors.push("Row width must be > 0.");
     if (!(Number(vineSpacing) > 0)) errors.push("Vine spacing must be > 0.");
-    if (!(Number(rowsCount) > 0)) errors.push("Row count must be > 0.");
-    if (generated.length === 0 && polygon.length >= 3) errors.push("No rows generated — check direction/width/offset.");
+    if (!rowNumbering.ok) {
+      if (rowNumbering.countError) errors.push(rowNumbering.countError);
+      if (rowNumbering.startError) errors.push(rowNumbering.startError);
+    }
+    if (generated.length === 0 && polygon.length >= 3 && rowNumbering.ok) errors.push("No rows generated — check direction/width/offset.");
     if (varietyAllocations.length > 0 && !isAllocationsValid(varietyAllocations))
       errors.push("Variety allocations must total 100% and have a selected variety.");
     return errors;
-  }, [selectedVineyardId, name, polygon, rowDirection, rowWidth, vineSpacing, rowsCount, generated.length, varietyAllocations]);
+  }, [selectedVineyardId, name, polygon, rowDirection, rowWidth, vineSpacing, rowNumbering, generated.length, varietyAllocations]);
 
   const isValid = validation.length === 0;
 
@@ -307,6 +317,7 @@ export default function NewPaddockPage() {
     }
     setSaving(true);
     try {
+      assertValidRowsPayload(payload as any);
       const { error } = await supabase.from("paddocks").insert(payload as any);
       if (error) throw error;
       toast({ title: "Block created", description: payload.name });
@@ -398,9 +409,9 @@ export default function NewPaddockPage() {
               <StepperField label="Row direction (°)" value={rowDirection} onChange={setRowDirection} step={0.5} min={0} max={360} />
               <StepperField label="Row width (m)" value={rowWidth} onChange={setRowWidth} step={0.1} min={0.1} />
               <StepperField label="Row offset (m)" value={rowOffset} onChange={setRowOffset} step={0.1} />
-              <StepperField label="Rows count" value={rowsCount} onChange={setRowsCount} step={1} min={1} />
+              <StepperField label="Rows count" value={rowsCount} onChange={setRowsCount} step={1} min={1} error={rowNumbering.ok ? undefined : rowNumbering.countError} />
               <div className="grid grid-cols-2 gap-3">
-                <NumberField label="Start row #" value={rowStartNumber} onChange={setRowStartNumber} step="1" />
+                <NumberField label="Start row #" value={rowStartNumber} onChange={setRowStartNumber} step="1" min="1" error={rowNumbering.ok ? undefined : rowNumbering.startError} />
                 <div className="space-y-2">
                   <Label>Ascending</Label>
                   <div className="flex h-10 items-center">
@@ -662,12 +673,13 @@ function StepNav({
 
 
 function NumberField({
-  label, value, onChange, step,
-}: { label: string; value: string; onChange: (v: string) => void; step?: string }) {
+  label, value, onChange, step, min, error,
+}: { label: string; value: string; onChange: (v: string) => void; step?: string; min?: string; error?: string }) {
   return (
     <div className="space-y-1.5">
       <Label className="text-xs">{label}</Label>
-      <Input type="number" step={step} value={value} onChange={(e) => onChange(e.target.value)} className="h-9" />
+      <Input type="number" step={step} min={min} value={value} onChange={(e) => onChange(e.target.value)} className="h-9" aria-invalid={error ? true : undefined} />
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }
@@ -676,8 +688,9 @@ function NumberField({
 // row-alignment controls (Direction, Width, Offset, Count) so users can
 // nudge values while watching the satellite preview update.
 function StepperField({
-  label, value, onChange, step = 1, min, max,
+  label, value, onChange, step = 1, min, max, error,
 }: {
+  error?: string;
   label: string;
   value: string;
   onChange: (v: string) => void;
