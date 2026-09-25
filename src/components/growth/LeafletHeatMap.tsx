@@ -60,7 +60,7 @@ export default function LeafletHeatMap({
             >
               <Tooltip direction="center" permanent className="!bg-transparent !border-0 !shadow-none !text-white">
                 {b.paddockName}
-                {blockLabel(b.mode, b.medianEl)}
+                {blockLabel(b.mode, b.maxEl)}
               </Tooltip>
             </Polygon>
           ) : null,
