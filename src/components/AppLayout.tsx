@@ -1,4 +1,4 @@
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import { Helmet } from "react-helmet-async";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -47,7 +47,8 @@ import { ACCOUNT_ACTIVITY, accessibleViews } from "@/lib/navigationConfig";
 
 
 export default function AppLayout() {
-  const { memberships, selectedVineyardId, selectVineyard, currentRole } = useVineyard();
+  const { memberships, selectedVineyardId, selectVineyard, currentRole, adminSupport, endAdminSupport } = useVineyard();
+  const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { profile } = useCurrentProfile();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -180,6 +181,29 @@ export default function AppLayout() {
           {mobileSearchOpen && (
             <div className="lg:hidden border-b border-border bg-card/90 px-4 py-2 backdrop-blur">
               <GlobalSearch autoFocus />
+            </div>
+          )}
+          {adminSupport && (
+            <div className="flex flex-wrap items-center gap-3 border-b border-border bg-accent px-4 py-2 text-sm text-accent-foreground md:px-6">
+              <span className="font-medium">
+                System Admin support: editing {adminSupport.vineyard_name ?? "customer vineyard"} on the customer's behalf.
+              </span>
+              <div className="ml-auto flex gap-2">
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/setup/paddocks">Blocks</Link>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => {
+                    const id = adminSupport.vineyard_id;
+                    endAdminSupport();
+                    navigate(`/admin/vineyards/${id}`);
+                  }}
+                >
+                  Exit support mode
+                </Button>
+              </div>
             </div>
           )}
           <PortalNoticesBanner />

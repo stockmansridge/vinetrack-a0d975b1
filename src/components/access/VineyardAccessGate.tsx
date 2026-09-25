@@ -29,12 +29,15 @@ function isAlwaysAllowed(pathname: string) {
 export function VineyardAccessGate({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { selectedVineyardId } = useVineyard();
+  const { selectedVineyardId, adminSupport } = useVineyard();
   const { data: matrix, isLoading, error } = useVineyardAccessMatrix();
   const { data: invites = [] } = usePendingInvites();
   const refresh = useRefreshVineyardAccess();
 
   if (isAlwaysAllowed(pathname)) return <>{children}</>;
+  // System Admin support session — billing access doesn't apply; the backend
+  // still authorises every read and write.
+  if (adminSupport && adminSupport.vineyard_id === selectedVineyardId) return <>{children}</>;
 
   // Never flash a paywall while access is resolving.
   if (isLoading) {
