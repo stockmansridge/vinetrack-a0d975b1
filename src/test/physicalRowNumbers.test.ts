@@ -1,14 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const updateSpy = vi.fn();
-vi.mock("@/integrations/supabase/client", () => ({
+const { updateSpy } = vi.hoisted(() => ({ updateSpy: vi.fn() }));
+const mockClient = () => ({
   supabase: {
     from: () => ({
       update: (p: any) => { updateSpy(p); return { eq: () => ({ select: () => ({ single: async () => ({ data: p, error: null }) }) }) }; },
     }),
     rpc: vi.fn(),
   },
-}));
+});
+vi.mock("@/integrations/supabase/client", mockClient);
+vi.mock("@/integrations/ios-supabase/client", mockClient);
 
 import { generateRows } from "@/lib/paddockRowGeneration";
 import {
