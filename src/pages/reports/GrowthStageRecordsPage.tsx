@@ -49,6 +49,8 @@ import {
   type GrowthStageRecord,
 } from "@/lib/growthStageRecordsQuery";
 
+import { phaseColourCss, ALL_PHASES } from "@/lib/growthPhases";
+
 const ANY = "__any__";
 
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
@@ -228,9 +230,19 @@ export default function GrowthStageRecordsPage() {
                     {s.days_since != null ? ` · ${s.days_since}d ago` : ""}
                   </div>
                 </div>
-                <Badge variant="secondary" className="shrink-0">
-                  {elStage(s.latest_stage)}
-                </Badge>
+                {(() => {
+                  const n = parseFloat(String(s.latest_stage ?? "").replace(/^E\s*-?\s*L\s*/i, ""));
+                  const bg = Number.isFinite(n) ? phaseColourCss(n, ALL_PHASES) : undefined;
+                  return (
+                    <Badge
+                      variant="secondary"
+                      className="shrink-0 border-transparent"
+                      style={bg ? { backgroundColor: bg, color: "#fff" } : undefined}
+                    >
+                      {elStage(s.latest_stage)}
+                    </Badge>
+                  );
+                })()}
               </div>
             ))}
           </div>
