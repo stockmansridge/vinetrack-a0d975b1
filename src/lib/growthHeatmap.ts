@@ -221,6 +221,12 @@ export function medianStage(obs: HeatObservation[]): number | null {
   return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
 }
 
+/** Highest E-L among the observations, or null when there are none. */
+export function maxStage(obs: HeatObservation[]): number | null {
+  const v = obs.map((o) => o.el).filter((n) => Number.isFinite(n));
+  return v.length ? Math.max(...v) : null;
+}
+
 // ---------------------------------------------------------------- geometry
 
 export function pointInPolygon(pt: LatLng, poly: LatLng[]): boolean {
@@ -264,6 +270,9 @@ export interface BlockHeat {
   mode: BlockHeatMode;
   /** Median EL of this block's influencing observations. */
   medianEl: number | null;
+  /** Highest EL among this block's influencing observations — the block's
+   *  displayed E-L (matches iOS/Android). Display only; never feeds the surface. */
+  maxEl: number | null;
   /** Grid of interpolated EL values (null = outside polygon). */
   grid: (number | null)[][] | null;
   /** Matching recency weight per cell, for opacity. */
@@ -400,6 +409,7 @@ export function buildBlockHeat(input: BuildBlockHeatInput): BlockHeat {
     stale,
     mode,
     medianEl: medianStage(influencing),
+    maxEl: maxStage(influencing),
     grid: null,
     weightGrid: null,
     gridBounds: null,

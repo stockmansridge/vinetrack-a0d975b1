@@ -245,8 +245,8 @@ export default function AppleHeatMap({
                     ? " · No observations"
                     : b.mode === "stale"
                       ? " · No current observations"
-                      : b.medianEl != null
-                        ? ` · ${formatEl(b.medianEl)}`
+                      : b.maxEl != null
+                        ? ` · ${formatEl(b.maxEl)}`
                         : ""
                 }`,
               ),
