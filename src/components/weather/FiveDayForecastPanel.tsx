@@ -355,7 +355,7 @@ function TrendChart({
                       cx={props.cx}
                       cy={props.cy}
                       r={3.2}
-                      fill={over ? "hsl(var(--warning))" : "hsl(var(--accent))"}
+                      fill={over ? "hsl(var(--warning))" : "hsl(var(--wind))"}
                     />
                   );
                 }}
