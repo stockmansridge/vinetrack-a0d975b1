@@ -1,3 +1,4 @@
+import { validateRowNumbering } from "@/lib/physicalRowNumbers";
 // Full paddock detail / edit page.
 //
 // Owner/manager: edit boundary, rows, varieties, irrigation, trellis,
@@ -245,14 +246,22 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
     setRowOverrides(init);
   }, [storedRawRows]);
 
+  // Physical row numbering — whole numbers only, never silently defaulted.
+  const rowNumbering = useMemo(
+    () => validateRowNumbering(rowStartNumber, rowsCount),
+    [rowStartNumber, rowsCount],
+  );
+  const rowNumberingError = rowNumbering.ok ? null : (rowNumbering.startError ?? rowNumbering.countError ?? null);
+
   // Live derived rows (used by Rows tab preview).
   const generatedRows: GeneratedRow[] = useMemo(() => {
     const dir = Number(rowDirection);
     const w = Number(rowWidth);
     const off = Number(rowOffset) || 0;
-    const c = Number(rowsCount);
-    const start = Number(rowStartNumber) || 1;
-    if (polygon.length < 3 || !Number.isFinite(dir) || !(w > 0) || !(c > 0)) return [];
+    if (!rowNumbering.ok) return [];
+    const c = rowNumbering.count;
+    const start = rowNumbering.start;
+    if (polygon.length < 3 || !Number.isFinite(dir) || !(w > 0)) return [];
     return generateRows({
       polygonPoints: polygon,
       rowDirectionDeg: dir,
@@ -262,7 +271,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
       rowStartNumber: start,
       rowNumberAscending,
     });
-  }, [polygon, rowDirection, rowWidth, rowOffset, rowsCount, rowStartNumber, rowNumberAscending]);
+  }, [polygon, rowDirection, rowWidth, rowOffset, rowNumbering, rowNumberAscending]);
 
   /**
    * The exact rows array written to the database: generated geometry merged
@@ -318,6 +327,10 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
 
   const onSaveBoundary = async () => {
     if (polygon.length < 3) return toast({ title: "Boundary needs ≥ 3 points", variant: "destructive" });
+    if (rowNumberingError) return toast({ title: "Invalid row numbering", description: rowNumberingError, variant: "destructive" });
+    if (generatedRows.length === 0) {
+      return toast({ title: "No rows generated", description: "Check direction/width/count.", variant: "destructive" });
+    }
     // Regenerate rows against the new boundary using current row params.
     await save({
       polygon_points: toCanonicalPolygon(polygon),
@@ -326,6 +339,9 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
   };
 
   const onSaveRows = async () => {
+    if (rowNumberingError) {
+      return toast({ title: "Invalid row numbering", description: rowNumberingError, variant: "destructive" });
+    }
     if (generatedRows.length === 0) {
       return toast({ title: "No rows generated", description: "Check direction/width/count.", variant: "destructive" });
     }
@@ -547,9 +563,9 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
                 <NumField label="Row direction (°)" value={rowDirection} onChange={setRowDirection} step="0.5" disabled={!canEdit} />
                 <NumField label="Row width (m)" value={rowWidth} onChange={setRowWidth} step="0.1" disabled={!canEdit} />
                 <NumField label="Row offset (m)" value={rowOffset} onChange={setRowOffset} step="0.1" disabled={!canEdit} />
-                <NumField label="Rows count" value={rowsCount} onChange={setRowsCount} step="1" disabled={!canEdit} />
+                <NumField label="Rows count" value={rowsCount} onChange={setRowsCount} step="1" min="1" disabled={!canEdit} error={rowNumbering.ok ? undefined : rowNumbering.countError} />
                 <div className="grid grid-cols-2 gap-3">
-                  <NumField label="Start row #" value={rowStartNumber} onChange={setRowStartNumber} step="1" disabled={!canEdit} />
+                  <NumField label="Start row #" value={rowStartNumber} onChange={setRowStartNumber} step="1" min="1" disabled={!canEdit} error={rowNumbering.ok ? undefined : rowNumbering.startError} />
                   <div className="space-y-2">
                     <Label className="text-xs">Ascending</Label>
                     <div className="flex h-10 items-center">
@@ -565,10 +581,8 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
                   <Metric
                     label="Last row # (calculated)"
                     value={(() => {
-                      const start = Number(rowStartNumber);
-                      const count = Number(rowsCount);
-                      if (!Number.isFinite(start) || !Number.isFinite(count) || count <= 0) return "—";
-                      return String(start + count - 1);
+                      if (!rowNumbering.ok) return "—";
+                      return String(rowNumbering.start + rowNumbering.count - 1);
                     })()}
                   />
                   <Metric label="Total row length" value={`${fmt(metrics.totalRowLengthM, 0)} m`} />
@@ -777,12 +791,13 @@ function ReadOnly({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 function NumField({
-  label, value, onChange, step, disabled,
-}: { label: string; value: string; onChange: (v: string) => void; step?: string; disabled?: boolean }) {
+  label, value, onChange, step, min, disabled, error,
+}: { label: string; value: string; onChange: (v: string) => void; step?: string; min?: string; disabled?: boolean; error?: string }) {
   return (
     <div className="space-y-1.5">
       <Label className="text-xs">{label}</Label>
-      <Input type="number" step={step} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} className="h-9" />
+      <Input type="number" step={step} min={min} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} className="h-9" aria-invalid={error ? true : undefined} />
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }

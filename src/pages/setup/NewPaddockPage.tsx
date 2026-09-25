@@ -1,3 +1,4 @@
+import { validateRowNumbering, assertValidRowsPayload } from "@/lib/physicalRowNumbers";
 // New Paddock wizard — Phase 2C scaffold.
 //
 // SAFETY: Final "Save paddock" button is gated by a TEST FLAG and is
@@ -744,6 +745,7 @@ function StepperField({
           <Plus className="h-4 w-4" />
         </Button>
       </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }
