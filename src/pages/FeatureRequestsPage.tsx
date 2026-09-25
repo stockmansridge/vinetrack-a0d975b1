@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ChevronUp, EyeOff, Loader2, Lightbulb, MessageSquare, Plus, RefreshCw } from "lucide-react";
+import { CheckCircle2, ChevronUp, EyeOff, Pencil, Loader2, Lightbulb, MessageSquare, Plus, RefreshCw } from "lucide-react";
 import { FeatureRequestComments } from "@/components/feature/FeatureRequestComments";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { useVineyard } from "@/context/VineyardContext";
@@ -66,11 +66,42 @@ export default function FeatureRequestsPage() {
   const update = useUpdateFeatureRequest();
 
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState("active");
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [details, setDetails] = useState("");
   const [openThread, setOpenThread] = useState<string | null>(null);
+  const [editing, setEditing] = useState<FeatureRequest | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDetails, setEditDetails] = useState("");
+  const [editNote, setEditNote] = useState("");
+
+  const startEdit = (r: FeatureRequest) => {
+    setEditing(r);
+    setEditTitle(r.title);
+    setEditDetails(r.details ?? "");
+    setEditNote(r.admin_note ?? "");
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    if (!editTitle.trim()) {
+      toast.error("Title can't be empty");
+      return;
+    }
+    try {
+      await update.mutateAsync({
+        id: editing.id,
+        title: editTitle.trim(),
+        details: editDetails.trim() || null,
+        admin_note: editNote.trim() || null,
+      });
+      toast.success("Request updated");
+      setEditing(null);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not save changes");
+    }
+  };
 
   const requests = data?.requests ?? [];
   const visible = useMemo(
@@ -149,10 +180,11 @@ export default function FeatureRequestsPage() {
           className="w-full sm:w-72"
         />
         <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[240px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="active">Open, planned &amp; in progress</SelectItem>
             <SelectItem value="all">All statuses</SelectItem>
             {FEATURE_REQUEST_STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
@@ -182,6 +214,12 @@ export default function FeatureRequestsPage() {
           {visible.map((r) => (
             <li key={r.id}>
               <Card className="flex items-start gap-4 p-4">
+                {r.status === "done" && (
+                  <CheckCircle2
+                    aria-label="Completed"
+                    className="mt-4 h-8 w-8 shrink-0 text-success"
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => toggleVote(r)}
@@ -259,6 +297,9 @@ export default function FeatureRequestsPage() {
                       >
                         {r.is_hidden ? "Unhide" : "Hide"}
                       </Button>
+                      <Button variant="outline" size="sm" onClick={() => startEdit(r)}>
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit text
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -306,6 +347,35 @@ export default function FeatureRequestsPage() {
             <Button onClick={submit} disabled={create.isPending}>
               {create.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Post request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit feature request</DialogTitle>
+            <DialogDescription>Update the wording shown on the board.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="fr-edit-title">Title</Label>
+              <Input id="fr-edit-title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} maxLength={160} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="fr-edit-details">Details</Label>
+              <Textarea id="fr-edit-details" value={editDetails} onChange={(e) => setEditDetails(e.target.value)} rows={6} maxLength={4000} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="fr-edit-note">VineTrack note</Label>
+              <Textarea id="fr-edit-note" value={editNote} onChange={(e) => setEditNote(e.target.value)} rows={3} placeholder="Optional reply shown under the request" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
+            <Button onClick={saveEdit} disabled={update.isPending}>
+              {update.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>
