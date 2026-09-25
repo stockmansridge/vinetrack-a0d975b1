@@ -283,9 +283,9 @@ describe("P6C — banded spray parity", () => {
     const c = calculateCarrier({
       geometry: g,
       mode: "banded",
-      carrier: { basis: "l_per_100m", appliedLitresPer100m: 6 },
+      carrier: { basis: "l_per_ha", carrierAreaBasis: "whole_block_area", litresPerHectare: 200 },
     });
-    expect(c.totalCarrierLitres).toBeCloseTo(2000, 1); // 333.33 hundred-metres × 6
+    expect(c.totalCarrierLitres).toBeCloseTo(2000, 1); // 200 L/gross ha × 10 ha
     const [r] = calculateProducts({
       products: [line({ rate: 50, unit: "mL", rateBasis: "per_100_litres" })],
       geometry: g,

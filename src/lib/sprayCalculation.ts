@@ -716,7 +716,8 @@ export function calculateSprayApplication(args: {
     tanks,
     diagnostics,
     blocksDeferred,
-    canRecord: !diagnostics.some((d) => d.severity === "error"),
+    // A plan with deferred block totals is saveable, but not yet recordable.
+    canRecord: !blocksDeferred && !diagnostics.some((d) => d.severity === "error"),
   };
 }
 
