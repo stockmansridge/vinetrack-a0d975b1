@@ -16,6 +16,8 @@ import {
   SPRAY_TARGETS,
   SPRAY_TARGET_LABEL,
   headTargetAllowed,
+  GROUND_APPLICATION_TARGETS,
+  GROUND_APPLICATION_TARGET_LABEL,
 } from "@/lib/sprayApplicationDomain";
 import { slugifySprayTarget, sprayTargetLabel } from "@/lib/sprayTargetLibrary";
 import { useVineyardSprayTargets } from "@/hooks/useVineyardSprayTargets";
@@ -149,6 +151,32 @@ export function TargetStep({ app, patch, canEdit, vineyardId }: StepProps) {
         )}
       </section>
 
+      {app.operationType === "banded" ? (
+        <section className="space-y-2" role="radiogroup" aria-label="Ground application target">
+          <h3 className="text-sm font-semibold">Where is this ground spray applied?</h3>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {GROUND_APPLICATION_TARGETS.map((g) => (
+              <button
+                key={g}
+                type="button"
+                role="radio"
+                disabled={!canEdit}
+                aria-checked={app.groundApplicationTarget === g}
+                onClick={() => patch({ groundApplicationTarget: g })}
+                className={cn(
+                  "rounded-md border px-3 py-2 text-sm transition",
+                  app.groundApplicationTarget === g ? "border-primary bg-primary/10 ring-2 ring-primary" : "hover:bg-muted/50",
+                )}
+              >
+                {GROUND_APPLICATION_TARGET_LABEL[g]}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            This is where the band is physically applied — separate from what the spray is targeting above.
+          </p>
+        </section>
+      ) : app.operationType !== "spreader" && (
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">Head target</h3>
         {headTargetAllowed(app.operationType) ? (
@@ -175,6 +203,7 @@ export function TargetStep({ app, patch, canEdit, vineyardId }: StepProps) {
           </p>
         )}
       </section>
+      )}
     </div>
   );
 }
