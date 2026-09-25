@@ -276,7 +276,7 @@ export function planEquipmentImport(
 
     text("serial_number", "serial_number");
     text("vin_number", "vin_number");
-    if (cls === "tractor" || cls === "other_asset" || cls === "vineyard_machine") text("notes", "notes");
+    if (cls === "other_asset" || cls === "vineyard_machine") text("notes", "notes");
     if (cls === "tractor" || cls === "other_asset") {
       text("make", "make");
       text("model", "model");
