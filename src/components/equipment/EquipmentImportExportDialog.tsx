@@ -100,7 +100,7 @@ async function loadAllEquipment(vineyardId: string): Promise<ExistingEquipment[]
   ];
 }
 
-export default function EquipmentImportExportDialog() {
+export default function EquipmentImportExportDialog({ size = "default" }: { size?: "default" | "sm" } = {}) {
   const { selectedVineyardId, memberships, currentRole } = useVineyard();
   const { user } = useAuth();
   const qc = useQueryClient();
