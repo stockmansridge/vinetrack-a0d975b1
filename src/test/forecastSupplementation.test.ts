@@ -162,3 +162,51 @@ describe("daily-only primary with empty periods", () => {
     expect(supplementForecast(daily, other).days[0].periods).toEqual([]);
   });
 });
+
+describe("daily-only 5-day primary", () => {
+  const dates = ["2026-09-24", "2026-09-25", "2026-09-26", "2026-09-27", "2026-09-28"];
+  const mkDay = (date: string, periods: ForecastPeriod[], v: number) => ({
+    date, conditionKey: null, conditionCode: null, conditionDescription: null,
+    tempMinC: v, tempMaxC: v + 10, rainMm: v / 10, rainProbabilityPct: v, humidityMaxPct: null, windMaxKmh: v + 20, periods,
+  });
+  const primary: FiveDayForecast = {
+    source: "WillyWeather", sourceDetail: "daily", timezone: "Australia/Sydney", updatedAt: null,
+    fieldSources: { temperature: "WillyWeather", wind: "WillyWeather", rain: "WillyWeather", humidity: null, condition: null },
+    days: dates.map((d, i) => mkDay(d, [], i + 1)),
+  };
+  // Supplementary days deliberately in reverse order to prove date matching.
+  const supp: FiveDayForecast = {
+    source: "Open-Meteo", sourceDetail: "samples", timezone: "Australia/Sydney", updatedAt: null,
+    days: [...dates].reverse().map((d) => mkDay(d, [0, 4, 8, 12, 16, 20].map((h) => period(h, { date: d })), 99)),
+  };
+
+  it("receives 30 periods, matched by date, with daily values unchanged", () => {
+    const out = supplementForecast(primary, supp);
+    expect(out.days.flatMap((d) => d.periods)).toHaveLength(30);
+    out.days.forEach((day, i) => {
+      expect(day.date).toBe(dates[i]);
+      expect(day.periods.every((p) => p.date === day.date)).toBe(true);
+      expect(day.tempMinC).toBe(i + 1);
+      expect(day.tempMaxC).toBe(i + 11);
+      expect(day.windMaxKmh).toBe(i + 21);
+      expect(day.rainMm).toBe((i + 1) / 10);
+      expect(day.rainProbabilityPct).toBe(i + 1);
+    });
+    expect(out.source).toBe("WillyWeather");
+  });
+
+  it("missing supplementary dates stay empty", () => {
+    const partial = { ...supp, days: supp.days.filter((d) => d.date !== "2026-09-26") };
+    const out = supplementForecast(primary, partial);
+    expect(out.days[2].periods).toEqual([]);
+    expect(out.days.flatMap((d) => d.periods)).toHaveLength(24);
+  });
+
+  it("existing primary periods are not replaced", () => {
+    const own = period(8, { tempMinC: 1, tempMaxC: 2, windMaxKmh: 3, rainMm: 0, humidityMinPct: 10, humidityMaxPct: 20, date: dates[0] });
+    const withPeriods = { ...primary, days: [mkDay(dates[0], [own], 1), ...primary.days.slice(1)] };
+    const out = supplementForecast(withPeriods, supp);
+    expect(out.days[0].periods).toHaveLength(1);
+    expect(out.days[0].periods[0]).toMatchObject({ tempMinC: 1, tempMaxC: 2, windMaxKmh: 3 });
+  });
+});
