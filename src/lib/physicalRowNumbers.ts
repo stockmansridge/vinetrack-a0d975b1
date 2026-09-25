@@ -57,7 +57,7 @@ export function parseRowCount(input: unknown): ParseResult {
 export function validateRowNumbering(
   start: unknown,
   count: unknown,
-): { ok: true; start: number; count: number } | { ok: false; startError?: string; countError?: string } {
+): { ok: true; start: number; count: number; startError?: undefined; countError?: undefined } | { ok: false; startError?: string; countError?: string } {
   const s = parseStartRowNumber(start);
   const c = parseRowCount(count);
   if (!s.ok || !c.ok) {
