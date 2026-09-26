@@ -242,10 +242,10 @@ export default function GrowthStageRecordsPage() {
                           src={img}
                           alt={`E-L ${n} reference`}
                           loading="lazy"
-                          className="h-8 w-8 rounded object-cover border border-border"
+                          className="h-14 w-14 rounded object-cover border border-border"
                         />
                       ) : Number.isFinite(n) ? (
-                        <div className="h-8 w-8 rounded border border-border bg-muted" aria-hidden />
+                        <div className="h-14 w-14 rounded border border-border bg-muted" aria-hidden />
                       ) : null}
                       <Badge
                         variant="secondary"
