@@ -51,6 +51,7 @@ import {
 
 import { phaseColourCss, ALL_PHASES } from "@/lib/growthPhases";
 import { growthStageImageUrl } from "@/lib/growthStageImages";
+import { Dialog as ZoomDialog, DialogContent as ZoomDialogContent, DialogTitle as ZoomDialogTitle } from "@/components/ui/dialog";
 
 const ANY = "__any__";
 
@@ -80,6 +81,7 @@ export default function GrowthStageRecordsPage() {
   const [operator, setOperator] = useState<string>(ANY);
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<GrowthStageRecord | null>(null);
+  const [zoomImg, setZoomImg] = useState<{ src: string; label: string } | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["growth_stage_records", selectedVineyardId],
@@ -238,12 +240,19 @@ export default function GrowthStageRecordsPage() {
                   return (
                     <div className="flex items-center gap-2 shrink-0">
                       {img ? (
-                        <img
-                          src={img}
-                          alt={`E-L ${n} reference`}
-                          loading="lazy"
-                          className="h-14 w-14 rounded object-cover border border-border"
-                        />
+                        <button
+                          type="button"
+                          onClick={() => setZoomImg({ src: img, label: `E-L ${n}` })}
+                          aria-label={`Expand E-L ${n} reference photo`}
+                          className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <img
+                            src={img}
+                            alt={`E-L ${n} reference`}
+                            loading="lazy"
+                            className="h-14 w-14 rounded object-cover border border-border cursor-zoom-in hover:opacity-90"
+                          />
+                        </button>
                       ) : Number.isFinite(n) ? (
                         <div className="h-14 w-14 rounded border border-border bg-muted" aria-hidden />
                       ) : null}
@@ -500,6 +509,12 @@ function Field({ label, value, mono }: { label: string; value: any; mono?: boole
       <span className={mono ? "font-mono text-xs break-all text-right" : "text-right"}>
         {value == null || value === "" ? "—" : String(value)}
       </span>
+      <ZoomDialog open={!!zoomImg} onOpenChange={(o) => !o && setZoomImg(null)}>
+        <ZoomDialogContent className="max-w-2xl">
+          <ZoomDialogTitle>{zoomImg?.label} reference photo</ZoomDialogTitle>
+          {zoomImg && <img src={zoomImg.src} alt={`${zoomImg.label} reference photo`} className="w-full h-auto rounded" />}
+        </ZoomDialogContent>
+      </ZoomDialog>
     </div>
   );
 }
