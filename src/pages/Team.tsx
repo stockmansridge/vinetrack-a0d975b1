@@ -44,7 +44,7 @@ import {
 } from "@/lib/invitationsQuery";
 import {
   updateMemberRole,
-  updateMemberOperatorCategoryRpc,
+  updateMemberWorkerType,
   removeMember,
   describeMemberMgmtError,
   type MemberRole,
@@ -119,13 +119,13 @@ export default function Team() {
     },
   });
 
-  const { data: memberRows } = useQuery({
+  const { data: memberRows, isLoading: rowsLoading, error: rowsError } = useQuery({
     queryKey: ["vineyard-members-rows", selectedVineyardId],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchVineyardMembersWithCategory(selectedVineyardId!),
   });
 
-  const { data: categoriesRes } = useQuery({
+  const { data: categoriesRes, isLoading: catsLoading, error: catsError } = useQuery({
     queryKey: ["operator-categories", selectedVineyardId],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchOperatorCategoriesForVineyard(selectedVineyardId!),
@@ -154,24 +154,40 @@ export default function Team() {
     return m;
   }, [memberRows]);
 
+  // Apply a confirmed saved row to the cache, then refetch. Cancelling
+  // in-flight fetches first stops an older response overwriting newer state.
+  const applyConfirmedRow = async (row: { user_id?: string | null; role?: string | null; worker_type_id?: string | null }) => {
+    const key = ["vineyard-members-rows", selectedVineyardId];
+    await qc.cancelQueries({ queryKey: key });
+    qc.setQueryData<typeof memberRows>(key, (old) =>
+      old?.map((r) =>
+        r.user_id === row.user_id
+          ? { ...r, role: row.role ?? r.role, worker_type_id: row.worker_type_id ?? null }
+          : r,
+      ),
+    );
+    qc.invalidateQueries({ queryKey: key });
+    qc.invalidateQueries({ queryKey: ["team-rpc", selectedVineyardId] });
+    qc.invalidateQueries({ queryKey: ["team-lookup", selectedVineyardId] });
+  };
+
   const setCategory = useMutation({
-    mutationFn: async ({ membershipId, categoryId }: { membershipId: string; categoryId: string | null }) => {
-      await updateMemberOperatorCategoryRpc(membershipId, categoryId);
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["vineyard-members-rows", selectedVineyardId] });
+    mutationFn: ({ userId, categoryId }: { userId: string; categoryId: string | null }) =>
+      updateMemberWorkerType({ vineyardId: selectedVineyardId!, userId }, categoryId),
+    onSuccess: async (row) => {
+      await applyConfirmedRow(row);
       toast({ title: "Worker type updated" });
     },
     onError: (e) => {
-      toast({ title: "Couldn't update category", description: describeMemberWriteError(e), variant: "destructive" });
+      toast({ title: "Couldn't update worker type", description: describeMemberWriteError(e), variant: "destructive" });
     },
   });
 
   const setRole = useMutation({
-    mutationFn: async ({ membershipId, role }: { membershipId: string; role: MemberRole }) => {
-      await updateMemberRole(membershipId, role);
-    },
-    onSuccess: () => {
+    mutationFn: ({ userId, role }: { userId: string; role: MemberRole }) =>
+      updateMemberRole({ vineyardId: selectedVineyardId!, userId }, role),
+    onSuccess: async (row) => {
+      await applyConfirmedRow(row);
       invalidateAll();
       toast({ title: "Role updated" });
     },
@@ -343,7 +359,7 @@ export default function Team() {
                       {canEditRole && membershipId ? (
                         <Select
                           value={m.role}
-                          onValueChange={(v) => setRole.mutate({ membershipId, role: v as MemberRole })}
+                          onValueChange={(v) => setRole.mutate({ userId: m.user_id, role: v as MemberRole })}
                           disabled={setRole.isPending}
                         >
                           <SelectTrigger className="w-36 h-8"><SelectValue /></SelectTrigger>
@@ -358,10 +374,14 @@ export default function Team() {
                   ),
                   operator_category: (
                     <TableCell>
-                      {canEdit && membershipId ? (
+                      {rowsLoading || catsLoading ? (
+                        <span className="text-sm text-muted-foreground">Loading…</span>
+                      ) : rowsError || !membershipId ? (
+                        <span className="text-sm text-destructive">Worker type unavailable</span>
+                      ) : canEdit && !catsError && !(rawCatId && !currentCat) ? (
                         <Select
                           value={currentCatId ?? NONE}
-                          onValueChange={(v) => setCategory.mutate({ membershipId, categoryId: v === NONE ? null : v })}
+                          onValueChange={(v) => setCategory.mutate({ userId: m.user_id, categoryId: v === NONE ? null : v })}
                           disabled={setCategory.isPending}
                         >
                           <SelectTrigger className="w-56"><SelectValue placeholder="No category" /></SelectTrigger>
@@ -375,8 +395,12 @@ export default function Team() {
                             ))}
                           </SelectContent>
                         </Select>
+                      ) : rawCatId && !currentCat ? (
+                        <span className="text-sm text-muted-foreground" title={rawCatId}>
+                          Assigned (worker type details unavailable)
+                        </span>
                       ) : (
-                        <span className="text-sm">{currentCat?.name ?? "—"}</span>
+                        <span className="text-sm">{currentCat?.name ?? (catsError ? "Unavailable" : "—")}</span>
                       )}
                     </TableCell>
                   ),
