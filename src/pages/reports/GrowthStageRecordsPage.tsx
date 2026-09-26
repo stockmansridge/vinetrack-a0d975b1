@@ -411,6 +411,12 @@ export default function GrowthStageRecordsPage() {
         open={!!selected}
         onOpenChange={(o) => !o && setSelected(null)}
       />
+      <ZoomDialog open={!!zoomImg} onOpenChange={(o) => !o && setZoomImg(null)}>
+        <ZoomDialogContent className="max-w-2xl">
+          <ZoomDialogTitle>{zoomImg?.label} reference photo</ZoomDialogTitle>
+          {zoomImg && <img src={zoomImg.src} alt={`${zoomImg.label} reference photo`} className="w-full h-auto rounded" />}
+        </ZoomDialogContent>
+      </ZoomDialog>
     </div>
   );
 }
