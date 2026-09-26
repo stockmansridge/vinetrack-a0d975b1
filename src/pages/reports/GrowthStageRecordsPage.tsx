@@ -509,12 +509,6 @@ function Field({ label, value, mono }: { label: string; value: any; mono?: boole
       <span className={mono ? "font-mono text-xs break-all text-right" : "text-right"}>
         {value == null || value === "" ? "—" : String(value)}
       </span>
-      <ZoomDialog open={!!zoomImg} onOpenChange={(o) => !o && setZoomImg(null)}>
-        <ZoomDialogContent className="max-w-2xl">
-          <ZoomDialogTitle>{zoomImg?.label} reference photo</ZoomDialogTitle>
-          {zoomImg && <img src={zoomImg.src} alt={`${zoomImg.label} reference photo`} className="w-full h-auto rounded" />}
-        </ZoomDialogContent>
-      </ZoomDialog>
     </div>
   );
 }
