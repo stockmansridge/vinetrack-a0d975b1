@@ -50,6 +50,7 @@ import {
 } from "@/lib/growthStageRecordsQuery";
 
 import { phaseColourCss, ALL_PHASES } from "@/lib/growthPhases";
+import { growthStageImageUrl } from "@/lib/growthStageImages";
 
 const ANY = "__any__";
 
@@ -233,14 +234,27 @@ export default function GrowthStageRecordsPage() {
                 {(() => {
                   const n = parseFloat(String(s.latest_stage ?? "").replace(/^E\s*-?\s*L\s*/i, ""));
                   const bg = Number.isFinite(n) ? phaseColourCss(n, ALL_PHASES) : undefined;
+                  const img = Number.isFinite(n) ? growthStageImageUrl(`EL${n}`) : null;
                   return (
-                    <Badge
-                      variant="secondary"
-                      className="shrink-0 border-transparent"
-                      style={bg ? { backgroundColor: bg, color: "#fff" } : undefined}
-                    >
-                      {elStage(s.latest_stage)}
-                    </Badge>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {img ? (
+                        <img
+                          src={img}
+                          alt={`E-L ${n} reference`}
+                          loading="lazy"
+                          className="h-8 w-8 rounded object-cover border border-border"
+                        />
+                      ) : Number.isFinite(n) ? (
+                        <div className="h-8 w-8 rounded border border-border bg-muted" aria-hidden />
+                      ) : null}
+                      <Badge
+                        variant="secondary"
+                        className="shrink-0 border-transparent"
+                        style={bg ? { backgroundColor: bg, color: "#fff" } : undefined}
+                      >
+                        {elStage(s.latest_stage)}
+                      </Badge>
+                    </div>
                   );
                 })()}
               </div>
