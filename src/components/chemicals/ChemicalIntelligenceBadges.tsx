@@ -6,7 +6,7 @@ import {
   VERIFICATION_LABEL,
   VERIFICATION_TONE,
   VERIFICATION_TOOLTIP,
-  groupDisplay,
+  resistanceGroupDisplay,
   type ChemicalIntelligence,
   type VerificationStatus,
 } from "@/lib/chemicalIntelligence";
@@ -35,12 +35,18 @@ export function VerificationBadge({
   );
 }
 
-/** Structured activity-group summary, e.g. "FRAC 3 + 11". Legacy free-text is
- *  shown clearly marked as legacy and is never parsed into groups. */
+/**
+ * Resistance group, driven by the backend's structured classification state:
+ * the structured group(s) when classified, "No resistance group applies" when
+ * the backend says not applicable, and "Resistance group unknown" plus the
+ * rotation warning when it is explicitly unresolved. An unresolved product is
+ * never blank and never reads as safe; legacy free-text stays marked as legacy
+ * and is never parsed into groups.
+ */
 export function ActivityGroupSummary({ chem }: { chem: ChemicalIntelligence }) {
-  const display = groupDisplay(chem);
-  if (!display) return <span className="text-muted-foreground">—</span>;
-  if (display.legacy) {
+  const display = resistanceGroupDisplay(chem);
+  if (display.kind === "none") return <span className="text-muted-foreground">—</span>;
+  if (display.kind === "legacy") {
     return (
       <span
         className="text-xs text-muted-foreground italic"
@@ -48,6 +54,18 @@ export function ActivityGroupSummary({ chem }: { chem: ChemicalIntelligence }) {
       >
         {display.text} (legacy)
       </span>
+    );
+  }
+  if (display.kind === "unresolved") {
+    return (
+      <Badge className={TONE_CLASS.warning} title={display.warning}>
+        {display.text}
+      </Badge>
+    );
+  }
+  if (display.kind === "not_applicable") {
+    return (
+      <span className="text-xs text-muted-foreground">{display.text}</span>
     );
   }
   return <Badge variant="secondary">{display.text}</Badge>;

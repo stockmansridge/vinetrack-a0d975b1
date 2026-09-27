@@ -692,3 +692,82 @@ export function groupDisplay(
   const legacy = chem.legacy.chemicalGroup;
   return legacy ? { text: legacy, legacy: true } : null;
 }
+
+/* --------------------------------------------- resistance group presentation */
+
+/** "No resistance group applies" — the backend said `not_applicable`. */
+export const RESISTANCE_NOT_APPLICABLE_TEXT = "No resistance group applies";
+/** "Resistance group unknown" — explicitly unresolved, never shown as blank. */
+export const RESISTANCE_UNKNOWN_TEXT = "Resistance group unknown";
+export const RESISTANCE_UNRESOLVED_WARNING =
+  "Resistance rotation cannot be assessed until this product's resistance group is resolved.";
+
+export type ResistanceGroupDisplayKind =
+  | "groups"
+  | "not_applicable"
+  | "unresolved"
+  | "legacy"
+  | "none";
+
+export interface ResistanceGroupDisplay {
+  kind: ResistanceGroupDisplayKind;
+  text: string;
+  /** Operator warning — present only for an explicitly unresolved product. */
+  warning?: string;
+}
+
+/**
+ * The single resistance-group presentation used by the Chemical Store list and
+ * the Add Chemical review, driven by the backend's structured state:
+ *
+ *   not_applicable -> "No resistance group applies"     (no code invented)
+ *   classified     -> the structured group(s), e.g. "HRAC 10", "FRAC 3 + 11"
+ *   unresolved     -> "Resistance group unknown" + rotation warning
+ *
+ * An empty group array by itself is NEVER "not applicable", and an unresolved
+ * product is never hidden behind a blank cell or presented as safe. Legacy
+ * free-text is only ever shown when there is no structured state at all, and
+ * stays clearly marked as legacy.
+ */
+export function resistanceGroupDisplay(chem: ChemicalIntelligence): ResistanceGroupDisplay {
+  const state = chem.resistanceClassificationState;
+  if (state === "not_applicable") {
+    return { kind: "not_applicable", text: RESISTANCE_NOT_APPLICABLE_TEXT };
+  }
+  const structured = activityGroupSummary(chem);
+  if (state === "unresolved" || (state === "classified" && !structured)) {
+    return {
+      kind: "unresolved",
+      text: RESISTANCE_UNKNOWN_TEXT,
+      warning: RESISTANCE_UNRESOLVED_WARNING,
+    };
+  }
+  if (structured) return { kind: "groups", text: structured };
+  const legacy = chem.legacy.chemicalGroup;
+  if (legacy) return { kind: "legacy", text: legacy };
+  return { kind: "none", text: "—" };
+}
+
+/**
+ * The same presentation for a search/lookup result that is not yet a saved row:
+ * a backend state plus the structured group text it came with. Used by the Add
+ * Chemical review for both the Master and the staged online path.
+ */
+export function resistanceStateDisplay(
+  state: ResistanceClassificationState | null,
+  groupText: string | null | undefined,
+): ResistanceGroupDisplay {
+  const groups = (groupText ?? "").trim();
+  if (state === "not_applicable") {
+    return { kind: "not_applicable", text: RESISTANCE_NOT_APPLICABLE_TEXT };
+  }
+  if (state === "unresolved" || (state === "classified" && !groups)) {
+    return {
+      kind: "unresolved",
+      text: RESISTANCE_UNKNOWN_TEXT,
+      warning: RESISTANCE_UNRESOLVED_WARNING,
+    };
+  }
+  if (groups) return { kind: "groups", text: groups };
+  return { kind: "none", text: "—" };
+}

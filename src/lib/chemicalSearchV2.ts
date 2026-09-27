@@ -7,7 +7,12 @@
 //   * `saved_chemicals.default_rates`      = the VINEYARD operational
 //     selection. The Spray Calculator consumes only this.
 //   * Master search is database-first: one deterministic RPC, no AI, no web
-//     search. The online label lookup is an EXPLICIT operator action.
+//     search. When it returns no Review-ready result the staged
+//     `web_lookup_v2` fallback runs AUTOMATICALLY (see
+//     `@/lib/chemicalStagedLookup`) — there is no operator "search online"
+//     button, exactly as on iOS/Android.
+//   * `resistance_classification_state` is backend-owned. It is carried through
+//     Master RPC → Review → Saved Chemical verbatim, never derived from groups.
 //   * Nothing here converts between /ha and /100 L, collapses a range, or
 //     picks between genuinely different registered options.
 //
@@ -32,7 +37,10 @@ import {
   manualRateSelection,
   type ManualRateDraft,
 } from "@/lib/chemicalManualRate";
-import { buildStructuredLookupBody } from "@/lib/chemicalLookupRequest";
+import {
+  normaliseResistanceClassificationState,
+  type ResistanceClassificationState,
+} from "@/lib/chemicalIntelligence";
 import type { SavedChemical, SavedChemicalInput } from "@/lib/savedChemicalsQuery";
 
 /* ------------------------------------------------------------------- gate */
@@ -93,6 +101,14 @@ export interface MasterSearchHit {
   rates: MasterViticultureRate[];
   /** Display only — "2.4–3.2 L/ha · 240–320 mL/100 L". */
   rateSummary: string;
+  /** Structured activity groups as the RPC returned them, e.g. "HRAC 10". */
+  activityGroupText: string;
+  /**
+   * SQL 256 `resistance_classification_state`, verbatim from the RPC. NEVER
+   * inferred from an empty activity-group array: no state means "not stated",
+   * which is not the same fact as "not applicable".
+   */
+  resistanceState: ResistanceClassificationState | null;
 }
 
 const numOrNull = (v: unknown): number | null => {
@@ -120,6 +136,10 @@ export function normaliseMasterSearchHit(raw: unknown): MasterSearchHit | null {
   if (!id || !productName) return null;
 
   const rates = parseMasterViticultureRates(o.viticulture_rates).filter(isPersistableMasterRate);
+  const groupCodes = (Array.isArray(o.activity_groups) ? o.activity_groups : [])
+    .map(str)
+    .filter(Boolean);
+  const scheme = str(o.activity_group_scheme).toUpperCase();
 
   return {
     id,
@@ -136,6 +156,12 @@ export function normaliseMasterSearchHit(raw: unknown): MasterSearchHit | null {
     catalogueVersion: numOrNull(o.catalogue_version),
     rates,
     rateSummary: rates.map(masterRateSummary).join(" · "),
+    activityGroupText: groupCodes.length
+      ? groupCodes.map((c) => (scheme ? `${scheme} ${c}` : c)).join(" + ")
+      : "",
+    resistanceState: normaliseResistanceClassificationState(
+      o.resistance_classification_state ?? o.resistanceClassificationState,
+    ),
   };
 }
 
@@ -375,6 +401,9 @@ export function buildMasterSavedChemicalInput(
     default_rates: rates,
     master_chemical_id: hit.id,
     master_source_revision: hit.catalogueVersion ?? undefined,
+    // Master's own structured state, carried through verbatim. Never derived
+    // from the activity group list.
+    resistance_classification_state: hit.resistanceState,
   };
   applyOptional(out, details);
   return out;
@@ -404,63 +433,21 @@ export function buildManualSavedChemicalInput(
     rate_per_ha: legacy.rate_per_ha,
     unit: legacy.unit,
     default_rates: rates,
+    // Hand entry carries no structured resistance evidence. It is UNRESOLVED —
+    // a typed group letter in the optional fields never makes it applicable and
+    // an absent group never becomes "not applicable".
+    resistance_classification_state: "unresolved",
   };
   applyOptional(out, details);
   return out;
 }
 
-/* ------------------------------------------------- explicit online fallback */
-
-export const ONLINE_FALLBACK_LABEL = "Can't find it? Search label online";
-
-export interface OnlineLookupResult {
-  productName: string;
-  registrant: string;
-  registrationNumber: string;
-  category: string;
-  activeIngredients: string;
-  labelUrl: string;
-  productUrl: string;
-}
-
-/**
- * The existing production `chemical-info-lookup` edge function, invoked ONLY
- * from an explicit operator action. Its result still goes through a Review
- * screen, and the operational default is always the operator's choice.
- */
-export async function lookupChemicalLabelOnline(
-  productName: string,
-  countryCode: string,
-): Promise<OnlineLookupResult | null> {
-  const { data, error } = await (iosSupabase as any).functions.invoke("chemical-info-lookup", {
-    body: buildStructuredLookupBody(productName.trim(), countryCode),
-  });
-  if (error) throw error;
-  return normaliseOnlineLookup(data, productName);
-}
-
-export function normaliseOnlineLookup(data: unknown, fallbackName: string): OnlineLookupResult | null {
-  if (!data || typeof data !== "object") return null;
-  const top = data as Record<string, unknown>;
-  const inner =
-    (top.chemical && typeof top.chemical === "object" ? (top.chemical as Record<string, unknown>) : null) ??
-    (top.product && typeof top.product === "object" ? (top.product as Record<string, unknown>) : null) ??
-    (top.result && typeof top.result === "object" ? (top.result as Record<string, unknown>) : null);
-  const o: Record<string, unknown> = inner ? { ...inner, ...top } : top;
-  const name = str(o.registered_product_name ?? o.productName ?? o.product_name ?? o.name) || fallbackName.trim();
-  if (!name) return null;
-  const labelUrl = str(o.label_reference ?? o.labelUrl ?? o.label_url);
-  const productUrl = str(o.product_url ?? o.productUrl);
-  return {
-    productName: name,
-    registrant: str(o.registrant ?? o.manufacturer),
-    registrationNumber: str(o.registration_number ?? o.registrationNumber),
-    category: str(o.product_category ?? o.category),
-    activeIngredients: activeIngredientSummary(o.active_ingredients ?? o.active_ingredient),
-    labelUrl: /^https?:\/\//i.test(labelUrl) ? labelUrl : "",
-    productUrl: /^https?:\/\//i.test(productUrl) ? productUrl : "",
-  };
-}
+/* ---------------------------------------------------- staged online fallback */
+//
+// The explicit "Search label online" operator action is GONE. The staged
+// `web_lookup_v2` fallback runs automatically once the Master search has not
+// produced a Review-ready result; its contract lives in
+// `@/lib/chemicalStagedLookup`.
 
 /** Display helper — "2.4–3.2 L/ha" for a persisted selection. */
 export function selectionSummary(selection: PersistedDefaultRateSelection): string {
