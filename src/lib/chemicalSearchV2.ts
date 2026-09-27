@@ -177,8 +177,9 @@ export async function searchMasterChemicalsV2(
 ): Promise<MasterSearchHit[]> {
   const q = query.trim();
   if (q.length < 2) return [];
+  // Live signature is search_master_chemicals_v2(p_query, p_limit) — the RPC
+  // has no country parameter, so `opts.country` is intentionally not sent.
   const args: Record<string, unknown> = { p_query: q, p_limit: opts.limit ?? 25 };
-  if (opts.country) args.p_country = opts.country;
   const { data, error } = await (iosSupabase as any).rpc(MASTER_SEARCH_RPC, args);
   if (error) throw error;
   const rows: unknown[] = Array.isArray(data) ? data : data ? [data] : [];
