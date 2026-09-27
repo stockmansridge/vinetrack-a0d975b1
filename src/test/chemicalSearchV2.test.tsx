@@ -9,13 +9,31 @@ import {
   hasAnyDefaultRate,
   initialiseDefaultRatesFromMaster,
   normaliseMasterSearchHit,
-  normaliseOnlineLookup,
   persistedDefaultRates,
   type MasterSearchHit,
 } from "@/lib/chemicalSearchV2";
+import * as chemicalSearchV2Module from "@/lib/chemicalSearchV2";
+import {
+  buildStagedLookupBody,
+  buildStagedSavedChemicalInput,
+  initialiseDefaultRatesFromStaged,
+  parseStagedLookup,
+} from "@/lib/chemicalStagedLookup";
+import {
+  RESISTANCE_NOT_APPLICABLE_TEXT,
+  RESISTANCE_UNKNOWN_TEXT,
+  RESISTANCE_UNRESOLVED_WARNING,
+  resistanceStateDisplay,
+} from "@/lib/chemicalIntelligence";
 import { parseMasterViticultureRates } from "@/lib/masterCuration";
 import { emptyManualRateDraft } from "@/lib/chemicalManualRate";
 import type { SavedChemical } from "@/lib/savedChemicalsQuery";
+import type { CanonicalRateBasis, PersistedDefaultRateSelection } from "@/lib/chemicalDefaultRatesContract";
+
+const emptySelections = (): Record<CanonicalRateBasis, PersistedDefaultRateSelection | null> => ({
+  per_hectare: null,
+  per_100_litres: null,
+});
 
 const SPRAYSEED_ROW = {
   id: "master-1",
