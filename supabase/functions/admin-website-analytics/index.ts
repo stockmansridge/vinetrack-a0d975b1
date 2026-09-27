@@ -132,6 +132,13 @@ Deno.serve(async (req: Request) => {
     fetchAll(admin, "email_list_subscribers", "email", (q) =>
       q.lt("created_at", fromIso).in("source", WEBSITE_SUBSCRIBER_SOURCES)),
   ]);
+  const ctas = await fetchAll(admin, "website_cta_clicks", "created_at, target", (q) =>
+    inRange(q).eq("environment", environment));
+  const ctaClicks = { app_store: 0, google_play: 0, portal: 0 } as Record<string, number>;
+  for (const r of ctas.rows) {
+    const t = String(r.target ?? "");
+    if (t in ctaClicks) ctaClicks[t] += 1;
+  }
 
   if (demos.error && !demos.missingTable) {
     return jsonError(500, `Could not load demo requests: ${demos.error}`);
@@ -157,7 +164,9 @@ Deno.serve(async (req: Request) => {
 
   return json(200, {
     ...report,
+    cta_clicks: ctaClicks,
     meta: {
+      cta_table_pending: ctas.missingTable,
       timezone: REPORT_TZ,
       granularity,
       environment,

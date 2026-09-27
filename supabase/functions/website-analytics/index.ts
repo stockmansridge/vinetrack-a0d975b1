@@ -25,6 +25,7 @@ import {
 import { checkRateLimit } from "../_shared/public-rate-limit.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const CTA_TARGETS = ["app_store", "google_play", "portal"];
 
 const BOT_RE =
   /(bot|crawler|spider|crawl|slurp|bingpreview|headlesschrome|phantomjs|puppeteer|playwright|curl|wget|python-requests|facebookexternalhit|preview|monitor|pingdom|lighthouse|gtmetrix|semrush|ahrefs|mj12|dotbot)/i;
@@ -109,8 +110,12 @@ Deno.serve(async (req: Request) => {
   }
 
   const event = cleanText(body.event, 40) || "page_view";
-  if (event !== "page_view") {
+  if (event !== "page_view" && event !== "cta_click") {
     return jsonFor(origin, 400, { ok: false, error: "Unsupported event." });
+  }
+  const ctaTarget = cleanText(body.target, 40);
+  if (event === "cta_click" && !CTA_TARGETS.includes(ctaTarget)) {
+    return jsonFor(origin, 400, { ok: false, error: "Invalid target." });
   }
 
   const pagePath = normalisePagePath(body.page_path);
@@ -135,6 +140,16 @@ Deno.serve(async (req: Request) => {
   }
 
   const vinetrack = createClient(VT_URL, VT_SERVICE, { auth: { persistSession: false } });
+  if (event === "cta_click") {
+    const { error: ctaErr } = await vinetrack.from("website_cta_clicks").insert({
+      target: ctaTarget,
+      page_path: pagePath,
+      session_id: sessionId,
+      environment: environmentFor(origin),
+    });
+    if (ctaErr) console.error("website-analytics cta insert failed", ctaErr.message);
+    return jsonFor(origin, 200, { ok: true });
+  }
   const { error } = await vinetrack.from("website_page_views").insert({
     page_path: pagePath,
     session_id: sessionId,
