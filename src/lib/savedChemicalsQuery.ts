@@ -135,6 +135,12 @@ export interface SavedChemicalInput {
   notes?: string | null;
   label_url?: string | null;
   product_url?: string | null;
+  /**
+   * SQL 210 `saved_chemicals.resistance_classification_state` — the backend's
+   * own structured state, persisted verbatim. Never derived from the activity
+   * group list, and an absent group never becomes "not_applicable".
+   */
+  resistance_classification_state?: "classified" | "not_applicable" | "unresolved" | null;
   purchase?: {
     costPerUnit?: number | null;
     cost_per_unit?: number | null;
@@ -184,6 +190,7 @@ const ALLOWED_FIELDS: (keyof SavedChemicalInput)[] = [
   "label_url", "product_url", "purchase",
   "master_chemical_id", "master_source_revision",
   "default_rates",
+  "resistance_classification_state",
   // Mobile operational fields. Without these the editor's controls would be
   // shown and then silently dropped on save.
   "product_form", "pack_size", "pack_unit", "price_per_pack",
