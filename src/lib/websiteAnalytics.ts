@@ -48,7 +48,9 @@ export interface AnalyticsReport {
   traffic_series: TrafficPoint[];
   contact_series: ContactPoint[];
   pages: TopPageRow[];
+  cta_clicks?: { app_store: number; google_play: number; portal: number };
   meta?: {
+    cta_table_pending?: boolean;
     timezone?: string;
     granularity?: Granularity;
     environment?: string;

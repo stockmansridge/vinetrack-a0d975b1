@@ -183,6 +183,18 @@ export default function AdminWebsiteAnalyticsPage() {
         <MetricCard label="New Subscribers" value={summary?.new_subscribers ?? 0} />
       </div>
 
+      <div className="text-sm font-medium mb-2">Call-to-Action Clicks</div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+        <MetricCard label="App Store" value={data?.cta_clicks?.app_store ?? 0} />
+        <MetricCard label="Google Play" value={data?.cta_clicks?.google_play ?? 0} />
+        <MetricCard label="Portal" value={data?.cta_clicks?.portal ?? 0} />
+      </div>
+      {data?.meta?.cta_table_pending && (
+        <Card className="p-3 mb-3 text-sm text-muted-foreground">
+          Click recording is not switched on in the main database yet, so these read zero.
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 mb-3">
         <Card className="p-3">
           <div className="text-sm font-medium mb-2">Website Traffic</div>
