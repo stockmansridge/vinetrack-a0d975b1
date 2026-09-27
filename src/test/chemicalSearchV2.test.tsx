@@ -198,15 +198,202 @@ describe("duplicate handling", () => {
   });
 });
 
-describe("online fallback parsing", () => {
-  it("reads whatever the edge function returned and keeps the typed name", () => {
-    const result = normaliseOnlineLookup(
-      { chemical: { registered_product_name: "Kocide Blue", registrant: "Certis", label_reference: "https://x/label.pdf" } },
-      "kocide",
-    )!;
-    expect(result.productName).toBe("Kocide Blue");
-    expect(result.labelUrl).toBe("https://x/label.pdf");
-    expect(normaliseOnlineLookup({}, "Fallback Name")!.productName).toBe("Fallback Name");
-    expect(normaliseOnlineLookup(null, "x")).toBeNull();
+/* ------------------------------------------------ staged online fallback -- */
+
+const BEAST_RESPONSE = {
+  resistance_classification_state: "classified",
+  candidates: [
+    {
+      product_name: "CropSure Beast 200 Herbicide",
+      registrant: "CROPSURE PTY LTD",
+      registration_number: "90143",
+      product_category: "herbicide",
+      active_ingredient: "Glufosinate-ammonium 200 g/L",
+      resistance_classification_state: "classified",
+    },
+  ],
+  detail: {
+    product_name: "CropSure Beast 200 Herbicide",
+    product_category: "herbicide",
+    form_type: "soluble liquid",
+    activity_groups: ["10"],
+    activity_group_scheme: "hrac",
+    resistance_classification_state: "classified",
+    active_ingredients: [
+      { name: "Glufosinate-ammonium", concentration: 200, concentration_unit: "g/L" },
+    ],
+    registration: {
+      registrant: "CROPSURE PTY LTD",
+      registration_number: "90143",
+      country_code: "AU",
+      scheme: "apvma",
+      manufacturer_label_url: "https://cropsure.example/beast-label.pdf",
+      manufacturer_product_url: "https://cropsure.example/beast",
+    },
+    grapevine_uses: [
+      {
+        crop: "Vineyards",
+        target_raw: "Weeds referenced in label directions",
+        rates: [{ unit: "L", basis: "range_per_hectare", raw_text: "1.0 to 5.0", min_value: 1, max_value: 5 }],
+      },
+    ],
+  },
+};
+
+describe("staged web_lookup_v2 fallback", () => {
+  it("sends the staged action and, on candidate selection, the selected name", () => {
+    expect(buildStagedLookupBody({ query: " Beast ", country: "AU" })).toEqual({
+      action: "web_lookup_v2",
+      query: "Beast",
+      country: "AU",
+    });
+    expect(
+      buildStagedLookupBody({ query: "Beast", country: "AU", selectedName: "CropSure Beast 200 Herbicide" }),
+    ).toEqual({
+      action: "web_lookup_v2",
+      query: "Beast",
+      country: "AU",
+      selectedName: "CropSure Beast 200 Herbicide",
+    });
+  });
+
+  it("identifies the agricultural product without a separate operator action", () => {
+    // The Portal no longer exposes an explicit 'search label online' button.
+    expect(Object.keys(chemicalSearchV2Module)).not.toContain("ONLINE_FALLBACK_LABEL");
+    expect(Object.keys(chemicalSearchV2Module)).not.toContain("lookupChemicalLabelOnline");
+    const parsed = parseStagedLookup(BEAST_RESPONSE);
+    expect(parsed.candidates).toHaveLength(1);
+    expect(parsed.candidates[0].name).toBe("CropSure Beast 200 Herbicide");
+    expect(parsed.candidates[0].registrant).toBe("CROPSURE PTY LTD");
+  });
+
+  it("Beast acceptance: identity, groups, rates and label provenance", () => {
+    const detail = parseStagedLookup(BEAST_RESPONSE).detail!;
+    expect(detail.productName).toBe("CropSure Beast 200 Herbicide");
+    expect(detail.registrant).toBe("CROPSURE PTY LTD");
+    expect(detail.registrationNumber).toBe("90143");
+    expect(detail.activeIngredientText).toBe("Glufosinate-ammonium 200 g/L");
+    expect(detail.activityGroupText).toBe("HRAC 10");
+    expect(detail.resistanceState).toBe("classified");
+    // The registered range is preserved exactly, never flattened or converted.
+    expect(detail.rateOptions).toHaveLength(1);
+    expect(detail.rateOptions[0]).toMatchObject({
+      basis: "per_hectare",
+      unit: "L",
+      minValue: 1,
+      maxValue: 5,
+      value: null,
+    });
+    // A manufacturer-hosted PDF is never promoted to a regulator label, and the
+    // marketing page is never a label.
+    expect(detail.manufacturerLabelUrl).toBe("https://cropsure.example/beast-label.pdf");
+    expect(detail.regulatorLabelUrl).toBe("");
+    expect(detail.productUrl).toBe("https://cropsure.example/beast");
+  });
+
+  it("carries the backend resistance state into the Saved Chemical payload", () => {
+    const detail = parseStagedLookup(BEAST_RESPONSE).detail!;
+    const init = initialiseDefaultRatesFromStaged(detail.rateOptions);
+    const input = buildStagedSavedChemicalInput(detail, persistedDefaultRates(init.selections));
+    expect(input.resistance_classification_state).toBe("classified");
+    expect(input.name).toBe("CropSure Beast 200 Herbicide");
+    expect(input.label_url).toBe("https://cropsure.example/beast-label.pdf");
+  });
+
+  it("keeps an unresolved mixture unresolved even when one group is present", () => {
+    const detail = parseStagedLookup({
+      detail: {
+        ...BEAST_RESPONSE.detail,
+        resistance_classification_state: "unresolved",
+        activity_groups: ["3"],
+        activity_group_scheme: "frac",
+      },
+    }).detail!;
+    expect(detail.resistanceState).toBe("unresolved");
+    const input = buildStagedSavedChemicalInput(detail, persistedDefaultRates(emptySelections()));
+    expect(input.resistance_classification_state).toBe("unresolved");
+    expect(resistanceStateDisplay(detail.resistanceState, detail.activityGroupText)).toEqual({
+      kind: "unresolved",
+      text: RESISTANCE_UNKNOWN_TEXT,
+      warning: RESISTANCE_UNRESOLVED_WARNING,
+    });
+  });
+
+  it("does not invent a group for a not-applicable product", () => {
+    const detail = parseStagedLookup({
+      detail: {
+        ...BEAST_RESPONSE.detail,
+        resistance_classification_state: "not_applicable",
+        activity_groups: [],
+      },
+    }).detail!;
+    expect(detail.activityGroupText).toBe("");
+    expect(resistanceStateDisplay(detail.resistanceState, detail.activityGroupText)).toEqual({
+      kind: "not_applicable",
+      text: RESISTANCE_NOT_APPLICABLE_TEXT,
+    });
+  });
+
+  it("never turns an absent group into 'not applicable'", () => {
+    const detail = parseStagedLookup({
+      detail: { ...BEAST_RESPONSE.detail, resistance_classification_state: null, activity_groups: [] },
+    }).detail!;
+    expect(detail.resistanceState).toBeNull();
+    expect(resistanceStateDisplay(detail.resistanceState, detail.activityGroupText).kind).toBe("none");
+  });
+
+  it("does not choose between genuinely different registered rates", () => {
+    const detail = parseStagedLookup({
+      detail: {
+        ...BEAST_RESPONSE.detail,
+        grapevine_uses: [
+          {
+            crop: "Vineyards",
+            rates: [
+              { unit: "L", basis: "per_hectare", value: 2, raw_text: "2 L/ha" },
+              { unit: "L", basis: "per_hectare", value: 4, raw_text: "4 L/ha" },
+            ],
+          },
+        ],
+      },
+    }).detail!;
+    const init = initialiseDefaultRatesFromStaged(detail.rateOptions);
+    expect(init.selections.per_hectare).toBeNull();
+    expect(init.ambiguous.per_hectare).toHaveLength(2);
   });
 });
+
+describe("resistance state propagation", () => {
+  it("keeps the Master RPC state verbatim and never derives it from groups", () => {
+    const classified = normaliseMasterSearchHit({
+      ...SPRAYSEED_ROW,
+      activity_groups: ["22"],
+      activity_group_scheme: "hrac",
+      resistance_classification_state: "classified",
+    })!;
+    expect(classified.resistanceState).toBe("classified");
+    expect(classified.activityGroupText).toBe("HRAC 22");
+    expect(
+      buildMasterSavedChemicalInput(classified, persistedDefaultRates(emptySelections()))
+        .resistance_classification_state,
+    ).toBe("classified");
+
+    const unresolved = normaliseMasterSearchHit({
+      ...SPRAYSEED_ROW,
+      activity_groups: [],
+      resistance_classification_state: "unresolved",
+    })!;
+    expect(unresolved.resistanceState).toBe("unresolved");
+    expect(unresolved.activityGroupText).toBe("");
+
+    const noState = normaliseMasterSearchHit({ ...SPRAYSEED_ROW, activity_groups: ["3"] })!;
+    expect(noState.resistanceState).toBeNull();
+  });
+
+  it("defaults manual entry to unresolved", () => {
+    const draft = { ...emptyManualRateDraft(), value: "2", unit: "L", basis: "per_hectare" as const };
+    const input = buildManualSavedChemicalInput("Operator product", draft, {});
+    expect(input?.resistance_classification_state).toBe("unresolved");
+  });
+});
+
