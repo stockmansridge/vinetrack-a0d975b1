@@ -409,7 +409,7 @@ describe("resistance state propagation", () => {
   });
 
   it("defaults manual entry to unresolved", () => {
-    const draft = { ...emptyManualRateDraft(), value: "2", unit: "L", basis: "per_hectare" as const };
+    const draft = { ...emptyManualRateDraft(), value: "2", unit: "L" as const, basis: "per_hectare" as const };
     const input = buildManualSavedChemicalInput("Operator product", draft, {});
     expect(input?.resistance_classification_state).toBe("unresolved");
   });
