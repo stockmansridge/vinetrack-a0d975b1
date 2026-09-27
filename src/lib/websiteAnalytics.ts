@@ -12,7 +12,7 @@ import { supabase as functionsHost } from "@/integrations/supabase/client";
 import { iosSupabase } from "@/integrations/ios-supabase/client";
 
 export type Granularity = "day" | "month" | "year";
-export type DatePreset = "7d" | "30d" | "90d" | "year" | "all" | "custom";
+export type DatePreset = "1d" | "7d" | "30d" | "90d" | "year" | "all" | "custom";
 
 export interface AnalyticsSummary {
   page_views: number;
@@ -87,6 +87,8 @@ export function rangeForPreset(preset: DatePreset, now: Date = new Date()): Repo
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
   switch (preset) {
+    case "1d":
+      break;
     case "7d":
       start.setDate(start.getDate() - 6);
       break;
