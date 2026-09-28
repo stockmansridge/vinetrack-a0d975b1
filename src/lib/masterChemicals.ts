@@ -72,6 +72,8 @@ export interface MasterChemicalRow {
   registrant?: string | null;
   review_status?: string | null;
   verification_status?: string | null;
+  /** Backend resistance state: classified / not_applicable / unresolved. */
+  resistance_classification_state?: string | null;
   active_ingredients?: unknown;
   activity_groups?: string[] | null;
   activity_group_scheme?: string | null;

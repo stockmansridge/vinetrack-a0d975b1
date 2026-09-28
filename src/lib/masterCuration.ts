@@ -24,6 +24,7 @@ import {
   type MasterReviewStatus,
 } from "@/lib/masterChemicals";
 import { resolveChemicalLabelLinks } from "@/lib/chemicalLabelLinks";
+import { masterIsComplete, masterIssues, sortByAttention } from "@/lib/masterWorkbench";
 
 /* ------------------------------------------------------------------ utils */
 
@@ -323,8 +324,12 @@ export function masterMissingFields(row: MasterChemicalRow): MasterCoreField[] {
   return missing;
 }
 
-export const masterNeedsAttention = (row: MasterChemicalRow): boolean =>
-  masterMissingFields(row).length > 0;
+/**
+ * Needs attention = any vineyard-relevant data-quality issue (core fields,
+ * resistance, vineyard-use rates, manufacturer label, conflicts, relevant
+ * unresolved evidence). Defined once in `masterWorkbench`.
+ */
+export const masterNeedsAttention = (row: MasterChemicalRow): boolean => !masterIsComplete(row);
 
 export const masterMissingLabels = (row: MasterChemicalRow): string[] =>
   masterMissingFields(row).map((f) => MASTER_CORE_FIELD_LABEL[f]);
@@ -339,17 +344,29 @@ export type MasterQueueFilter =
   | "missing_rate"
   | "missing_label"
   | "missing_active"
-  | "missing_category";
+  | "missing_category"
+  | "resistance_unresolved"
+  | "missing_group"
+  | "vineyard_missing_rates"
+  | "conflicts"
+  | "manufacturer_label_missing"
+  | "complete";
 
 export const MASTER_QUEUE_FILTERS: Array<{ key: MasterQueueFilter; label: string }> = [
   { key: "needs_attention", label: "Needs attention" },
   { key: "all", label: "All" },
   { key: "candidate", label: "Candidate" },
   { key: "approved", label: "Approved" },
+  { key: "resistance_unresolved", label: "Resistance unresolved" },
+  { key: "missing_group", label: "Missing resistance group" },
+  { key: "vineyard_missing_rates", label: "Vineyard use — missing rates" },
   { key: "missing_rate", label: "Missing vineyard rate" },
+  { key: "conflicts", label: "Evidence conflicts" },
+  { key: "manufacturer_label_missing", label: "Manufacturer label missing" },
   { key: "missing_label", label: "Missing label" },
   { key: "missing_active", label: "Missing active ingredient" },
   { key: "missing_category", label: "Missing category" },
+  { key: "complete", label: "Ready for review / Complete" },
 ];
 
 export function matchesMasterQueueFilter(
@@ -358,11 +375,14 @@ export function matchesMasterQueueFilter(
 ): boolean {
   const status: MasterReviewStatus | undefined = normaliseReviewStatus(row.review_status);
   const missing = masterMissingFields(row);
+  const has = (k: string) => masterIssues(row).some((i) => i.key === k);
   switch (filter) {
     case "all":
       return true;
     case "needs_attention":
-      return missing.length > 0;
+      return masterNeedsAttention(row);
+    case "complete":
+      return !masterNeedsAttention(row);
     case "candidate":
       return status === "candidate";
     case "approved":
@@ -375,6 +395,16 @@ export function matchesMasterQueueFilter(
       return missing.includes("active_ingredients");
     case "missing_category":
       return missing.includes("product_category");
+    case "resistance_unresolved":
+      return has("resistance_unresolved");
+    case "missing_group":
+      return has("missing_group");
+    case "vineyard_missing_rates":
+      return has("vineyard_rates_missing");
+    case "conflicts":
+      return has("conflict");
+    case "manufacturer_label_missing":
+      return has("manufacturer_label_missing");
     default:
       return true;
   }
@@ -394,7 +424,11 @@ export function filterMasterQueue(
   filter: MasterQueueFilter,
   search = "",
 ): MasterChemicalRow[] {
-  return rows.filter((r) => matchesMasterQueueFilter(r, filter) && matchesMasterSearch(r, search));
+  const hits = rows.filter((r) => matchesMasterQueueFilter(r, filter) && matchesMasterSearch(r, search));
+  // Needs-attention work is ordered by urgency; other views keep backend order.
+  return filter === "all" || filter === "candidate" || filter === "approved" || filter === "complete"
+    ? hits
+    : sortByAttention(hits);
 }
 
 /* ------------------------------------------------------ queue navigation */
@@ -442,10 +476,13 @@ import {
 } from "@/lib/masterReviewActions";
 import { masterRevision } from "@/lib/masterChemicals";
 
-/** Editable identity fields in the curation drawer (all existing columns). */
+/**
+ * Editable fields in the curation drawer — ONLY fields the live
+ * `master_review_correct` whitelist accepts. Registration number goes through
+ * the re-key path; vineyard rates come from the audited preview/apply path.
+ */
 export interface MasterCurationIdentity {
   registered_product_name?: string | null;
-  registration_number?: string | null;
   registrant?: string | null;
   product_category?: string | null;
   form_type?: string | null;
@@ -455,43 +492,34 @@ export interface MasterCurationIdentity {
 export interface MasterCurationSaveInput {
   row: MasterChemicalRow;
   identity: MasterCurationIdentity;
-  /** Full replacement list of Master vineyard rates. */
-  rates?: MasterViticultureRate[] | null;
   reason: string;
 }
 
-const IDENTITY_KEYS: Array<keyof MasterCurationIdentity> = [
+/** Fields the live correction RPC permits. `viticulture_rates` is NOT one. */
+export const MASTER_CORRECT_WHITELIST = [
   "registered_product_name",
-  "registration_number",
   "registrant",
   "product_category",
   "form_type",
   "label_reference",
-];
+] as const;
 
 /**
  * The patch this workflow sends to the existing `master_review_correct` RPC.
- * Only changed fields are included; blank clears to null. Rates travel in the
- * SAME patch so one save is one revision — never two chained writes with a
- * stale expected revision between them.
+ * Only changed, whitelisted fields are included; blank clears to null. Any
+ * other key (e.g. `viticulture_rates`) is dropped, never sent.
  */
 export function buildMasterCurationPatch(
   input: MasterCurationSaveInput,
 ): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
-  for (const key of IDENTITY_KEYS) {
-    if (!(key in input.identity)) continue;
-    const next = str(input.identity[key]);
+  const identity = input.identity as Record<string, unknown>;
+  for (const key of MASTER_CORRECT_WHITELIST) {
+    if (!(key in identity)) continue;
+    const next = str(identity[key]);
     const current = str((input.row as unknown as Record<string, unknown>)[key]);
     if (next === current) continue;
     patch[key] = next;
-  }
-  if (input.rates) {
-    const encoded = encodeMasterViticultureRates(input.rates);
-    const before = JSON.stringify(
-      encodeMasterViticultureRates(parseMasterViticultureRates(input.row.viticulture_rates)),
-    );
-    if (JSON.stringify(encoded) !== before) patch.viticulture_rates = encoded;
   }
   return patch;
 }

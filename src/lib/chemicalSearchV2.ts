@@ -153,7 +153,7 @@ const strOrNull = (v: unknown): string | null => str(v) || null;
  * keeps it. A single-active product whose active has no group inherits the
  * row's single structured group; multi-active rows are never paired by guess.
  */
-function qualifyMasterActives(
+export function qualifyMasterActives(
   actives: unknown[],
   rowGroups: string[],
   rowScheme: string | null,

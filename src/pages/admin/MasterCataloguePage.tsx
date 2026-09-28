@@ -53,14 +53,22 @@ import { MasterCurationDrawer } from "@/components/chemicals/MasterCurationDrawe
 import {
   MASTER_QUEUE_FILTERS,
   filterMasterQueue,
-  masterMissingFields,
-  masterRateCoverage,
   nextAttentionId,
   nextQueueId,
   previousQueueId,
-  primaryMasterLabelTarget,
   type MasterQueueFilter,
 } from "@/lib/masterCuration";
+import {
+  VINEYARD_RATE_STATUS_LABEL,
+  masterHasConflict,
+  masterHealthCounts,
+  masterIssues,
+  masterManufacturerLabel,
+  masterRegulatorReference,
+  masterResistanceStatus,
+  vineyardRateStatus,
+  vineyardRelevantUnresolved,
+} from "@/lib/masterWorkbench";
 
 const QK = ["admin", "master-chemicals"] as const;
 
@@ -98,14 +106,46 @@ function CatalogueBody() {
     [q.data, filter, search],
   );
 
-  const selected = queue.find((r) => r.id === selectedId) ?? null;
+  // Stay on the record after an apply even if it just left the current filter.
+  const selected =
+    queue.find((r) => r.id === selectedId) ?? (q.data ?? []).find((r) => r.id === selectedId) ?? null;
   const index = selected ? queue.findIndex((r) => r.id === selected.id) : -1;
+  const health = useMemo(() => masterHealthCounts(q.data ?? []), [q.data]);
 
   const openId = (id: string | null) => setSelectedId(id);
+
+  const cards: Array<{ label: string; value: number; filter: MasterQueueFilter }> = [
+    { label: "Total chemicals", value: health.total, filter: "all" },
+    { label: "Needs attention", value: health.needsAttention, filter: "needs_attention" },
+    { label: "Resistance unresolved", value: health.resistanceUnresolved, filter: "resistance_unresolved" },
+    { label: "Missing resistance group", value: health.missingGroup, filter: "missing_group" },
+    { label: "Missing vineyard rates", value: health.missingRates, filter: "missing_rate" },
+    { label: "Vineyard use but no vineyard rates", value: health.vineyardMissingRates, filter: "vineyard_missing_rates" },
+    { label: "Missing label", value: health.missingLabel, filter: "manufacturer_label_missing" },
+    { label: "Evidence conflicts", value: health.conflicts, filter: "conflicts" },
+    { label: "Missing category", value: health.missingCategory, filter: "missing_category" },
+    { label: "Complete", value: health.complete, filter: "complete" },
+  ];
 
   return (
     <div className="space-y-3">
       <AdminError error={q.error} />
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        {cards.map((c) => (
+          <button
+            key={c.label}
+            type="button"
+            onClick={() => setFilter(c.filter)}
+            className={`rounded-md border p-2 text-left hover:bg-muted/50 ${
+              filter === c.filter ? "border-primary bg-primary/10" : "border-border/60"
+            }`}
+          >
+            <div className="text-lg font-semibold">{q.isLoading ? "…" : c.value}</div>
+            <div className="text-[11px] text-muted-foreground">{c.label}</div>
+          </button>
+        ))}
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         {MASTER_QUEUE_FILTERS.map((f) => (
@@ -172,6 +212,7 @@ function CatalogueBody() {
         onNext={() => openId(nextQueueId(queue, selectedId))}
         onNextAttention={() => openId(nextAttentionId(queue, selectedId))}
         onSaved={() => queryClient.invalidateQueries({ queryKey: QK })}
+        onReviewConflict={() => selected && setDeep(selected)}
       />
 
       <MasterCatalogueRefreshDialog
@@ -208,9 +249,13 @@ function QueueRow({
   onOpen: () => void;
   onEvidence: () => void;
 }) {
-  const missing = masterMissingFields(row);
-  const coverage = masterRateCoverage(row);
-  const label = primaryMasterLabelTarget(row);
+  const issues = masterIssues(row);
+  const resistance = masterResistanceStatus(row);
+  const rateStatus = vineyardRateStatus(row);
+  const manufacturer = masterManufacturerLabel(row);
+  const regulator = masterRegulatorReference(row);
+  const conflict = masterHasConflict(row);
+  const unresolved = vineyardRelevantUnresolved(row).length;
   const status = MASTER_REVIEW_STATUS_LABEL[
     (row.review_status as MasterReviewStatus) ?? "candidate"
   ] ?? row.review_status;
@@ -234,29 +279,39 @@ function QueueRow({
         <div className="font-medium">{row.registered_product_name?.trim() || "Unnamed product"}</div>
         <div className="text-xs text-muted-foreground">
           {row.registration_number?.trim() || "No APVMA number"}
+          {row.registrant?.trim() ? ` · ${row.registrant.trim()}` : ""}
           {row.product_category?.trim() ? ` · ${row.product_category.trim()}` : " · No category"}
         </div>
       </div>
 
-      <Badge variant="secondary" className="text-[10px]">{status}</Badge>
-
-      <div className="flex items-center gap-1">
-        {coverage.perHectare && <Badge variant="outline" className="text-[10px]">/ha</Badge>}
-        {coverage.per100Litres && <Badge variant="outline" className="text-[10px]">/100 L</Badge>}
-        {!coverage.any && (
-          <Badge variant="outline" className="text-[10px] border-orange-500/40 text-orange-600">
-            No vineyard rate
-          </Badge>
-        )}
-      </div>
-
-      <Badge variant="outline" className="text-[10px]">
-        {label ? "Label" : "No label"}
+      <Badge
+        variant="outline"
+        className={`text-[10px] ${resistance.state === "unresolved" || resistance.incomplete ? "border-warning/50 text-warning" : ""}`}
+      >
+        {resistance.text}
       </Badge>
 
-      {missing.length > 0 ? (
-        <span className="inline-flex items-center gap-1 text-[11px] text-orange-600">
-          <AlertTriangle className="h-3.5 w-3.5" /> Needs attention ({missing.length})
+      <Badge
+        variant="outline"
+        className={`text-[10px] ${rateStatus === "vineyard_missing" ? "border-destructive/50 text-destructive" : ""}`}
+      >
+        {VINEYARD_RATE_STATUS_LABEL[rateStatus]}
+      </Badge>
+
+      <div className="flex items-center gap-1">
+        <Badge variant="outline" className="text-[10px]">
+          {manufacturer ? "Manufacturer label" : "No manufacturer label"}
+        </Badge>
+        {regulator && <Badge variant="outline" className="text-[10px]">APVMA evidence</Badge>}
+        {conflict && <Badge variant="outline" className="text-[10px] border-destructive/50 text-destructive">Conflict</Badge>}
+        {unresolved > 0 && <Badge variant="outline" className="text-[10px]">{unresolved} unresolved</Badge>}
+      </div>
+
+      <Badge variant="secondary" className="text-[10px]">{status}</Badge>
+
+      {issues.length > 0 ? (
+        <span className="inline-flex items-center gap-1 text-[11px] text-warning">
+          <AlertTriangle className="h-3.5 w-3.5" /> Needs attention ({issues.length})
         </span>
       ) : (
         <span className="inline-flex items-center gap-1 text-[11px] text-primary">
