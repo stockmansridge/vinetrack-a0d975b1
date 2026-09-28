@@ -36,11 +36,21 @@ export function candidateProductLines(
     // never be read as the fungicide group with the same numeral. Resolution
     // and evidence quality are shared with the Resistance Planner so both
     // surfaces describe the same product the same way.
+    const lineCodes = (line.activityGroups ?? [])
+      .map((g) => qualifiedGroupCode(g.scheme, g.code))
+      .filter((c): c is string => !!c);
+    // Manual/legacy products only: the operator's typed group is an
+    // UNVERIFIED fallback, passed verbatim. Never for structured records, and
+    // never when the backend says no group applies.
+    const manualGroup =
+      lineCodes.length === 0 &&
+      !intel?.structured &&
+      intel?.resistanceClassificationState !== "not_applicable"
+        ? (line.legacyChemicalGroup ?? intel?.legacy.chemicalGroup ?? "").trim()
+        : "";
     const { codes, availability } = resolveProductGroups({
       intel,
-      fallbackCodes: (line.activityGroups ?? [])
-        .map((g) => qualifiedGroupCode(g.scheme, g.code))
-        .filter((c): c is string => !!c),
+      fallbackCodes: lineCodes.length > 0 ? lineCodes : manualGroup ? [manualGroup] : [],
     });
 
 
