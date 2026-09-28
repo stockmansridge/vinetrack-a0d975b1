@@ -29,7 +29,10 @@ const complete = (over: Partial<MasterChemicalRow> = {}): MasterChemicalRow => (
   registration_scheme: "apvma",
   product_category: "fungicide",
   review_status: "candidate",
-  active_ingredients: [{ name: "Prothioconazole", concentration: 210, concentration_unit: "g/L" }],
+  active_ingredients: [{ name: "Prothioconazole", concentration: 210, concentration_unit: "g/L", activity_group: "FRAC 3" }],
+  resistance_classification_state: "classified",
+  registered_uses: [{ crop: "Grapevines", target_raw: "Powdery mildew", rates: [] }],
+  verification_sources: [{ kind: "manufacturer_label", name: "Bayer", reference: "https://bayer.example/prosaro-label.pdf" }],
   label_reference: "https://elabels.apvma.gov.au/90279ELBL.pdf",
   viticulture_rates: [{ basis: "per_100_litres", kind: "range", min_value: 240, max_value: 320, unit: "mL" }],
   ...over,
@@ -79,7 +82,7 @@ describe("queue filtering", () => {
   const rows = [
     complete({ id: "ok" }),
     complete({ id: "no-rate", viticulture_rates: [] }),
-    complete({ id: "no-label", label_reference: null }),
+    complete({ id: "no-label", label_reference: null, verification_sources: [] }),
     complete({ id: "approved-ok", review_status: "approved" }),
   ];
 
@@ -115,7 +118,7 @@ describe("label link selection", () => {
   });
 
   it("falls back to the APVMA label reference", () => {
-    expect(primaryMasterLabelTarget(complete())?.url).toBe(
+    expect(primaryMasterLabelTarget(complete({ verification_sources: [] }))?.url).toBe(
       "https://elabels.apvma.gov.au/90279ELBL.pdf",
     );
   });
@@ -205,14 +208,15 @@ describe("curation patch", () => {
     ).toEqual({ product_category: "fungicide" });
   });
 
-  it("includes viticulture rates only when they changed", () => {
-    const row = complete();
-    const unchanged = parseMasterViticultureRates(row.viticulture_rates);
-    expect(buildMasterCurationPatch({ row, identity: {}, rates: unchanged, reason: "r" })).toEqual({});
-    const changed = [...unchanged, { ...newMasterRate("per_hectare"), value: 2.4, unit: "L" as const }];
-    expect(
-      buildMasterCurationPatch({ row, identity: {}, rates: changed, reason: "r" }).viticulture_rates,
-    ).toHaveLength(2);
+  it("never sends viticulture_rates through master_review_correct", () => {
+    const row = complete({ viticulture_rates: [] });
+    const patch = buildMasterCurationPatch({
+      row,
+      identity: { viticulture_rates: [{ basis: "per_hectare", value: 2 }] } as any,
+      reason: "r",
+    });
+    expect(patch).toEqual({});
+    expect("viticulture_rates" in patch).toBe(false);
   });
 });
 
@@ -222,7 +226,7 @@ describe("Save & Next / Approve & Next movement", () => {
   const queue = [
     complete({ id: "a", viticulture_rates: [] }),
     complete({ id: "b" }),
-    complete({ id: "c", label_reference: null }),
+    complete({ id: "c", label_reference: null, verification_sources: [] }),
   ];
 
   it("Save & Next moves to the next record in the filtered queue", () => {
