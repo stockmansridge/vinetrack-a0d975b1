@@ -65,6 +65,8 @@ export interface SavedChemical {
   registered_uses?: any;
   label_rate_bases?: string[] | null;
   intelligence_schema_version?: number | null;
+  /** SQL 210 backend-owned resistance classification state. */
+  resistance_classification_state?: "classified" | "not_applicable" | "unresolved" | null;
   /* ---- Shared mobile operational columns (verified against the deployed
    * shared schema): pack_size / price_per_pack / inventory_quantity are
    * numeric, organic_certified is boolean, the rest are text. ---- */

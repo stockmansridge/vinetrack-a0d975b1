@@ -42,6 +42,11 @@ import {
   type ResistanceClassificationState,
 } from "@/lib/chemicalIntelligence";
 import type { SavedChemical, SavedChemicalInput } from "@/lib/savedChemicalsQuery";
+import {
+  draftFromRow,
+  encodeChemicalIntelligenceForWrite,
+  type ChemicalIntelligenceDraft,
+} from "@/lib/chemicalIntelligenceWrite";
 
 /* ------------------------------------------------------------------- gate */
 
@@ -109,6 +114,79 @@ export interface MasterSearchHit {
    * which is not the same fact as "not applicable".
    */
   resistanceState: ResistanceClassificationState | null;
+  /**
+   * Structured SQL 194 intelligence exactly as the Master RPC returned it,
+   * retained for persistence. Display strings above are presentation only.
+   */
+  structured: MasterStructuredFields;
+  /** Canonical Chemical Intelligence draft built via `draftFromRow`. */
+  draft: ChemicalIntelligenceDraft;
+}
+
+export interface MasterStructuredFields {
+  active_ingredients: unknown[];
+  activity_groups: string[];
+  activity_group_scheme: string | null;
+  resistance_classification_state: ResistanceClassificationState | null;
+  registration_country: string | null;
+  registration_scheme: string | null;
+  registration_number: string | null;
+  registrant: string | null;
+  registered_product_name: string | null;
+  label_reference: string | null;
+  label_version: string | null;
+  verification_status: string | null;
+  verification_sources: unknown[];
+  verification_conflicts: unknown[];
+  verification_unresolved_fields: unknown[];
+  verified_at: string | null;
+  registered_uses: unknown[];
+  label_rate_bases: string[];
+}
+
+const arrOf = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+const strOrNull = (v: unknown): string | null => str(v) || null;
+
+/**
+ * Master actives may carry their group as a bare code ("3") with the scheme
+ * held at row level. Qualify it with the row's scheme so the canonical decoder
+ * keeps it. A single-active product whose active has no group inherits the
+ * row's single structured group; multi-active rows are never paired by guess.
+ */
+function qualifyMasterActives(
+  actives: unknown[],
+  rowGroups: string[],
+  rowScheme: string | null,
+): unknown[] {
+  const scheme = rowScheme ? rowScheme.toLowerCase() : null;
+  const out = actives.map((a) => {
+    if (typeof a === "string") return { name: a };
+    if (!a || typeof a !== "object") return a;
+    const o = { ...(a as Record<string, unknown>) };
+    const g = o.activity_group ?? o.activityGroup;
+    if (typeof g === "string" || typeof g === "number") {
+      const raw = String(g).trim();
+      const m = raw.match(/^(FRAC|HRAC|IRAC)\s*(.+)$/i);
+      o.activity_group = m
+        ? { scheme: m[1].toLowerCase(), code: m[2].trim() }
+        : scheme
+          ? { scheme, code: raw }
+          : undefined;
+      delete o.activityGroup;
+    }
+    return o;
+  });
+  if (
+    out.length === 1 &&
+    out[0] &&
+    typeof out[0] === "object" &&
+    !(out[0] as any).activity_group &&
+    rowGroups.length === 1 &&
+    scheme
+  ) {
+    (out[0] as any).activity_group = { scheme, code: rowGroups[0] };
+  }
+  return out;
 }
 
 const numOrNull = (v: unknown): number | null => {
@@ -141,6 +219,35 @@ export function normaliseMasterSearchHit(raw: unknown): MasterSearchHit | null {
     .filter(Boolean);
   const scheme = str(o.activity_group_scheme).toUpperCase();
 
+  const resistanceState = normaliseResistanceClassificationState(
+    o.resistance_classification_state ?? o.resistanceClassificationState,
+  );
+  const structured: MasterStructuredFields = {
+    active_ingredients: qualifyMasterActives(
+      arrOf(o.active_ingredients),
+      groupCodes,
+      strOrNull(o.activity_group_scheme),
+    ),
+    activity_groups: groupCodes,
+    activity_group_scheme: strOrNull(o.activity_group_scheme),
+    resistance_classification_state: resistanceState,
+    registration_country: strOrNull(o.registration_country),
+    registration_scheme: strOrNull(o.registration_scheme),
+    registration_number: strOrNull(o.registration_number ?? o.apvma_number),
+    registrant: strOrNull(o.registrant ?? o.manufacturer),
+    registered_product_name: strOrNull(o.registered_product_name ?? o.product_name ?? o.name),
+    label_reference: strOrNull(o.label_reference),
+    label_version: strOrNull(o.label_version),
+    verification_status: strOrNull(o.verification_status),
+    verification_sources: arrOf(o.verification_sources),
+    verification_conflicts: arrOf(o.verification_conflicts),
+    verification_unresolved_fields: arrOf(o.verification_unresolved_fields),
+    verified_at: strOrNull(o.verified_at),
+    registered_uses: arrOf(o.registered_uses),
+    label_rate_bases: arrOf(o.label_rate_bases).map(str).filter(Boolean),
+  };
+  const draft = draftFromRow(structured as unknown as Record<string, unknown>);
+
   return {
     id,
     productName,
@@ -159,9 +266,9 @@ export function normaliseMasterSearchHit(raw: unknown): MasterSearchHit | null {
     activityGroupText: groupCodes.length
       ? groupCodes.map((c) => (scheme ? `${scheme} ${c}` : c)).join(" + ")
       : "",
-    resistanceState: normaliseResistanceClassificationState(
-      o.resistance_classification_state ?? o.resistanceClassificationState,
-    ),
+    resistanceState,
+    structured,
+    draft,
   };
 }
 
@@ -391,6 +498,11 @@ export function buildMasterSavedChemicalInput(
   details: V2OptionalDetails = {},
 ): SavedChemicalInput {
   const legacy = legacyScalar(rates);
+  // Canonical SQL 194 encoder — same semantics as the staged online path.
+  // Tolerates hits built without a draft (older callers/tests).
+  const intelligence = encodeChemicalIntelligenceForWrite(
+    hit.draft ?? (hit.structured ? draftFromRow(hit.structured as any) : null),
+  );
   const out: SavedChemicalInput = {
     name: hit.productName,
     manufacturer: hit.registrant || undefined,
@@ -405,6 +517,7 @@ export function buildMasterSavedChemicalInput(
     // Master's own structured state, carried through verbatim. Never derived
     // from the activity group list.
     resistance_classification_state: hit.resistanceState,
+    intelligence: Object.keys(intelligence).length ? intelligence : undefined,
   };
   applyOptional(out, details);
   return out;
