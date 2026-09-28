@@ -463,7 +463,9 @@ export async function applyMasterReviewPreview(
   const statusRaw =
     payload.status ?? payload.outcome ?? payload.result ?? payload.error ?? data;
   const outcome = classifyApplyOutcome(statusRaw);
-  const revision = num(payload.revision ?? payload.catalogue_version ?? payload.new_revision);
+  const revision = num(
+    payload.result_revision ?? payload.revision ?? payload.catalogue_version ?? payload.new_revision,
+  );
 
   const row =
     outcome === "applied" || outcome === "already_applied"
