@@ -15,6 +15,7 @@
 import { masterChemicalDraft, type MasterChemicalRow } from "@/lib/masterChemicals";
 import type { WriteRegisteredUse } from "@/lib/chemicalIntelligenceWrite";
 import { masterLabelTargets, masterRateCoverage } from "@/lib/masterCuration";
+import { qualifyMasterActives } from "@/lib/chemicalSearchV2";
 
 const str = (v: unknown): string | null => {
   const s = typeof v === "string" ? v.trim() : v == null ? "" : String(v).trim();
@@ -93,7 +94,15 @@ function groupText(groups: Array<{ scheme: string; code: string }>): string {
 }
 
 export function masterResistanceStatus(row: MasterChemicalRow): MasterResistanceStatus {
-  const draft = masterChemicalDraft(row);
+  // Master actives may carry a bare code with the scheme at row level — qualify
+  // them with the same reader Chemical Search uses; never pair mixtures by guess.
+  const rowGroups = Array.isArray(row.activity_groups) ? row.activity_groups.map(String) : [];
+  const draft = masterChemicalDraft({
+    ...row,
+    active_ingredients: Array.isArray(row.active_ingredients)
+      ? qualifyMasterActives(row.active_ingredients, rowGroups, str(row.activity_group_scheme))
+      : row.active_ingredients,
+  });
   const state = normaliseResistanceState((row as any).resistance_classification_state);
   const actives: MasterResistanceActive[] = draft.actives
     .filter((a) => str(a.name))
@@ -101,12 +110,12 @@ export function masterResistanceStatus(row: MasterChemicalRow): MasterResistance
       name: a.name,
       concentration:
         a.concentration != null ? `${a.concentration} ${a.concentration_unit ?? ""}`.trim() : null,
-      group: a.activity_group?.code ? `${a.activity_group.scheme} ${a.activity_group.code}` : null,
+      group: a.activity_group?.code ? `${String(a.activity_group.scheme).toUpperCase()} ${a.activity_group.code}` : null,
     }));
 
   const groups: Array<{ scheme: string; code: string }> = draft.actives
     .filter((a) => a.activity_group?.code)
-    .map((a) => ({ scheme: String(a.activity_group!.scheme), code: a.activity_group!.code }));
+    .map((a) => ({ scheme: String(a.activity_group!.scheme).toUpperCase(), code: a.activity_group!.code }));
   if (!groups.length && Array.isArray(row.activity_groups) && str(row.activity_group_scheme)) {
     for (const c of row.activity_groups) {
       const code = str(c);
