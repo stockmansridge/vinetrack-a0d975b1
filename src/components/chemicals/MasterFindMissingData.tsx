@@ -7,13 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import type { MasterChemicalRow } from "@/lib/masterChemicals";
-import { requestMasterBackfillPreview, type BackfillResult } from "@/lib/masterBackfill";
+import { readBackfillView, requestMasterBackfillPreview, type BackfillResult } from "@/lib/masterBackfill";
 import {
-  applyMasterReviewPreview, formatIdentity, previewApplyBlockedReason,
+  applyMasterReviewPreview, formatIdentity, identityEmpty, previewApplyBlockedReason,
 } from "@/lib/masterReviewPreview";
-
-const list = (v: unknown): string[] =>
-  Array.isArray(v) ? v.map((x) => (typeof x === "string" ? x : JSON.stringify(x))) : [];
 
 export function MasterFindMissingData({
   row,
@@ -31,7 +28,7 @@ export function MasterFindMissingData({
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
   const [reason, setReason] = useState("");
-  const [applied, setApplied] = useState<string[] | null>(null);
+  const [applied, setApplied] = useState<{ fields: string[]; revision: number | null } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -59,12 +56,16 @@ export function MasterFindMissingData({
   }, [trigger]);
 
   const preview = state?.outcome === "preview" ? state.preview : null;
-  const blocked = preview ? previewApplyBlockedReason(preview) : null;
-  const raw = (preview?.raw ?? {}) as Record<string, any>;
-  const remaining = list(raw.remaining_unresolved ?? raw.unresolved_fields ?? preview?.proposedPatch?.verification_unresolved_fields);
-  const conflicts = list(raw.conflicts ?? preview?.proposedPatch?.verification_conflicts);
-  const labelUrl = (raw.manufacturer_label_url ?? raw.label_url ?? null) as string | null;
-  const source = (raw.evidence_source ?? raw.source ?? null) as string | null;
+  const view = preview
+    ? readBackfillView(
+        preview,
+        row.registration_number,
+        identityEmpty(preview.identityStored) ? null : formatIdentity(preview.identityStored),
+      )
+    : null;
+  const blocked = preview && view?.canApply ? previewApplyBlockedReason(preview) : null;
+  const rowIdentity = [row.registered_product_name, row.registration_country, row.registration_scheme, row.registration_number]
+    .filter(Boolean).join(" · ");
 
   const apply = async () => {
     if (!preview?.previewId) return;
@@ -72,7 +73,7 @@ export function MasterFindMissingData({
     try {
       const res = await applyMasterReviewPreview({ previewId: preview.previewId, masterId: row.id, reason });
       if (res.outcome === "applied" || res.outcome === "already_applied") {
-        setApplied(preview.changes.map((c) => c.label));
+        setApplied({ fields: preview.changes.map((c) => c.label), revision: res.revision });
         setState(null);
         toast({ title: "Applied", description: res.message });
         onApplied?.(res.row);
@@ -105,29 +106,46 @@ export function MasterFindMissingData({
 
       {applied && (
         <div className="text-xs space-y-1" role="status">
-          <div>Applied. Updated: {applied.join(", ") || "no fields"}. Review status unchanged.</div>
+          <div>
+            {applied.revision != null ? `Applied — revision ${applied.revision}.` : "Applied."} Updated:{" "}
+            {applied.fields.join(", ") || "no fields"}. Review status unchanged.
+          </div>
           {onNextIncomplete && (
             <Button size="sm" onClick={onNextIncomplete}>Next incomplete product</Button>
           )}
         </div>
       )}
 
-      {preview && (
+      {preview && view && (
         <div className="space-y-2 text-xs">
-          <p className="text-muted-foreground">
-            Preview only — nothing has been changed yet.
-          </p>
+          {view.statusMessage ? (
+            <p className={view.status.endsWith("conflict") ? "text-destructive" : "text-muted-foreground"} role="status">
+              {view.statusMessage}
+            </p>
+          ) : (
+            <p className="text-muted-foreground">Preview only — nothing has been changed yet.</p>
+          )}
           <div className="text-muted-foreground">
-            Locked identity: {formatIdentity(preview.identityStored)}
-            {row.registration_number ? ` · APVMA ${row.registration_number}` : ""}
-            {source ? ` · Source: ${source}` : ""}
+            Locked identity: {view.lockedIdentity ?? (rowIdentity || "Not reported")}
+            {view.source ? ` · Source: ${view.source}` : ""}
           </div>
-          {labelUrl && (
-            <a className="underline" href={labelUrl} target="_blank" rel="noopener noreferrer">
+          {view.reportedRegistrationNumber && (
+            <div className={view.registrationMismatch ? "text-destructive" : "text-muted-foreground"}>
+              Reported registration: {view.reportedRegistrationNumber}
+              {view.registrationMismatch ? ` — does not match stored ${row.registration_number}` : ""}
+            </div>
+          )}
+          {view.manufacturerLabelUrl && (
+            <a className="underline" href={view.manufacturerLabelUrl} target="_blank" rel="noopener noreferrer">
               Manufacturer label
             </a>
           )}
-          {preview.changes.length === 0 ? (
+          {view.findings.length > 0 && (
+            <ul className="list-disc pl-4 text-muted-foreground">
+              {view.findings.map((f) => <li key={f}>{f}</li>)}
+            </ul>
+          )}
+          {view.canApply && (preview.changes.length === 0 ? (
             <div className="text-muted-foreground">No evidence-backed changes were proposed.</div>
           ) : (
             <div className="rounded-md border border-border/60 divide-y divide-border/60">
@@ -142,10 +160,10 @@ export function MasterFindMissingData({
                 </div>
               ))}
             </div>
-          )}
-          {conflicts.length > 0 && <div>Conflicts: {conflicts.join(", ")}</div>}
-          {remaining.length > 0 && <div className="text-muted-foreground">Still unresolved: {remaining.join(", ")}</div>}
-          {blocked ? (
+          ))}
+          {view.conflicts.length > 0 && <div>Conflicts: {view.conflicts.join(", ")}</div>}
+          {view.remaining.length > 0 && <div className="text-muted-foreground">Still unresolved: {view.remaining.join(", ")}</div>}
+          {view.canApply && (blocked ? (
             <div className="text-muted-foreground">{blocked}</div>
           ) : (
             <>
@@ -155,7 +173,7 @@ export function MasterFindMissingData({
                 {applying && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} Apply reviewed changes
               </Button>
             </>
-          )}
+          ))}
         </div>
       )}
     </section>

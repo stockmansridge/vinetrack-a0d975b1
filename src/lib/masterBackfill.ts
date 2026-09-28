@@ -178,6 +178,10 @@ export function readBackfillView(
     conflicts: legacyConflicts,
     remaining: asList(s.remaining_unresolved ?? s.unresolved_fields ?? preview.proposedPatch?.verification_unresolved_fields),
     findings,
-    canApply: (status === "preview_ready" || status === "unknown") && !!preview.previewId,
+    canApply:
+      !!preview.previewId &&
+      (status === "preview_ready" ||
+        status === "unknown" ||
+        (status === "manufacturer_label_not_found" && preview.writable)),
   };
 }
