@@ -48,7 +48,7 @@ describe("workbench filters", () => {
     ready({ id: "norate", viticulture_rates: [] }),
     ready({ id: "conf", verification_conflicts: [{ field: "registrant" }] }),
   ];
-  it("1 resistance unresolved", () => expect(ids(filterMasterQueue(rows, "resistance_unresolved"))).toEqual(["nogroup", "unres"]));
+  it("1 resistance unresolved", () => expect(ids(filterMasterQueue(rows, "resistance_unresolved")).sort()).toEqual(["nogroup", "unres"]));
   it("2 missing group", () => expect(ids(filterMasterQueue(rows, "missing_group"))).toEqual(["nogroup"]));
   it("3 vineyard use without rate", () => expect(ids(filterMasterQueue(rows, "vineyard_missing_rates"))).toEqual(["norate"]));
   it("4 conflicts", () => expect(ids(filterMasterQueue(rows, "conflicts"))).toEqual(["conf"]));

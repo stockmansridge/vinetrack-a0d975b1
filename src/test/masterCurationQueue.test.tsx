@@ -53,6 +53,7 @@ describe("missing-field calculation", () => {
       product_category: "",
       active_ingredients: [],
       label_reference: null,
+      verification_sources: [],
       viticulture_rates: [],
     });
     expect(masterMissingFields(row)).toEqual([
