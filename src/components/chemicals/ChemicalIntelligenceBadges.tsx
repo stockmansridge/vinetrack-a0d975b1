@@ -56,6 +56,16 @@ export function ActivityGroupSummary({ chem }: { chem: ChemicalIntelligence }) {
       </span>
     );
   }
+  if (display.kind === "manual") {
+    return (
+      <span className="inline-flex flex-col gap-0.5">
+        <Badge className={TONE_CLASS.warning} title={display.warning}>
+          {display.text}
+        </Badge>
+        <span className="text-[11px] text-muted-foreground">{display.warning}</span>
+      </span>
+    );
+  }
   if (display.kind === "unresolved") {
     return (
       <Badge className={TONE_CLASS.warning} title={display.warning}>
