@@ -476,10 +476,13 @@ import {
 } from "@/lib/masterReviewActions";
 import { masterRevision } from "@/lib/masterChemicals";
 
-/** Editable identity fields in the curation drawer (all existing columns). */
+/**
+ * Editable fields in the curation drawer — ONLY fields the live
+ * `master_review_correct` whitelist accepts. Registration number goes through
+ * the re-key path; vineyard rates come from the audited preview/apply path.
+ */
 export interface MasterCurationIdentity {
   registered_product_name?: string | null;
-  registration_number?: string | null;
   registrant?: string | null;
   product_category?: string | null;
   form_type?: string | null;
@@ -489,43 +492,34 @@ export interface MasterCurationIdentity {
 export interface MasterCurationSaveInput {
   row: MasterChemicalRow;
   identity: MasterCurationIdentity;
-  /** Full replacement list of Master vineyard rates. */
-  rates?: MasterViticultureRate[] | null;
   reason: string;
 }
 
-const IDENTITY_KEYS: Array<keyof MasterCurationIdentity> = [
+/** Fields the live correction RPC permits. `viticulture_rates` is NOT one. */
+export const MASTER_CORRECT_WHITELIST = [
   "registered_product_name",
-  "registration_number",
   "registrant",
   "product_category",
   "form_type",
   "label_reference",
-];
+] as const;
 
 /**
  * The patch this workflow sends to the existing `master_review_correct` RPC.
- * Only changed fields are included; blank clears to null. Rates travel in the
- * SAME patch so one save is one revision — never two chained writes with a
- * stale expected revision between them.
+ * Only changed, whitelisted fields are included; blank clears to null. Any
+ * other key (e.g. `viticulture_rates`) is dropped, never sent.
  */
 export function buildMasterCurationPatch(
   input: MasterCurationSaveInput,
 ): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
-  for (const key of IDENTITY_KEYS) {
-    if (!(key in input.identity)) continue;
-    const next = str(input.identity[key]);
+  const identity = input.identity as Record<string, unknown>;
+  for (const key of MASTER_CORRECT_WHITELIST) {
+    if (!(key in identity)) continue;
+    const next = str(identity[key]);
     const current = str((input.row as unknown as Record<string, unknown>)[key]);
     if (next === current) continue;
     patch[key] = next;
-  }
-  if (input.rates) {
-    const encoded = encodeMasterViticultureRates(input.rates);
-    const before = JSON.stringify(
-      encodeMasterViticultureRates(parseMasterViticultureRates(input.row.viticulture_rates)),
-    );
-    if (JSON.stringify(encoded) !== before) patch.viticulture_rates = encoded;
   }
   return patch;
 }
