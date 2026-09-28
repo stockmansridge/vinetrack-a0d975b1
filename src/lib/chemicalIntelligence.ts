@@ -701,11 +701,14 @@ export const RESISTANCE_NOT_APPLICABLE_TEXT = "No resistance group applies";
 export const RESISTANCE_UNKNOWN_TEXT = "Resistance group unknown";
 export const RESISTANCE_UNRESOLVED_WARNING =
   "Resistance rotation cannot be assessed until this product's resistance group is resolved.";
+export const RESISTANCE_MANUAL_WARNING =
+  "Resistance classification is unverified — resistance rotation cannot be assessed automatically.";
 
 export type ResistanceGroupDisplayKind =
   | "groups"
   | "not_applicable"
   | "unresolved"
+  | "manual"
   | "legacy"
   | "none";
 
@@ -735,6 +738,13 @@ export function resistanceGroupDisplay(chem: ChemicalIntelligence): ResistanceGr
     return { kind: "not_applicable", text: RESISTANCE_NOT_APPLICABLE_TEXT };
   }
   const structured = activityGroupSummary(chem);
+  const hasStructuredRecord =
+    chem.structured || chem.actives.length > 0 || chem.activityGroups.length > 0;
+  const legacy = chem.legacy.chemicalGroup?.trim() || null;
+  if (state === "unresolved" && !hasStructuredRecord && legacy) {
+    // Manually entered free text: shown, but never treated as authoritative.
+    return { kind: "manual", text: `${legacy} (manual)`, warning: RESISTANCE_MANUAL_WARNING };
+  }
   if (state === "unresolved" || (state === "classified" && !structured)) {
     return {
       kind: "unresolved",
@@ -743,7 +753,6 @@ export function resistanceGroupDisplay(chem: ChemicalIntelligence): ResistanceGr
     };
   }
   if (structured) return { kind: "groups", text: structured };
-  const legacy = chem.legacy.chemicalGroup;
   if (legacy) return { kind: "legacy", text: legacy };
   return { kind: "none", text: "—" };
 }
