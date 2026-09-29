@@ -136,10 +136,10 @@ describe("pending-operation guard", () => {
 
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
-    const next = screen.getByRole("button", { name: /^Next/ });
+    const next = screen.getByRole("button", { name: /^Next$/ });
     expect(next).toBeDisabled();
     expect(screen.getByRole("button", { name: /Next needing attention/ })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /Find missing data/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Find missing data$/i })).toBeDisabled();
 
     // Selection changes underneath (e.g. external list navigation) before completion.
     rerender(
