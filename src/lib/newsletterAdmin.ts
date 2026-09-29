@@ -33,6 +33,7 @@ export interface NewsletterCampaign {
   logo_url: string | null;
   logo_path: string | null;
   logo_alt: string | null;
+  logo_link: string | null;
   audience_current_users: boolean;
   audience_subscribers: boolean;
   blocks: NewsletterBlock[];
@@ -140,6 +141,7 @@ export interface SaveCampaignInput {
   logo_url?: string | null;
   logo_path?: string | null;
   logo_alt?: string | null;
+  logo_link?: string | null;
   audience_current_users: boolean;
   audience_subscribers: boolean;
   blocks: NewsletterBlock[];
@@ -201,7 +203,7 @@ export function useAudienceCounts(includeUsers: boolean, includeSubscribers: boo
 
 /** Renders the real send HTML on the server so preview === what is delivered. */
 export function useNewsletterPreview(campaign: SaveCampaignInput | null, enabled: boolean) {
-  const key = JSON.stringify({ s: campaign?.subject, p: campaign?.preheader, b: campaign?.blocks });
+  const key = JSON.stringify({ s: campaign?.subject, p: campaign?.preheader, b: campaign?.blocks, l: campaign?.logo_link, u: campaign?.logo_url });
   return useQuery({
     queryKey: [...NEWSLETTERS_QK, "preview", key],
     enabled: enabled && !!campaign,

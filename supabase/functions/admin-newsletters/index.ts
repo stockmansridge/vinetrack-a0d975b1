@@ -16,7 +16,7 @@ import { isValidEmail, normaliseEmail } from "../_shared/newsletter/audience.ts"
 import { sendNewsletterEmail } from "../_shared/newsletter/send.ts";
 
 const CAMPAIGN_COLUMNS =
-  "id, name, subject, preheader, from_name, reply_to, logo_url, logo_path, logo_alt, audience_current_users, audience_subscribers, blocks, status, scheduled_at, timezone, audience_counts, current_version_id, created_by_email, created_at, updated_at";
+  "id, name, subject, preheader, from_name, reply_to, logo_url, logo_path, logo_alt, logo_link, audience_current_users, audience_subscribers, blocks, status, scheduled_at, timezone, audience_counts, current_version_id, created_by_email, created_at, updated_at";
 
 const EDITABLE_STATUSES = new Set(["draft", "scheduled", "failed"]);
 
@@ -43,6 +43,7 @@ function renderOf(campaign: any, isTest = false) {
     blocks: Array.isArray(campaign?.blocks) ? campaign.blocks : [],
     logoUrl: campaign?.logo_url ?? null,
     logoAlt: campaign?.logo_alt ?? null,
+    logoLink: campaign?.logo_link ?? null,
     isTest,
   };
 }
@@ -114,6 +115,7 @@ Deno.serve(async (req: Request) => {
         logo_url: logoUrl,
         logo_path: logoUrl && c.logo_path ? String(c.logo_path).slice(0, 500) : null,
         logo_alt: c.logo_alt ? String(c.logo_alt).slice(0, 200) : null,
+        logo_link: c.logo_link ? String(c.logo_link).trim().slice(0, 1000) || null : null,
         audience_current_users: Boolean(c.audience_current_users),
         audience_subscribers: Boolean(c.audience_subscribers),
         blocks: Array.isArray(c.blocks) ? c.blocks : [],
@@ -178,6 +180,7 @@ Deno.serve(async (req: Request) => {
           logo_url: s.logo_url,
           logo_path: s.logo_path,
           logo_alt: s.logo_alt,
+          logo_link: s.logo_link,
           audience_current_users: s.audience_current_users,
           audience_subscribers: s.audience_subscribers,
           blocks: s.blocks,

@@ -93,6 +93,7 @@ async function createVersion(
     blocks: Array.isArray(campaign.blocks) ? campaign.blocks : [],
     logoUrl: campaign.logo_url ?? null,
     logoAlt: campaign.logo_alt ?? null,
+    logoLink: campaign.logo_link ?? null,
   };
 
   const insert = await ctx.portal
@@ -107,6 +108,7 @@ async function createVersion(
       logo_url: campaign.logo_url ?? null,
       logo_path: campaign.logo_path ?? null,
       logo_alt: campaign.logo_alt ?? null,
+      logo_link: campaign.logo_link ?? null,
       html: renderNewsletterHtml(renderOpts),
       text_body: renderNewsletterText(renderOpts),
       audience_current_users: includeCurrentUsers,

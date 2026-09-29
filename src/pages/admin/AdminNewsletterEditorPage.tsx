@@ -80,6 +80,7 @@ export default function AdminNewsletterEditorPage() {
     logo_url: null,
     logo_path: null,
     logo_alt: "VineTrack",
+    logo_link: "",
     audience_current_users: false,
     audience_subscribers: false,
     blocks: [],
@@ -106,6 +107,7 @@ export default function AdminNewsletterEditorPage() {
       logo_url: c.logo_url ?? null,
       logo_path: c.logo_path ?? null,
       logo_alt: c.logo_alt ?? "VineTrack",
+      logo_link: c.logo_link ?? "",
       audience_current_users: c.audience_current_users,
       audience_subscribers: c.audience_subscribers,
       blocks: Array.isArray(c.blocks) ? c.blocks : [],
@@ -267,6 +269,18 @@ export default function AdminNewsletterEditorPage() {
                 }))
               }
             />
+            <div className="space-y-1">
+              <Label htmlFor="logo-link">Logo link</Label>
+              <Input
+                id="logo-link"
+                type="url"
+                placeholder="https://www.vinetrack.com.au"
+                value={form.logo_link ?? ""}
+                disabled={readOnly}
+                onChange={(e) => setForm((current) => ({ ...current, logo_link: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">Where readers go when they click the logo. Leave blank for no link.</p>
+            </div>
           </Card>
         </div>
 
