@@ -588,7 +588,7 @@ export default function AdminNewsletterEditorPage() {
                   let guard = 0;
                   while (result.remaining > 0 && guard < 200) {
                     guard += 1;
-                    result = await send.mutateAsync({ id: form.id, resume: true });
+                    result = await send.mutateAsync({ id: savedId, resume: true });
                   }
                   setConfirmSend(false);
                   toast({
