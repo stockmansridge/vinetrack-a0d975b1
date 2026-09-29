@@ -42,7 +42,7 @@ describe("Approve & Next preserves manual corrections", () => {
   it("does not approve when the save is refused (resolved non-ok outcome)", async () => {
     const approve = vi.fn();
     const res = await approveWithCorrections(
-      { row, identity: { registrant: "New Co" } },
+      { row, identity: { registrant: "New Co" }, reason: "" },
       { save: async () => ({ outcome: "conflict", message: "Stale revision", row: null, raw: null }) as any, approve },
     );
     expect(res).toEqual({ outcome: "save_failed", message: "Stale revision" });
@@ -52,7 +52,7 @@ describe("Approve & Next preserves manual corrections", () => {
   it("does not approve when the save throws", async () => {
     const approve = vi.fn();
     const res = await approveWithCorrections(
-      { row, identity: { registrant: "New Co" } },
+      { row, identity: { registrant: "New Co" }, reason: "" },
       { save: async () => { throw new Error("offline"); }, approve },
     );
     expect(res.outcome).toBe("save_failed");
@@ -61,7 +61,7 @@ describe("Approve & Next preserves manual corrections", () => {
 
   it("distinguishes saved corrections from a failed approval", async () => {
     const res = await approveWithCorrections(
-      { row, identity: { registrant: "New Co" } },
+      { row, identity: { registrant: "New Co" }, reason: "" },
       {
         save: async () => ({ outcome: "ok", message: "", row: { ...row, registrant: "New Co" }, raw: null }) as any,
         approve: async () => { throw new Error("denied"); },
@@ -77,7 +77,7 @@ describe("Approve & Next preserves manual corrections", () => {
   it("sends no correction write when nothing changed", async () => {
     const save = vi.fn();
     const approve = vi.fn(async () => {});
-    const res = await approveWithCorrections({ row, identity: { registrant: "Old Co" } }, { save, approve });
+    const res = await approveWithCorrections({ row, identity: { registrant: "Old Co" }, reason: "" }, { save, approve });
     expect(save).not.toHaveBeenCalled();
     expect(approve).toHaveBeenCalledWith("m1", null);
     expect(res).toMatchObject({ outcome: "approved", saved: false });
@@ -94,6 +94,7 @@ describe("Approve & Next preserves manual corrections", () => {
         registration_number: "123",
         verification_status: "verified",
       } as any,
+      reason: "",
     });
     expect(patch).toEqual({ registrant: "New Co" });
   });
