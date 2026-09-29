@@ -22,7 +22,7 @@ import {
 } from "@/lib/masterChemicals";
 import {
   MASTER_RATE_BASIS_LABEL, masterRateSummary, masterRatesForBasis, parseMasterViticultureRates,
-  saveMasterCuration, approveWithCorrections, type MasterCurationIdentity, type MasterRateBasis,
+  saveMasterCuration, approveWithCorrections, buildMasterCurationPatch, type MasterCurationIdentity, type MasterRateBasis,
 } from "@/lib/masterCuration";
 import {
   MASTER_ISSUE_ACTION_LABEL, masterIssues, masterManufacturerLabel, masterProductPage,
@@ -68,6 +68,15 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
   }, [row?.id]);
 
   const issues = useMemo(() => (row ? masterIssues(row) : []), [row]);
+  // Readiness with the entered (unsaved) whitelisted corrections applied — only
+  // decides which button shows; approval re-checks the confirmed saved record.
+  const draftIssueCount = useMemo(
+    () =>
+      row
+        ? masterIssues({ ...row, ...buildMasterCurationPatch({ row, identity, reason }) } as MasterChemicalRow).length
+        : 0,
+    [row, identity, reason],
+  );
   const resistance = useMemo(() => (row ? masterResistanceStatus(row) : null), [row]);
   const vineUses = useMemo(() => (row ? masterVineyardUses(row) : []), [row]);
   const rates = useMemo(() => parseMasterViticultureRates(row?.viticulture_rates), [row]);
@@ -332,7 +341,7 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
               <Button size="sm" variant="outline" disabled={busy} onClick={() => runSave()}>
                 <Save className="h-4 w-4 mr-1" /> Save corrections
               </Button>
-              {issues.length > 0 ? (
+              {draftIssueCount > 0 ? (
                 <Button size="sm" disabled={busy} onClick={() => setFindSignal((n) => n + 1)}>
                   <SearchCheck className="h-4 w-4 mr-1" /> Find Missing Data
                 </Button>
