@@ -17,8 +17,11 @@ export function MasterFindMissingData({
   trigger,
   onApplied,
   onNextIncomplete,
+  disabled = false,
 }: {
   row: MasterChemicalRow;
+  /** Parent drawer has a save/approve in flight — lock competing actions. */
+  disabled?: boolean;
   /** Increment to run the preview from elsewhere (checklist / footer). */
   trigger?: number;
   onApplied?: (row: MasterChemicalRow | null) => void;
@@ -48,7 +51,7 @@ export function MasterFindMissingData({
   };
 
   useEffect(() => {
-    if (trigger) {
+    if (trigger && !disabled) {
       ref.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       void run();
     }
@@ -91,7 +94,7 @@ export function MasterFindMissingData({
     <section ref={ref} className="rounded-md border border-border/60 p-3 space-y-2" aria-label="Find Missing Data">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold">Find Missing Data</span>
-        <Button size="sm" variant="outline" disabled={loading || applying} onClick={run}>
+        <Button size="sm" variant="outline" disabled={disabled || loading || applying} onClick={run}>
           {loading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <SearchCheck className="h-4 w-4 mr-1" />}
           {preview ? "Run again" : "Find Missing Data"}
         </Button>
@@ -111,7 +114,7 @@ export function MasterFindMissingData({
             {applied.fields.join(", ") || "no fields"}. Review status unchanged.
           </div>
           {onNextIncomplete && (
-            <Button size="sm" onClick={onNextIncomplete}>Next incomplete product</Button>
+            <Button size="sm" disabled={disabled} onClick={onNextIncomplete}>Next incomplete product</Button>
           )}
         </div>
       )}
@@ -169,7 +172,7 @@ export function MasterFindMissingData({
             <>
               <Textarea rows={2} placeholder="Reason for applying (required)" value={reason}
                 onChange={(e) => setReason(e.target.value)} />
-              <Button size="sm" disabled={!reason.trim() || applying} onClick={apply}>
+              <Button size="sm" disabled={disabled || !reason.trim() || applying} onClick={apply}>
                 {applying && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} Apply reviewed changes
               </Button>
             </>

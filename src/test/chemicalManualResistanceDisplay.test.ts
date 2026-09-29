@@ -16,7 +16,7 @@ describe("manual resistance group display", () => {
   it("manual group stays visible, marked manual and unverified", () => {
     const d = show({ chemical_group: "Group 3", resistance_classification_state: "unresolved" });
     expect(d.kind).toBe("manual");
-    expect(d.text).toBe("Group 3 (manual)");
+    expect(d.text).toBe("Group 3 (unverified)");
     expect(d.warning).toBe(RESISTANCE_MANUAL_WARNING);
   });
 
