@@ -170,6 +170,8 @@ export interface RenderOptions {
   logoUrl?: string | null;
   /** Accessible description used by the same logo in the header and footer. */
   logoAlt?: string | null;
+  /** Optional click-through URL for the logo. */
+  logoLink?: string | null;
 }
 
 interface Theme {
@@ -321,8 +323,12 @@ function section(inner: string, theme: Theme, pad = "30px 32px"): string {
 function renderHeader(opts: RenderOptions): string {
   const logo = safeUrl(opts.logoUrl ?? BRAND_LOGO_URL);
   const logoAlt = String(opts.logoAlt ?? "VineTrack").trim() || "VineTrack";
-  const wordmark = logo
+  const logoHref = safeUrl(opts.logoLink);
+  const logoImg = logo
     ? `<img src="${logo}" alt="${escapeHtml(logoAlt)}" width="150" height="38" style="display:block;width:150px;max-width:150px;height:auto;border:0;outline:none;text-decoration:none;" />`
+    : null;
+  const wordmark = logoImg
+    ? logoHref ? `<a href="${logoHref}" target="_blank" style="text-decoration:none;">${logoImg}</a>` : logoImg
     : `<span style="font-family:${FONT};font-size:22px;font-weight:700;color:${BRAND.greenDark};letter-spacing:0.2px;">VineTrack</span>`;
   return `<tr><td bgcolor="${BRAND.white}" class="vt-pad" style="padding:22px 32px 18px 32px;background-color:${BRAND.white};border-bottom:1px solid ${BRAND.border};">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
@@ -455,7 +461,7 @@ ${
 <td class="vt-col vt-right" width="45%" valign="top" align="right" style="padding:0;">
 ${
     logo
-      ? `<img src="${logo}" alt="${escapeHtml(logoAlt)}" width="128" height="32" style="display:inline-block;width:128px;max-width:128px;height:auto;border:0;outline:none;text-decoration:none;" />`
+      ? ((img: string, href: string | null) => href ? `<a href="${href}" target="_blank" style="text-decoration:none;">${img}</a>` : img)(`<img src="${logo}" alt="${escapeHtml(logoAlt)}" width="128" height="32" style="display:inline-block;width:128px;max-width:128px;height:auto;border:0;outline:none;text-decoration:none;" />`, safeUrl(opts.logoLink))
       : `<span style="font-family:${FONT};font-size:17px;font-weight:700;color:${BRAND.greenDark};">VineTrack</span>`
   }
 <p style="margin:8px 0 0 0;font-family:${FONT};font-size:12px;line-height:19px;color:${BRAND.muted};">${escapeHtml(

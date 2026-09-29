@@ -322,6 +322,7 @@ export type Database = {
           html: string
           id: string
           logo_alt: string | null
+          logo_link: string | null
           logo_path: string | null
           logo_url: string | null
           preheader: string | null
@@ -352,6 +353,7 @@ export type Database = {
           html: string
           id?: string
           logo_alt?: string | null
+          logo_link?: string | null
           logo_path?: string | null
           logo_url?: string | null
           preheader?: string | null
@@ -382,6 +384,7 @@ export type Database = {
           html?: string
           id?: string
           logo_alt?: string | null
+          logo_link?: string | null
           logo_path?: string | null
           logo_url?: string | null
           preheader?: string | null
@@ -421,6 +424,7 @@ export type Database = {
           from_name: string | null
           id: string
           logo_alt: string | null
+          logo_link: string | null
           logo_path: string | null
           logo_url: string | null
           name: string
@@ -444,6 +448,7 @@ export type Database = {
           from_name?: string | null
           id?: string
           logo_alt?: string | null
+          logo_link?: string | null
           logo_path?: string | null
           logo_url?: string | null
           name?: string
@@ -467,6 +472,7 @@ export type Database = {
           from_name?: string | null
           id?: string
           logo_alt?: string | null
+          logo_link?: string | null
           logo_path?: string | null
           logo_url?: string | null
           name?: string
