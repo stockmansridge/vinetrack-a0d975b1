@@ -22,7 +22,7 @@ import {
 } from "@/lib/masterChemicals";
 import {
   MASTER_RATE_BASIS_LABEL, masterRateSummary, masterRatesForBasis, parseMasterViticultureRates,
-  saveMasterCuration, type MasterCurationIdentity, type MasterRateBasis,
+  saveMasterCuration, approveWithCorrections, type MasterCurationIdentity, type MasterRateBasis,
 } from "@/lib/masterCuration";
 import {
   MASTER_ISSUE_ACTION_LABEL, masterIssues, masterManufacturerLabel, masterProductPage,
@@ -86,7 +86,14 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
   const approve = useMutation({
     mutationFn: async () => {
       if (!row) throw new Error("No record selected.");
-      await setMasterReviewStatus(row.id, "approved", reason || null);
+      // Snapshot the record + entered values so mid-operation edits can't change what is approved.
+      return approveWithCorrections(
+        { row, identity: { ...identity }, reason },
+        {
+          save: saveMasterCuration,
+          approve: (id, notes) => setMasterReviewStatus(id, "approved", notes),
+        },
+      );
     },
   });
   const busy = save.isPending || approve.isPending;
@@ -103,15 +110,26 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
   };
 
   const runApprove = async () => {
-    if (issues.length) return;
+    if (busy) return;
+    let res;
     try {
-      await approve.mutateAsync();
-      toast({ title: "Approved" });
-      props.onSaved?.();
-      props.onNextAttention?.();
+      res = await approve.mutateAsync();
     } catch (e: any) {
       toast({ title: "Not approved", description: e?.message ?? String(e), variant: "destructive" });
+      return;
     }
+    if (res.outcome !== "save_failed" && res.saved) props.onSaved?.();
+    if (res.outcome === "approved") {
+      toast({ title: res.saved ? "Corrections saved and approved" : "Approved" });
+      if (!res.saved) props.onSaved?.();
+      props.onNextAttention?.();
+      return;
+    }
+    toast({
+      title: res.outcome === "save_failed" ? "Not saved — not approved" : "Not approved",
+      description: res.message,
+      variant: "destructive",
+    });
   };
 
   const onIssueAction = (i: MasterIssue) => {
@@ -274,28 +292,28 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
                 <h3 className="text-xs font-semibold text-muted-foreground">Manual corrections</h3>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <Field label="Registered product name">
-                    <Input value={txt(identity.registered_product_name)}
+                    <Input disabled={busy} value={txt(identity.registered_product_name)}
                       onChange={(e) => setIdentity((s) => ({ ...s, registered_product_name: e.target.value }))} />
                   </Field>
                   <Field label="Registrant / manufacturer">
-                    <Input value={txt(identity.registrant)}
+                    <Input disabled={busy} value={txt(identity.registrant)}
                       onChange={(e) => setIdentity((s) => ({ ...s, registrant: e.target.value }))} />
                   </Field>
                   <Field label="Category">
-                    <Input placeholder="fungicide, insecticide, herbicide…" value={txt(identity.product_category)}
+                    <Input disabled={busy} placeholder="fungicide, insecticide, herbicide…" value={txt(identity.product_category)}
                       onChange={(e) => setIdentity((s) => ({ ...s, product_category: e.target.value }))} />
                   </Field>
                   <Field label="Form / type">
-                    <Input placeholder="SC, WG, EC…" value={txt(identity.form_type)}
+                    <Input disabled={busy} placeholder="SC, WG, EC…" value={txt(identity.form_type)}
                       onChange={(e) => setIdentity((s) => ({ ...s, form_type: e.target.value }))} />
                   </Field>
                   <Field label="Label link">
-                    <Input placeholder="https://…" value={txt(identity.label_reference)}
+                    <Input disabled={busy} placeholder="https://…" value={txt(identity.label_reference)}
                       onChange={(e) => setIdentity((s) => ({ ...s, label_reference: e.target.value }))} />
                   </Field>
                 </div>
                 <Field label="Reason / review note">
-                  <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
+                  <Textarea rows={2} disabled={busy} value={reason} onChange={(e) => setReason(e.target.value)} />
                 </Field>
               </section>
             </div>
