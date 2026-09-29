@@ -192,6 +192,24 @@ Deno.serve(async (req: Request) => {
       return json(200, { campaign: data });
     }
 
+    if (action === "recipients") {
+      const versionId = String(body.version_id ?? "");
+      if (!versionId) return jsonError(400, "Missing version_id");
+      const rows: unknown[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await portal
+          .from("newsletter_campaign_recipients")
+          .select("email, source, status, error_message, sent_at, created_at")
+          .eq("version_id", versionId)
+          .order("email")
+          .range(from, from + 999);
+        if (error) return jsonError(500, error.message);
+        rows.push(...(data ?? []));
+        if (!data || data.length < 1000) break;
+      }
+      return json(200, { recipients: rows });
+    }
+
     if (action === "delete") {
       const id = String(body.id ?? "");
       if (!id) return jsonError(400, "Missing id");

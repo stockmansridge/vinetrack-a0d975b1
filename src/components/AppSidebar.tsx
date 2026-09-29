@@ -28,6 +28,22 @@ import {
 import { SupportRequestSheet } from "@/components/support/SupportRequestSheet";
 import { useUnresolvedSupportCount } from "@/lib/supportRequestsCount";
 import { useNavViewer } from "@/hooks/useNavViewer";
+import { useMarkFeatureRequestsSeen, useUnseenFeatureRequestCount } from "@/lib/featureRequestsUnseen";
+
+function FeatureRequestsBadge({ active }: { active: boolean }) {
+  const { isAdmin } = useIsSystemAdmin();
+  useMarkFeatureRequestsSeen(isAdmin && active);
+  const { data: count = 0 } = useUnseenFeatureRequestCount(isAdmin);
+  if (!isAdmin || active || count <= 0) return null;
+  return (
+    <span
+      className="ml-auto inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-semibold text-white"
+      aria-label={`${count} new feature request updates`}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
 import {
   ACTIVITIES,
   SYSTEM_ADMIN_DASHBOARD,
@@ -247,6 +263,7 @@ export function AppSidebar() {
               <NavLink to="/feature-requests" className="flex items-center gap-2.5">
                 <Lightbulb className="h-4 w-4" />
                 <span>Feature Requests</span>
+                <FeatureRequestsBadge active={pathname === "/feature-requests"} />
               </NavLink>
             </SidebarMenuButton>
           </SidebarMenuItem>

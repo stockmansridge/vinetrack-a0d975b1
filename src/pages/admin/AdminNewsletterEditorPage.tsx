@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Monitor, Plus, Save, Send, Smartphone, CalendarClock, Loader2 } from "lucide-react";
 import { AdminGate, AdminPageHeader, AdminError } from "./_shared";
+import { downloadNewsletterRecipientsCsv } from "@/lib/newsletterRecipientsExport";
 import { NewsletterBlockEditor } from "@/components/admin/newsletter/NewsletterBlockEditor";
 import { NewsletterImageField } from "@/components/admin/newsletter/NewsletterImageField";
 import {
@@ -399,6 +400,18 @@ export default function AdminNewsletterEditorPage() {
                     {v.sent_count} sent · {v.suppressed_count} suppressed · {v.failed_count} failed
                     {v.sender_email ? ` · by ${v.sender_email}` : ""}
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-1 h-7 text-xs"
+                    onClick={() =>
+                      downloadNewsletterRecipientsCsv(v.id, data?.campaign?.name ?? "newsletter").catch((e) =>
+                        toast.error(e instanceof Error ? e.message : "Export failed"),
+                      )
+                    }
+                  >
+                    Download CSV
+                  </Button>
                   {v.error_message && <div className="text-red-600">{v.error_message}</div>}
                 </div>
               ))}
