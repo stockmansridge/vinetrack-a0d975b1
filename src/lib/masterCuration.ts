@@ -560,11 +560,14 @@ export async function saveMasterCuration(
 export type ApproveWithCorrectionsResult =
   | { outcome: "approved"; row: MasterChemicalRow; saved: boolean }
   | { outcome: "save_failed"; message: string }
+  | { outcome: "save_unknown"; message: string }
   | { outcome: "save_unconfirmed"; saved: true; message: string }
   | { outcome: "blocked"; row: MasterChemicalRow; saved: boolean; message: string }
   | { outcome: "approve_failed"; row: MasterChemicalRow; saved: boolean; message: string };
 
 export const CORRECTIONS_SAVED_APPROVAL_FAILED = "Corrections saved; approval failed.";
+export const CORRECTIONS_SAVE_UNKNOWN =
+  "The save request didn't complete, so it isn't known whether the corrections were saved. Nothing was approved. Reload this record to check before trying again.";
 export const CORRECTIONS_SAVE_UNCONFIRMED =
   "The server accepted the corrections, but the updated record could not be read back, so it was not approved. Reload this record to confirm what was saved before approving.";
 
@@ -587,7 +590,9 @@ export async function approveWithCorrections(
     try {
       res = await deps.save(input);
     } catch (e) {
-      return { outcome: "save_failed", message: e instanceof Error ? e.message : String(e) };
+      // An exception means the write outcome was never reported: unknown, not refused.
+      const detail = e instanceof Error ? e.message : String(e);
+      return { outcome: "save_unknown", message: `${CORRECTIONS_SAVE_UNKNOWN} ${detail}`.trim() };
     }
     if (res.outcome !== "ok") return { outcome: "save_failed", message: res.message };
     saved = true;

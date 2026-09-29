@@ -30,6 +30,9 @@ import {
 } from "@/lib/masterWorkbench";
 import { MasterFindMissingData } from "@/components/chemicals/MasterFindMissingData";
 
+const CORRECTIONS_SAVE_UNKNOWN_SHORT =
+  "The save request didn't complete, so it isn't known whether the corrections were saved. Reload this record to check.";
+
 const txt = (v: unknown) => (v == null ? "" : String(v));
 
 export interface MasterCurationDrawerProps {
@@ -87,9 +90,7 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
   const save = useMutation({
     mutationFn: async () => {
       if (!row) throw new Error("No record selected.");
-      const res = await saveMasterCuration({ row, identity, reason });
-      if (res.outcome !== "ok") throw new Error(res.message);
-      return res;
+      return saveMasterCuration({ row, identity, reason });
     },
   });
   const approve = useMutation({
@@ -115,14 +116,30 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
   };
 
   const runSave = async (then?: () => void) => {
+    let res;
     try {
-      const res = await save.mutateAsync();
-      toast({ title: "Saved", description: res.message });
-      props.onSaved?.();
-      then?.();
+      res = await save.mutateAsync();
     } catch (e: any) {
-      toast({ title: "Not saved", description: e?.message ?? String(e), variant: "destructive" });
+      // Request didn't report an outcome — don't claim nothing was saved.
+      toast({
+        title: "Save result unknown",
+        description: `${CORRECTIONS_SAVE_UNKNOWN_SHORT} ${e?.message ?? String(e)}`.trim(),
+        variant: "destructive",
+      });
+      return;
     }
+    if (res.outcome !== "ok") {
+      toast({ title: "Not saved", description: res.message, variant: "destructive" });
+      return;
+    }
+    if (res.readBackFailed) {
+      toast({ title: "Saved — not confirmed", description: res.message, variant: "destructive" });
+      props.onSaved?.();
+      return;
+    }
+    toast({ title: "Saved", description: res.message });
+    props.onSaved?.();
+    then?.();
   };
 
   const runApprove = async () => {
@@ -135,7 +152,7 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
       toast({ title: "Not approved", description: e?.message ?? String(e), variant: "destructive" });
       return;
     }
-    if (res.outcome !== "save_failed" && res.saved) props.onSaved?.();
+    if (res.outcome !== "save_failed" && res.outcome !== "save_unknown" && res.saved) props.onSaved?.();
     if (res.outcome === "approved") {
       toast({ title: res.saved ? "Corrections saved and approved" : "Approved" });
       if (!res.saved) props.onSaved?.();
@@ -146,9 +163,11 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
       title:
         res.outcome === "save_failed"
           ? "Not saved — not approved"
+          : res.outcome === "save_unknown"
+            ? "Save result unknown — not approved"
           : res.outcome === "save_unconfirmed"
             ? "Save not confirmed — not approved"
-            : "Not approved",
+              : "Not approved",
       description: res.message,
       variant: "destructive",
     });

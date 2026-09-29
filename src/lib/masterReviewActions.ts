@@ -319,7 +319,16 @@ export interface MasterActionResult {
   message: string;
   row: MasterChemicalRow | null;
   raw: unknown;
+  /**
+   * Set only when the RPC itself confirmed success but re-reading the record
+   * afterwards failed. The write happened; the refreshed row is unavailable.
+   */
+  readBackFailed?: boolean;
+  readBackError?: string;
 }
+
+export const MASTER_READ_BACK_FAILED =
+  "The server accepted the change, but the updated record could not be read back. Reload this record to confirm what was saved.";
 
 const obj = (v: unknown): Record<string, any> =>
   v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, any>) : {};
@@ -349,14 +358,24 @@ export async function callReviewRpc(
   const payload = Array.isArray(data) ? obj(data[0]) : obj(data);
   const status = payload.status ?? payload.outcome ?? payload.result ?? payload.error ?? data ?? "ok";
   const outcome = classifyActionOutcome(status);
-  return {
-    outcome,
-    message:
-      (typeof payload.message === "string" && payload.message.trim()) ||
-      MASTER_ACTION_MESSAGE[outcome],
-    row: outcome === "ok" ? await fetchMasterChemical(masterId) : null,
-    raw: data,
-  };
+  const message =
+    (typeof payload.message === "string" && payload.message.trim()) ||
+    MASTER_ACTION_MESSAGE[outcome];
+  if (outcome !== "ok") return { outcome, message, row: null, raw: data };
+  // The write is confirmed at this point; a read-back failure must not be
+  // reported as a refused write.
+  try {
+    return { outcome, message, row: await fetchMasterChemical(masterId), raw: data };
+  } catch (e) {
+    return {
+      outcome,
+      message: MASTER_READ_BACK_FAILED,
+      row: null,
+      raw: data,
+      readBackFailed: true,
+      readBackError: e instanceof Error ? e.message : String(e),
+    };
+  }
 }
 
 /* -------------------------------------------------------------- correct */
