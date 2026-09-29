@@ -135,7 +135,7 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
       toast({ title: "Not approved", description: e?.message ?? String(e), variant: "destructive" });
       return;
     }
-    if (res.outcome !== "save_failed" && res.saved) props.onSaved?.();
+    if (res.outcome !== "save_failed" && res.outcome !== "save_unknown" && res.saved) props.onSaved?.();
     if (res.outcome === "approved") {
       toast({ title: res.saved ? "Corrections saved and approved" : "Approved" });
       if (!res.saved) props.onSaved?.();
@@ -146,9 +146,11 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
       title:
         res.outcome === "save_failed"
           ? "Not saved — not approved"
+          : res.outcome === "save_unknown"
+            ? "Save result unknown — not approved"
           : res.outcome === "save_unconfirmed"
             ? "Save not confirmed — not approved"
-            : "Not approved",
+              : "Not approved",
       description: res.message,
       variant: "destructive",
     });
