@@ -577,8 +577,12 @@ export default function AdminNewsletterEditorPage() {
               disabled={send.isPending}
               onClick={async () => {
                 if (!form.id) return;
+                // Send reads the saved campaign, so save the current
+                // audience/content first — otherwise unsaved ticks are lost.
+                const savedId = await doSave();
+                if (!savedId) return;
                 try {
-                  let result = await send.mutateAsync({ id: form.id });
+                  let result = await send.mutateAsync({ id: savedId });
                   // Deliver in batches; resuming continues the SAME frozen
                   // version, so no duplicate campaign is ever created.
                   let guard = 0;
