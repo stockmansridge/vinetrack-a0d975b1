@@ -55,7 +55,7 @@ describe("Approve & Next preserves manual corrections", () => {
       { row, identity: { registrant: "New Co" }, reason: "" },
       { save: async () => { throw new Error("offline"); }, approve },
     );
-    expect(res.outcome).toBe("save_failed");
+    expect(res.outcome).toBe("save_unknown");
     expect(approve).not.toHaveBeenCalled();
   });
 
