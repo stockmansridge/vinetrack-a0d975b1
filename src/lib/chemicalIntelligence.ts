@@ -743,8 +743,8 @@ export function resistanceGroupDisplay(chem: ChemicalIntelligence): ResistanceGr
   const hasGroupEvidence = !!structured;
   const legacy = chem.legacy.chemicalGroup?.trim() || null;
   if (state === "unresolved" && !hasGroupEvidence && legacy) {
-    // Manually entered free text: shown, but never treated as authoritative.
-    return { kind: "manual", text: `${legacy} (manual)`, warning: RESISTANCE_MANUAL_WARNING };
+    // Retained free text of unknown origin: shown, never treated as authoritative.
+    return { kind: "manual", text: `${legacy} (unverified)`, warning: RESISTANCE_MANUAL_WARNING };
   }
   if (state === "unresolved" || (state === "classified" && !structured)) {
     return {

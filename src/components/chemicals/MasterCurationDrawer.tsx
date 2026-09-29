@@ -5,7 +5,7 @@
 // vineyard registration → registered vineyard rates (read-only) → whitelisted
 // manual corrections. Vineyard rates are NEVER written from here: the live
 // `master_review_correct` whitelist does not accept `viticulture_rates`.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   AlertTriangle, BadgeCheck, ChevronLeft, ChevronRight, ExternalLink, Save, SearchCheck, SkipForward,
@@ -106,6 +106,13 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
     },
   });
   const busy = save.isPending || approve.isPending;
+  // Track the currently selected record so an async completion can't advance a different one.
+  const currentIdRef = useRef<string | null>(row?.id ?? null);
+  currentIdRef.current = row?.id ?? null;
+  const guardedOpenChange = (next: boolean) => {
+    if (!next && busy) return;
+    onOpenChange(next);
+  };
 
   const runSave = async (then?: () => void) => {
     try {
@@ -119,7 +126,8 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
   };
 
   const runApprove = async () => {
-    if (busy) return;
+    if (busy || !row) return;
+    const startedId = row.id;
     let res;
     try {
       res = await approve.mutateAsync();
@@ -131,17 +139,23 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
     if (res.outcome === "approved") {
       toast({ title: res.saved ? "Corrections saved and approved" : "Approved" });
       if (!res.saved) props.onSaved?.();
-      props.onNextAttention?.();
+      if (currentIdRef.current === startedId) props.onNextAttention?.();
       return;
     }
     toast({
-      title: res.outcome === "save_failed" ? "Not saved — not approved" : "Not approved",
+      title:
+        res.outcome === "save_failed"
+          ? "Not saved — not approved"
+          : res.outcome === "save_unconfirmed"
+            ? "Save not confirmed — not approved"
+            : "Not approved",
       description: res.message,
       variant: "destructive",
     });
   };
 
   const onIssueAction = (i: MasterIssue) => {
+    if (busy) return;
     if (i.action === "review_conflict") props.onReviewConflict?.();
     else setFindSignal((n) => n + 1);
   };
@@ -151,8 +165,15 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
     : "";
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto">
+    <Sheet open={open} onOpenChange={guardedOpenChange}>
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-xl overflow-y-auto"
+        aria-busy={busy || undefined}
+        onEscapeKeyDown={(e) => { if (busy) e.preventDefault(); }}
+        onPointerDownOutside={(e) => { if (busy) e.preventDefault(); }}
+        onInteractOutside={(e) => { if (busy) e.preventDefault(); }}
+      >
         {!row ? null : (
           <>
             <SheetHeader className="space-y-2">
@@ -190,7 +211,7 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
                         <span className="inline-flex items-center gap-1">
                           <AlertTriangle className="h-3.5 w-3.5 text-warning" /> {i.label}
                         </span>
-                        <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => onIssueAction(i)}>
+                        <Button size="sm" variant="ghost" className="h-7 text-[11px]" disabled={busy} onClick={() => onIssueAction(i)}>
                           {MASTER_ISSUE_ACTION_LABEL[i.action]}
                         </Button>
                       </li>
@@ -210,6 +231,7 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
               <MasterFindMissingData
                 row={row}
                 trigger={findSignal}
+                disabled={busy}
                 onApplied={() => props.onSaved?.()}
                 onNextIncomplete={props.onNextAttention}
               />
