@@ -406,7 +406,7 @@ export default function AdminNewsletterEditorPage() {
                     className="mt-1 h-7 text-xs"
                     onClick={() =>
                       downloadNewsletterRecipientsCsv(v.id, data?.campaign?.name ?? "newsletter").catch((e) =>
-                        toast.error(e instanceof Error ? e.message : "Export failed"),
+                        toast({ title: e instanceof Error ? e.message : "Export failed", variant: "destructive" }),
                       )
                     }
                   >
