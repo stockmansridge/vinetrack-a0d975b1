@@ -556,3 +556,61 @@ export async function saveMasterCuration(
     input.row.id,
   );
 }
+
+export type ApproveWithCorrectionsResult =
+  | { outcome: "approved"; row: MasterChemicalRow; saved: boolean }
+  | { outcome: "save_failed"; message: string }
+  | { outcome: "blocked"; row: MasterChemicalRow; saved: boolean; message: string }
+  | { outcome: "approve_failed"; row: MasterChemicalRow; saved: boolean; message: string };
+
+export const CORRECTIONS_SAVED_APPROVAL_FAILED = "Corrections saved; approval failed.";
+
+/**
+ * Approve & Next as an ordered workflow over the EXISTING operations (not one
+ * atomic transaction): save changed whitelisted corrections first, confirm the
+ * save outcome, re-check readiness on the saved record, then approve.
+ */
+export async function approveWithCorrections(
+  input: MasterCurationSaveInput,
+  deps: {
+    save: (i: MasterCurationSaveInput) => Promise<MasterActionResult>;
+    approve: (id: string, notes: string | null) => Promise<unknown>;
+  },
+): Promise<ApproveWithCorrectionsResult> {
+  let current = input.row;
+  let saved = false;
+  if (Object.keys(buildMasterCurationPatch(input)).length) {
+    let res: MasterActionResult;
+    try {
+      res = await deps.save(input);
+    } catch (e) {
+      return { outcome: "save_failed", message: e instanceof Error ? e.message : String(e) };
+    }
+    if (res.outcome !== "ok") return { outcome: "save_failed", message: res.message };
+    saved = true;
+    if (res.row) current = res.row;
+  }
+  const issues = masterIssues(current);
+  if (issues.length) {
+    return {
+      outcome: "blocked",
+      row: current,
+      saved,
+      message: saved
+        ? "Corrections saved; this record still needs attention before it can be approved."
+        : "This record still needs attention before it can be approved.",
+    };
+  }
+  try {
+    await deps.approve(current.id, (input.reason ?? "").trim() || null);
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    return {
+      outcome: "approve_failed",
+      row: current,
+      saved,
+      message: saved ? `${CORRECTIONS_SAVED_APPROVAL_FAILED} ${detail}` : detail,
+    };
+  }
+  return { outcome: "approved", row: current, saved };
+}

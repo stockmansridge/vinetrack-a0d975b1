@@ -738,10 +738,11 @@ export function resistanceGroupDisplay(chem: ChemicalIntelligence): ResistanceGr
     return { kind: "not_applicable", text: RESISTANCE_NOT_APPLICABLE_TEXT };
   }
   const structured = activityGroupSummary(chem);
-  const hasStructuredRecord =
-    chem.structured || chem.actives.length > 0 || chem.activityGroups.length > 0;
+  // Decide on actual resistance evidence, not the broad `structured` flag
+  // (which is true for any row with a verification_status, even "unverified").
+  const hasGroupEvidence = !!structured;
   const legacy = chem.legacy.chemicalGroup?.trim() || null;
-  if (state === "unresolved" && !hasStructuredRecord && legacy) {
+  if (state === "unresolved" && !hasGroupEvidence && legacy) {
     // Manually entered free text: shown, but never treated as authoritative.
     return { kind: "manual", text: `${legacy} (manual)`, warning: RESISTANCE_MANUAL_WARNING };
   }
