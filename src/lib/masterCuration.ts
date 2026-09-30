@@ -82,6 +82,10 @@ export interface MasterViticultureRate {
   /** Target / method associations as stored — read only, never re-minted. */
   target?: string | null;
   method?: string | null;
+  /** Registered direction bound through the persisted rate identity. */
+  direction_id?: string | null;
+  conditions?: string | null;
+  crop?: string | null;
 }
 
 /** Entries the stored contract marks as excluded / unsupported directions. */
@@ -156,6 +160,42 @@ export function parseMasterViticultureRates(raw: unknown): MasterViticultureRate
     });
   }
   return out;
+}
+
+/**
+ * Bind flat rates to their registered direction through the persisted
+ * `rate_id` (the flat entry and the direction's rate share it). Target,
+ * conditions and direction identity come from that direction only; a rate
+ * whose id is absent, or appears in more than one direction, stays unbound.
+ */
+export function bindMasterRateDirections(
+  rates: MasterViticultureRate[],
+  registeredUses: unknown,
+): MasterViticultureRate[] {
+  const byRate = new Map<string, Record<string, unknown>[]>();
+  for (const u of Array.isArray(registeredUses) ? registeredUses : []) {
+    if (!u || typeof u !== "object") continue;
+    const use = u as Record<string, unknown>;
+    for (const r of Array.isArray(use.rates) ? use.rates : []) {
+      const id = str((r as Record<string, unknown>)?.rate_id);
+      if (!id) continue;
+      const list = byRate.get(id) ?? [];
+      list.push(use);
+      byRate.set(id, list);
+    }
+  }
+  return rates.map((rate) => {
+    const matches = rate.source_id ? byRate.get(rate.source_id) : undefined;
+    if (!matches || matches.length !== 1) return rate;
+    const d = matches[0];
+    return {
+      ...rate,
+      direction_id: str(d.direction_id) ?? null,
+      target: rate.target ?? str(d.target_raw ?? d.target) ?? null,
+      conditions: str(d.conditions) ?? null,
+      crop: str(d.crop) ?? null,
+    };
+  });
 }
 
 export interface MasterRateProblem {
