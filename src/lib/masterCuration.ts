@@ -626,15 +626,16 @@ export async function approveWithCorrections(
     }
     current = res.row;
   }
-  const issues = masterIssues(current);
-  if (issues.length) {
+  // Release policy (blockers only) — completeness warnings never block on their own.
+  const blockers = masterReleaseBlockers(current);
+  if (blockers.length) {
     return {
       outcome: "blocked",
       row: current,
       saved,
       message: saved
-        ? "Corrections saved; this record still needs attention before it can be approved."
-        : "This record still needs attention before it can be approved.",
+        ? `Corrections saved; not approved — blocked by: ${blockers.map((b) => b.label).join(", ")}.`
+        : `Not approved — blocked by: ${blockers.map((b) => b.label).join(", ")}.`,
     };
   }
   try {
