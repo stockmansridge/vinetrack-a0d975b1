@@ -24,7 +24,7 @@ import {
   type MasterReviewStatus,
 } from "@/lib/masterChemicals";
 import { resolveChemicalLabelLinks } from "@/lib/chemicalLabelLinks";
-import { masterIsComplete, masterIssues, sortByAttention } from "@/lib/masterWorkbench";
+import { masterIsComplete, masterIssues, masterReleaseBlockers, sortByAttention } from "@/lib/masterWorkbench";
 
 /* ------------------------------------------------------------------ utils */
 

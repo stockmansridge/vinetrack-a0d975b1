@@ -76,7 +76,7 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
   const draftIssueCount = useMemo(
     () =>
       row
-        ? masterIssues({ ...row, ...buildMasterCurationPatch({ row, identity, reason }) } as MasterChemicalRow).length
+        ? masterReleaseBlockers({ ...row, ...buildMasterCurationPatch({ row, identity, reason }) } as MasterChemicalRow).length
         : 0,
     [row, identity, reason],
   );
