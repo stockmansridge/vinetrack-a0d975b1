@@ -195,6 +195,7 @@ export default function FeatureRequestsPage() {
           <SelectContent>
             <SelectItem value="active">Open, planned &amp; in progress</SelectItem>
             <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="recent_done">Completed in the last 6 months</SelectItem>
             {FEATURE_REQUEST_STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
                 {FEATURE_REQUEST_STATUS_LABEL[s]}
@@ -202,6 +203,12 @@ export default function FeatureRequestsPage() {
             ))}
           </SelectContent>
         </Select>
+        <Button
+          variant={status === "recent_done" ? "default" : "outline"}
+          onClick={() => setStatus(status === "recent_done" ? "active" : "recent_done")}
+        >
+          <CheckCircle2 className="mr-1.5 h-4 w-4" /> Recently completed
+        </Button>
         <span className="text-sm text-muted-foreground">
           {visible.length} {visible.length === 1 ? "request" : "requests"}
         </span>

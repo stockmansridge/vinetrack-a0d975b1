@@ -40,6 +40,7 @@ export interface FeatureRequestRow {
   created_by: string | null;
   created_by_name: string | null;
   admin_note: string | null;
+  updated_at?: string | null;
   created_at: string;
 }
 
@@ -123,7 +124,12 @@ export function filterFeatureRequests(
   const active = new Set<string>(ACTIVE_FEATURE_STATUSES);
   return list
     .filter((r) => {
-      if (status === "active") {
+      if (status === "recent_done") {
+        if (r.status !== "done") return false;
+        const cutoff = new Date();
+        cutoff.setMonth(cutoff.getMonth() - 6);
+        if (new Date(r.updated_at ?? r.created_at) < cutoff) return false;
+      } else if (status === "active") {
         if (!active.has(r.status)) return false;
       } else if (status !== "all" && r.status !== status) return false;
       if (!q) return true;
@@ -159,7 +165,7 @@ export function useFeatureRequests() {
         (iosSupabase as any)
           .from("feature_requests")
           .select(
-            "id,title,details,status,is_hidden,created_by,created_by_name,admin_note,created_at",
+            "id,title,details,status,is_hidden,created_by,created_by_name,admin_note,created_at,updated_at",
           )
           .order("created_at", { ascending: false })
           .limit(500),
