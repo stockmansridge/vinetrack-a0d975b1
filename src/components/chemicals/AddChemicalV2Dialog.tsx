@@ -227,7 +227,7 @@ export function AddChemicalV2Dialog({
     const init = initialiseDefaultRatesFromMaster(result.rates, {
       selected_at: new Date().toISOString(),
       label_version: result.labelVersion,
-    });
+    }, result.defaultRateOptions);
     setHit(result);
     setStaged(null);
     setStagedNotice(null);
@@ -290,7 +290,7 @@ export function AddChemicalV2Dialog({
       [basis]: selectionFromMasterRate(rate, {
         selected_at: new Date().toISOString(),
         label_version: hit?.labelVersion ?? null,
-      }),
+      }, hit?.defaultRateOptions ?? null),
     }));
 
   const setStagedSelection = (basis: CanonicalRateBasis, option: StagedRateOption) =>
@@ -555,6 +555,7 @@ export function AddChemicalV2Dialog({
                             <span>
                               {masterRateSummary(o)}
                               {o.label ? <span className="text-muted-foreground"> — {o.label}</span> : null}
+                              {o.target ? <span className="text-muted-foreground"> · {o.target}</span> : null}
                             </span>
                           </label>
                         ))}

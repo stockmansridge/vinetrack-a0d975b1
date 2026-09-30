@@ -274,6 +274,29 @@ export function masterIssues(row: MasterChemicalRow): MasterIssue[] {
 
 export const masterIsComplete = (row: MasterChemicalRow): boolean => masterIssues(row).length === 0;
 
+/* ------------------------------------------------------ release eligibility */
+
+/**
+ * Release policy, kept SEPARATE from the completeness checklist.
+ *
+ * Blocking: evidence conflict; resistance unresolved / missing group; a
+ * vineyard registration with no vineyard rates; no trusted manufacturer label;
+ * missing identity or chemistry (product name, APVMA number, category, active,
+ * concentration). These are never bypassed.
+ *
+ * Not blocking (retained as warnings, always shown): individual unresolved
+ * label fields such as an REI the label does not state, or an application
+ * basis the calculator cannot use. They describe what the label does NOT
+ * establish; nothing is cleared or filled in.
+ */
+export const RELEASE_WARNING_KEYS: ReadonlySet<MasterIssueKey> = new Set(["unresolved_field"]);
+
+export const masterReleaseBlockers = (row: MasterChemicalRow): MasterIssue[] =>
+  masterIssues(row).filter((i) => !RELEASE_WARNING_KEYS.has(i.key));
+
+export const masterReleaseWarnings = (row: MasterChemicalRow): MasterIssue[] =>
+  masterIssues(row).filter((i) => RELEASE_WARNING_KEYS.has(i.key));
+
 /** Rows needing attention sorted by most urgent issue, then product name. */
 export function sortByAttention(rows: MasterChemicalRow[]): MasterChemicalRow[] {
   const rank = (r: MasterChemicalRow) => masterIssues(r)[0]?.priority ?? 99;

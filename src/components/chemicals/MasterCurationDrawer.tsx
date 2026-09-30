@@ -25,7 +25,7 @@ import {
   saveMasterCuration, approveWithCorrections, buildMasterCurationPatch, type MasterCurationIdentity, type MasterRateBasis,
 } from "@/lib/masterCuration";
 import {
-  MASTER_ISSUE_ACTION_LABEL, masterIssues, masterManufacturerLabel, masterProductPage,
+  MASTER_ISSUE_ACTION_LABEL, masterIssues, RELEASE_WARNING_KEYS, masterManufacturerLabel, masterProductPage,
   masterRegulatorReference, masterResistanceStatus, masterVineyardUses, type MasterIssue,
 } from "@/lib/masterWorkbench";
 import { MasterFindMissingData } from "@/components/chemicals/MasterFindMissingData";
@@ -76,7 +76,9 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
   const draftIssueCount = useMemo(
     () =>
       row
-        ? masterIssues({ ...row, ...buildMasterCurationPatch({ row, identity, reason }) } as MasterChemicalRow).length
+        ? masterIssues({ ...row, ...buildMasterCurationPatch({ row, identity, reason }) } as MasterChemicalRow).filter(
+            (i) => !RELEASE_WARNING_KEYS.has(i.key),
+          ).length
         : 0,
     [row, identity, reason],
   );
@@ -387,9 +389,16 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
                   <SearchCheck className="h-4 w-4 mr-1" /> Find Missing Data
                 </Button>
               ) : row.review_status !== "approved" ? (
-                <Button size="sm" disabled={busy} onClick={runApprove}>
-                  <BadgeCheck className="h-4 w-4 mr-1" /> Approve &amp; Next
-                </Button>
+                <>
+                  {issues.filter((i) => RELEASE_WARNING_KEYS.has(i.key)).length > 0 && (
+                    <span className="text-xs text-muted-foreground" data-testid="release-warnings-note">
+                      {issues.filter((i) => RELEASE_WARNING_KEYS.has(i.key)).length} warning(s) stay visible after approval
+                    </span>
+                  )}
+                  <Button size="sm" disabled={busy} onClick={runApprove}>
+                    <BadgeCheck className="h-4 w-4 mr-1" /> Approve &amp; Next
+                  </Button>
+                </>
               ) : null}
             </div>
           </>

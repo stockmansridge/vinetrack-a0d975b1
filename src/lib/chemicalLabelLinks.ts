@@ -74,6 +74,49 @@ export const OPEN_REGISTRATION_SOURCE = "Open APVMA registration source";
 export const OPEN_MANUFACTURER_LABEL = "Open manufacturer label";
 export const OPEN_PRODUCT_PAGE = "Open product page";
 
+/**
+ * A data API / register query endpoint (e.g. data.gov.au `datastore_search`).
+ * Such a reference can legitimately be tagged `manufacturer_label` as EVIDENCE
+ * of label claims, but it is a JSON query, never an openable label document.
+ */
+export function isDataApiEndpointUrl(v: unknown): boolean {
+  const url = httpUrl(v);
+  if (!url) return false;
+  return (
+    /^https?:\/\/(www\.)?data\.gov\.au\//i.test(url) ||
+    /\/api\/\d*\/?action\//i.test(url) ||
+    /datastore_search/i.test(url) ||
+    /\.json(\?|#|$)/i.test(url)
+  );
+}
+
+/**
+ * Trusted-document rule for a manufacturer label: an http(s) URL that is not a
+ * data API endpoint and not an APVMA register/eLabel/Gazette URL (those are
+ * regulator material, never the manufacturer's label). Nothing is guessed.
+ */
+export function isTrustedManufacturerLabelDocument(v: unknown): boolean {
+  const url = httpUrl(v);
+  if (!url) return false;
+  if (isDataApiEndpointUrl(url)) return false;
+  if (/^https?:\/\/([a-z0-9-]+\.)*apvma\.gov\.au\//i.test(url)) return false;
+  return true;
+}
+
+/**
+ * First trusted manufacturer label document among `manufacturer_label`
+ * sources, in stored order. A document URL (e.g. `.pdf`) wins over any other
+ * trusted URL; API endpoints stay evidence only.
+ */
+export function pickManufacturerLabelSource(
+  sources: WriteDataSource[],
+): WriteDataSource | undefined {
+  const trusted = sources.filter(
+    (s) => s.kind === "manufacturer_label" && isTrustedManufacturerLabelDocument(s.reference),
+  );
+  return trusted.find((s) => /\.pdf(\?|#|$)/i.test(String(s.reference))) ?? trusted[0];
+}
+
 export function resolveChemicalLabelLinks(input: {
   sources?: WriteDataSource[];
   /** Registration label reference — may itself be the authoritative eLabel. */
@@ -88,7 +131,7 @@ export function resolveChemicalLabelLinks(input: {
   const sources = input.sources ?? [];
   const manufacturer =
     httpUrl(input.manufacturerLabelUrl) ??
-    httpUrl(sources.find((s) => s.kind === "manufacturer_label")?.reference);
+    httpUrl(pickManufacturerLabelSource(sources)?.reference);
   // A recognised eLabel wins wherever it arrives; a Gazette never becomes a
   // label. The portal never constructs a guessed eLabel URL.
   // `label_reference` is only eligible as the label when it IS a recognised
