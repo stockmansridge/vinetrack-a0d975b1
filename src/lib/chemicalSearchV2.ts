@@ -25,10 +25,14 @@ import {
   parseMasterViticultureRates,
   isPersistableMasterRate,
   masterRateSummary,
+  bindMasterRateDirections,
   type MasterRateBasis,
   type MasterViticultureRate,
 } from "@/lib/masterCuration";
+import { decodeCanonicalDefaultRateOptions } from "@/lib/chemicalDefaultRatesContract";
+import { selectionFromCanonicalOption } from "@/lib/chemicalDefaultRateSelection";
 import type {
+  CanonicalDefaultRateOptions,
   CanonicalRateBasis,
   PersistedDefaultRateSelection,
   PersistedDefaultRates,
@@ -104,6 +108,11 @@ export interface MasterSearchHit {
   labelVersion: string | null;
   catalogueVersion: number | null;
   rates: MasterViticultureRate[];
+  /**
+   * Backend canonical `default_rate_options` when the Master response carries
+   * them; null otherwise. Never synthesised by the Portal.
+   */
+  defaultRateOptions: CanonicalDefaultRateOptions | null;
   /** Display only — "2.4–3.2 L/ha · 240–320 mL/100 L". */
   rateSummary: string;
   /** Structured activity groups as the RPC returned them, e.g. "HRAC 10". */
@@ -213,7 +222,11 @@ export function normaliseMasterSearchHit(raw: unknown): MasterSearchHit | null {
   const productName = str(o.registered_product_name ?? o.product_name ?? o.name);
   if (!id || !productName) return null;
 
-  const rates = parseMasterViticultureRates(o.viticulture_rates).filter(isPersistableMasterRate);
+  const rates = bindMasterRateDirections(
+    parseMasterViticultureRates(o.viticulture_rates).filter(isPersistableMasterRate),
+    o.registered_uses,
+  );
+  const defaultRateOptions = decodeCanonicalDefaultRateOptions(o.default_rate_options);
   const groupCodes = (Array.isArray(o.activity_groups) ? o.activity_groups : [])
     .map(str)
     .filter(Boolean);
@@ -262,6 +275,7 @@ export function normaliseMasterSearchHit(raw: unknown): MasterSearchHit | null {
     labelVersion: str(o.label_version) || null,
     catalogueVersion: numOrNull(o.catalogue_version),
     rates,
+    defaultRateOptions,
     rateSummary: rates.map(masterRateSummary).join(" · "),
     activityGroupText: groupCodes.length
       ? groupCodes.map((c) => (scheme ? `${scheme} ${c}` : c)).join(" + ")
@@ -308,9 +322,18 @@ export async function searchMasterChemicalsV2(
 export function selectionFromMasterRate(
   rate: MasterViticultureRate,
   meta?: { selected_at?: string | null; label_version?: string | null },
+  options?: CanonicalDefaultRateOptions | null,
 ): PersistedDefaultRateSelection | null {
   if (!isPersistableMasterRate(rate)) return null;
   if (!rate.unit) return null;
+  const canonical = canonicalOptionForMasterRate(rate, options);
+  if (canonical) {
+    return selectionFromCanonicalOption(canonical, {
+      source: "operator",
+      selectedAt: meta?.selected_at ?? null,
+      labelVersion: meta?.label_version ?? null,
+    });
+  }
   return {
     option_key: "",
     rate_ids: [],
@@ -324,6 +347,28 @@ export function selectionFromMasterRate(
     selected_at: meta?.selected_at ?? null,
     label_version: meta?.label_version ?? null,
   };
+}
+
+/**
+ * The ONE backend canonical option that cites this rate's persisted identity
+ * with an identical basis, unit and amount. Zero or several → null (the
+ * selection stays an honest manual entry; nothing is minted or guessed).
+ */
+export function canonicalOptionForMasterRate(
+  rate: MasterViticultureRate,
+  options?: CanonicalDefaultRateOptions | null,
+) {
+  if (!options || !rate.source_id) return null;
+  const list = options[rate.basis as CanonicalRateBasis] ?? [];
+  const hits = list.filter(
+    (o) =>
+      o.rate_ids.includes(rate.source_id as string) &&
+      o.unit === rate.unit &&
+      o.value === (rate.kind === "single" ? rate.value : null) &&
+      o.min_value === (rate.kind === "range" ? rate.min_value : null) &&
+      o.max_value === (rate.kind === "range" ? rate.max_value : null),
+  );
+  return hits.length === 1 ? hits[0] : null;
 }
 
 export interface MasterDefaultRateInit {
@@ -346,6 +391,7 @@ const rateFingerprint = (r: MasterViticultureRate): string =>
 export function initialiseDefaultRatesFromMaster(
   rates: MasterViticultureRate[],
   meta?: { selected_at?: string | null; label_version?: string | null },
+  options?: CanonicalDefaultRateOptions | null,
 ): MasterDefaultRateInit {
   const selections = { per_hectare: null, per_100_litres: null } as MasterDefaultRateInit["selections"];
   const ambiguous = { per_hectare: [], per_100_litres: [] } as MasterDefaultRateInit["ambiguous"];
@@ -357,7 +403,7 @@ export function initialiseDefaultRatesFromMaster(
     if (usable.length === 0) continue;
     const distinct = new Set(usable.map(rateFingerprint));
     if (usable.length === 1 || distinct.size === 1) {
-      selections[basis] = selectionFromMasterRate(usable[0], meta);
+      selections[basis] = selectionFromMasterRate(usable[0], meta, options);
     } else {
       ambiguous[basis] = usable;
     }
