@@ -24,7 +24,7 @@ import {
   type MasterReviewStatus,
 } from "@/lib/masterChemicals";
 import { resolveChemicalLabelLinks } from "@/lib/chemicalLabelLinks";
-import { masterIsComplete, masterIssues, masterReleaseBlockers, sortByAttention } from "@/lib/masterWorkbench";
+import { masterIsComplete, masterIssues, RELEASE_WARNING_KEYS, sortByAttention } from "@/lib/masterWorkbench";
 
 /* ------------------------------------------------------------------ utils */
 
@@ -667,7 +667,7 @@ export async function approveWithCorrections(
     current = res.row;
   }
   // Release policy (blockers only) — completeness warnings never block on their own.
-  const blockers = masterReleaseBlockers(current);
+  const blockers = masterIssues(current).filter((i) => !RELEASE_WARNING_KEYS.has(i.key));
   if (blockers.length) {
     return {
       outcome: "blocked",
