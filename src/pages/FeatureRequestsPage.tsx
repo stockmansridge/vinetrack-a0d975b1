@@ -43,13 +43,20 @@ import {
   type FeatureRequestStatus,
 } from "@/lib/featureRequestsQuery";
 
+const STATUS_STYLE: Record<string, { badge: string; card: string }> = {
+  open: { badge: "border-sky-500/30 bg-sky-500/15 text-sky-700 dark:text-sky-300", card: "border-l-sky-500" },
+  planned: { badge: "border-violet-500/30 bg-violet-500/15 text-violet-700 dark:text-violet-300", card: "border-l-violet-500" },
+  in_progress: { badge: "border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300", card: "border-l-amber-500" },
+  done: { badge: "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", card: "border-l-emerald-500" },
+  declined: { badge: "border-border bg-muted text-muted-foreground", card: "border-l-muted-foreground/40" },
+};
+
 function StatusBadge({ status }: { status: string }) {
   const label =
     FEATURE_REQUEST_STATUS_LABEL[status as FeatureRequestStatus] ?? status;
-  const variant =
-    status === "done" ? "default" : status === "declined" ? "outline" : "secondary";
+  const cls = STATUS_STYLE[status]?.badge ?? "border-border bg-muted text-muted-foreground";
   return (
-    <Badge variant={variant} className="text-[11px] font-medium">
+    <Badge variant="outline" className={`text-[11px] font-medium ${cls}`}>
       {label}
     </Badge>
   );
@@ -213,7 +220,7 @@ export default function FeatureRequestsPage() {
         <ul className="space-y-3">
           {visible.map((r) => (
             <li key={r.id}>
-              <Card className="flex items-start gap-4 p-4">
+              <Card className={`flex items-start gap-4 border-l-4 p-4 ${STATUS_STYLE[r.status]?.card ?? ""}`}>
                 {r.status === "done" && (
                   <CheckCircle2
                     aria-label="Completed"
