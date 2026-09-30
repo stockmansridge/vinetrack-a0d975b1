@@ -78,6 +78,8 @@ export default function FeatureRequestsPage() {
   const [title, setTitle] = useState("");
   const [details, setDetails] = useState("");
   const [openThread, setOpenThread] = useState<string | null>(null);
+  const [noteFor, setNoteFor] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState("");
   const [editing, setEditing] = useState<FeatureRequest | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDetails, setEditDetails] = useState("");
@@ -256,8 +258,17 @@ export default function FeatureRequestsPage() {
                     </p>
                   )}
                   {r.admin_note && (
-                    <p className="rounded-md bg-muted/50 px-2 py-1 text-xs">
-                      <span className="font-medium">VineTrack:</span> {r.admin_note}
+                    <p
+                      className={`whitespace-pre-wrap rounded-md px-2 py-1 text-xs ${
+                        r.status === "done"
+                          ? "border border-emerald-500/30 bg-emerald-500/10"
+                          : "bg-muted/50"
+                      }`}
+                    >
+                      <span className="font-medium">
+                        {r.status === "done" ? "Completed:" : "VineTrack:"}
+                      </span>{" "}
+                      {r.admin_note}
                     </p>
                   )}
                   <div className="flex flex-wrap items-center gap-3">
@@ -307,6 +318,48 @@ export default function FeatureRequestsPage() {
                       <Button variant="outline" size="sm" onClick={() => startEdit(r)}>
                         <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit text
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setNoteFor(r.id);
+                          setNoteText(r.admin_note ?? "");
+                        }}
+                      >
+                        <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                        {r.admin_note ? "Edit completion note" : "Add completion note"}
+                      </Button>
+                    </div>
+                  )}
+                  {isAdmin && noteFor === r.id && (
+                    <div className="space-y-2 pt-1">
+                      <Textarea
+                        value={noteText}
+                        onChange={(e) => setNoteText(e.target.value)}
+                        rows={3}
+                        maxLength={4000}
+                        placeholder="What was delivered, and where to find it"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => setNoteFor(null)}>
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={update.isPending}
+                          onClick={() =>
+                            update.mutate(
+                              { id: r.id, admin_note: noteText.trim() || null },
+                              {
+                                onSuccess: () => setNoteFor(null),
+                                onError: (e: any) => toast.error(e?.message ?? "Could not save note"),
+                              },
+                            )
+                          }
+                        >
+                          Save note
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
