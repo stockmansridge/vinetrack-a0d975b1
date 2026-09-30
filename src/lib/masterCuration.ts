@@ -77,6 +77,18 @@ export interface MasterViticultureRate {
   unit: ManualRateUnit | "";
   /** Optional label / condition text as printed. */
   label: string | null;
+  /** Persisted backend rate identity, carried through unchanged. */
+  source_id?: string | null;
+  /** Target / method associations as stored — read only, never re-minted. */
+  target?: string | null;
+  method?: string | null;
+}
+
+/** Entries the stored contract marks as excluded / unsupported directions. */
+function isExcludedRateEntry(o: Record<string, unknown>): boolean {
+  if (o.supported === false || o.excluded === true || o.calculator_eligible === false) return true;
+  const s = String(o.status ?? o.support_status ?? o.direction_status ?? "").toLowerCase();
+  return s === "excluded" || s === "unsupported" || s === "rejected";
 }
 
 export function normaliseMasterRateBasis(value: unknown): MasterRateBasis | null {
@@ -103,16 +115,25 @@ const rateId = () => `mvr_${(rateSeq += 1)}`;
  * no coverage rather than guessed at.
  */
 export function parseMasterViticultureRates(raw: unknown): MasterViticultureRate[] {
-  const list: unknown[] = Array.isArray(raw)
-    ? raw
-    : raw && typeof raw === "object" && Array.isArray((raw as any).rates)
-      ? (raw as any).rates
-      : [];
+  // Accepted shapes: legacy array; legacy { rates: [...] }; canonical
+  // { per_hectare: [...], per_100_litres: [...] } where the collection key is
+  // the basis when an entry doesn't declare one itself.
+  const list: { entry: unknown; basisHint: string | null }[] = [];
+  if (Array.isArray(raw)) raw.forEach((entry) => list.push({ entry, basisHint: null }));
+  else if (raw && typeof raw === "object") {
+    const r = raw as Record<string, unknown>;
+    if (Array.isArray(r.rates)) r.rates.forEach((entry) => list.push({ entry, basisHint: null }));
+    for (const key of ["per_hectare", "per_100_litres"] as const) {
+      if (Array.isArray(r[key])) (r[key] as unknown[]).forEach((entry) => list.push({ entry, basisHint: key }));
+    }
+  }
   const out: MasterViticultureRate[] = [];
-  for (const entry of list) {
+  for (const { entry, basisHint } of list) {
     if (!entry || typeof entry !== "object") continue;
     const o = entry as Record<string, unknown>;
-    const basis = normaliseMasterRateBasis(o.basis ?? o.rate_basis ?? o.basis_code);
+    if (isExcludedRateEntry(o)) continue;
+    const basis =
+      normaliseMasterRateBasis(o.basis ?? o.rate_basis ?? o.basis_code) ?? (basisHint as MasterRateBasis | null);
     if (!basis) continue;
     const min = num(o.min_value ?? o.min ?? o.rate_min);
     const max = num(o.max_value ?? o.max ?? o.rate_max);
@@ -129,6 +150,9 @@ export function parseMasterViticultureRates(raw: unknown): MasterViticultureRate
       max_value: kind === "range" ? max : null,
       unit: normaliseMasterRateUnit(o.unit),
       label: str(o.label ?? o.condition ?? o.notes ?? o.comment),
+      source_id: str(o.rate_id ?? o.id ?? o.rate_identity),
+      target: str(o.target ?? o.target_raw ?? o.weed ?? o.pest),
+      method: str(o.method ?? o.application_method),
     });
   }
   return out;
