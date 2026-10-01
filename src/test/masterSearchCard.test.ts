@@ -5,7 +5,7 @@ import {
 } from "@/lib/chemicalSearchV2";
 
 const duo = JSON.parse(fs.readFileSync("src/test/fixtures/weedmaster-rev2.sanitised.json", "utf8"));
-const duoRow = duo.master ?? duo.record ?? duo;
+const duoRow = duo.row;
 
 describe("compact Master search card", () => {
   it("DUO shows one indicator, not the flattened rate list", () => {
