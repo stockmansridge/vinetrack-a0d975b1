@@ -28,6 +28,8 @@ import {
   readStoredRefreshState,
   rehydratedQueueIds,
   rehydrationScopeIds,
+  rehydrationBacklog,
+  batchQueueIds,
   retryableRunIds,
   type RefreshRowState,
   type RefreshRunState,
@@ -115,14 +117,15 @@ function CatalogueBody() {
 
   // Rehydration scope is ALWAYS every candidate in the unfiltered catalogue.
   const rehydrateIds = useMemo(() => rehydrationScopeIds(q.data ?? []), [q.data]);
-  const runIds = useMemo(() => new Set(rehydratedQueueIds(runState)), [runState]);
+  const backlog = useMemo(() => rehydrationBacklog(q.data ?? []), [q.data]);
+  const runIds = useMemo(() => new Set(batchQueueIds(runState)), [runState]);
   const retryCount = retryableRunIds(runState).length;
 
   const queue = useMemo(() => {
     if (!runQueue) return filterMasterQueue(q.data ?? [], filter, search);
     const byId = new Map((q.data ?? []).map((r) => [r.id, r]));
     // Approved rows leave the candidate review queue.
-    return rehydratedQueueIds(runState)
+    return batchQueueIds(runState)
       .map((id) => byId.get(id))
       .filter((r): r is MasterChemicalRow => !!r && (r.review_status ?? "candidate") === "candidate")
       .filter((r) => !search.trim() || filterMasterQueue([r], "all", search).length > 0);
@@ -186,11 +189,11 @@ function CatalogueBody() {
         ))}
         {runIds.size > 0 && (
           <Button size="sm" variant={runQueue ? "default" : "outline"} onClick={() => setRunQueue(true)}>
-            Rehydrated this run ({runIds.size})
+            Rehydrated this batch ({runIds.size})
           </Button>
         )}
         {retryCount > 0 && (
-          <span className="text-xs text-destructive">{retryCount} failed / unavailable — resume rehydration to retry</span>
+          <span className="text-xs text-destructive">{retryCount} failed / unavailable — resume the batch to retry</span>
         )}
       </div>
 
@@ -214,6 +217,9 @@ function CatalogueBody() {
         >
           <RefreshCw className="h-4 w-4 mr-1" /> Rehydrate Master Catalogue
         </Button>
+        <span className="text-xs text-muted-foreground">
+          Candidates: {backlog.candidates} · Never hydrated: {backlog.neverHydrated} · Older than 30 days: {backlog.olderThan30}
+        </span>
         <span className="text-xs text-muted-foreground">{queue.length} record(s)</span>
       </div>
 
@@ -261,7 +267,8 @@ function CatalogueBody() {
       <MasterCatalogueRefreshDialog
         open={refreshOpen}
         onOpenChange={setRefreshOpen}
-        ids={rehydrateIds}
+        rows={q.data ?? []}
+        reloadRows={async () => (await q.refetch()).data ?? []}
         onProgress={setRunState}
         onFinished={() => queryClient.invalidateQueries({ queryKey: QK })}
         onReview={(s) => {
@@ -269,7 +276,7 @@ function CatalogueBody() {
           setRefreshOpen(false);
           setRunQueue(true);
           setSearch("");
-          const first = rehydratedQueueIds(s).find((id) =>
+          const first = batchQueueIds(s).find((id) =>
             (q.data ?? []).some((r) => r.id === id && (r.review_status ?? "candidate") === "candidate"),
           );
           openId(first ?? null);

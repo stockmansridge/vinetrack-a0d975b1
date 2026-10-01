@@ -13,8 +13,166 @@
 import { withClientDiagnostics } from "@/lib/chemicalLookupRequest";
 
 export const MASTER_REFRESH_ACTION = "master_refresh";
-export const REFRESH_STORAGE_KEY = "vt.master-catalogue-refresh.v1";
-export const DEFAULT_REFRESH_CONCURRENCY = 3;
+export const REFRESH_STORAGE_KEY = "vt.master-catalogue-refresh.batch.v2";
+/** Hard ceiling: never more than 2 master_refresh requests in flight. */
+export const DEFAULT_REFRESH_CONCURRENCY = 2;
+export const MAX_REFRESH_CONCURRENCY = 2;
+/** Batch sizes offered to a System Admin. There is deliberately no "All". */
+export const BATCH_SIZE_OPTIONS = [10, 20, 50] as const;
+export const DEFAULT_BATCH_SIZE = 20;
+/** Pause the batch after this many consecutive transient/transport failures. */
+export const CONSECUTIVE_FAILURE_PAUSE = 5;
+export const PAUSED_SOURCE_MESSAGE =
+  "Rehydration paused because the source is repeatedly unavailable.";
+/** Optional staleness filter (days). `null` = any age. */
+export const STALENESS_OPTIONS: Array<{ label: string; days: number | null }> = [
+  { label: "7 days", days: 7 },
+  { label: "30 days", days: 30 },
+  { label: "90 days", days: 90 },
+  { label: "Any age", days: null },
+];
+export const DEFAULT_STALENESS_DAYS = 30;
+
+/* --------------------------------------------------------------- batch */
+
+export interface EvidenceAgeRow {
+  id: string;
+  review_status?: string | null;
+  retrieved_at?: string | null;
+  verified_at?: string | null;
+  updated_at?: string | null;
+  created_at?: string | null;
+  registered_product_name?: string | null;
+}
+
+const ts = (v?: string | null): number | null => {
+  if (!v) return null;
+  const n = Date.parse(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+/** null first, then oldest. */
+function cmpNullsFirst(a: number | null, b: number | null): number {
+  if (a === null && b === null) return 0;
+  if (a === null) return -1;
+  if (b === null) return 1;
+  return a - b;
+}
+
+/** null last, then oldest (used for updated_at / created_at fallbacks). */
+function cmpAsc(a: number | null, b: number | null): number {
+  if (a === null && b === null) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return a - b;
+}
+
+/**
+ * "Which candidate has the oldest chemical evidence?"
+ * retrieved_at ASC NULLS FIRST → verified_at ASC NULLS FIRST → updated_at ASC
+ * → created_at ASC → product name ASC → id ASC (deterministic tie-break).
+ * updated_at is never the primary key: admin edits bump it without new evidence.
+ */
+export function compareEvidenceAge(a: EvidenceAgeRow, b: EvidenceAgeRow): number {
+  return (
+    cmpNullsFirst(ts(a.retrieved_at), ts(b.retrieved_at)) ||
+    cmpNullsFirst(ts(a.verified_at), ts(b.verified_at)) ||
+    cmpAsc(ts(a.updated_at), ts(b.updated_at)) ||
+    cmpAsc(ts(a.created_at), ts(b.created_at)) ||
+    (a.registered_product_name ?? "").localeCompare(b.registered_product_name ?? "") ||
+    a.id.localeCompare(b.id)
+  );
+}
+
+const isCandidate = (r: EvidenceAgeRow) => (r.review_status ?? "candidate") === "candidate";
+
+/** Candidate qualifies for the staleness filter. Never-hydrated always qualifies. */
+export function isStale(row: EvidenceAgeRow, staleDays: number | null, nowMs: number): boolean {
+  const t = ts(row.retrieved_at);
+  if (t === null || staleDays === null) return true;
+  return nowMs - t >= staleDays * 86_400_000;
+}
+
+export interface NextBatchOptions {
+  size?: number;
+  staleDays?: number | null;
+  now?: number;
+}
+
+/** Ordered eligible candidates (oldest evidence first). */
+export function eligibleCandidates<T extends EvidenceAgeRow>(
+  rows: T[],
+  opts: NextBatchOptions = {},
+): T[] {
+  const nowMs = opts.now ?? Date.now();
+  const staleDays = opts.staleDays === undefined ? null : opts.staleDays;
+  return rows
+    .filter(isCandidate)
+    .filter((r) => isStale(r, staleDays, nowMs))
+    .sort(compareEvidenceAge);
+}
+
+/**
+ * Next batch, computed from CURRENT Master rows (callers re-read the catalogue
+ * first). Size is clamped to the offered options — never "all".
+ */
+export function selectNextBatch(rows: EvidenceAgeRow[], opts: NextBatchOptions = {}): string[] {
+  const max = Math.max(...BATCH_SIZE_OPTIONS);
+  const size = Math.max(1, Math.min(opts.size ?? DEFAULT_BATCH_SIZE, max));
+  return eligibleCandidates(rows, opts).slice(0, size).map((r) => r.id);
+}
+
+export interface BatchPlanSummary {
+  candidateTotal: number;
+  eligible: number;
+  selected: number;
+  /** ISO string, or null meaning "Never". undefined when the batch is empty. */
+  oldestEvidence?: string | null;
+  newestEvidence?: string | null;
+  remainingAfter: number;
+}
+
+export function batchPlanSummary(
+  rows: EvidenceAgeRow[],
+  opts: NextBatchOptions = {},
+): BatchPlanSummary & { ids: string[] } {
+  const eligible = eligibleCandidates(rows, opts);
+  const ids = selectNextBatch(rows, opts);
+  const picked = eligible.slice(0, ids.length);
+  const candidateTotal = rows.filter(isCandidate).length;
+  return {
+    ids,
+    candidateTotal,
+    eligible: eligible.length,
+    selected: ids.length,
+    oldestEvidence: picked.length ? picked[0].retrieved_at ?? null : undefined,
+    newestEvidence: picked.length ? picked[picked.length - 1].retrieved_at ?? null : undefined,
+    remainingAfter: Math.max(0, candidateTotal - ids.length),
+  };
+}
+
+export interface BacklogCounts {
+  candidates: number;
+  neverHydrated: number;
+  olderThan30: number;
+}
+
+export function rehydrationBacklog(rows: EvidenceAgeRow[], nowMs = Date.now()): BacklogCounts {
+  const c = rows.filter(isCandidate);
+  return {
+    candidates: c.length,
+    neverHydrated: c.filter((r) => ts(r.retrieved_at) === null).length,
+    olderThan30: c.filter((r) => {
+      const t = ts(r.retrieved_at);
+      return t !== null && nowMs - t >= 30 * 86_400_000;
+    }).length,
+  };
+}
+
+/** True when every planned row has a terminal outcome. */
+export function isBatchComplete(state: RefreshRunState | null): boolean {
+  return !!state && pendingIds(state, state.planned).length === 0;
+}
 
 /* ------------------------------------------------------------- request */
 
@@ -91,7 +249,7 @@ export const REFRESH_ROW_STATUS_LABEL: Record<MasterRefreshOutcome, string> = {
   failed: "Failed",
 };
 
-/** Outcomes that belong in the "Rehydrated this run" review queue. */
+/** Outcomes that belong in the "Rehydrated this batch" review queue. */
 export const REVIEW_QUEUE_OUTCOMES: MasterRefreshOutcome[] = [
   "material_change",
   "evidence_refreshed",
@@ -106,6 +264,12 @@ export function rehydratedQueueIds(state: RefreshRunState | null): string[] {
     const row = state.rows[id];
     return !!row && REVIEW_QUEUE_OUTCOMES.includes(row.outcome);
   });
+}
+
+/** "Rehydrated this batch": every processed id of THIS batch only, in planned order. */
+export function batchQueueIds(state: RefreshRunState | null): string[] {
+  if (!state) return [];
+  return state.planned.filter((id) => !!state.rows[id]);
 }
 
 /** Retryable ids from the run (failed / source unavailable). */
@@ -229,15 +393,20 @@ export interface RefreshRunState {
   rows: Record<string, RefreshRowState>;
   startedAt: string;
   updatedAt: string;
+  /** Requested batch size when the batch was planned. */
+  batchSize?: number;
+  /** Set when the safety circuit paused the batch. */
+  paused?: boolean;
 }
 
-export function newRefreshRunState(ids: string[], now: string): RefreshRunState {
+export function newRefreshRunState(ids: string[], now: string, batchSize?: number): RefreshRunState {
   return {
     version: 1,
     planned: [...ids],
     rows: {},
     startedAt: now,
     updatedAt: now,
+    batchSize: batchSize ?? ids.length,
   };
 }
 
@@ -311,10 +480,12 @@ export function resumableState(
   if (!raw || typeof raw !== "object") return null;
   const s = raw as RefreshRunState;
   if (s.version !== 1 || !Array.isArray(s.planned) || !s.rows) return null;
-  const planned = new Set(s.planned);
-  const overlap = ids.filter((id) => planned.has(id)).length;
-  if (overlap === 0) return null;
-  return { ...s, planned: [...ids] };
+  // The stored batch is authoritative: its planned ids are never replaced.
+  if (ids.length > 0) {
+    const planned = new Set(s.planned);
+    if (!ids.some((id) => planned.has(id))) return null;
+  }
+  return { ...s, planned: [...s.planned] };
 }
 
 /* --------------------------------------------------------------- runner */
@@ -331,6 +502,8 @@ export interface RefreshRunnerOptions {
   isCancelled?: () => boolean;
   /** Politeness delay between requests on one worker (ms). */
   delayMs?: number;
+  /** Safety circuit; 0 disables. Default CONSECUTIVE_FAILURE_PAUSE. */
+  pauseAfterConsecutiveFailures?: number;
   sleep?: (ms: number) => Promise<void>;
 }
 
@@ -345,18 +518,24 @@ export async function runCatalogueRefresh(
 ): Promise<RefreshRunState> {
   const now = opts.now ?? (() => new Date().toISOString());
   const sleep = opts.sleep ?? defaultSleep;
-  const concurrency = Math.max(1, Math.min(opts.concurrency ?? DEFAULT_REFRESH_CONCURRENCY, 3));
-  let state =
+  const concurrency = Math.max(
+    1,
+    Math.min(opts.concurrency ?? DEFAULT_REFRESH_CONCURRENCY, MAX_REFRESH_CONCURRENCY),
+  );
+  const pauseAfter = opts.pauseAfterConsecutiveFailures ?? CONSECUTIVE_FAILURE_PAUSE;
+  let state: RefreshRunState =
     opts.initialState && opts.initialState.version === 1
-      ? { ...opts.initialState, planned: [...opts.ids] }
+      ? { ...opts.initialState, planned: [...opts.ids], paused: false }
       : newRefreshRunState(opts.ids, now());
 
   const queue = pendingIds(state, opts.ids);
   let cursor = 0;
+  let consecutiveFailures = 0;
+  let paused = false;
 
   const worker = async () => {
     for (;;) {
-      if (opts.isCancelled?.()) return;
+      if (paused || opts.isCancelled?.()) return;
       const index = cursor++;
       if (index >= queue.length) return;
       const id = queue[index];
@@ -372,6 +551,15 @@ export async function runCatalogueRefresh(
         message = e instanceof Error ? e.message : String(e);
       }
       state = recordRow(state, id, outcome, now(), message);
+      if (outcome === "source_unavailable" || outcome === "failed") {
+        consecutiveFailures += 1;
+        if (pauseAfter > 0 && consecutiveFailures >= pauseAfter) {
+          paused = true;
+          state = { ...state, paused: true };
+        }
+      } else {
+        consecutiveFailures = 0;
+      }
       opts.onProgress?.(state);
       if (opts.delayMs) await sleep(opts.delayMs);
     }
