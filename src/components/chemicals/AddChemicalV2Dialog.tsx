@@ -261,7 +261,7 @@ export function AddChemicalV2Dialog({
     try {
       hydration = await hydrateMasterSelection(result);
     } catch {
-      hydration = { status: "failed", options: null } as unknown as typeof hydration;
+      hydration = { status: "unavailable", options: null };
     }
     // A late reply from an older selection is ignored completely.
     if (!hydrationGate.isCurrent(token)) return;
