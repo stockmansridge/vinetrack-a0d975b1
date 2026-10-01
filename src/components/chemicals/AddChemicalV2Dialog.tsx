@@ -500,7 +500,7 @@ export function AddChemicalV2Dialog({
                   >
                     <div className="font-medium">{c.name}</div>
                     <div className="text-xs text-muted-foreground">
-                      {[c.registrant, c.registrationNumber && `APVMA ${c.registrationNumber}`, c.category]
+                      {[c.registrant, c.registrationNumber && `Reg. ${c.registrationNumber}`, c.category]
                         .filter(Boolean)
                         .join(" · ")}
                     </div>
@@ -546,7 +546,7 @@ export function AddChemicalV2Dialog({
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {[r.registrant, r.registrationNumber && `APVMA ${r.registrationNumber}`, r.category]
+                    {[r.registrant, r.registrationNumber && `Reg. ${r.registrationNumber}`, r.category]
                       .filter(Boolean)
                       .join(" · ")}
                   </div>
@@ -567,7 +567,7 @@ export function AddChemicalV2Dialog({
             <Card className="space-y-1 p-3 text-sm">
               <div className="font-medium">{hit.productName}</div>
               <div className="text-xs text-muted-foreground">
-                {[hit.registrant, hit.registrationNumber && `APVMA ${hit.registrationNumber}`, hit.category]
+                {[hit.registrant, hit.registrationNumber && `Reg. ${hit.registrationNumber}`, hit.category]
                   .filter(Boolean)
                   .join(" · ")}
               </div>
@@ -613,11 +613,12 @@ export function AddChemicalV2Dialog({
                   onClear={(basis) => setSelections((p) => ({ ...p, [basis]: null }))}
                 />
               )}
-              {!hydrating && !hydrationNotice && !hasAnyDefaultRate(chosenRates) && hit.rates.length === 0 && (
+              {!hydrating && !hydrationNotice && !hasAnyDefaultRate(chosenRates) &&
+                Object.values(selectableVineyardOptions(hit.defaultRateOptions)).every((l) => l.length === 0) && (
                 <>
                   <Alert>
                     <AlertDescription>
-                      This Master record has no registered vineyard rate. Enter the operational rate yourself.
+                      No catalogue vineyard rate is available for this product. Enter the operational rate yourself.
                     </AlertDescription>
                   </Alert>
                   {manualRateFallback}
@@ -648,7 +649,7 @@ export function AddChemicalV2Dialog({
               <div className="text-xs text-muted-foreground">
                 {[
                   staged.registrant,
-                  staged.registrationNumber && `APVMA ${staged.registrationNumber}`,
+                  staged.registrationNumber && `Reg. ${staged.registrationNumber}`,
                   staged.category,
                   staged.physicalForm,
                 ]
@@ -893,7 +894,7 @@ function OptionalDetails({
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           {field("manufacturer", "Manufacturer / registrant")}
-          {field("registrationNumber", "APVMA registration number")}
+          {field("registrationNumber", "Registration number")}
           <div className="space-y-1">
             <Label className="text-xs" htmlFor="v2-opt-category">Product category</Label>
             <select
