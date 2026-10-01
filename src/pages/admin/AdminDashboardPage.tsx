@@ -16,6 +16,7 @@ import {
 } from "@/lib/adminApi";
 import { iosSupabase } from "@/integrations/ios-supabase/client";
 import { formatDate } from "@/lib/dateFormat";
+import { PlatformActionStatsSection } from "@/components/admin/PlatformActionStatsSection";
 
 const SHARED_PROJECT_REF = "tbafuqwruefgkbyxrxyb";
 
@@ -291,6 +292,8 @@ export default function AdminDashboardPage() {
       <p className="text-xs text-muted-foreground">
         Tap any tile to see the underlying records. Active = signed in within the period.
       </p>
+
+      <PlatformActionStatsSection />
 
       <Card className="p-4">
         <div className="flex items-center justify-between mb-3 gap-3">
