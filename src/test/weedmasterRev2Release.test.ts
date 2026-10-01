@@ -187,7 +187,6 @@ describe("4. Rork-confirmed canonical Phalaris option (default_option_v1_5f58…
     expect(payload.master_chemical_id).toBe(ROW.id);
     const back = decodePersistedDefaultRates(JSON.parse(JSON.stringify(payload.default_rates)))!;
     expect(back.per_100_litres).toMatchObject({ entry_method: "canonical", option_key: OPTION, rate_ids: [PHALARIS_100L], min_value: 500, max_value: 1000, unit: "mL", basis: "per_100_litres" });
-    console.log("PAYLOAD", JSON.stringify(payload.default_rates));
   });
 
   it("keeps both bases and all 32 unresolved entries", () => {
