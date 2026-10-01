@@ -226,6 +226,7 @@ export type MasterRefreshOutcome =
   | "conflict"
   | "source_unavailable"
   | "skipped"
+  | "not_applied"
   | "failed";
 
 export const REFRESH_OUTCOME_LABEL: Record<MasterRefreshOutcome, string> = {
@@ -235,6 +236,7 @@ export const REFRESH_OUTCOME_LABEL: Record<MasterRefreshOutcome, string> = {
   conflict: "Conflict",
   source_unavailable: "Source unavailable",
   skipped: "Skipped",
+  not_applied: "Not applied",
   failed: "Failed",
 };
 
@@ -246,6 +248,7 @@ export const REFRESH_ROW_STATUS_LABEL: Record<MasterRefreshOutcome, string> = {
   conflict: "Conflict",
   source_unavailable: "Source unavailable",
   skipped: "Skipped",
+  not_applied: "Retry required",
   failed: "Failed",
 };
 
@@ -272,12 +275,15 @@ export function batchQueueIds(state: RefreshRunState | null): string[] {
   return state.planned.filter((id) => !!state.rows[id]);
 }
 
-/** Retryable ids from the run (failed / source unavailable). */
+/** Outcomes that need another attempt: not persisted, failed or unavailable. */
+export const RETRYABLE_OUTCOMES: MasterRefreshOutcome[] = ["failed", "source_unavailable", "not_applied"];
+
+/** "Retry required" ids from the run (failed / unavailable / not applied). */
 export function retryableRunIds(state: RefreshRunState | null): string[] {
   if (!state) return [];
   return state.planned.filter((id) => {
     const o = state.rows[id]?.outcome;
-    return o === "failed" || o === "source_unavailable";
+    return !!o && RETRYABLE_OUTCOMES.includes(o);
   });
 }
 
@@ -337,6 +343,23 @@ const OUTCOME_ALIASES: Record<string, MasterRefreshOutcome> = {
  * otherwise as `no_material_change`.
  */
 export function classifyRefreshOutcome(payload: unknown): MasterRefreshOutcome {
+  const outcome = classifyRawOutcome(payload);
+  // apply:true refresh — a change only counts once the backend confirms it was
+  // written. Never infer persistence from the outcome alone.
+  if (outcome === "material_change" || outcome === "evidence_refreshed") {
+    return refreshApplied(payload) === true ? outcome : "not_applied";
+  }
+  return outcome;
+}
+
+/** Backend `applied` flag (true / false), or null when not reported. */
+export function refreshApplied(payload: unknown): boolean | null {
+  const root = (payload && typeof payload === "object" ? payload : {}) as Record<string, any>;
+  const v = root.applied ?? root.master?.applied;
+  return typeof v === "boolean" ? v : null;
+}
+
+function classifyRawOutcome(payload: unknown): MasterRefreshOutcome {
   const root = (payload && typeof payload === "object" ? payload : {}) as Record<string, any>;
   if (typeof root.error === "string" && root.error) {
     return /unavailable|timeout|429|temporar/i.test(root.error)
@@ -383,6 +406,10 @@ export interface RefreshRowState {
   outcome: MasterRefreshOutcome;
   message?: string;
   attempts: number;
+  /** Backend `applied` flag for this attempt (null = not reported). */
+  applied?: boolean | null;
+  /** When this batch last attempted the row (not evidence time). */
+  attemptedAt?: string;
 }
 
 export interface RefreshRunState {
@@ -429,13 +456,14 @@ export function recordRow(
   outcome: MasterRefreshOutcome,
   now: string,
   message?: string,
+  applied?: boolean | null,
 ): RefreshRunState {
   const prev = state.rows[id];
   return {
     ...state,
     rows: {
       ...state.rows,
-      [id]: { id, outcome, message, attempts: (prev?.attempts ?? 0) + 1 },
+      [id]: { id, outcome, message, attempts: (prev?.attempts ?? 0) + 1, applied: applied ?? null, attemptedAt: now },
     },
     updatedAt: now,
   };
@@ -450,6 +478,7 @@ export interface RefreshTotals {
   conflict: number;
   source_unavailable: number;
   skipped: number;
+  not_applied: number;
   failed: number;
 }
 
@@ -463,6 +492,7 @@ export function refreshTotals(state: RefreshRunState): RefreshTotals {
     conflict: 0,
     source_unavailable: 0,
     skipped: 0,
+    not_applied: 0,
     failed: 0,
   };
   for (const row of Object.values(state.rows)) {
@@ -505,6 +535,35 @@ export interface RefreshRunnerOptions {
   /** Safety circuit; 0 disables. Default CONSECUTIVE_FAILURE_PAUSE. */
   pauseAfterConsecutiveFailures?: number;
   sleep?: (ms: number) => Promise<void>;
+  /** Per-request client timeout (ms); 0 disables. A timeout is retryable. */
+  requestTimeoutMs?: number;
+  /** Diagnostic trace of the runner's control flow. */
+  onTrace?: (event: RefreshTraceEvent) => void;
+}
+
+export interface RefreshTraceEvent {
+  type: "start" | "invoke_start" | "invoke_done" | "worker_exit" | "end";
+  id?: string;
+  outcome?: MasterRefreshOutcome;
+  applied?: boolean | null;
+  reason?: "cancelled" | "paused" | "queue_empty";
+  planned: number;
+  queue: number;
+  cursor: number;
+  cancelled: boolean;
+  paused: boolean;
+  rows: number;
+  pending: number;
+}
+
+export const DEFAULT_REQUEST_TIMEOUT_MS = 180_000;
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  if (!ms) return p;
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`timeout after ${ms} ms (client)`)), ms);
+    p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
 }
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -532,25 +591,44 @@ export async function runCatalogueRefresh(
   let cursor = 0;
   let consecutiveFailures = 0;
   let paused = false;
+  const timeoutMs = opts.requestTimeoutMs ?? 0;
+  const trace = (e: Omit<RefreshTraceEvent, "planned" | "queue" | "cursor" | "cancelled" | "paused" | "rows" | "pending">) =>
+    opts.onTrace?.({
+      ...e,
+      planned: state.planned.length,
+      queue: queue.length,
+      cursor,
+      cancelled: !!opts.isCancelled?.(),
+      paused,
+      rows: Object.keys(state.rows).length,
+      pending: pendingIds(state, state.planned).length,
+    });
+  trace({ type: "start" });
 
   const worker = async () => {
     for (;;) {
-      if (paused || opts.isCancelled?.()) return;
+      if (paused) return trace({ type: "worker_exit", reason: "paused" });
+      if (opts.isCancelled?.()) return trace({ type: "worker_exit", reason: "cancelled" });
       const index = cursor++;
-      if (index >= queue.length) return;
+      if (index >= queue.length) return trace({ type: "worker_exit", reason: "queue_empty" });
       const id = queue[index];
       let outcome: MasterRefreshOutcome;
       let message: string | undefined;
+      let applied: boolean | null = null;
+      trace({ type: "invoke_start", id });
       try {
-        const payload = await opts.invoke(id);
+        const payload = await withTimeout(Promise.resolve().then(() => opts.invoke(id)), timeoutMs);
         outcome = classifyRefreshOutcome(payload);
+        applied = refreshApplied(payload);
         const err = (payload as any)?.error;
         if (typeof err === "string" && err) message = err;
+        else if (outcome === "not_applied") message = "Backend reported applied: false — change not saved";
       } catch (e) {
         outcome = classifyRefreshError(e);
         message = e instanceof Error ? e.message : String(e);
       }
-      state = recordRow(state, id, outcome, now(), message);
+      state = recordRow(state, id, outcome, now(), message, applied);
+      trace({ type: "invoke_done", id, outcome, applied });
       if (outcome === "source_unavailable" || outcome === "failed") {
         consecutiveFailures += 1;
         if (pauseAfter > 0 && consecutiveFailures >= pauseAfter) {
@@ -566,5 +644,6 @@ export async function runCatalogueRefresh(
   };
 
   await Promise.all(Array.from({ length: concurrency }, () => worker()));
+  trace({ type: "end" });
   return state;
 }
