@@ -21,6 +21,7 @@
 
 import { supabase as iosSupabase } from "@/integrations/ios-supabase/client";
 import { useFeatureFlag } from "@/lib/systemAdmin";
+import { resolveVineyardCountry, VINEYARD_COUNTRY_NAME } from "@/lib/vineyardCountries";
 import {
   parseMasterViticultureRates,
   isPersistableMasterRate,
