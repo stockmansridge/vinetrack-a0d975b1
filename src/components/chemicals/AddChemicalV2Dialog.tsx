@@ -276,10 +276,14 @@ export function AddChemicalV2Dialog({
       ...result,
       defaultRateOptions: hydration.options ?? result.defaultRateOptions,
     };
-    const init = initialiseDefaultRatesFromMaster(hydrated.rates, {
-      selected_at: new Date().toISOString(),
-      label_version: hydrated.labelVersion,
-    }, hydrated.defaultRateOptions);
+    // Only a basis with exactly ONE selectable canonical option is preselected.
+    const selectable = selectableVineyardOptions(hydration.status === "hydrated" ? hydration.options : null);
+    const at = new Date().toISOString();
+    const pre = (list: CanonicalDefaultRateOption[]) =>
+      list.length === 1
+        ? selectionFromCanonicalOption(list[0], { source: "operator", selectedAt: at, labelVersion: hydrated.labelVersion ?? null })
+        : null;
+    const init = { selections: { per_hectare: pre(selectable.per_hectare), per_100_litres: pre(selectable.per_100_litres) } };
     setHit(hydrated);
     setSelections(init.selections);
     setHydrationNotice(hydration.status === "hydrated" ? null : MASTER_RATES_UNAVAILABLE_TEXT);
