@@ -23,6 +23,15 @@ import { MasterChemicalCard } from "@/components/chemicals/MasterChemicalCard";
 import { MasterEvidencePanel } from "@/components/chemicals/MasterEvidencePanel";
 import { ApvmaImportDialog } from "@/components/chemicals/ApvmaImportDialog";
 import { MasterCatalogueRefreshDialog } from "@/components/chemicals/MasterCatalogueRefreshDialog";
+import {
+  REFRESH_ROW_STATUS_LABEL,
+  readStoredRefreshState,
+  rehydratedQueueIds,
+  rehydrationScopeIds,
+  retryableRunIds,
+  type RefreshRowState,
+  type RefreshRunState,
+} from "@/lib/masterCatalogueRefresh";
 import { MasterReviewPreviewDialog } from "@/components/chemicals/MasterReviewPreviewDialog";
 import { MasterReviewSummaryCard } from "@/components/chemicals/MasterReviewSummaryCard";
 import { masterReviewSummary, type ClassifiedConflict } from "@/lib/masterReview";
@@ -241,7 +250,7 @@ function CatalogueBody() {
         onApprovedNext={(approvedId) =>
           openId(
             runQueue
-              ? nextQueueId(queue.filter((r) => r.id !== approvedId || true), approvedId)
+              ? nextQueueId(queue, approvedId)
               : nextAttentionId(queue, approvedId),
           )
         }
@@ -285,11 +294,15 @@ function CatalogueBody() {
 function QueueRow({
   row,
   active,
+  runRow,
+  runAt,
   onOpen,
   onEvidence,
 }: {
   row: MasterChemicalRow;
   active: boolean;
+  runRow?: RefreshRowState;
+  runAt?: string;
   onOpen: () => void;
   onEvidence: () => void;
 }) {
@@ -322,7 +335,7 @@ function QueueRow({
       <div className="min-w-[200px] flex-1">
         <div className="font-medium">{row.registered_product_name?.trim() || "Unnamed product"}</div>
         <div className="text-xs text-muted-foreground">
-          {row.registration_number?.trim() || "No APVMA number"}
+          {row.registration_number?.trim() ? `Reg. ${row.registration_number.trim()}` : "No registration number"}
           {row.registrant?.trim() ? ` · ${row.registrant.trim()}` : ""}
           {row.product_category?.trim() ? ` · ${row.product_category.trim()}` : " · No category"}
         </div>
@@ -346,12 +359,33 @@ function QueueRow({
         <Badge variant="outline" className="text-[10px]">
           {manufacturer ? "Manufacturer label" : "No manufacturer label"}
         </Badge>
-        {regulator && <Badge variant="outline" className="text-[10px]">APVMA evidence</Badge>}
+        {regulator && <Badge variant="outline" className="text-[10px]">Regulatory evidence</Badge>}
         {conflict && <Badge variant="outline" className="text-[10px] border-destructive/50 text-destructive">Conflict</Badge>}
         {unresolved > 0 && <Badge variant="outline" className="text-[10px]">{unresolved} unresolved</Badge>}
       </div>
 
       <Badge variant="secondary" className="text-[10px]">{status}</Badge>
+
+      {runRow && (
+        <Badge
+          variant="outline"
+          data-testid="rehydration-status"
+          className={`text-[10px] ${
+            runRow.outcome === "failed" || runRow.outcome === "conflict"
+              ? "border-destructive/50 text-destructive"
+              : runRow.outcome === "source_unavailable"
+                ? "border-warning/50 text-warning"
+                : "border-primary/50 text-primary"
+          }`}
+        >
+          {REFRESH_ROW_STATUS_LABEL[runRow.outcome]}
+        </Badge>
+      )}
+      {(row.retrieved_at || runAt) && (
+        <span className="text-[10px] text-muted-foreground">
+          Checked {(row.retrieved_at ?? runAt ?? "").slice(0, 16).replace("T", " ")}
+        </span>
+      )}
 
       {issues.length > 0 ? (
         <span className="inline-flex items-center gap-1 text-[11px] text-warning">
