@@ -233,7 +233,7 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
                       row.product_category?.trim() || "Category missing",
                       country ? countryLabel(row.registration_country) : "Country missing",
                       regNumber ? `Reg. ${regNumber}` : null,
-                      `Revision ${row.catalogue_version ?? "—"}`,
+                      `Catalogue revision ${row.catalogue_version ?? "—"}`,
                       props.position ? `Record ${props.position.index + 1} of ${props.position.total}` : null,
                     ].filter(Boolean).join(" · ")}
                   </SheetDescription>
