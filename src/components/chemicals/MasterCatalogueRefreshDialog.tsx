@@ -1,10 +1,10 @@
-// System Admin — "Rehydrate Master Catalogue".
+// System Admin — "Rehydrate Master Catalogue" in CONTROLLED BATCHES.
 //
-// Re-evaluates EVERY current CANDIDATE master chemical (unfiltered scope,
-// supplied by the page) through the CURRENTLY deployed `chemical-info-lookup`
-// parser using the existing, trusted `action: "master_refresh"` path with
-// `apply: true` and the signed-in System Admin's JWT. The backend derives the
-// jurisdiction from the exact Master record and keeps review_status=candidate.
+// Each batch is the next N (default 20) CANDIDATE Master chemicals with the
+// oldest evidence, calculated from CURRENT Master rows (the catalogue is re-read
+// before every new batch). Each row calls the existing `master_refresh` action
+// with `apply: true`; at most 2 requests are in flight. A batch never rolls into
+// the next one automatically, and 5 consecutive source failures pause it.
 //
 // The browser never writes authoritative chemical evidence, never uses a
 // service-role key, never approves a candidate and never touches
@@ -14,22 +14,33 @@ import { BadgeCheck, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { supabase as iosSupabase } from "@/integrations/ios-supabase/client";
 import {
+  BATCH_SIZE_OPTIONS,
+  DEFAULT_BATCH_SIZE,
   DEFAULT_REFRESH_CONCURRENCY,
+  DEFAULT_STALENESS_DAYS,
+  PAUSED_SOURCE_MESSAGE,
   REFRESH_OUTCOME_LABEL,
+  STALENESS_OPTIONS,
+  batchPlanSummary,
+  isBatchComplete,
   masterRefreshRequestBody,
   newRefreshRunState,
   pendingIds,
   readStoredRefreshState,
   refreshTotals,
   rehydratedQueueIds,
-  resumableState,
   runCatalogueRefresh,
   writeStoredRefreshState,
+  type EvidenceAgeRow,
   type MasterRefreshOutcome,
   type RefreshRunState,
 } from "@/lib/masterCatalogueRefresh";
@@ -44,58 +55,76 @@ const OUTCOME_ORDER: MasterRefreshOutcome[] = [
   "failed",
 ];
 
+const fmtEvidence = (v: string | null | undefined) =>
+  v === undefined ? "—" : v === null ? "Never" : new Date(v).toLocaleDateString();
+
 export function MasterCatalogueRefreshDialog({
   open,
   onOpenChange,
-  ids,
+  rows,
+  reloadRows,
   onProgress,
   onFinished,
   onReview,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  /** Every candidate master chemical id (unfiltered), in list order. */
-  ids: string[];
+  /** Current, unfiltered Master rows (for the batch preview). */
+  rows: EvidenceAgeRow[];
+  /** Re-read the Master Catalogue; the next batch is planned from this. */
+  reloadRows: () => Promise<EvidenceAgeRow[]>;
   onProgress?: (state: RefreshRunState | null) => void;
   onFinished?: () => void;
-  /** Open the "Rehydrated this run" queue. */
+  /** Open the "Rehydrated this batch" queue. */
   onReview?: (state: RefreshRunState) => void;
 }) {
   const [state, setState] = useState<RefreshRunState | null>(null);
   const [running, setRunning] = useState(false);
+  const [planning, setPlanning] = useState(false);
+  const [batchSize, setBatchSize] = useState<number>(DEFAULT_BATCH_SIZE);
+  const [staleDays, setStaleDays] = useState<number | null>(DEFAULT_STALENESS_DAYS);
   const cancelled = useRef(false);
 
   useEffect(() => {
     if (!open) return;
     cancelled.current = false;
-    setState((prev) => prev ?? resumableState(readStoredRefreshState(), ids));
-  }, [open, ids]);
+    setState((prev) => prev ?? readStoredRefreshState());
+  }, [open]);
 
-  const totals = useMemo(
-    () => refreshTotals(state ?? newRefreshRunState(ids, new Date().toISOString())),
-    [state, ids],
+  const plan = useMemo(
+    () => batchPlanSummary(rows, { size: batchSize, staleDays }),
+    [rows, batchSize, staleDays],
   );
-  const remaining = state ? pendingIds(state, ids).length : ids.length;
+
+  const planned = state?.planned ?? [];
+  const totals = useMemo(
+    () => refreshTotals(state ?? newRefreshRunState([], new Date().toISOString())),
+    [state],
+  );
+  const remaining = state ? pendingIds(state, planned).length : 0;
   const pct = totals.total === 0 ? 0 : Math.round((totals.processed / totals.total) * 100);
-  const complete = !!state && !running && remaining === 0;
+  const complete = isBatchComplete(state) && !running;
+  const unfinished = !!state && !complete;
   const reviewable = rehydratedQueueIds(state).length;
 
-  async function start() {
+  const persist = (s: RefreshRunState | null) => {
+    setState(s);
+    writeStoredRefreshState(s);
+    onProgress?.(s);
+  };
+
+  async function run(initial: RefreshRunState) {
     cancelled.current = false;
     setRunning(true);
     const correlationId = newLookupCorrelationId();
     const next = await runCatalogueRefresh({
-      ids,
-      initialState: state,
+      ids: initial.planned,
+      initialState: initial,
       concurrency: DEFAULT_REFRESH_CONCURRENCY,
       // Politeness: never flood registers / manufacturer sources.
       delayMs: 400,
       isCancelled: () => cancelled.current,
-      onProgress: (s) => {
-        setState(s);
-        writeStoredRefreshState(s);
-        onProgress?.(s);
-      },
+      onProgress: persist,
       invoke: async (id) => {
         const { data, error } = await iosSupabase.functions.invoke("chemical-info-lookup", {
           body: masterRefreshRequestBody(id, correlationId),
@@ -104,44 +133,118 @@ export function MasterCatalogueRefreshDialog({
         return data;
       },
     });
-    setState(next);
-    writeStoredRefreshState(next);
-    onProgress?.(next);
+    persist(next);
     setRunning(false);
     onFinished?.();
   }
+
+  /** Plan a NEW batch from freshly re-read Master rows. */
+  async function startNextBatch() {
+    setPlanning(true);
+    try {
+      const fresh = await reloadRows();
+      const { ids } = batchPlanSummary(fresh, { size: batchSize, staleDays });
+      if (ids.length === 0) {
+        persist(null);
+        return;
+      }
+      const s = newRefreshRunState(ids, new Date().toISOString(), batchSize);
+      persist(s);
+      setPlanning(false);
+      await run(s);
+    } finally {
+      setPlanning(false);
+    }
+  }
+
+  const title = running
+    ? "Rehydrating batch"
+    : complete
+      ? `Batch complete — ${totals.processed} chemicals processed`
+      : unfinished
+        ? "Rehydration batch unfinished"
+        : "Rehydrate Master Catalogue";
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!running) onOpenChange(o); }}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{complete ? "Rehydration complete" : "Rehydrate Master Catalogue"}</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Re-evaluates every candidate Master chemical with the current parser and
-            authority rules, whatever filter is showing. Nothing is approved, approved
-            records are not changed, and no vineyard data is touched.
+            Candidate chemicals are refreshed in small batches, oldest evidence first.
+            Nothing is approved, approved and retired records are not touched, and no
+            vineyard data is changed.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 text-sm">
-          <Progress value={pct} />
-          <div className="text-xs text-muted-foreground">
-            Progress: {totals.processed} / {totals.total} chemicals · {remaining} remaining
+        {!state && (
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-2 gap-2">
+              <label className="space-y-1 text-xs">
+                <span className="text-muted-foreground">Batch size</span>
+                <Select value={String(batchSize)} onValueChange={(v) => setBatchSize(Number(v))}>
+                  <SelectTrigger aria-label="Batch size"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {BATCH_SIZE_OPTIONS.map((n) => (
+                      <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              <label className="space-y-1 text-xs">
+                <span className="text-muted-foreground">Only chemicals not checked in</span>
+                <Select
+                  value={staleDays === null ? "any" : String(staleDays)}
+                  onValueChange={(v) => setStaleDays(v === "any" ? null : Number(v))}
+                >
+                  <SelectTrigger aria-label="Only chemicals not checked in"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {STALENESS_OPTIONS.map((o) => (
+                      <SelectItem key={o.label} value={o.days === null ? "any" : String(o.days)}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+            </div>
+            <div className="rounded-md border border-border/60 p-3 space-y-1 text-xs">
+              <div className="text-xs text-muted-foreground">Priority: Oldest evidence first · never-checked chemicals always qualify</div>
+              <div><span className="font-semibold">{plan.candidateTotal}</span> candidate chemicals total</div>
+              <div><span className="font-semibold">{plan.selected}</span> selected for this batch</div>
+              <div>Oldest evidence: {fmtEvidence(plan.oldestEvidence)}</div>
+              <div>Newest evidence in this batch: {fmtEvidence(plan.newestEvidence)}</div>
+              <div>Remaining after this batch: {plan.remainingAfter}</div>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {OUTCOME_ORDER.map((o) => (
-              <Badge key={o} variant="outline" className="text-[11px]">
-                {REFRESH_OUTCOME_LABEL[o]}: {totals[o]}
-              </Badge>
-            ))}
+        )}
+
+        {state && (
+          <div className="space-y-3 text-sm">
+            <Progress value={pct} />
+            <div className="text-xs text-muted-foreground">
+              Progress: {totals.processed} / {totals.total} chemicals in this batch · {remaining} remaining
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {OUTCOME_ORDER.map((o) => (
+                <Badge key={o} variant="outline" className="text-[11px]">
+                  {REFRESH_OUTCOME_LABEL[o]}: {totals[o]}
+                </Badge>
+              ))}
+            </div>
+            {state.paused && !running && (
+              <Alert variant="destructive">
+                <AlertDescription>{PAUSED_SOURCE_MESSAGE}</AlertDescription>
+              </Alert>
+            )}
+            {(totals.source_unavailable > 0 || totals.failed > 0) && !running && !state.paused && (
+              <p className="text-[11px] text-muted-foreground">
+                Failed and unavailable rows can be retried — Resume only retries those and any
+                unfinished rows in this batch.
+              </p>
+            )}
           </div>
-          {(totals.source_unavailable > 0 || totals.failed > 0) && !running && (
-            <p className="text-[11px] text-muted-foreground">
-              Transient failures can be retried — start again and only the unfinished rows
-              are processed.
-            </p>
-          )}
-        </div>
+        )}
 
         <DialogFooter className="gap-2">
           {running ? (
@@ -151,27 +254,32 @@ export function MasterCatalogueRefreshDialog({
                 Stop
               </Button>
             </>
-          ) : (
+          ) : unfinished ? (
             <>
-              <Button
-                variant="ghost"
-                onClick={() => { setState(null); writeStoredRefreshState(null); onProgress?.(null); }}
-                disabled={!state}
-              >
-                Reset progress
+              <Button variant="ghost" onClick={() => persist(null)}>
+                {state?.paused ? "Stop" : "Abandon batch"}
               </Button>
-              {remaining > 0 && (
-                <Button variant={reviewable ? "outline" : "default"} onClick={start} disabled={ids.length === 0}>
-                  <RefreshCw className="mr-1 h-4 w-4" />
-                  {state ? "Resume rehydration" : "Start rehydration"}
-                </Button>
-              )}
+              <Button onClick={() => state && run(state)}>
+                <RefreshCw className="mr-1 h-4 w-4" /> Resume
+              </Button>
+            </>
+          ) : complete ? (
+            <>
+              <Button variant="outline" onClick={startNextBatch} disabled={planning}>
+                {planning ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1 h-4 w-4" />}
+                Rehydrate next {batchSize}
+              </Button>
               {state && reviewable > 0 && (
                 <Button onClick={() => onReview?.(state)}>
-                  <BadgeCheck className="mr-1 h-4 w-4" /> Review rehydrated chemicals
+                  <BadgeCheck className="mr-1 h-4 w-4" /> Review this batch
                 </Button>
               )}
             </>
+          ) : (
+            <Button onClick={startNextBatch} disabled={planning || plan.selected === 0}>
+              {planning ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1 h-4 w-4" />}
+              Rehydrate next {batchSize}
+            </Button>
           )}
         </DialogFooter>
       </DialogContent>
