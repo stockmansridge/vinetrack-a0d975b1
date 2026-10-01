@@ -85,6 +85,10 @@ import {
   type SavedChemical,
 } from "@/lib/savedChemicalsQuery";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import { selectableVineyardOptions, MASTER_RATES_UNAVAILABLE_TEXT } from "@/lib/masterRateOptionGroups";
+import { selectionFromCanonicalOption } from "@/lib/chemicalDefaultRateSelection";
+import type { CanonicalDefaultRateOption } from "@/lib/chemicalDefaultRatesContract";
+import { CanonicalRateChoice } from "@/components/chemicals/CanonicalRateChoice";
 import { PRODUCT_CATEGORIES } from "@/lib/chemicalProductCategory";
 
 const BASES: CanonicalRateBasis[] = ["per_hectare", "per_100_litres"];
@@ -136,8 +140,10 @@ export function AddChemicalV2Dialog({
   const hydrationGate = useRef(createHydrationGate()).current;
   const [hydrating, setHydrating] = useState(false);
   const [hydrationNotice, setHydrationNotice] = useState<string | null>(null);
+  const [manualMasterRate, setManualMasterRate] = useState(false);
   const invalidateHydration = () => {
     hydrationGate.invalidate();
+    setManualMasterRate(false);
     setHydrating(false);
     setHydrationNotice(null);
   };
@@ -254,12 +260,13 @@ export function AddChemicalV2Dialog({
     setDetails({});
     setRateDraft({ ...emptyManualRateDraft(), open: true });
     setHydrationNotice(null);
+    setManualMasterRate(false);
     setStep("master");
     setHydrating(true);
     const token = hydrationGate.begin();
     let hydration: Awaited<ReturnType<typeof hydrateMasterSelection>>;
     try {
-      hydration = await hydrateMasterSelection(result);
+      hydration = await hydrateMasterSelection(result, undefined, { adminCandidatePreview: isSystemAdmin });
     } catch {
       hydration = { status: "unavailable", options: null };
     }
@@ -269,13 +276,17 @@ export function AddChemicalV2Dialog({
       ...result,
       defaultRateOptions: hydration.options ?? result.defaultRateOptions,
     };
-    const init = initialiseDefaultRatesFromMaster(hydrated.rates, {
-      selected_at: new Date().toISOString(),
-      label_version: hydrated.labelVersion,
-    }, hydrated.defaultRateOptions);
+    // Only a basis with exactly ONE selectable canonical option is preselected.
+    const selectable = selectableVineyardOptions(hydration.status === "hydrated" ? hydration.options : null);
+    const at = new Date().toISOString();
+    const pre = (list: CanonicalDefaultRateOption[]) =>
+      list.length === 1
+        ? selectionFromCanonicalOption(list[0], { source: "operator", selectedAt: at, labelVersion: hydrated.labelVersion ?? null })
+        : null;
+    const init = { selections: { per_hectare: pre(selectable.per_hectare), per_100_litres: pre(selectable.per_100_litres) } };
     setHit(hydrated);
     setSelections(init.selections);
-    setHydrationNotice(hydration.status === "hydrated" ? null : MASTER_HYDRATION_FAILED_TEXT);
+    setHydrationNotice(hydration.status === "hydrated" ? null : MASTER_RATES_UNAVAILABLE_TEXT);
     setHydrating(false);
   };
 
@@ -334,6 +345,16 @@ export function AddChemicalV2Dialog({
         selected_at: new Date().toISOString(),
         label_version: hit?.labelVersion ?? null,
       }, hit?.defaultRateOptions ?? null),
+    }));
+
+  const setCanonicalSelection = (basis: CanonicalRateBasis, option: CanonicalDefaultRateOption) =>
+    setSelections((prev) => ({
+      ...prev,
+      [basis]: selectionFromCanonicalOption(option, {
+        source: "operator",
+        selectedAt: new Date().toISOString(),
+        labelVersion: hit?.labelVersion ?? null,
+      }),
     }));
 
   const setStagedSelection = (basis: CanonicalRateBasis, option: StagedRateOption) =>
@@ -571,60 +592,28 @@ export function AddChemicalV2Dialog({
                   <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading catalogue rate details…
                 </p>
               )}
-              {!hydrating && hydrationNotice && (
+              {!hydrating && hydrationNotice && !manualMasterRate && (
                 <Alert>
-                  <AlertDescription>{hydrationNotice}</AlertDescription>
+                  <AlertDescription className="space-y-2">
+                    <p>{hydrationNotice}</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={() => hit && selectMaster(hit)}>Retry</Button>
+                      <Button size="sm" variant="outline" onClick={() => setManualMasterRate(true)}>Enter rate manually</Button>
+                      <Button size="sm" variant="ghost" onClick={() => { invalidateHydration(); setStep("search"); }}>Back</Button>
+                    </div>
+                  </AlertDescription>
                 </Alert>
               )}
-              {!hydrating && BASES.map((basis) => {
-                const selection = selections[basis];
-                const options = ambiguousMaster[basis];
-                if (!selection && options.length === 0) return null;
-                return (
-                  <div key={basis} className="space-y-1 rounded-md border p-3 text-sm">
-                    <div className="text-xs font-medium text-muted-foreground">{BASIS_LABEL[basis]}</div>
-                    {selection ? (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline">{selectionSummary(selection)}</Badge>
-                        <span className="text-xs text-muted-foreground">From the Master Catalogue</span>
-                        {options.length > 0 && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 px-2 text-[11px]"
-                            onClick={() => setSelections((p) => ({ ...p, [basis]: null }))}
-                          >
-                            Change
-                          </Button>
-                        )}
-                      </div>
-                    ) : (
-                      <RadioGroup
-                        className="space-y-1"
-                        onValueChange={(id) => {
-                          const rate = options.find((o) => o.id === id);
-                          if (rate) setMasterSelection(basis, rate);
-                        }}
-                      >
-                        <p className="text-xs text-muted-foreground">
-                          Several registered options — choose the one for this vineyard.
-                        </p>
-                        {options.map((o) => (
-                          <label key={o.id} className="flex cursor-pointer items-center gap-2 text-sm">
-                            <RadioGroupItem value={o.id} aria-label={masterRateSummary(o)} />
-                            <span>
-                              {masterRateSummary(o)}
-                              {o.label ? <span className="text-muted-foreground"> — {o.label}</span> : null}
-                              {o.target ? <span className="text-muted-foreground"> · {o.target}</span> : null}
-                            </span>
-                          </label>
-                        ))}
-                      </RadioGroup>
-                    )}
-                  </div>
-                );
-              })}
-              {!hasAnyDefaultRate(chosenRates) && hit.rates.length === 0 && (
+              {!hydrating && hydrationNotice && manualMasterRate && !hasAnyDefaultRate(chosenRates) && manualRateFallback}
+              {!hydrating && !hydrationNotice && (
+                <CanonicalRateChoice
+                  options={selectableVineyardOptions(hit.defaultRateOptions)}
+                  selections={selections}
+                  onSelect={setCanonicalSelection}
+                  onClear={(basis) => setSelections((p) => ({ ...p, [basis]: null }))}
+                />
+              )}
+              {!hydrating && !hydrationNotice && !hasAnyDefaultRate(chosenRates) && hit.rates.length === 0 && (
                 <>
                   <Alert>
                     <AlertDescription>
