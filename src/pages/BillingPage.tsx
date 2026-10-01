@@ -135,7 +135,7 @@ export default function BillingPage({ customerPreview = false }: { customerPrevi
   const isLoading = customerPreview ? false : accessQuery.isLoading;
   const error = customerPreview ? null : accessQuery.error;
   const refetch = accessQuery.refetch;
-  const access = (data?.access ?? null) as typeof accessQuery.data extends { access: infer A } ? A | null : any;
+  const access = customerPreview ? null : accessQuery.data?.access ?? null;
   const schemaMissing = data?.schemaMissing ?? false;
   const subId = access?.subscription_id ?? null;
   const { data: directInvoices = [] } = useVinetrackInvoices(subId);

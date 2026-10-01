@@ -128,6 +128,7 @@ import AdminIntegrationsPage from "./pages/admin/AdminIntegrationsPage";
 import MasterCataloguePage from "./pages/admin/MasterCataloguePage";
 import AdminIntegrationDetailPage from "./pages/admin/AdminIntegrationDetailPage";
 import BillingPage from "./pages/BillingPage";
+import AdminBillingPreviewPage from "./pages/admin/AdminBillingPreviewPage";
 import AccountBillingPage from "./pages/account/BillingPage";
 
 const queryClient = new QueryClient();
@@ -304,6 +305,7 @@ const App = () => (
                     <Route path="/admin/newsletters" element={<AdminNewslettersPage />} />
                     <Route path="/admin/newsletters/:id" element={<AdminNewsletterEditorPage />} />
                     <Route path="/admin/website-analytics" element={<AdminWebsiteAnalyticsPage />} />
+                    <Route path="/admin/billing-preview" element={<AdminBillingPreviewPage />} />
                     <Route path="/admin/user-activity" element={<AdminUserActivityPage />} />
                     <Route path="/admin/integrations" element={<AdminIntegrationsPage />} />
                     <Route path="/admin/integrations/:clientId" element={<AdminIntegrationDetailPage />} />

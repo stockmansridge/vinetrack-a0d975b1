@@ -583,6 +583,7 @@ const SYSTEM_ADMIN_ITEM_LIST: SystemAdminItem[] = [
   { label: "System Admins", path: "/admin/system-admins", icon: ShieldCheck },
   { label: "Access & Entitlements", path: "/admin/access-entitlements", icon: ShieldCheck },
   { label: "Billing Grants", path: "/admin/billing-grants", icon: DollarSign },
+  { label: "Billing (customer view)", path: "/admin/billing-preview", icon: DollarSign },
   { label: "App Notices", path: "/admin/notices", icon: Globe2 },
   { label: "Maintenance Mode", path: "/admin/maintenance", icon: Settings2 },
   { label: "Feature Flags", path: "/admin/feature-flags", icon: ShieldCheck },
