@@ -61,9 +61,9 @@ function MetricCard({
 const toDateInput = (iso: string) => iso.slice(0, 10);
 
 export default function AdminWebsiteAnalyticsPage() {
-  const [preset, setPreset] = useState<DatePreset>("30d");
+  const [preset, setPreset] = useState<DatePreset>("1d");
   const [granularity, setGranularity] = useState<Granularity>("day");
-  const defaultRange = useMemo(() => rangeForPreset("30d"), []);
+  const defaultRange = useMemo(() => rangeForPreset("1d"), []);
   const [customFrom, setCustomFrom] = useState(toDateInput(defaultRange.date_from));
   const [customTo, setCustomTo] = useState(toDateInput(defaultRange.date_to));
 
