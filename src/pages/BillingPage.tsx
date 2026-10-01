@@ -126,12 +126,16 @@ interface BillingDetailResponse {
   error?: string;
 }
 
-export default function BillingPage() {
+export default function BillingPage({ customerPreview = false }: { customerPreview?: boolean } = {}) {
   const { user } = useAuth();
   const { selectedVineyardId, memberships } = useVineyard();
   const qc = useQueryClient();
-  const { data, isLoading, error, refetch } = useVinetrackAccess();
-  const access = data?.access ?? null;
+  const accessQuery = useVinetrackAccess();
+  const data = customerPreview ? { access: null, schemaMissing: false } : accessQuery.data;
+  const isLoading = customerPreview ? false : accessQuery.isLoading;
+  const error = customerPreview ? null : accessQuery.error;
+  const refetch = accessQuery.refetch;
+  const access = (data?.access ?? null) as typeof accessQuery.data extends { access: infer A } ? A | null : any;
   const schemaMissing = data?.schemaMissing ?? false;
   const subId = access?.subscription_id ?? null;
   const { data: directInvoices = [] } = useVinetrackInvoices(subId);
@@ -544,6 +548,15 @@ export default function BillingPage() {
 
   return (
     <div className="container mx-auto max-w-5xl space-y-6 p-4 md:p-6">
+      {customerPreview && (
+        <Alert>
+          <AlertTitle>Customer preview</AlertTitle>
+          <AlertDescription>
+            You are seeing the Billing page as a customer with no plan would see it.
+            Nothing here is real and buttons that change billing are switched off.
+          </AlertDescription>
+        </Alert>
+      )}
       <header className="space-y-1">
         <div className="flex items-start justify-between gap-2">
           <div>
