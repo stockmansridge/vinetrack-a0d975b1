@@ -1,6 +1,6 @@
 // Chemical Lookup V3 — clean-room System Admin prototype.
 //
-// V3 is fully separate from master_chemicals / V1 / V2. This module only
+// V3 is fully separate from the Master catalogue and V1 / V2 search. This module only
 // touches the chemical_v3_* tables, the V3 RPCs, the chemical-lookup-v3 Edge
 // Function and the private chemical-v3-media bucket. Column names beyond the
 // documented contract are read defensively — nothing is fabricated.
