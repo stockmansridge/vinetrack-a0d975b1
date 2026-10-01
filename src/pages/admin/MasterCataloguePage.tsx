@@ -94,6 +94,9 @@ function CatalogueBody() {
   const [importOpen, setImportOpen] = useState(false);
   // System Admin maintenance only — never a vineyard-user feature.
   const [refreshOpen, setRefreshOpen] = useState(false);
+  // Latest (persisted, resumable) rehydration run + the temporary review queue.
+  const [runState, setRunState] = useState<RefreshRunState | null>(() => readStoredRefreshState());
+  const [runQueue, setRunQueue] = useState(false);
   const queryClient = useQueryClient();
 
   const q = useQuery({
@@ -101,10 +104,20 @@ function CatalogueBody() {
     queryFn: () => listMasterChemicals({}),
   });
 
-  const queue = useMemo(
-    () => filterMasterQueue(q.data ?? [], filter, search),
-    [q.data, filter, search],
-  );
+  // Rehydration scope is ALWAYS every candidate in the unfiltered catalogue.
+  const rehydrateIds = useMemo(() => rehydrationScopeIds(q.data ?? []), [q.data]);
+  const runIds = useMemo(() => new Set(rehydratedQueueIds(runState)), [runState]);
+  const retryCount = retryableRunIds(runState).length;
+
+  const queue = useMemo(() => {
+    if (!runQueue) return filterMasterQueue(q.data ?? [], filter, search);
+    const byId = new Map((q.data ?? []).map((r) => [r.id, r]));
+    // Approved rows leave the candidate review queue.
+    return rehydratedQueueIds(runState)
+      .map((id) => byId.get(id))
+      .filter((r): r is MasterChemicalRow => !!r && (r.review_status ?? "candidate") === "candidate")
+      .filter((r) => !search.trim() || filterMasterQueue([r], "all", search).length > 0);
+  }, [q.data, filter, search, runQueue, runState]);
 
   // Stay on the record after an apply even if it just left the current filter.
   const selected =
@@ -113,6 +126,10 @@ function CatalogueBody() {
   const health = useMemo(() => masterHealthCounts(q.data ?? []), [q.data]);
 
   const openId = (id: string | null) => setSelectedId(id);
+  const chooseFilter = (f: MasterQueueFilter) => {
+    setRunQueue(false);
+    setFilter(f);
+  };
 
   const cards: Array<{ label: string; value: number; filter: MasterQueueFilter }> = [
     { label: "Total chemicals", value: health.total, filter: "all" },
@@ -136,9 +153,9 @@ function CatalogueBody() {
           <button
             key={c.label}
             type="button"
-            onClick={() => setFilter(c.filter)}
+            onClick={() => chooseFilter(c.filter)}
             className={`rounded-md border p-2 text-left hover:bg-muted/50 ${
-              filter === c.filter ? "border-primary bg-primary/10" : "border-border/60"
+              !runQueue && filter === c.filter ? "border-primary bg-primary/10" : "border-border/60"
             }`}
           >
             <div className="text-lg font-semibold">{q.isLoading ? "…" : c.value}</div>
@@ -152,12 +169,20 @@ function CatalogueBody() {
           <Button
             key={f.key}
             size="sm"
-            variant={filter === f.key ? "default" : "outline"}
-            onClick={() => setFilter(f.key)}
+            variant={!runQueue && filter === f.key ? "default" : "outline"}
+            onClick={() => chooseFilter(f.key)}
           >
             {f.label}
           </Button>
         ))}
+        {runIds.size > 0 && (
+          <Button size="sm" variant={runQueue ? "default" : "outline"} onClick={() => setRunQueue(true)}>
+            Rehydrated this run ({runIds.size})
+          </Button>
+        )}
+        {retryCount > 0 && (
+          <span className="text-xs text-destructive">{retryCount} failed / unavailable — resume rehydration to retry</span>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -165,7 +190,7 @@ function CatalogueBody() {
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             className="pl-8"
-            placeholder="Search product, registrant or APVMA number"
+            placeholder="Search product, registrant or registration number"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -176,9 +201,9 @@ function CatalogueBody() {
         <Button
           variant="outline"
           onClick={() => setRefreshOpen(true)}
-          disabled={queue.length === 0}
+          disabled={rehydrateIds.length === 0}
         >
-          <RefreshCw className="h-4 w-4 mr-1" /> Refresh Chemical Catalogue
+          <RefreshCw className="h-4 w-4 mr-1" /> Rehydrate Master Catalogue
         </Button>
         <span className="text-xs text-muted-foreground">{queue.length} record(s)</span>
       </div>
@@ -194,6 +219,8 @@ function CatalogueBody() {
               key={row.id}
               row={row}
               active={row.id === selectedId}
+              runRow={runState?.rows[row.id]}
+              runAt={runState?.updatedAt}
               onOpen={() => openId(row.id)}
               onEvidence={() => setDeep(row)}
             />
@@ -211,6 +238,13 @@ function CatalogueBody() {
         onPrevious={() => openId(previousQueueId(queue, selectedId))}
         onNext={() => openId(nextQueueId(queue, selectedId))}
         onNextAttention={() => openId(nextAttentionId(queue, selectedId))}
+        onApprovedNext={(approvedId) =>
+          openId(
+            runQueue
+              ? nextQueueId(queue.filter((r) => r.id !== approvedId || true), approvedId)
+              : nextAttentionId(queue, approvedId),
+          )
+        }
         onSaved={() => queryClient.invalidateQueries({ queryKey: QK })}
         onReviewConflict={() => selected && setDeep(selected)}
       />
@@ -218,9 +252,19 @@ function CatalogueBody() {
       <MasterCatalogueRefreshDialog
         open={refreshOpen}
         onOpenChange={setRefreshOpen}
-        ids={queue.map((r) => r.id)}
-        country={vineyardCountryCode("AU") ?? "AU"}
+        ids={rehydrateIds}
+        onProgress={setRunState}
         onFinished={() => queryClient.invalidateQueries({ queryKey: QK })}
+        onReview={(s) => {
+          setRunState(s);
+          setRefreshOpen(false);
+          setRunQueue(true);
+          setSearch("");
+          const first = rehydratedQueueIds(s).find((id) =>
+            (q.data ?? []).some((r) => r.id === id && (r.review_status ?? "candidate") === "candidate"),
+          );
+          openId(first ?? null);
+        }}
       />
 
       <ApvmaImportDialog
