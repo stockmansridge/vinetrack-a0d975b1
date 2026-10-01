@@ -580,23 +580,6 @@ function ReviewSection({
   );
 }
 
-function SourceButton({ label, url }: { label: string; url?: string | null }) {
-  if (!url) {
-    return (
-      <Button size="sm" variant="outline" disabled>
-        {label.replace("Open ", "No ")}
-      </Button>
-    );
-  }
-  return (
-    <Button asChild size="sm" variant="outline">
-      <a href={url} target="_blank" rel="noopener noreferrer">
-        {label} <ExternalLink className="h-3.5 w-3.5 ml-1" />
-      </a>
-    </Button>
-  );
-}
-
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
