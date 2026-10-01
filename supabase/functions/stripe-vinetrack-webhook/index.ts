@@ -120,34 +120,26 @@ Deno.serve(async (req: Request) => {
   }
 
   async function getTeamPlan(): Promise<{ id: string | null; seats_included: number }> {
-    // Try with seats_included; if the column doesn't exist (42703), fall back.
-    let row: any = null;
-    let lastError: any = null;
-    for (const cols of ["id, seats_included", "id, included_seats", "id"]) {
-      const { data, error } = await admin
-        .from("vinetrack_plans")
-        .select(cols)
-        .eq("code", "team")
-        .maybeSingle();
-      if (!error) {
-        row = data;
-        break;
-      }
-      lastError = error;
-      if ((error as any)?.code !== "42703") break;
+    // vinetrack_plans.included_user_licences is the single source of truth.
+    // No fallback: an unresolvable plan must fail rather than snapshot a
+    // made-up seat count onto a new Team subscription.
+    const { data: row, error } = await admin
+      .from("vinetrack_plans")
+      .select("id, included_user_licences")
+      .eq("code", "team")
+      .maybeSingle();
+    if (error) {
+      logEvent("Load team plan failed", { error: stringifyError(error) });
+      throw new Error(`Load team plan: ${stringifyError(error)}`);
     }
-    if (!row && lastError) {
-      logEvent("Load team plan failed", { error: stringifyError(lastError) });
-      throw new Error(`Load team plan: ${stringifyError(lastError)}`);
+    const included = (row as any)?.included_user_licences;
+    if (!row?.id || typeof included !== "number" || !Number.isInteger(included) || included < 1) {
+      logEvent("Team plan unresolved", { hasRow: !!row, included });
+      throw new Error(
+        "Team plan is missing or has no valid included_user_licences; refusing to snapshot seats.",
+      );
     }
-    const included =
-      (row?.seats_included as number | undefined) ??
-      (row?.included_seats as number | undefined) ??
-      3;
-    return {
-      id: (row?.id as string) ?? null,
-      seats_included: included,
-    };
+    return { id: row.id as string, seats_included: included };
   }
 
   /** Pull owner_user_id from a Stripe object's metadata chain. */

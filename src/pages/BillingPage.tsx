@@ -641,8 +641,8 @@ export default function BillingPage() {
                 : "No active Team subscription"}
             </h2>
             <p className="text-sm text-muted-foreground">
-              Team includes 3 user licences, full portal access, and iPhone app
-              access for licensed users.
+              Team — $799/year. Includes 5 user licences, Mobile app + Web
+              Portal, and Email support.
             </p>
             {!selectedVineyardId ? (
               <Alert variant="destructive">
@@ -914,7 +914,7 @@ export default function BillingPage() {
               {!isInternalUnlimited && (
                 <>
                   <p className="mt-3 text-xs text-muted-foreground">
-                    Extra licences are billed at $99/year ex GST per user via Stripe.
+                    Additional licences are billed separately via Stripe.
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Available seats can be assigned to new users. Removing a user
@@ -942,10 +942,14 @@ export default function BillingPage() {
 
           {isEnterprise && (
             <Alert>
-              <AlertTitle>Enterprise plan</AlertTitle>
+              <AlertTitle>Enterprise — $1,499/year</AlertTitle>
               <AlertDescription>
-                Enterprise billing is handled manually. Contact our team for
-                changes to your plan.
+                10 users included · Mobile app + Web Portal · Phone support ·
+                Free setup support. Enterprise billing is handled manually —{" "}
+                <a className="underline" href="mailto:support@vinetrack.com.au">
+                  Contact Us
+                </a>{" "}
+                for changes to your plan.
               </AlertDescription>
             </Alert>
           )}
@@ -1086,8 +1090,8 @@ export default function BillingPage() {
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
               Your plan includes <strong>{seatsIncluded}</strong> user licences.
-              Extra user licences are billed annually at $99/year ex GST per seat
-              and prorated to your Team renewal date. Removing a user frees the
+              Additional licences are billed separately and prorated to your
+              Team renewal date. Removing a user frees the
               licence for reassignment but does not automatically refund the
               licence.
             </p>
@@ -1168,7 +1172,7 @@ export default function BillingPage() {
               <strong>
                 {Math.max(0, Math.floor(extraSeats)) - seatsPurchased}
               </strong>{" "}
-              extra user licence(s). These are <strong>$99/year ex GST each</strong>{" "}
+              extra user licence(s). Additional licences are billed separately
               and will be prorated to your current Team renewal date.
             </p>
             <p>
