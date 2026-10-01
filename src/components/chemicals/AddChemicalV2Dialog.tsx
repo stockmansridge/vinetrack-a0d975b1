@@ -48,7 +48,9 @@ import {
   buildMasterSavedChemicalInput,
   findVineyardDuplicate,
   hasAnyDefaultRate,
+  hydrateMasterSelection,
   initialiseDefaultRatesFromMaster,
+  MASTER_HYDRATION_FAILED_TEXT,
   persistedDefaultRates,
   searchMasterChemicalsV2,
   selectionFromMasterRate,
@@ -223,18 +225,34 @@ export function AddChemicalV2Dialog({
     [staged],
   );
 
-  const selectMaster = (result: MasterSearchHit) => {
-    const init = initialiseDefaultRatesFromMaster(result.rates, {
-      selected_at: new Date().toISOString(),
-      label_version: result.labelVersion,
-    }, result.defaultRateOptions);
+  // Selected-result hydration only (never while typing): the structured
+  // lookup supplies the backend canonical rate options for THIS identity.
+  const [hydrating, setHydrating] = useState(false);
+  const [hydrationNotice, setHydrationNotice] = useState<string | null>(null);
+
+  const selectMaster = async (result: MasterSearchHit) => {
     setHit(result);
     setStaged(null);
     setStagedNotice(null);
-    setSelections(init.selections);
+    setSelections(emptySelections());
     setDetails({});
     setRateDraft({ ...emptyManualRateDraft(), open: true });
+    setHydrationNotice(null);
     setStep("master");
+    setHydrating(true);
+    const hydration = await hydrateMasterSelection(result);
+    const hydrated: MasterSearchHit = {
+      ...result,
+      defaultRateOptions: hydration.options ?? result.defaultRateOptions,
+    };
+    const init = initialiseDefaultRatesFromMaster(hydrated.rates, {
+      selected_at: new Date().toISOString(),
+      label_version: hydrated.labelVersion,
+    }, hydrated.defaultRateOptions);
+    setHit((cur) => (cur && cur.id === result.id ? hydrated : cur));
+    setSelections(init.selections);
+    setHydrationNotice(hydration.status === "hydrated" ? null : MASTER_HYDRATION_FAILED_TEXT);
+    setHydrating(false);
   };
 
   const startManual = () => {
@@ -247,7 +265,7 @@ export function AddChemicalV2Dialog({
   const rateValidation = validateManualRate(rateDraft);
 
   const chosenRates = useMemo(() => persistedDefaultRates(selections), [selections]);
-  const masterCanSave = !!hit && hasAnyDefaultRate(chosenRates);
+  const masterCanSave = !!hit && !hydrating && hasAnyDefaultRate(chosenRates);
   const stagedCanSave = !!staged && hasAnyDefaultRate(chosenRates);
   const manualCanSave = manualName.trim().length > 0 && rateValidation.ok === true;
 
@@ -516,7 +534,17 @@ export function AddChemicalV2Dialog({
 
             <div className="space-y-3">
               <div className="text-sm font-medium">Default rate</div>
-              {BASES.map((basis) => {
+              {hydrating && (
+                <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading catalogue rate details…
+                </p>
+              )}
+              {!hydrating && hydrationNotice && (
+                <Alert>
+                  <AlertDescription>{hydrationNotice}</AlertDescription>
+                </Alert>
+              )}
+              {!hydrating && BASES.map((basis) => {
                 const selection = selections[basis];
                 const options = ambiguousMaster[basis];
                 if (!selection && options.length === 0) return null;
