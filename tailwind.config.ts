@@ -32,6 +32,10 @@ export default {
           foreground: "hsl(var(--destructive-foreground))",
         },
         wind: "hsl(var(--wind))",
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
         warning: {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",

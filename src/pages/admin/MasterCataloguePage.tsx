@@ -23,6 +23,15 @@ import { MasterChemicalCard } from "@/components/chemicals/MasterChemicalCard";
 import { MasterEvidencePanel } from "@/components/chemicals/MasterEvidencePanel";
 import { ApvmaImportDialog } from "@/components/chemicals/ApvmaImportDialog";
 import { MasterCatalogueRefreshDialog } from "@/components/chemicals/MasterCatalogueRefreshDialog";
+import {
+  REFRESH_ROW_STATUS_LABEL,
+  readStoredRefreshState,
+  rehydratedQueueIds,
+  rehydrationScopeIds,
+  retryableRunIds,
+  type RefreshRowState,
+  type RefreshRunState,
+} from "@/lib/masterCatalogueRefresh";
 import { MasterReviewPreviewDialog } from "@/components/chemicals/MasterReviewPreviewDialog";
 import { MasterReviewSummaryCard } from "@/components/chemicals/MasterReviewSummaryCard";
 import { masterReviewSummary, type ClassifiedConflict } from "@/lib/masterReview";
@@ -94,6 +103,9 @@ function CatalogueBody() {
   const [importOpen, setImportOpen] = useState(false);
   // System Admin maintenance only — never a vineyard-user feature.
   const [refreshOpen, setRefreshOpen] = useState(false);
+  // Latest (persisted, resumable) rehydration run + the temporary review queue.
+  const [runState, setRunState] = useState<RefreshRunState | null>(() => readStoredRefreshState());
+  const [runQueue, setRunQueue] = useState(false);
   const queryClient = useQueryClient();
 
   const q = useQuery({
@@ -101,10 +113,20 @@ function CatalogueBody() {
     queryFn: () => listMasterChemicals({}),
   });
 
-  const queue = useMemo(
-    () => filterMasterQueue(q.data ?? [], filter, search),
-    [q.data, filter, search],
-  );
+  // Rehydration scope is ALWAYS every candidate in the unfiltered catalogue.
+  const rehydrateIds = useMemo(() => rehydrationScopeIds(q.data ?? []), [q.data]);
+  const runIds = useMemo(() => new Set(rehydratedQueueIds(runState)), [runState]);
+  const retryCount = retryableRunIds(runState).length;
+
+  const queue = useMemo(() => {
+    if (!runQueue) return filterMasterQueue(q.data ?? [], filter, search);
+    const byId = new Map((q.data ?? []).map((r) => [r.id, r]));
+    // Approved rows leave the candidate review queue.
+    return rehydratedQueueIds(runState)
+      .map((id) => byId.get(id))
+      .filter((r): r is MasterChemicalRow => !!r && (r.review_status ?? "candidate") === "candidate")
+      .filter((r) => !search.trim() || filterMasterQueue([r], "all", search).length > 0);
+  }, [q.data, filter, search, runQueue, runState]);
 
   // Stay on the record after an apply even if it just left the current filter.
   const selected =
@@ -113,6 +135,10 @@ function CatalogueBody() {
   const health = useMemo(() => masterHealthCounts(q.data ?? []), [q.data]);
 
   const openId = (id: string | null) => setSelectedId(id);
+  const chooseFilter = (f: MasterQueueFilter) => {
+    setRunQueue(false);
+    setFilter(f);
+  };
 
   const cards: Array<{ label: string; value: number; filter: MasterQueueFilter }> = [
     { label: "Total chemicals", value: health.total, filter: "all" },
@@ -136,9 +162,9 @@ function CatalogueBody() {
           <button
             key={c.label}
             type="button"
-            onClick={() => setFilter(c.filter)}
+            onClick={() => chooseFilter(c.filter)}
             className={`rounded-md border p-2 text-left hover:bg-muted/50 ${
-              filter === c.filter ? "border-primary bg-primary/10" : "border-border/60"
+              !runQueue && filter === c.filter ? "border-primary bg-primary/10" : "border-border/60"
             }`}
           >
             <div className="text-lg font-semibold">{q.isLoading ? "…" : c.value}</div>
@@ -152,12 +178,20 @@ function CatalogueBody() {
           <Button
             key={f.key}
             size="sm"
-            variant={filter === f.key ? "default" : "outline"}
-            onClick={() => setFilter(f.key)}
+            variant={!runQueue && filter === f.key ? "default" : "outline"}
+            onClick={() => chooseFilter(f.key)}
           >
             {f.label}
           </Button>
         ))}
+        {runIds.size > 0 && (
+          <Button size="sm" variant={runQueue ? "default" : "outline"} onClick={() => setRunQueue(true)}>
+            Rehydrated this run ({runIds.size})
+          </Button>
+        )}
+        {retryCount > 0 && (
+          <span className="text-xs text-destructive">{retryCount} failed / unavailable — resume rehydration to retry</span>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -165,7 +199,7 @@ function CatalogueBody() {
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             className="pl-8"
-            placeholder="Search product, registrant or APVMA number"
+            placeholder="Search product, registrant or registration number"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -176,9 +210,9 @@ function CatalogueBody() {
         <Button
           variant="outline"
           onClick={() => setRefreshOpen(true)}
-          disabled={queue.length === 0}
+          disabled={rehydrateIds.length === 0}
         >
-          <RefreshCw className="h-4 w-4 mr-1" /> Refresh Chemical Catalogue
+          <RefreshCw className="h-4 w-4 mr-1" /> Rehydrate Master Catalogue
         </Button>
         <span className="text-xs text-muted-foreground">{queue.length} record(s)</span>
       </div>
@@ -194,6 +228,8 @@ function CatalogueBody() {
               key={row.id}
               row={row}
               active={row.id === selectedId}
+              runRow={runState?.rows[row.id]}
+              runAt={runState?.updatedAt}
               onOpen={() => openId(row.id)}
               onEvidence={() => setDeep(row)}
             />
@@ -211,6 +247,13 @@ function CatalogueBody() {
         onPrevious={() => openId(previousQueueId(queue, selectedId))}
         onNext={() => openId(nextQueueId(queue, selectedId))}
         onNextAttention={() => openId(nextAttentionId(queue, selectedId))}
+        onApprovedNext={(approvedId) =>
+          openId(
+            runQueue
+              ? nextQueueId(queue, approvedId)
+              : nextAttentionId(queue, approvedId),
+          )
+        }
         onSaved={() => queryClient.invalidateQueries({ queryKey: QK })}
         onReviewConflict={() => selected && setDeep(selected)}
       />
@@ -218,9 +261,19 @@ function CatalogueBody() {
       <MasterCatalogueRefreshDialog
         open={refreshOpen}
         onOpenChange={setRefreshOpen}
-        ids={queue.map((r) => r.id)}
-        country={vineyardCountryCode("AU") ?? "AU"}
+        ids={rehydrateIds}
+        onProgress={setRunState}
         onFinished={() => queryClient.invalidateQueries({ queryKey: QK })}
+        onReview={(s) => {
+          setRunState(s);
+          setRefreshOpen(false);
+          setRunQueue(true);
+          setSearch("");
+          const first = rehydratedQueueIds(s).find((id) =>
+            (q.data ?? []).some((r) => r.id === id && (r.review_status ?? "candidate") === "candidate"),
+          );
+          openId(first ?? null);
+        }}
       />
 
       <ApvmaImportDialog
@@ -241,11 +294,15 @@ function CatalogueBody() {
 function QueueRow({
   row,
   active,
+  runRow,
+  runAt,
   onOpen,
   onEvidence,
 }: {
   row: MasterChemicalRow;
   active: boolean;
+  runRow?: RefreshRowState;
+  runAt?: string;
   onOpen: () => void;
   onEvidence: () => void;
 }) {
@@ -278,7 +335,7 @@ function QueueRow({
       <div className="min-w-[200px] flex-1">
         <div className="font-medium">{row.registered_product_name?.trim() || "Unnamed product"}</div>
         <div className="text-xs text-muted-foreground">
-          {row.registration_number?.trim() || "No APVMA number"}
+          {row.registration_number?.trim() ? `Reg. ${row.registration_number.trim()}` : "No registration number"}
           {row.registrant?.trim() ? ` · ${row.registrant.trim()}` : ""}
           {row.product_category?.trim() ? ` · ${row.product_category.trim()}` : " · No category"}
         </div>
@@ -302,12 +359,33 @@ function QueueRow({
         <Badge variant="outline" className="text-[10px]">
           {manufacturer ? "Manufacturer label" : "No manufacturer label"}
         </Badge>
-        {regulator && <Badge variant="outline" className="text-[10px]">APVMA evidence</Badge>}
+        {regulator && <Badge variant="outline" className="text-[10px]">Regulatory evidence</Badge>}
         {conflict && <Badge variant="outline" className="text-[10px] border-destructive/50 text-destructive">Conflict</Badge>}
         {unresolved > 0 && <Badge variant="outline" className="text-[10px]">{unresolved} unresolved</Badge>}
       </div>
 
       <Badge variant="secondary" className="text-[10px]">{status}</Badge>
+
+      {runRow && (
+        <Badge
+          variant="outline"
+          data-testid="rehydration-status"
+          className={`text-[10px] ${
+            runRow.outcome === "failed" || runRow.outcome === "conflict"
+              ? "border-destructive/50 text-destructive"
+              : runRow.outcome === "source_unavailable"
+                ? "border-warning/50 text-warning"
+                : "border-primary/50 text-primary"
+          }`}
+        >
+          {REFRESH_ROW_STATUS_LABEL[runRow.outcome]}
+        </Badge>
+      )}
+      {(row.retrieved_at || runAt) && (
+        <span className="text-[10px] text-muted-foreground">
+          Checked {(row.retrieved_at ?? runAt ?? "").slice(0, 16).replace("T", " ")}
+        </span>
+      )}
 
       {issues.length > 0 ? (
         <span className="inline-flex items-center gap-1 text-[11px] text-warning">
@@ -472,7 +550,7 @@ function ReviewDialog({
               <div className="border-t border-border/60 px-3 py-2 text-[11px] text-muted-foreground">
                 Registered uses, rates, withholding periods and re-entry intervals are typed,
                 evidence-level data. They cannot be edited or adjudicated from the portal — a gap
-                here is only closed by an authoritative APVMA preview and apply.
+                here is only closed by an authoritative register preview and apply.
               </div>
             </div>
           )}
