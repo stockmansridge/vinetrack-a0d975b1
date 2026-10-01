@@ -208,3 +208,35 @@ export function splitRates(rates: unknown): { perHa: any[]; per100L: any[]; othe
   }
   return { perHa, per100L, other };
 }
+
+/** Human-readable text from a V3 value — never JSON.stringify. */
+export function textOf(x: unknown): string {
+  if (x == null) return "";
+  if (typeof x === "string") return x.trim();
+  if (typeof x === "number" || typeof x === "boolean") return String(x);
+  if (Array.isArray(x)) return x.map(textOf).filter(Boolean).join("; ");
+  if (typeof x === "object") {
+    const v = pick(x as Row, "text", "raw_text", "statement", "message", "label", "name", "value", "description", "field");
+    return v === undefined ? "" : textOf(v);
+  }
+  return "";
+}
+
+/** Plain list of strings from a value that may be a string, array or object list. */
+export function textList(x: unknown): string[] {
+  if (x == null) return [];
+  if (typeof x === "string") return x.trim() ? [x.trim()] : [];
+  return asList(x).map(textOf).filter(Boolean);
+}
+
+/** Rate headline: min–max unit, else value unit, else raw_text. Never converts. */
+export function formatRateOption(o: Row): string {
+  const unit = textOf(pick(o, "unit", "rate_unit"));
+  const min = pick(o, "min_value", "rate_min");
+  const max = pick(o, "max_value", "rate_max");
+  const value = pick(o, "value", "rate_value");
+  const u = unit ? ` ${unit}` : "";
+  if (min != null && max != null) return String(min) === String(max) ? `${min}${u}` : `${min}–${max}${u}`;
+  if (value != null) return `${value}${u}`;
+  return textOf(pick(o, "raw_text", "rate_text", "text")) || "Rate not stated";
+}
