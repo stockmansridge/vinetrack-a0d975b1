@@ -53,6 +53,8 @@ import {
   MASTER_HYDRATION_FAILED_TEXT,
   persistedDefaultRates,
   searchMasterChemicalsV2,
+  visibleMasterHits,
+  isCandidateHit,
   selectionFromMasterRate,
   selectionSummary,
   type MasterSearchHit,
@@ -81,6 +83,7 @@ import {
   createSavedChemical,
   type SavedChemical,
 } from "@/lib/savedChemicalsQuery";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { PRODUCT_CATEGORIES } from "@/lib/chemicalProductCategory";
 
 const BASES: CanonicalRateBasis[] = ["per_hectare", "per_100_litres"];
@@ -148,10 +151,12 @@ export function AddChemicalV2Dialog({
     return () => clearTimeout(t);
   }, [search]);
 
+  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
   const results = useQuery({
-    queryKey: ["master-search-v2", debounced, country ?? null],
+    queryKey: ["master-search-v2", debounced, country ?? null, isSystemAdmin],
     enabled: open && step === "search" && debounced.trim().length >= 2,
-    queryFn: () => searchMasterChemicalsV2(debounced, { country }),
+    queryFn: async () =>
+      visibleMasterHits(await searchMasterChemicalsV2(debounced, { country }), isSystemAdmin),
   });
 
   // Automatic staged fallback: it runs on its own once the Master search has
@@ -491,7 +496,14 @@ export function AddChemicalV2Dialog({
                   }}
                   className="cursor-pointer p-3 text-sm hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  <div className="font-medium">{r.productName}</div>
+                  <div className="flex items-center gap-2 font-medium">
+                    <span>{r.productName}</span>
+                    {isCandidateHit(r) && (
+                      <Badge variant="outline" className="border-warning text-[10px] text-warning-foreground">
+                        Candidate — not approved
+                      </Badge>
+                    )}
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     {[r.registrant, r.registrationNumber && `APVMA ${r.registrationNumber}`, r.category]
                       .filter(Boolean)
@@ -501,7 +513,7 @@ export function AddChemicalV2Dialog({
                     <div className="text-xs text-muted-foreground">{r.activeIngredients}</div>
                   )}
                   {r.rateSummary && (
-                    <Badge variant="outline" className="mt-1 text-[11px]">{r.rateSummary}</Badge>
+                    <div className="mt-1 text-[11px] text-muted-foreground">{r.rateSummary}</div>
                   )}
                 </Card>
               ))}
