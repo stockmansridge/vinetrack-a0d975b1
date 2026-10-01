@@ -26,8 +26,9 @@ import {
 } from "@/lib/masterCuration";
 import {
   MASTER_ISSUE_ACTION_LABEL, masterIssues, RELEASE_WARNING_KEYS, masterManufacturerLabel, masterProductPage,
-  masterRegulatorReference, masterResistanceStatus, masterVineyardUses, type MasterIssue,
+  masterRegulatorReference, masterResistanceStatus, masterVineyardUses, masterHasConflict, vineyardRelevantUnresolved, type MasterIssue,
 } from "@/lib/masterWorkbench";
+import { countryLabel, vineyardCountryCode } from "@/lib/chemicalJurisdiction";
 import { MasterFindMissingData } from "@/components/chemicals/MasterFindMissingData";
 
 const CORRECTIONS_SAVE_UNKNOWN_SHORT =
@@ -50,6 +51,11 @@ export interface MasterCurationDrawerProps {
   onNextAttention?: () => void;
   /** Open the full evidence/conflict review for this record. */
   onReviewConflict?: () => void;
+  /**
+   * After a successful approval: open the next record (e.g. the next in
+   * "Rehydrated this run"). Falls back to `onNextAttention`.
+   */
+  onApprovedNext?: (approvedId: string) => void;
 }
 
 export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
@@ -57,6 +63,7 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
   const [identity, setIdentity] = useState<MasterCurationIdentity>({});
   const [reason, setReason] = useState("");
   const [findSignal, setFindSignal] = useState(0);
+  const [approveError, setApproveError] = useState<{ title: string; message?: string } | null>(null);
 
   useEffect(() => {
     if (!row) return;
@@ -68,6 +75,7 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
       label_reference: txt(row.label_reference),
     });
     setReason("");
+    setApproveError(null);
   }, [row?.id]);
 
   const issues = useMemo(() => (row ? masterIssues(row) : []), [row]);
@@ -151,6 +159,7 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
     try {
       res = await approve.mutateAsync();
     } catch (e: any) {
+      if (currentIdRef.current === startedId) setApproveError({ title: "Not approved", message: e?.message ?? String(e) });
       toast({ title: "Not approved", description: e?.message ?? String(e), variant: "destructive" });
       return;
     }
@@ -158,21 +167,23 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
     if (res.outcome === "approved") {
       toast({ title: res.saved ? "Corrections saved and approved" : "Approved" });
       if (!res.saved) props.onSaved?.();
-      if (currentIdRef.current === startedId) props.onNextAttention?.();
+      if (currentIdRef.current === startedId) {
+        setApproveError(null);
+        if (props.onApprovedNext) props.onApprovedNext(startedId);
+        else props.onNextAttention?.();
+      }
       return;
     }
-    toast({
-      title:
+    const failTitle =
         res.outcome === "save_failed"
           ? "Not saved — not approved"
           : res.outcome === "save_unknown"
             ? "Save result unknown — not approved"
           : res.outcome === "save_unconfirmed"
             ? "Save not confirmed — not approved"
-              : "Not approved",
-      description: res.message,
-      variant: "destructive",
-    });
+              : "Not approved";
+    if (currentIdRef.current === startedId) setApproveError({ title: failTitle, message: res.message });
+    toast({ title: failTitle, description: res.message, variant: "destructive" });
   };
 
   const onIssueAction = (i: MasterIssue) => {
@@ -185,11 +196,23 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
     ? MASTER_REVIEW_STATUS_LABEL[(row.review_status as MasterReviewStatus) ?? "candidate"] ?? row.review_status
     : "";
 
+  const conflict = row ? masterHasConflict(row) : false;
+  const unresolvedFields = row ? vineyardRelevantUnresolved(row) : [];
+  const vineyardRegistered = vineUses.length > 0;
+  const regNumber = row?.registration_number?.trim() || "";
+  const scheme = row?.registration_scheme?.trim() || "";
+  const country = row ? vineyardCountryCode(row.registration_country) : null;
+  const whps = uniq(vineUses.map((u) => u.withholding_period_days).filter((v) => v != null).map((v) => `${v} days`));
+  const reis = uniq(vineUses.map((u) => u.re_entry_period_hours).filter((v) => v != null).map((v) => `${v} hours`));
+  const restrictions = uniq(vineUses.map((u) => u.restrictions?.trim() || "").filter(Boolean));
+  const sources = Array.isArray(row?.verification_sources) ? (row!.verification_sources as unknown[]) : [];
+
   return (
     <Sheet open={open} onOpenChange={guardedOpenChange}>
       <SheetContent
         side="right"
-        className="w-full sm:max-w-xl overflow-y-auto"
+        data-testid="master-review-drawer"
+        className="w-screen max-w-none sm:w-[90vw] sm:max-w-[90vw] lg:w-[75vw] lg:max-w-[75vw] overflow-y-auto p-0"
         aria-busy={busy || undefined}
         onEscapeKeyDown={(e) => { if (busy) e.preventDefault(); }}
         onPointerDownOutside={(e) => { if (busy) e.preventDefault(); }}
@@ -197,57 +220,66 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
       >
         {!row ? null : (
           <>
-            <SheetHeader className="space-y-2">
-              <SheetTitle className="text-base">
-                {row.registered_product_name?.trim() || "Unnamed product"}
-              </SheetTitle>
-              <SheetDescription className="text-xs">
-                {row.registration_number?.trim() ? `APVMA ${row.registration_number.trim()}` : "No APVMA number"}
-                {row.registrant?.trim() ? ` · ${row.registrant.trim()}` : ""}
-                {row.product_category?.trim() ? ` · ${row.product_category.trim()}` : ""}
-                {props.position ? ` · Record ${props.position.index + 1} of ${props.position.total}` : ""}
-              </SheetDescription>
-              <div className="flex flex-wrap gap-1">
-                <Badge variant="secondary" className="text-[10px]">{status}</Badge>
-                <Badge variant="outline" className="text-[10px]">
-                  {issues.length ? `Needs attention (${issues.length})` : "Complete"}
-                </Badge>
+            {/* ------------------------------------------ sticky review header */}
+            <SheetHeader className="sticky top-0 z-10 space-y-2 border-b border-border/60 bg-background px-6 pb-3 pt-6 pr-12">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 space-y-1">
+                  <SheetTitle className="text-2xl font-semibold leading-tight">
+                    {row.registered_product_name?.trim() || "Unnamed product"}
+                  </SheetTitle>
+                  <SheetDescription className="text-sm">
+                    {[
+                      row.registrant?.trim() || "Manufacturer missing",
+                      row.product_category?.trim() || "Category missing",
+                      country ? countryLabel(row.registration_country) : "Country missing",
+                      regNumber ? `Reg. ${regNumber}` : null,
+                      `Revision ${row.catalogue_version ?? "—"}`,
+                      props.position ? `Record ${props.position.index + 1} of ${props.position.total}` : null,
+                    ].filter(Boolean).join(" · ")}
+                  </SheetDescription>
+                  <div className="flex flex-wrap gap-1">
+                    <Badge variant="secondary" className="text-[10px]">{status}</Badge>
+                    <Badge variant="outline" className="text-[10px]">
+                      {issues.length ? `Needs attention (${issues.length})` : "Complete"}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-2" data-testid="header-label">
+                  {manufacturer?.url ? (
+                    <Button asChild size="lg">
+                      <a href={manufacturer.url} target="_blank" rel="noopener noreferrer" data-testid="header-manufacturer-label">
+                        Open Manufacturer Label <ExternalLink className="h-4 w-4 ml-1" />
+                      </a>
+                    </Button>
+                  ) : (
+                    <div
+                      data-testid="manufacturer-label-missing"
+                      data-status="missing"
+                      className="flex items-center gap-2 rounded-md border-2 border-destructive bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive"
+                    >
+                      <AlertTriangle className="h-4 w-4" /> Manufacturer label missing
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        disabled={busy}
+                        aria-label="Find Missing Data for manufacturer label"
+                        onClick={() => setFindSignal((n) => n + 1)}
+                      >
+                        <SearchCheck className="h-4 w-4 mr-1" /> Find Missing Data
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
+              {approveError && (
+                <div role="alert" data-testid="approve-error" className="rounded-md border-2 border-destructive bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  <div className="font-semibold">{approveError.title}</div>
+                  {approveError.message && <div className="text-xs">{approveError.message}</div>}
+                </div>
+              )}
             </SheetHeader>
 
-            <div className="mt-4 space-y-5 text-sm">
-              {/* ---------------------------------------- missing checklist */}
-              <section className="rounded-md border border-border/60" aria-label="Missing / needs review">
-                <div className="border-b border-border/60 px-3 py-1.5 text-xs font-semibold">
-                  Missing / needs review
-                </div>
-                {issues.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-primary inline-flex items-center gap-1">
-                    <BadgeCheck className="h-3.5 w-3.5" /> Nothing missing for vineyard use.
-                  </div>
-                ) : (
-                  <ul className="divide-y divide-border/60 text-xs">
-                    {issues.map((i) => (
-                      <li key={`${i.key}:${i.field ?? ""}`} className="flex items-center justify-between gap-2 px-3 py-1.5">
-                        <span className="inline-flex items-center gap-1">
-                          <AlertTriangle className="h-3.5 w-3.5 text-warning" /> {i.label}
-                        </span>
-                        <Button size="sm" variant="ghost" className="h-7 text-[11px]" disabled={busy} onClick={() => onIssueAction(i)}>
-                          {MASTER_ISSUE_ACTION_LABEL[i.action]}
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-
-              {/* --------------------------------------------- source links */}
-              <section className="flex flex-wrap gap-2">
-                <SourceButton label="Open Manufacturer Label" url={manufacturer?.url} />
-                <SourceButton label="Open APVMA / regulator reference" url={regulator?.url} />
-                <SourceButton label="Open Product Page" url={productPage?.url} />
-              </section>
-
+            <div className="space-y-5 px-6 py-4 text-sm">
               {/* --------------------------------------- find missing data */}
               <MasterFindMissingData
                 row={row}
@@ -257,92 +289,159 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
                 onNextIncomplete={props.onNextAttention}
               />
 
-              {/* ---------------------------------------------- resistance */}
-              {resistance && (
-                <section className="space-y-2">
-                  <h3 className="text-xs font-semibold text-muted-foreground">Resistance classification</h3>
-                  <div className="text-xs">
-                    <span className="font-medium">
-                      {resistance.state === "classified" ? "Classified" : resistance.state === "not_applicable" ? "Not applicable" : "Unresolved"}
-                    </span>
-                    {" · "}
-                    {resistance.text}
-                  </div>
-                  {resistance.actives.length > 0 ? (
-                    <div className="rounded-md border border-border/60 divide-y divide-border/60 text-xs">
-                      {resistance.actives.map((a, i) => (
-                        <div key={i} className="px-3 py-2">
-                          <div className="font-medium">
-                            {a.name}
-                            {a.concentration ? ` · ${a.concentration}` : " · No concentration"}
-                          </div>
-                          <div className="text-muted-foreground">
-                            {a.group ?? (resistance.state === "not_applicable" ? "No resistance group applies" : "Group unresolved")}
-                            {" · "}
-                            {a.group && resistance.state === "classified" ? "Authoritative classification" : "Not classified"}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-xs text-muted-foreground">No active ingredients recorded.</div>
+              <div className="grid gap-4 xl:grid-cols-2">
+                {/* -------------------------------------------- A product */}
+                <ReviewSection title="Product" testId="section-product">
+                  <FieldRow label="Product name" value={row.registered_product_name} />
+                  <FieldRow label="Manufacturer / registrant" value={row.registrant} />
+                  <FieldRow label="Country" value={country ? countryLabel(row.registration_country) : null} />
+                  <FieldRow label="Product category" value={row.product_category} />
+                  <FieldRow label="Formulation / form" value={row.form_type} missing="review" />
+                  <FieldRow label="Registration scheme" value={scheme ? scheme.toUpperCase() : null} missing="na" />
+                  <FieldRow label="Registration number" value={regNumber || null} missing="na" />
+                  <FieldRow label="Catalogue revision" value={row.catalogue_version != null ? String(row.catalogue_version) : null} missing="review" />
+                  <FieldRow label="Review status" value={status} />
+                </ReviewSection>
+
+                {/* ------------------------------ B actives & resistance */}
+                <ReviewSection title="Active ingredients & resistance" testId="section-actives">
+                  {resistance && (
+                    <FieldRow
+                      label="Resistance classification"
+                      value={resistance.state === "classified" ? `Classified · ${resistance.text}` : resistance.state === "not_applicable" ? "Not applicable" : `Unresolved · ${resistance.text}`}
+                      state={resistance.state === "classified" ? "ok" : resistance.state === "not_applicable" ? "na" : "review"}
+                    />
                   )}
-                </section>
-              )}
-
-              {/* ----------------------------------- vineyard registration */}
-              <section className="space-y-2">
-                <h3 className="text-xs font-semibold text-muted-foreground">Vineyard registration</h3>
-                {vineUses.length === 0 ? (
-                  <div className="text-xs text-muted-foreground">No grapevine use on the register record.</div>
-                ) : (
-                  <div className="rounded-md border border-border/60 divide-y divide-border/60 text-xs">
-                    {vineUses.map((u, i) => (
-                      <div key={i} className="px-3 py-2 space-y-0.5">
-                        <div className="font-medium">{u.crop} · {u.target_raw || u.target || "—"}</div>
-                        <div className="text-muted-foreground">
-                          {u.rates.length
-                            ? u.rates.map((r) => r.label || r.raw_text).filter(Boolean).join("; ")
-                            : "Rate not stated"}
-                          {u.withholding_period_days != null ? ` · WHP ${u.withholding_period_days} d` : " · WHP unresolved"}
-                          {u.re_entry_period_hours != null ? ` · REI ${u.re_entry_period_hours} h` : " · REI unresolved"}
-                        </div>
-                        {u.restrictions && <div className="text-muted-foreground">{u.restrictions}</div>}
+                  <FieldRow label="Resistance scheme" value={row.activity_group_scheme} missing={resistance?.state === "not_applicable" ? "na" : "review"} />
+                  {resistance && resistance.actives.length > 0 ? (
+                    resistance.actives.map((a, i) => (
+                      <div key={i} className="rounded border border-border/60 p-2 space-y-1">
+                        <FieldRow label="Active ingredient" value={a.name} />
+                        <FieldRow label="Concentration" value={a.concentration} />
+                        <FieldRow
+                          label="Resistance group"
+                          value={a.group}
+                          missing={resistance.state === "not_applicable" ? "na" : "review"}
+                          emptyText={resistance.state === "not_applicable" ? "Not applicable" : "Unresolved"}
+                        />
                       </div>
+                    ))
+                  ) : (
+                    <FieldRow label="Active ingredients" value={null} />
+                  )}
+                </ReviewSection>
+
+                {/* ------------------------------------- C vineyard uses */}
+                <ReviewSection title="Vineyard uses" testId="section-uses">
+                  {vineUses.length === 0 ? (
+                    <FieldRow label="Grapevine registered uses" value={null} missing="na" emptyText="None on the register record" />
+                  ) : (
+                    vineUses.map((u, i) => (
+                      <div key={i} className="rounded border border-border/60 p-2 text-xs space-y-0.5">
+                        <div className="font-medium">{u.crop}</div>
+                        <div>Target: {u.target_raw || u.target || <span className="text-warning">Not established</span>}</div>
+                        {u.restrictions && <div className="text-muted-foreground">Condition: {u.restrictions}</div>}
+                      </div>
+                    ))
+                  )}
+                </ReviewSection>
+
+                {/* ------------------------------------ D vineyard rates */}
+                <ReviewSection
+                  title="Vineyard rates"
+                  testId="section-rates"
+                  state={rates.length === 0 && vineyardRegistered ? "missing" : undefined}
+                >
+                  {rates.length === 0 ? (
+                    <FieldRow
+                      label="Registered vineyard rates"
+                      value={null}
+                      missing={vineyardRegistered ? "missing" : "na"}
+                      emptyText={vineyardRegistered ? "Missing — registered for grapevine" : "Not applicable"}
+                    />
+                  ) : (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {(["per_hectare", "per_100_litres"] as MasterRateBasis[]).map((basis) => {
+                        const grouped = groupRates(masterRatesForBasis(rates, basis).map(masterRateSummary));
+                        return (
+                          <div key={basis} className="rounded border border-border/60 p-2 text-xs">
+                            <div className="mb-1 font-semibold">{MASTER_RATE_BASIS_LABEL[basis]}</div>
+                            {grouped.length === 0 ? (
+                              <div className="text-muted-foreground">None registered</div>
+                            ) : (
+                              <ul className="space-y-0.5">
+                                {grouped.map(([text, n]) => (
+                                  <li key={text}>{text}{n > 1 ? <span className="text-muted-foreground"> · {n} entries</span> : null}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <p className="text-[11px] text-muted-foreground">
+                    Rates come only from the authoritative enrichment and review path — use Find Missing Data.
+                  </p>
+                </ReviewSection>
+
+                {/* --------------------------------------- E safety / label */}
+                <ReviewSection title="Safety / label details" testId="section-safety">
+                  <FieldRow label="WHP" value={whps.join("; ") || null} missing={vineyardRegistered ? "review" : "na"} emptyText={vineyardRegistered ? "Not established" : "Not applicable"} />
+                  <FieldRow label="REI" value={reis.join("; ") || null} missing={vineyardRegistered ? "review" : "na"} emptyText={vineyardRegistered ? "Not established" : "Not applicable"} />
+                  <FieldRow label="Restrictions" value={restrictions.join("; ") || null} missing="na" emptyText="None stated" />
+                  <FieldRow label="Label version" value={row.label_version} missing="review" emptyText="Not established" />
+                </ReviewSection>
+
+                {/* --------------------------------------------- F sources */}
+                <ReviewSection title="Sources" testId="section-sources">
+                  <FieldRow label="Manufacturer label" value={manufacturer?.url ?? null} link />
+                  <FieldRow label="Manufacturer product page" value={productPage?.url ?? null} link missing="review" />
+                  <FieldRow label="Regulatory / register source" value={regulator?.url ?? null} link missing="na" />
+                  <FieldRow label="Source provenance" value={sources.length ? `${sources.length} recorded source(s)` : null} missing="review" />
+                  <FieldRow label="Retrieved" value={row.retrieved_at?.slice(0, 10) ?? null} missing="review" />
+                  <FieldRow label="Verified" value={row.verified_at?.slice(0, 10) ?? null} missing="review" emptyText="Not verified" />
+                </ReviewSection>
+              </div>
+
+              {/* --------------------------------------- G outstanding issues */}
+              <ReviewSection
+                title="Outstanding issues"
+                testId="section-issues"
+                state={conflict ? "missing" : issues.length ? "review" : "ok"}
+              >
+                {conflict && (
+                  <div data-status="missing" className="rounded border-2 border-destructive bg-destructive/10 px-2 py-1 text-xs font-semibold text-destructive">
+                    Evidence conflict — must be adjudicated
+                  </div>
+                )}
+                {issues.length === 0 ? (
+                  <div className="text-xs text-success inline-flex items-center gap-1">
+                    <BadgeCheck className="h-3.5 w-3.5" /> Nothing missing for vineyard use.
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-border/60 text-xs">
+                    {issues.map((i) => (
+                      <li key={`${i.key}:${i.field ?? ""}`} className="flex items-center justify-between gap-2 py-1.5">
+                        <span className="inline-flex items-center gap-1">
+                          <AlertTriangle className={`h-3.5 w-3.5 ${i.key === "conflict" ? "text-destructive" : "text-warning"}`} /> {i.label}
+                        </span>
+                        <Button size="sm" variant="ghost" className="h-7 text-[11px]" disabled={busy} onClick={() => onIssueAction(i)}>
+                          {MASTER_ISSUE_ACTION_LABEL[i.action]}
+                        </Button>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 )}
-              </section>
-
-              {/* ---------------------------------- registered vineyard rates */}
-              <section className="space-y-2">
-                <h3 className="text-xs font-semibold text-muted-foreground">Registered vineyard rates</h3>
-                {rates.length === 0 ? (
-                  <div className="text-xs text-warning">
-                    {vineUses.length ? "Registered for grapevine — rate still unresolved" : "No vineyard rates"}
-                  </div>
-                ) : (
-                  (["per_hectare", "per_100_litres"] as MasterRateBasis[]).map((basis) => {
-                    const list = masterRatesForBasis(rates, basis);
-                    if (!list.length) return null;
-                    return (
-                      <div key={basis} className="text-xs">
-                        <span className="font-medium">{MASTER_RATE_BASIS_LABEL[basis]}: </span>
-                        {list.map(masterRateSummary).join("; ")}
-                      </div>
-                    );
-                  })
+                {unresolvedFields.length > 0 && (
+                  <div className="text-[11px] text-warning">Unresolved fields: {unresolvedFields.join(", ")}</div>
                 )}
-                <p className="text-[11px] text-muted-foreground">
-                  Vineyard rates come only from the authoritative enrichment and review path — they
-                  can't be typed in here. Use Find Missing Data, or open the label for reference.
-                </p>
-              </section>
+              </ReviewSection>
 
               {/* ------------------------------------- manual corrections */}
               <section className="space-y-2">
                 <h3 className="text-xs font-semibold text-muted-foreground">Manual corrections</h3>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   <Field label="Registered product name">
                     <Input disabled={busy} value={txt(identity.registered_product_name)}
                       onChange={(e) => setIdentity((s) => ({ ...s, registered_product_name: e.target.value }))} />
@@ -370,7 +469,7 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
               </section>
             </div>
 
-            <div className="sticky bottom-0 mt-4 -mx-6 border-t border-border/60 bg-background px-6 py-3 flex flex-wrap items-center gap-2">
+            <div className="sticky bottom-0 z-10 border-t border-border/60 bg-background px-6 py-3 flex flex-wrap items-center gap-2">
               <Button size="sm" variant="ghost" disabled={!props.hasPrevious || busy} onClick={props.onPrevious}>
                 <ChevronLeft className="h-4 w-4" /> Previous
               </Button>
@@ -405,6 +504,79 @@ export function MasterCurationDrawer(props: MasterCurationDrawerProps) {
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+/* ------------------------------------------------------- field statuses */
+
+export type FieldStatus = "ok" | "review" | "missing" | "na";
+
+export const FIELD_STATUS_CLASS: Record<FieldStatus, string> = {
+  ok: "border-l-4 border-success",
+  review: "border-l-4 border-warning bg-warning/10",
+  missing: "border-l-4 border-destructive bg-destructive/10",
+  na: "border-l-4 border-border",
+};
+
+const DEFAULT_EMPTY: Record<FieldStatus, string> = {
+  ok: "—",
+  review: "Not established",
+  missing: "Missing",
+  na: "Not applicable",
+};
+
+const uniq = (xs: string[]) => Array.from(new Set(xs));
+
+/** Collapse duplicated raw rate lines into canonical text + count. */
+function groupRates(lines: string[]): Array<[string, number]> {
+  const m = new Map<string, number>();
+  for (const l of lines) m.set(l, (m.get(l) ?? 0) + 1);
+  return Array.from(m.entries());
+}
+
+function FieldRow({
+  label, value, state, missing = "missing", emptyText, link,
+}: {
+  label: string;
+  value: string | null | undefined;
+  /** Explicit status; otherwise present → ok, absent → `missing`. */
+  state?: FieldStatus;
+  missing?: FieldStatus;
+  emptyText?: string;
+  link?: boolean;
+}) {
+  const v = value == null ? "" : String(value).trim();
+  const st: FieldStatus = state ?? (v ? "ok" : missing);
+  return (
+    <div data-status={st} data-field={label} className={`flex flex-wrap items-baseline justify-between gap-2 rounded-sm px-2 py-1 text-xs ${FIELD_STATUS_CLASS[st]}`}>
+      <span className="text-muted-foreground">{label}</span>
+      {v ? (
+        link ? (
+          <a href={v} target="_blank" rel="noopener noreferrer" className="max-w-[70%] truncate font-medium underline">{v}</a>
+        ) : (
+          <span className="font-medium text-right break-words">{v}</span>
+        )
+      ) : (
+        <span className={`font-semibold ${st === "missing" ? "text-destructive" : st === "review" ? "text-warning" : "text-muted-foreground"}`}>
+          {emptyText ?? DEFAULT_EMPTY[st]}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function ReviewSection({
+  title, testId, state, children,
+}: { title: string; testId: string; state?: FieldStatus; children: React.ReactNode }) {
+  return (
+    <section
+      aria-label={title}
+      data-testid={testId}
+      className={`space-y-1.5 rounded-md border p-3 ${state === "missing" ? "border-2 border-destructive" : state === "review" ? "border-warning/60" : "border-border/60"}`}
+    >
+      <h3 className="text-xs font-semibold text-muted-foreground">{title}</h3>
+      {children}
+    </section>
   );
 }
 
