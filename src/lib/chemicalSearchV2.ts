@@ -113,8 +113,14 @@ export interface MasterSearchHit {
    * them; null otherwise. Never synthesised by the Portal.
    */
   defaultRateOptions: CanonicalDefaultRateOptions | null;
-  /** Display only — "2.4–3.2 L/ha · 240–320 mL/100 L". */
+  /**
+   * Compact search-card indicator only, e.g. "Vineyard rates available: /ha
+   * and /100 L · 137 entries". Individual rates are never listed at search
+   * level; they appear after selection + structured hydration.
+   */
   rateSummary: string;
+  /** Master `review_status` verbatim-normalised; null when the RPC omits it. */
+  reviewStatus: string | null;
   /** Structured activity groups as the RPC returned them, e.g. "HRAC 10". */
   activityGroupText: string;
   /**
@@ -276,7 +282,8 @@ export function normaliseMasterSearchHit(raw: unknown): MasterSearchHit | null {
     catalogueVersion: numOrNull(o.catalogue_version),
     rates,
     defaultRateOptions,
-    rateSummary: rates.map(masterRateSummary).join(" · "),
+    rateSummary: compactRateIndicator(rates),
+    reviewStatus: strOrNull(o.review_status ?? o.catalogue_status)?.toLowerCase() ?? null,
     activityGroupText: groupCodes.length
       ? groupCodes.map((c) => (scheme ? `${scheme} ${c}` : c)).join(" + ")
       : "",
@@ -285,6 +292,30 @@ export function normaliseMasterSearchHit(raw: unknown): MasterSearchHit | null {
     draft,
   };
 }
+
+/** One-line vineyard-rate indicator for a search card — never the rate list. */
+export function compactRateIndicator(rates: MasterViticultureRate[]): string {
+  if (!rates.length) return "";
+  const bases: string[] = [];
+  if (rates.some((r) => r.basis === "per_hectare")) bases.push("/ha");
+  if (rates.some((r) => r.basis === "per_100_litres")) bases.push("/100 L");
+  const n = rates.length;
+  const count = `${n} registered vineyard rate ${n === 1 ? "entry" : "entries"}`;
+  return bases.length ? `Vineyard rates available: ${bases.join(" and ")} · ${count}` : count;
+}
+
+/**
+ * Customer visibility of Master search hits. Ordinary users only see approved
+ * products (or hits whose status the RPC does not state — the RPC owns that
+ * filter). System admins also see candidates, which the UI labels Candidate.
+ */
+export function visibleMasterHits(hits: MasterSearchHit[], isSystemAdmin: boolean): MasterSearchHit[] {
+  if (isSystemAdmin) return hits;
+  return hits.filter((h) => h.reviewStatus == null || h.reviewStatus === "approved");
+}
+
+export const isCandidateHit = (h: MasterSearchHit): boolean =>
+  h.reviewStatus != null && h.reviewStatus !== "approved";
 
 export const MASTER_SEARCH_RPC = "search_master_chemicals_v2";
 
