@@ -151,21 +151,6 @@ function Field({ label, value, status }: { label: string; value: React.ReactNode
   );
 }
 
-function RateList({ title, items }: { title: string; items: any[] }) {
-  return (
-    <div className="space-y-1">
-      <div className="text-sm font-medium">{title}</div>
-      {items.length === 0 ? <p className="text-xs text-muted-foreground">None extracted</p> : (
-        <ul className="space-y-1 text-xs">{items.map((r, i) => (
-          <li key={i} className="rounded border p-1.5">
-            {[pick(r, "rate_text", "text"), pick(r, "target", "targets"), pick(r, "situation", "crop")].filter(Boolean).map(labelOf).join(" · ") || labelOf(r)}
-          </li>
-        ))}</ul>
-      )}
-    </div>
-  );
-}
-
 function ReviewSheet({ revisionId, onClose }: { revisionId: string | null; onClose: () => void }) {
   const qc = useQueryClient();
   const [note, setNote] = useState("");
