@@ -11,7 +11,8 @@
 //      lookup runs AUTOMATICALLY. There is no operator "search online" button.
 //   3. Candidates identify the agricultural product; choosing one enriches that
 //      exact identity against its manufacturer label (`selectedName`).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createHydrationGate } from "@/lib/masterHydrationGate";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ChevronDown, ExternalLink, Loader2, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -130,8 +131,20 @@ export function AddChemicalV2Dialog({
   const [optionalOpen, setOptionalOpen] = useState(false);
   const [duplicate, setDuplicate] = useState<{ chemical: SavedChemical; message: string } | null>(null);
 
+  // Each Master hydration belongs to one selection generation; anything that
+  // changes the selection invalidates older requests (see masterHydrationGate).
+  const hydrationGate = useRef(createHydrationGate()).current;
+  const [hydrating, setHydrating] = useState(false);
+  const [hydrationNotice, setHydrationNotice] = useState<string | null>(null);
+  const invalidateHydration = () => {
+    hydrationGate.invalidate();
+    setHydrating(false);
+    setHydrationNotice(null);
+  };
+
   useEffect(() => {
     if (open) return;
+    invalidateHydration();
     setStep("search");
     setSearch("");
     setDebounced("");
@@ -184,6 +197,7 @@ export function AddChemicalV2Dialog({
   }, [stagedSearch.data?.detail]);
 
   const applyStagedDetail = (detail: StagedDetail) => {
+    invalidateHydration();
     const init = initialiseDefaultRatesFromStaged(detail.rateOptions, {
       selected_at: new Date().toISOString(),
     });
@@ -232,9 +246,6 @@ export function AddChemicalV2Dialog({
 
   // Selected-result hydration only (never while typing): the structured
   // lookup supplies the backend canonical rate options for THIS identity.
-  const [hydrating, setHydrating] = useState(false);
-  const [hydrationNotice, setHydrationNotice] = useState<string | null>(null);
-
   const selectMaster = async (result: MasterSearchHit) => {
     setHit(result);
     setStaged(null);
@@ -245,7 +256,15 @@ export function AddChemicalV2Dialog({
     setHydrationNotice(null);
     setStep("master");
     setHydrating(true);
-    const hydration = await hydrateMasterSelection(result);
+    const token = hydrationGate.begin();
+    let hydration: Awaited<ReturnType<typeof hydrateMasterSelection>>;
+    try {
+      hydration = await hydrateMasterSelection(result);
+    } catch {
+      hydration = { status: "failed", options: null } as unknown as typeof hydration;
+    }
+    // A late reply from an older selection is ignored completely.
+    if (!hydrationGate.isCurrent(token)) return;
     const hydrated: MasterSearchHit = {
       ...result,
       defaultRateOptions: hydration.options ?? result.defaultRateOptions,
@@ -254,13 +273,14 @@ export function AddChemicalV2Dialog({
       selected_at: new Date().toISOString(),
       label_version: hydrated.labelVersion,
     }, hydrated.defaultRateOptions);
-    setHit((cur) => (cur && cur.id === result.id ? hydrated : cur));
+    setHit(hydrated);
     setSelections(init.selections);
     setHydrationNotice(hydration.status === "hydrated" ? null : MASTER_HYDRATION_FAILED_TEXT);
     setHydrating(false);
   };
 
   const startManual = () => {
+    invalidateHydration();
     setHit(null);
     setStaged(null);
     setManualName(search.trim());
@@ -624,7 +644,7 @@ export function AddChemicalV2Dialog({
             />
 
             <div className="flex justify-between gap-2">
-              <Button variant="ghost" onClick={() => setStep("search")}>Back</Button>
+              <Button variant="ghost" onClick={() => { invalidateHydration(); setStep("search"); }}>Back</Button>
               <Button disabled={!masterCanSave || save.isPending} onClick={() => save.mutate()}>
                 {save.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Save
               </Button>
@@ -749,7 +769,7 @@ export function AddChemicalV2Dialog({
             </div>
 
             <div className="flex justify-between gap-2">
-              <Button variant="ghost" onClick={() => setStep("search")}>Back</Button>
+              <Button variant="ghost" onClick={() => { invalidateHydration(); setStep("search"); }}>Back</Button>
               <Button disabled={!stagedCanSave || save.isPending} onClick={() => save.mutate()}>
                 {save.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Save
               </Button>
@@ -792,7 +812,7 @@ export function AddChemicalV2Dialog({
             />
 
             <div className="flex justify-between gap-2">
-              <Button variant="ghost" onClick={() => setStep("search")}>Back</Button>
+              <Button variant="ghost" onClick={() => { invalidateHydration(); setStep("search"); }}>Back</Button>
               <Button disabled={!manualCanSave || save.isPending} onClick={() => save.mutate()}>
                 {save.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Save
               </Button>
