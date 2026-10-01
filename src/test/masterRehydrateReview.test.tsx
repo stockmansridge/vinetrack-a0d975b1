@@ -42,7 +42,7 @@ describe("rehydration scope + request", () => {
   it("can stop and resume without restarting completed rows; queue holds processed ids", async () => {
     let calls: string[] = [];
     let stop = false;
-    const invoke = async (id: string) => { calls.push(id); if (id === "b") stop = true; return { outcome: id === "c" ? "conflict" : "material_change" }; };
+    const invoke = async (id: string) => { calls.push(id); if (id === "b") stop = true; return { outcome: id === "c" ? "conflict" : "material_change", applied: true }; };
     const first = await runCatalogueRefresh({ ids: ["a", "b", "c", "d"], concurrency: 1, invoke, isCancelled: () => stop });
     expect(calls).toEqual(["a", "b"]);
     expect(pendingIds(first, ["a", "b", "c", "d"])).toEqual(["c", "d"]);

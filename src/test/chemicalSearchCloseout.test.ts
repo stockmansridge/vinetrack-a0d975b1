@@ -276,8 +276,8 @@ describe("candidate catalogue refresh", () => {
 
   it("classifies backend outcomes separately", () => {
     expect(classifyRefreshOutcome({ refresh_outcome: "no_material_change" })).toBe("no_material_change");
-    expect(classifyRefreshOutcome({ outcome: "material_change" })).toBe("material_change");
-    expect(classifyRefreshOutcome({ outcome: "evidence_refreshed" })).toBe("evidence_refreshed");
+    expect(classifyRefreshOutcome({ outcome: "material_change", applied: true })).toBe("material_change");
+    expect(classifyRefreshOutcome({ outcome: "evidence_refreshed", applied: true })).toBe("evidence_refreshed");
     expect(classifyRefreshOutcome({ conflicts: [{ field: "actives" }] })).toBe("conflict");
     expect(classifyRefreshOutcome({ outcome: "source_unavailable" })).toBe("source_unavailable");
     expect(classifyRefreshError(new Error("429 rate limit"))).toBe("source_unavailable");

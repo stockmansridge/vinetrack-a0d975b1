@@ -40,6 +40,7 @@ import {
   rehydratedQueueIds,
   runCatalogueRefresh,
   writeStoredRefreshState,
+  DEFAULT_REQUEST_TIMEOUT_MS,
   type EvidenceAgeRow,
   type MasterRefreshOutcome,
   type RefreshRunState,
@@ -51,6 +52,7 @@ const OUTCOME_ORDER: MasterRefreshOutcome[] = [
   "evidence_refreshed",
   "no_material_change",
   "conflict",
+  "not_applied",
   "source_unavailable",
   "failed",
 ];
@@ -117,12 +119,16 @@ export function MasterCatalogueRefreshDialog({
     cancelled.current = false;
     setRunning(true);
     const correlationId = newLookupCorrelationId();
+    try {
     const next = await runCatalogueRefresh({
       ids: initial.planned,
       initialState: initial,
       concurrency: DEFAULT_REFRESH_CONCURRENCY,
       // Politeness: never flood registers / manufacturer sources.
       delayMs: 400,
+      requestTimeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
+      // Diagnostic trace (planned / queue / cursor / cancelled / paused / rows / pending).
+      onTrace: (e) => console.info("[master-rehydrate]", e.type, e),
       isCancelled: () => cancelled.current,
       onProgress: persist,
       invoke: async (id) => {
@@ -134,9 +140,21 @@ export function MasterCatalogueRefreshDialog({
       },
     });
     persist(next);
-    setRunning(false);
-    onFinished?.();
+    } catch (e) {
+      console.error("[master-rehydrate] runner crashed", e);
+    } finally {
+      setRunning(false);
+      onFinished?.();
+    }
   }
+
+  // The batch runs in this browser tab: warn before a reload / close cuts it short.
+  useEffect(() => {
+    if (!running) return;
+    const h = (ev: BeforeUnloadEvent) => { ev.preventDefault(); ev.returnValue = ""; };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [running]);
 
   /** Plan a NEW batch from freshly re-read Master rows. */
   async function startNextBatch() {
@@ -237,9 +255,9 @@ export function MasterCatalogueRefreshDialog({
                 <AlertDescription>{PAUSED_SOURCE_MESSAGE}</AlertDescription>
               </Alert>
             )}
-            {(totals.source_unavailable > 0 || totals.failed > 0) && !running && !state.paused && (
+            {(totals.source_unavailable > 0 || totals.failed > 0 || totals.not_applied > 0) && !running && !state.paused && (
               <p className="text-[11px] text-muted-foreground">
-                Failed and unavailable rows can be retried — Resume only retries those and any
+                Retry required: failed, unavailable and not-applied rows can be retried — Resume only retries those and any
                 unfinished rows in this batch.
               </p>
             )}
