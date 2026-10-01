@@ -612,6 +612,7 @@ export const SYSTEM_ADMIN_GROUPS: SystemAdminGroup[] = [
       systemAdminItem("Invitations"),
       systemAdminItem("Access & Entitlements"),
       systemAdminItem("Billing Grants"),
+      systemAdminItem("Billing (customer view)"),
       systemAdminItem("System Admins"),
     ],
   },
