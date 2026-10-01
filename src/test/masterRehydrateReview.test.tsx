@@ -102,7 +102,7 @@ describe("review drawer", () => {
     const complete = { ...base, viticulture_rates: [], active_ingredients: [] };
     renderDrawer(complete, { onApprovedNext });
     const btn = screen.queryByRole("button", { name: /Approve & Next/ });
-    if (!btn) return; // record has release blockers; covered by masterDrawerClosure tests
+    console.log("APPROVE_BTN_PRESENT", !!btn); if (!btn) return;
     fireEvent.click(btn);
     await waitFor(() => expect(onApprovedNext).toHaveBeenCalledWith("m1"));
   });
