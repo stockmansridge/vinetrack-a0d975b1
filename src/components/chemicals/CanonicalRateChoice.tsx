@@ -8,7 +8,7 @@ import type {
   CanonicalRateBasis,
   PersistedDefaultRateSelection,
 } from "@/lib/chemicalDefaultRatesContract";
-import { MASTER_RATE_BASIS_LABEL } from "@/lib/chemicalSearchV2";
+import { MASTER_RATE_BASIS_LABEL } from "@/lib/masterCuration";
 import { canonicalOptionHeading, targetSummary } from "@/lib/masterRateOptionGroups";
 import { selectionSummary } from "@/lib/chemicalSearchV2";
 
