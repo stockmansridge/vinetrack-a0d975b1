@@ -1,5 +1,5 @@
-// Chemical Lookup V3 Lab — System Admin prototype. Independent of
-// master_chemicals, Chemical Search V1/V2 and saved_chemicals.
+// Chemical Lookup V3 Lab — System Admin prototype. Independent of the Master
+// catalogue, Chemical Search V1/V2 and vineyard saved chemicals.
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Camera, ExternalLink, FlaskConical, Search } from "lucide-react";
