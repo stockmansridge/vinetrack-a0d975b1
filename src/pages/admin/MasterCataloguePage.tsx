@@ -576,7 +576,7 @@ function ReviewDialog({
                 (versions.data ?? []).map((v) => (
                   <div key={v.id} className="px-3 py-2 flex items-center justify-between gap-2">
                     <span>
-                      {vineyardCountryCode(row.registration_country) ?? "??"} · rev{" "}
+                      {vineyardCountryCode(row.registration_country) ?? "??"} · Catalogue revision{" "}
                       {v.catalogue_version ?? "—"}
                     </span>
                     <span className="text-muted-foreground">
