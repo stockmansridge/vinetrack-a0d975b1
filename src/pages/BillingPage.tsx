@@ -169,15 +169,16 @@ export default function BillingPage({ customerPreview = false }: { customerPrevi
     }
   }, []);
   useEffect(() => {
+    if (customerPreview) return;
     fetchBilling();
-  }, [fetchBilling]);
+  }, [fetchBilling, customerPreview]);
 
   // Prefer billing-detail response (service role) over direct RLS reads.
-  const licences =
+  const licences = customerPreview ? [] :
     billing && billing.licences.length > 0 ? billing.licences : directLicences;
-  const invoices =
+  const invoices = customerPreview ? [] :
     billing && billing.invoices.length > 0 ? billing.invoices : directInvoices;
-  const billingSub = billing?.subscription ?? null;
+  const billingSub = customerPreview ? null : billing?.subscription ?? null;
 
   const [busy, setBusy] = useState<"checkout" | "portal" | "seats" | "addUser" | "revoke" | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -321,6 +322,10 @@ export default function BillingPage({ customerPreview = false }: { customerPrevi
   const showLicenceManagement = isStripeTeam || isInternalUnlimited;
 
   async function startCheckout() {
+    if (customerPreview) {
+      toast.message("Customer preview — checkout is switched off.");
+      return;
+    }
     if (!selectedVineyardId) {
       toast.error("Please select a vineyard before starting Team checkout.");
       return;
