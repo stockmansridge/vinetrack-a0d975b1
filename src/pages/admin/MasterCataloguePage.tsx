@@ -29,6 +29,7 @@ import {
   rehydratedQueueIds,
   rehydrationScopeIds,
   rehydrationBacklog,
+  batchQueueIds,
   retryableRunIds,
   type RefreshRowState,
   type RefreshRunState,
@@ -117,14 +118,14 @@ function CatalogueBody() {
   // Rehydration scope is ALWAYS every candidate in the unfiltered catalogue.
   const rehydrateIds = useMemo(() => rehydrationScopeIds(q.data ?? []), [q.data]);
   const backlog = useMemo(() => rehydrationBacklog(q.data ?? []), [q.data]);
-  const runIds = useMemo(() => new Set(rehydratedQueueIds(runState)), [runState]);
+  const runIds = useMemo(() => new Set(batchQueueIds(runState)), [runState]);
   const retryCount = retryableRunIds(runState).length;
 
   const queue = useMemo(() => {
     if (!runQueue) return filterMasterQueue(q.data ?? [], filter, search);
     const byId = new Map((q.data ?? []).map((r) => [r.id, r]));
     // Approved rows leave the candidate review queue.
-    return rehydratedQueueIds(runState)
+    return batchQueueIds(runState)
       .map((id) => byId.get(id))
       .filter((r): r is MasterChemicalRow => !!r && (r.review_status ?? "candidate") === "candidate")
       .filter((r) => !search.trim() || filterMasterQueue([r], "all", search).length > 0);
@@ -275,7 +276,7 @@ function CatalogueBody() {
           setRefreshOpen(false);
           setRunQueue(true);
           setSearch("");
-          const first = rehydratedQueueIds(s).find((id) =>
+          const first = batchQueueIds(s).find((id) =>
             (q.data ?? []).some((r) => r.id === id && (r.review_status ?? "candidate") === "candidate"),
           );
           openId(first ?? null);

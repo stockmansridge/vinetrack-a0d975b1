@@ -266,6 +266,12 @@ export function rehydratedQueueIds(state: RefreshRunState | null): string[] {
   });
 }
 
+/** "Rehydrated this batch": every processed id of THIS batch only, in planned order. */
+export function batchQueueIds(state: RefreshRunState | null): string[] {
+  if (!state) return [];
+  return state.planned.filter((id) => !!state.rows[id]);
+}
+
 /** Retryable ids from the run (failed / source unavailable). */
 export function retryableRunIds(state: RefreshRunState | null): string[] {
   if (!state) return [];
