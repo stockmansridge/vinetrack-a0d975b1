@@ -148,7 +148,7 @@ export async function signedV3MediaUrl(path: string | null | undefined): Promise
   return data?.signedUrl ?? null;
 }
 
-export function photoInputPath(userId: string, fileName: string, unique = crypto.randomUUID()): string {
+export function photoInputPath(userId: string, fileName: string, unique: string = crypto.randomUUID()): string {
   const ext = (fileName.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
   return `search-inputs/${userId}/${unique}.${ext}`;
 }
