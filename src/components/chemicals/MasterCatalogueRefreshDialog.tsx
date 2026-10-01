@@ -52,6 +52,7 @@ const OUTCOME_ORDER: MasterRefreshOutcome[] = [
   "evidence_refreshed",
   "no_material_change",
   "conflict",
+  "not_applied",
   "source_unavailable",
   "failed",
 ];
@@ -254,9 +255,9 @@ export function MasterCatalogueRefreshDialog({
                 <AlertDescription>{PAUSED_SOURCE_MESSAGE}</AlertDescription>
               </Alert>
             )}
-            {(totals.source_unavailable > 0 || totals.failed > 0) && !running && !state.paused && (
+            {(totals.source_unavailable > 0 || totals.failed > 0 || totals.not_applied > 0) && !running && !state.paused && (
               <p className="text-[11px] text-muted-foreground">
-                Failed and unavailable rows can be retried — Resume only retries those and any
+                Retry required: failed, unavailable and not-applied rows can be retried — Resume only retries those and any
                 unfinished rows in this batch.
               </p>
             )}

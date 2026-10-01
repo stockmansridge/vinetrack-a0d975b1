@@ -193,7 +193,7 @@ function CatalogueBody() {
           </Button>
         )}
         {retryCount > 0 && (
-          <span className="text-xs text-destructive">{retryCount} failed / unavailable — resume the batch to retry</span>
+          <span className="text-xs text-destructive">Retry required ({retryCount}) — resume the batch to retry</span>
         )}
       </div>
 
@@ -378,7 +378,7 @@ function QueueRow({
           variant="outline"
           data-testid="rehydration-status"
           className={`text-[10px] ${
-            runRow.outcome === "failed" || runRow.outcome === "conflict"
+            runRow.outcome === "failed" || runRow.outcome === "conflict" || runRow.outcome === "not_applied"
               ? "border-destructive/50 text-destructive"
               : runRow.outcome === "source_unavailable"
                 ? "border-warning/50 text-warning"
@@ -388,9 +388,12 @@ function QueueRow({
           {REFRESH_ROW_STATUS_LABEL[runRow.outcome]}
         </Badge>
       )}
-      {(row.retrieved_at || runAt) && (
-        <span className="text-[10px] text-muted-foreground">
-          Checked {(row.retrieved_at ?? runAt ?? "").slice(0, 16).replace("T", " ")}
+      <span className="text-[10px] text-muted-foreground" data-testid="latest-evidence">
+        Latest evidence: {row.retrieved_at ? row.retrieved_at.slice(0, 16).replace("T", " ") : "Never"}
+      </span>
+      {runRow && (runRow.attemptedAt ?? runAt) && (
+        <span className="text-[10px] text-muted-foreground" data-testid="refresh-attempted">
+          Refresh attempted: {(runRow.attemptedAt ?? runAt ?? "").slice(0, 16).replace("T", " ")}
         </span>
       )}
 
