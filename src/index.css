@@ -36,6 +36,8 @@
     --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 100%;
 
+    --success: 142 64% 36%;
+    --success-foreground: 0 0% 100%;
     --warning: 36 92% 50%;
     --wind: 48 96% 48%;
     --warning-foreground: 30 30% 12%;
@@ -88,6 +90,8 @@
     --destructive: 0 70% 55%;
     --destructive-foreground: 0 0% 100%;
 
+    --success: 142 55% 45%;
+    --success-foreground: 0 0% 100%;
     --warning: 36 92% 55%;
     --wind: 50 98% 56%;
     --warning-foreground: 30 30% 12%;
