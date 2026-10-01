@@ -620,3 +620,96 @@ export function selectionSummary(selection: PersistedDefaultRateSelection): stri
 }
 
 export const masterRateBasisOf = (r: MasterViticultureRate): MasterRateBasis => r.basis;
+
+/* ------------------------------ selected-result structured hydration */
+
+/**
+ * Hydrates ONE selected Master result through the existing
+ * `chemical-info-lookup` structured action (Rork contract 7e80e5d9) to obtain
+ * the backend canonical `default_rate_options`. Search itself never carries
+ * them. Fires only on selection, never while typing.
+ *
+ * Fail-closed: any failure, identity mismatch, unresolved response or missing
+ * options returns no options — the Portal never mints or reconstructs an
+ * option/rate/direction identity; rates then save as honest manual entries.
+ */
+export type MasterHydrationResult =
+  | { status: "hydrated"; options: CanonicalDefaultRateOptions }
+  | { status: "unavailable" | "identity_mismatch" | "unresolved" | "no_options"; options: null };
+
+export const MASTER_HYDRATION_FAILED_TEXT =
+  "Catalogue rate details could not be fully loaded. A rate you choose will be saved as a manual rate without its catalogue reference.";
+
+const COUNTRY_NAME: Record<string, string> = { AU: "Australia", NZ: "New Zealand" };
+const normCountry = (v: unknown): string => {
+  const s = String(v ?? "").trim();
+  if (!s) return "";
+  const up = s.toUpperCase();
+  if (COUNTRY_NAME[up]) return up;
+  const hit = Object.entries(COUNTRY_NAME).find(([, n]) => n.toLowerCase() === s.toLowerCase());
+  return hit ? hit[0] : up;
+};
+const normReg = (v: unknown): string => String(v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+export function masterHydrationRequestBody(hit: MasterSearchHit, correlationId?: string) {
+  const code = normCountry(hit.registrationCountry);
+  const country = COUNTRY_NAME[code] ?? hit.registrationCountry;
+  return {
+    action: "structured" as const,
+    country,
+    productName: hit.productName,
+    registrationNumber: hit.registrationNumber,
+    registrationScheme: hit.registrationScheme,
+    master_chemical_id: hit.id,
+    client: { platform: "portal", correlation_id: correlationId ?? `portal-${Date.now().toString(36)}` },
+  };
+}
+
+/** Pure: validate a structured response against the selected Master identity. */
+export function parseMasterHydration(hit: MasterSearchHit, payload: unknown): MasterHydrationResult {
+  const top = (payload && typeof payload === "object" ? payload : null) as Record<string, any> | null;
+  if (!top) return { status: "unavailable", options: null };
+  const inner =
+    [top.master, top.product, top.result, top.chemical].find((x) => x && typeof x === "object") ?? {};
+  const o: Record<string, any> = { ...inner, ...top };
+  const state = String(o.status ?? o.resolution ?? o.resolution_state ?? "").toLowerCase();
+  const masterId = str(o.master_chemical_id ?? inner.master_chemical_id ?? inner.id);
+  if (state === "unresolved" || !masterId) return { status: "unresolved", options: null };
+  if (masterId !== hit.id) return { status: "identity_mismatch", options: null };
+  const reg = o.registration_number ?? o.registrationNumber;
+  if (normReg(reg) !== normReg(hit.registrationNumber) || !normReg(reg)) {
+    return { status: "identity_mismatch", options: null };
+  }
+  const country = o.registration_country ?? o.country;
+  if (country != null && hit.registrationCountry && normCountry(country) !== normCountry(hit.registrationCountry)) {
+    return { status: "identity_mismatch", options: null };
+  }
+  const key = str(o.registration_identity_key);
+  const expectedKey = `${normCountry(hit.registrationCountry)}:${hit.registrationScheme.toLowerCase()}:${hit.registrationNumber}`;
+  if (key && hit.registrationScheme && key.toLowerCase() !== expectedKey.toLowerCase()) {
+    return { status: "identity_mismatch", options: null };
+  }
+  const decoded = decodeCanonicalDefaultRateOptions(o.default_rate_options);
+  if (!decoded) return { status: "no_options", options: null };
+  // Condition-ambiguous options are never used to label a rate canonically.
+  const options: CanonicalDefaultRateOptions = {
+    per_hectare: decoded.per_hectare.filter((x) => x.condition_ambiguous !== true),
+    per_100_litres: decoded.per_100_litres.filter((x) => x.condition_ambiguous !== true),
+  };
+  return { status: "hydrated", options };
+}
+
+export async function hydrateMasterSelection(
+  hit: MasterSearchHit,
+  invoke: (body: unknown) => Promise<{ data: unknown; error: unknown }> = (body) =>
+    (iosSupabase as any).functions.invoke("chemical-info-lookup", { body }),
+): Promise<MasterHydrationResult> {
+  if (!hit.registrationNumber || !hit.registrationCountry) return { status: "unavailable", options: null };
+  try {
+    const { data, error } = await invoke(masterHydrationRequestBody(hit));
+    if (error) return { status: "unavailable", options: null };
+    return parseMasterHydration(hit, data);
+  } catch {
+    return { status: "unavailable", options: null };
+  }
+}
