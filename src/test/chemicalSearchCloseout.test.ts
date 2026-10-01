@@ -267,10 +267,10 @@ describe("vineyard default rate inside the registered evidence", () => {
 
 describe("candidate catalogue refresh", () => {
   it("asks the existing backend action and never changes review status", () => {
-    const body = masterRefreshRequestBody("id-1", "AU", "cid-9") as any;
+    const body = masterRefreshRequestBody("id-1", "cid-9") as any;
     expect(body.action).toBe("master_refresh");
     expect(body.masterChemicalId).toBe("id-1");
-    expect(body.target_review_status).toBe("candidate");
+    expect(body.apply).toBe(true);
     expect(JSON.stringify(body)).not.toMatch(/service_role|approved/i);
   });
 

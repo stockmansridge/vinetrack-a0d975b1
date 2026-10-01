@@ -23,29 +23,39 @@ export interface MasterRefreshRequest {
   masterChemicalId: string;
   /** Snake-case alias for older deployments of the same action. */
   master_chemical_id: string;
-  country: string;
-  country_code: string;
-  /** The portal NEVER asks for approval. */
-  target_review_status: "candidate";
+  /** Refresh the candidate in place. The backend keeps review_status = candidate. */
+  apply: true;
 }
 
+/**
+ * Exact request for one Master record. No country is sent: the backend derives
+ * the jurisdiction from the exact Master record. Registration is optional.
+ * The portal NEVER asks for approval here.
+ */
 export function masterRefreshRequestBody(
   masterChemicalId: string,
-  country: string,
   correlationId?: string,
 ): Record<string, unknown> {
   const body: MasterRefreshRequest = {
     action: MASTER_REFRESH_ACTION,
     masterChemicalId,
     master_chemical_id: masterChemicalId,
-    country,
-    country_code: country,
-    target_review_status: "candidate",
+    apply: true,
   };
-  return withClientDiagnostics({
-    ...(body as unknown as Record<string, unknown>),
-    ...(correlationId ? { correlationId } : {}),
-  });
+  return withClientDiagnostics(body as unknown as Record<string, unknown>, correlationId);
+}
+
+/**
+ * Rehydration scope: EVERY candidate Master record from the unfiltered
+ * catalogue, independent of the current UI filter. Approved / retired rows are
+ * never refreshed in place.
+ */
+export function rehydrationScopeIds(
+  rows: Array<{ id: string; review_status?: string | null }>,
+): string[] {
+  return rows
+    .filter((r) => (r.review_status ?? "candidate") === "candidate")
+    .map((r) => r.id);
 }
 
 /* ------------------------------------------------------------- outcomes */
@@ -61,14 +71,71 @@ export type MasterRefreshOutcome =
   | "failed";
 
 export const REFRESH_OUTCOME_LABEL: Record<MasterRefreshOutcome, string> = {
-  no_material_change: "No material change",
-  material_change: "Material change",
+  no_material_change: "No change",
+  material_change: "Updated",
   evidence_refreshed: "Evidence refreshed",
   conflict: "Conflict",
   source_unavailable: "Source unavailable",
   skipped: "Skipped",
   failed: "Failed",
 };
+
+/** Short per-row status for the Master list. */
+export const REFRESH_ROW_STATUS_LABEL: Record<MasterRefreshOutcome, string> = {
+  no_material_change: "No change",
+  material_change: "Rehydrated",
+  evidence_refreshed: "Rehydrated",
+  conflict: "Conflict",
+  source_unavailable: "Source unavailable",
+  skipped: "Skipped",
+  failed: "Failed",
+};
+
+/** Outcomes that belong in the "Rehydrated this run" review queue. */
+export const REVIEW_QUEUE_OUTCOMES: MasterRefreshOutcome[] = [
+  "material_change",
+  "evidence_refreshed",
+  "no_material_change",
+  "conflict",
+];
+
+/** Processed ids for review, in planned order. Failed / unavailable excluded. */
+export function rehydratedQueueIds(state: RefreshRunState | null): string[] {
+  if (!state) return [];
+  return state.planned.filter((id) => {
+    const row = state.rows[id];
+    return !!row && REVIEW_QUEUE_OUTCOMES.includes(row.outcome);
+  });
+}
+
+/** Retryable ids from the run (failed / source unavailable). */
+export function retryableRunIds(state: RefreshRunState | null): string[] {
+  if (!state) return [];
+  return state.planned.filter((id) => {
+    const o = state.rows[id]?.outcome;
+    return o === "failed" || o === "source_unavailable";
+  });
+}
+
+/** Read the persisted run state (browser-refresh safe). */
+export function readStoredRefreshState(): RefreshRunState | null {
+  try {
+    const raw = localStorage.getItem(REFRESH_STORAGE_KEY);
+    const s = raw ? JSON.parse(raw) : null;
+    return s && s.version === 1 && Array.isArray(s.planned) && s.rows ? s : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeStoredRefreshState(state: RefreshRunState | null) {
+  try {
+    if (!state) localStorage.removeItem(REFRESH_STORAGE_KEY);
+    else localStorage.setItem(REFRESH_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    /* storage is a convenience only */
+  }
+}
 
 /** Outcomes that must not be retried automatically. */
 export const TERMINAL_OUTCOMES: MasterRefreshOutcome[] = [
