@@ -163,3 +163,35 @@ describe("3. option -> selection -> save payload -> read-back", () => {
     expect(parseMasterViticultureRates(ROW.viticulture_rates).every((r) => r.basis !== ("other" as any))).toBe(true);
   });
 });
+
+describe("4. Rork-confirmed canonical Phalaris option (default_option_v1_5f58…)", () => {
+  const OPTION = "default_option_v1_5f58b1d9f422213e1ecf8632036c1356";
+  const hit = normaliseMasterSearchHit({
+    ...clone(),
+    default_rate_options: {
+      per_hectare: [],
+      per_100_litres: [
+        { option_key: OPTION, rate_ids: [PHALARIS_100L], basis: "per_100_litres", unit: "mL", value: null, min_value: 500, max_value: 1000 },
+      ],
+    },
+  })!;
+  const r = hit.rates.find((x) => x.source_id === PHALARIS_100L)!;
+
+  it("displays Phalaris Handgun bound to its direction", () => {
+    expect(r).toMatchObject({ min_value: 500, max_value: 1000, unit: "mL", basis: "per_100_litres", direction_id: PHALARIS_DIRECTION, target: "Phalaris", label: "Handgun" });
+  });
+
+  it("saves and reads back with the canonical option and rate identity", () => {
+    const sel = selectionFromMasterRate(r, { selected_at: "2026-10-01T00:00:00Z", label_version: hit.labelVersion }, hit.defaultRateOptions)!;
+    const payload = buildMasterSavedChemicalInput(hit, persistedDefaultRates({ per_100_litres: sel }));
+    expect(payload.master_chemical_id).toBe(ROW.id);
+    const back = decodePersistedDefaultRates(JSON.parse(JSON.stringify(payload.default_rates)))!;
+    expect(back.per_100_litres).toMatchObject({ entry_method: "canonical", option_key: OPTION, rate_ids: [PHALARIS_100L], min_value: 500, max_value: 1000, unit: "mL", basis: "per_100_litres" });
+  });
+
+  it("keeps both bases and all 32 unresolved entries", () => {
+    expect(new Set(hit.rates.map((x) => x.basis))).toEqual(new Set(["per_hectare", "per_100_litres"]));
+    expect((ROW.verification_unresolved_fields as any[]).length).toBe(32);
+    expect(hit.structured.verification_unresolved_fields).toHaveLength(32);
+  });
+});
