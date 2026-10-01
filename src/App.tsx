@@ -129,6 +129,7 @@ import MasterCataloguePage from "./pages/admin/MasterCataloguePage";
 import AdminIntegrationDetailPage from "./pages/admin/AdminIntegrationDetailPage";
 import BillingPage from "./pages/BillingPage";
 import AdminBillingPreviewPage from "./pages/admin/AdminBillingPreviewPage";
+import ChemicalV3LabPage from "./pages/admin/ChemicalV3LabPage";
 import AccountBillingPage from "./pages/account/BillingPage";
 
 const queryClient = new QueryClient();
@@ -283,6 +284,7 @@ const App = () => (
                     <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
                     <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
                     <Route path="/admin/master-catalogue" element={<MasterCataloguePage />} />
+                    <Route path="/admin/chemical-v3" element={<ChemicalV3LabPage />} />
                     <Route path="/admin/users" element={<AdminUsersPage />} />
                     <Route path="/admin/users/:id" element={<AdminUserDetailPage />} />
                     <Route path="/admin/vineyards" element={<AdminVineyardsPage />} />
