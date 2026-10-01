@@ -682,10 +682,25 @@ const normCountry = (v: unknown): string => {
 };
 const normReg = (v: unknown): string => String(v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
-export function masterHydrationRequestBody(hit: MasterSearchHit, correlationId?: string) {
+export interface MasterHydrationOptions {
+  /**
+   * System Admin exact-ID candidate preview. Sent ONLY for a candidate hit
+   * selected by a System Admin; the backend re-checks admin status itself and
+   * must keep ordinary structured serving approved-only. Read-only.
+   */
+  adminCandidatePreview?: boolean;
+}
+
+export function masterHydrationRequestBody(
+  hit: MasterSearchHit,
+  correlationId?: string,
+  opts: MasterHydrationOptions = {},
+) {
   const code = normCountry(hit.registrationCountry);
   const country = COUNTRY_NAME[code] ?? hit.registrationCountry;
+  const preview = opts.adminCandidatePreview === true && isCandidateHit(hit);
   return {
+    ...(preview ? { admin_candidate_preview: true } : {}),
     action: "structured" as const,
     country,
     productName: hit.productName,
@@ -734,10 +749,11 @@ export async function hydrateMasterSelection(
   hit: MasterSearchHit,
   invoke: (body: unknown) => Promise<{ data: unknown; error: unknown }> = (body) =>
     (iosSupabase as any).functions.invoke("chemical-info-lookup", { body }),
+  opts: MasterHydrationOptions = {},
 ): Promise<MasterHydrationResult> {
   if (!hit.registrationNumber || !hit.registrationCountry) return { status: "unavailable", options: null };
   try {
-    const { data, error } = await invoke(masterHydrationRequestBody(hit));
+    const { data, error } = await invoke(masterHydrationRequestBody(hit, undefined, opts));
     if (error) return { status: "unavailable", options: null };
     return parseMasterHydration(hit, data);
   } catch {
