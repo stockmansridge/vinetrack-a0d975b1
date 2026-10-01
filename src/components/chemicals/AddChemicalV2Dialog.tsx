@@ -266,7 +266,7 @@ export function AddChemicalV2Dialog({
     const token = hydrationGate.begin();
     let hydration: Awaited<ReturnType<typeof hydrateMasterSelection>>;
     try {
-      hydration = await hydrateMasterSelection(result, undefined, { adminCandidatePreview: isSystemAdmin });
+      hydration = await hydrateMasterSelection(result, undefined, { adminCandidatePreview: isSystemAdmin, country });
     } catch {
       hydration = { status: "unavailable", options: null };
     }

@@ -671,14 +671,12 @@ export type MasterHydrationResult =
 export const MASTER_HYDRATION_FAILED_TEXT =
   "Catalogue rate details could not be fully loaded. A rate you choose will be saved as a manual rate without its catalogue reference.";
 
-const COUNTRY_NAME: Record<string, string> = { AU: "Australia", NZ: "New Zealand" };
+// Canonical VineTrack country list — never a second Portal-only map, never a
+// default to Australia. Unknown values pass through upper-cased, unguessed.
 const normCountry = (v: unknown): string => {
   const s = String(v ?? "").trim();
   if (!s) return "";
-  const up = s.toUpperCase();
-  if (COUNTRY_NAME[up]) return up;
-  const hit = Object.entries(COUNTRY_NAME).find(([, n]) => n.toLowerCase() === s.toLowerCase());
-  return hit ? hit[0] : up;
+  return resolveVineyardCountry(s) ?? s.toUpperCase();
 };
 const normReg = (v: unknown): string => String(v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -689,23 +687,30 @@ export interface MasterHydrationOptions {
    * must keep ordinary structured serving approved-only. Read-only.
    */
   adminCandidatePreview?: boolean;
+  /** Vineyard jurisdiction, used only when the Master row carries no country. */
+  country?: string | null;
 }
 
+/**
+ * Registration scheme/number are OPTIONAL identity evidence. The exact
+ * master_chemical_id is the primary identity; country scopes jurisdiction.
+ */
 export function masterHydrationRequestBody(
   hit: MasterSearchHit,
   correlationId?: string,
   opts: MasterHydrationOptions = {},
 ) {
-  const code = normCountry(hit.registrationCountry);
-  const country = COUNTRY_NAME[code] ?? hit.registrationCountry;
+  const code = normCountry(hit.registrationCountry || opts.country);
+  const country = (code && VINEYARD_COUNTRY_NAME[code]) || code || undefined;
   const preview = opts.adminCandidatePreview === true && isCandidateHit(hit);
   return {
     ...(preview ? { admin_candidate_preview: true } : {}),
-    action: "structured" as const,
-    country,
+    action: preview ? ("structured_master_preview" as const) : ("structured" as const),
+    ...(country ? { country } : {}),
+    ...(code ? { country_code: code } : {}),
     productName: hit.productName,
-    registrationNumber: hit.registrationNumber,
-    registrationScheme: hit.registrationScheme,
+    ...(hit.registrationNumber ? { registrationNumber: hit.registrationNumber } : {}),
+    ...(hit.registrationScheme ? { registrationScheme: hit.registrationScheme } : {}),
     master_chemical_id: hit.id,
     client: { platform: "portal", correlation_id: correlationId ?? `portal-${Date.now().toString(36)}` },
   };
@@ -722,18 +727,24 @@ export function parseMasterHydration(hit: MasterSearchHit, payload: unknown): Ma
   const masterId = str(o.master_chemical_id ?? inner.master_chemical_id ?? inner.id);
   if (state === "unresolved" || !masterId) return { status: "unresolved", options: null };
   if (masterId !== hit.id) return { status: "identity_mismatch", options: null };
+  // Registration number: compared only when BOTH sides carry one.
   const reg = o.registration_number ?? o.registrationNumber;
-  if (normReg(reg) !== normReg(hit.registrationNumber) || !normReg(reg)) {
+  if (normReg(reg) && normReg(hit.registrationNumber) && normReg(reg) !== normReg(hit.registrationNumber)) {
     return { status: "identity_mismatch", options: null };
   }
-  const country = o.registration_country ?? o.country;
-  if (country != null && hit.registrationCountry && normCountry(country) !== normCountry(hit.registrationCountry)) {
+  // Registration scheme: compared only when BOTH sides carry one.
+  const scheme = str(o.registration_scheme ?? o.registrationScheme);
+  if (scheme && hit.registrationScheme && scheme.toLowerCase() !== hit.registrationScheme.toLowerCase()) {
+    return { status: "identity_mismatch", options: null };
+  }
+  const country = o.registration_country ?? o.country_code ?? o.country;
+  if (country != null && str(country) && hit.registrationCountry && normCountry(country) !== normCountry(hit.registrationCountry)) {
     return { status: "identity_mismatch", options: null };
   }
   const key = str(o.registration_identity_key);
-  const expectedKey = `${normCountry(hit.registrationCountry)}:${hit.registrationScheme.toLowerCase()}:${hit.registrationNumber}`;
-  if (key && hit.registrationScheme && key.toLowerCase() !== expectedKey.toLowerCase()) {
-    return { status: "identity_mismatch", options: null };
+  if (key && hit.registrationScheme && hit.registrationNumber && hit.registrationCountry) {
+    const expectedKey = `${normCountry(hit.registrationCountry)}:${hit.registrationScheme.toLowerCase()}:${hit.registrationNumber}`;
+    if (key.toLowerCase() !== expectedKey.toLowerCase()) return { status: "identity_mismatch", options: null };
   }
   const decoded = decodeCanonicalDefaultRateOptions(o.default_rate_options);
   if (!decoded) return { status: "no_options", options: null };
@@ -751,7 +762,8 @@ export async function hydrateMasterSelection(
     (iosSupabase as any).functions.invoke("chemical-info-lookup", { body }),
   opts: MasterHydrationOptions = {},
 ): Promise<MasterHydrationResult> {
-  if (!hit.registrationNumber || !hit.registrationCountry) return { status: "unavailable", options: null };
+  // Exact Master ID is the only prerequisite; registration data is optional.
+  if (!hit.id) return { status: "unavailable", options: null };
   try {
     const { data, error } = await invoke(masterHydrationRequestBody(hit, undefined, opts));
     if (error) return { status: "unavailable", options: null };
