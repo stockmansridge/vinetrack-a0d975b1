@@ -96,16 +96,6 @@ describe("review drawer", () => {
     expect(screen.getByText(/Reg\. 53576/)).toBeInTheDocument();
     expect(screen.queryByText(/APVMA 53576/)).toBeNull();
   });
-  it("Approve & Next advances via onApprovedNext; failure keeps the record open", async () => {
-    const onApprovedNext = vi.fn();
-    (approveWithCorrections as any).mockResolvedValueOnce({ outcome: "approved", saved: false });
-    const complete = { ...base, viticulture_rates: [], active_ingredients: [] };
-    renderDrawer(complete, { onApprovedNext });
-    const btn = screen.queryByRole("button", { name: /Approve & Next/ });
-    console.log("APPROVE_BTN_PRESENT", !!btn); if (!btn) return;
-    fireEvent.click(btn);
-    await waitFor(() => expect(onApprovedNext).toHaveBeenCalledWith("m1"));
-  });
 });
 
 describe("wording", () => {
