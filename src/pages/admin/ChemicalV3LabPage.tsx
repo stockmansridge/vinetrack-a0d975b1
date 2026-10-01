@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { RateColumn, V3DataSummary, V3Warnings, VineyardUseCard } from "@/components/chemicals/V3ReviewData";
 import { useAuth } from "@/context/AuthContext";
 import { useVineyard } from "@/context/VineyardContext";
 import { VINEYARD_COUNTRIES, resolveVineyardCountry } from "@/lib/vineyardCountries";
@@ -185,7 +186,7 @@ function ReviewSheet({ revisionId, onClose }: { revisionId: string | null; onClo
   const st = (...k: string[]): FieldStatus => (has(...k) ? "ok" : "missing");
   const opt = (...k: string[]): FieldStatus => (has(...k) ? "ok" : "na");
   const actives = asList(pick(r, "active_ingredients"));
-  const rates = splitRates(pick(r, "vineyard_rates", "rates"));
+  const rates = splitRates(pick(r, "default_rate_options", "vineyard_rates", "rates"));
   const uses = asList(pick(r, "vineyard_uses", "uses"));
   const warnings = asList(pick(r, "warnings"));
   const unresolved = asList(pick(r, "unresolved_fields"));
@@ -232,21 +233,19 @@ function ReviewSheet({ revisionId, onClose }: { revisionId: string | null; onClo
                 <Field label="Source retrieved" value={pick(r, "source_retrieved_at", "label_retrieved_at")} status={has("source_retrieved_at", "label_retrieved_at") ? "ok" : "review"} />
               </div>
             </div>
-            <section className="space-y-1">
+            <V3DataSummary uses={uses.length} perHa={rates.perHa.length} per100L={rates.per100L.length} />
+            <V3Warnings warnings={warnings} />
+            <section className="space-y-2">
               <h3 className="font-semibold">Vineyard uses</h3>
-              {uses.length ? <ul className="list-disc pl-5 text-sm">{uses.map((u, i) => <li key={i}>{labelOf(u)}</li>)}</ul> : <p className="text-sm text-muted-foreground">None extracted</p>}
+              {uses.length ? <div className="space-y-2">{uses.map((u, i) => <VineyardUseCard key={i} use={u} />)}</div> : <p className="text-sm text-muted-foreground">None extracted</p>}
             </section>
             <section className="space-y-2">
               <h3 className="font-semibold">Vineyard rates</h3>
               <div className="grid gap-3 md:grid-cols-2">
-                <RateList title="Per hectare" items={rates.perHa} />
-                <RateList title="Per 100 litres" items={rates.per100L} />
+                <RateColumn title="Per hectare" items={rates.perHa} testId="v3-rates-per-ha" />
+                <RateColumn title="Per 100 litres" items={rates.per100L} testId="v3-rates-per-100l" />
               </div>
-              {rates.other.length > 0 && <RateList title="Basis not stated" items={rates.other} />}
-            </section>
-            <section className={cn("rounded border p-2", warnings.length ? STATUS_CLASS.review : STATUS_CLASS.na)}>
-              <h3 className="font-semibold">Warnings</h3>
-              {warnings.length ? <ul className="list-disc pl-5 text-sm">{warnings.map((w, i) => <li key={i}>{labelOf(w)}</li>)}</ul> : <p className="text-sm">None</p>}
+              {rates.other.length > 0 && <RateColumn title="Basis not stated" items={rates.other} />}
             </section>
             <section className={cn("rounded border p-2", unresolved.length ? STATUS_CLASS.review : STATUS_CLASS.na)}>
               <h3 className="font-semibold">Outstanding / unresolved fields</h3>
