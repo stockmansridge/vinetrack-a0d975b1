@@ -108,7 +108,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 function seatsSummary(sourceRow: BillingSource) {
   if (sourceRow.unlimited_licences) return "Unlimited seats";
-  const total = Math.max(sourceRow.seats_included, sourceRow.seats_purchased);
+  const total = (sourceRow.seats_included ?? 0) + (sourceRow.seats_purchased ?? 0);
   return `${sourceRow.active_licences} of ${total} seats used`;
 }
 
