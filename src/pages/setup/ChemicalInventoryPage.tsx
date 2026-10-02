@@ -7,9 +7,10 @@
 // Pilot gate: canUseInventoryPilot (System Admin only) — applied here and on the
 // Chemicals page button. Removing the gate in chemicalInventory.ts releases both.
 import { useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Package } from "lucide-react";
+import { Package } from "lucide-react";
+import { ChemicalSectionNav } from "@/components/chemicals/ChemicalSectionNav";
 import { useVineyard } from "@/context/VineyardContext";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { useCanSeeCosts } from "@/lib/permissions";
@@ -98,12 +99,10 @@ export default function ChemicalInventoryPage() {
   return (
     <div className="space-y-5">
       <div className="space-y-1">
-        <Button variant="ghost" size="sm" asChild className="-ml-2">
-          <Link to="/setup/chemicals"><ArrowLeft className="h-4 w-4 mr-1" />Chemicals</Link>
-        </Button>
         <h1 className="flex items-center gap-2 text-2xl font-semibold"><Package className="h-6 w-6 text-primary" />Chemical Inventory</h1>
         <p className="text-sm text-muted-foreground">Track chemical stock, purchases and low-stock levels for this vineyard.</p>
       </div>
+      <ChemicalSectionNav active="inventory" />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <SummaryCard label="Tracked chemicals" value={tracked} />

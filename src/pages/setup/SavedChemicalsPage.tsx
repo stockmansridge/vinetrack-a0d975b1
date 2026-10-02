@@ -78,6 +78,8 @@ import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { formatDate } from "@/lib/dateFormat";
 import { ChemicalEditor } from "@/components/chemicals/ChemicalEditorSheet";
 import { ChemicalSearchDialog } from "@/components/chemicals/ChemicalSearchDialog";
+import { ChemicalSectionNav, ADD_CHEMICAL_PARAM } from "@/components/chemicals/ChemicalSectionNav";
+import { useSearchParams } from "react-router-dom";
 import { ChemicalInventoryPanel } from "@/components/chemicals/ChemicalInventoryPanel";
 import { canUseInventoryPilot, v3EntryBadge } from "@/lib/chemicalInventory";
 import { ChemicalLabelThumb, UsedForCell } from "@/components/chemicals/ChemicalListCells";
@@ -133,6 +135,14 @@ export default function SavedChemicalsPage() {
   // Add Chemical → the single customer Chemical Search. Manual entry opens the
   // editor in manual-only mode (no lookup mounts).
   const [searchOpen, setSearchOpen] = useState(false);
+  // Add Chemical from other Chemicals pages arrives as ?add=1 and opens the same Chemical Search.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get(ADD_CHEMICAL_PARAM) !== "1") return;
+    const next = new URLSearchParams(searchParams); next.delete(ADD_CHEMICAL_PARAM);
+    setSearchParams(next, { replace: true });
+    setSearchOpen(true);
+  }, [searchParams, setSearchParams]);
   const [manualName, setManualName] = useState<string | null>(null);
   const canEdit = currentRole === "owner" || currentRole === "manager";
   const canSeeCosts = useCanSeeCosts();
@@ -426,21 +436,7 @@ export default function SavedChemicalsPage() {
             {" "}Soft-deleted records are excluded.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {canEdit && (
-            <Button onClick={() => setSearchOpen(true)}>
-              <Plus className="h-4 w-4 mr-1" /> Add Chemical
-            </Button>
-          )}
-          {/* Inventory pilot gate (canUseInventoryPilot) — System Admin only for now. */}
-          {inventoryPilot && (
-            <Button variant="outline" asChild>
-              <Link to="/setup/chemicals/inventory" data-testid="chemical-inventory-link">
-                <Package className="h-4 w-4 mr-1" /> Chemical Inventory
-              </Link>
-            </Button>
-          )}
-        </div>
+        <ChemicalSectionNav active="chemicals" onAddChemical={() => setSearchOpen(true)} />
       </div>
 
 

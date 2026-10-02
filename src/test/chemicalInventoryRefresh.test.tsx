@@ -42,7 +42,7 @@ describe("inventory post-save refresh + default unit", () => {
       : Promise.resolve({ data: null, error: { message: "Unit family mismatch" } }));
     setup();
     fireEvent.click(await screen.findByText("Record Purchase"));
-    fireEvent.change(screen.getByLabelText("Quantity"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Container size"), { target: { value: "5" } });
     fireEvent.change(screen.getByLabelText("Total purchase amount"), { target: { value: "50" } });
     fireEvent.click(screen.getByText("Save"));
     expect(await screen.findByText(/Unit family mismatch/)).toBeTruthy();
