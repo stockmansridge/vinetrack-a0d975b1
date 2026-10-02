@@ -337,20 +337,21 @@ export function buildRateOptionArgs(revisionId: string, d: V3RateDraft): { args:
     if (min == null || max == null || Number.isNaN(min) || Number.isNaN(max)) return { error: "Enter numeric minimum and maximum." };
     if (min > max) return { error: "Minimum cannot be greater than maximum." };
   }
-  const targets = d.targets.split(/\n|,/).map((t) => t.trim()).filter(Boolean);
+  const targets = d.targets.split(/\r?\n/).map((t) => t.trim()).filter(Boolean);
   return {
     args: {
       p_revision_id: revisionId,
       p_option_id: d.optionId,
       p_basis: d.basis,
+      p_unit: d.unit.trim(),
       p_value: value,
       p_min_value: min,
       p_max_value: max,
-      p_unit: d.unit.trim(),
       p_targets: targets,
-      p_method: d.method.trim() || null,
+      p_application_method: d.method.trim() || null,
       p_condition: d.condition.trim() || null,
       p_raw_text: d.notes.trim() || null,
+      p_needs_review: false,
     },
   };
 }
