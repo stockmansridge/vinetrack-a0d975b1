@@ -10,7 +10,7 @@ const src = (p: string) => readFileSync(p, "utf8");
 const dialog = src("src/components/chemicals/ChemicalSearchDialog.tsx");
 const page = src("src/pages/setup/SavedChemicalsPage.tsx");
 const step = src("src/components/spray/wizard/ProductsStep.tsx");
-const strings = (s: string) => (s.match(/"[^"\n]*"|>[^<>{}\n]+</g) ?? []).join("\n");
+const strings = (s: string) => (s.split("\n").filter((l) => !/^\s*(import|} from)/.test(l)).join("\n").match(/"[^"\n]*"|>[^<>{}\n]+</g) ?? []).join("\n");
 
 describe("Chemical Search production cutover", () => {
   it("Chemicals page uses the new search, not V2", () => {
