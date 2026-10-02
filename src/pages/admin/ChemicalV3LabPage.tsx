@@ -26,6 +26,17 @@ import {
   deleteV3RateOption, draftFromOption, emptyRateDraft, formatRateOption, isV3RevisionEditable, saveV3RateOption,
   type V3RateBasis, type V3RateDraft,
 } from "@/lib/chemicalV3";
+import { canUseInventoryPilot, fetchProductCategories, isV3Addable, setV3ProductCategory, v3CategoryLabel, type CategoryOption } from "@/lib/chemicalInventory";
+import { V3AddToVineyardButton } from "@/components/chemicals/V3AddToVineyardDialog";
+
+function useCategories() {
+  return useQuery({ queryKey: ["chemical-product-categories"], staleTime: 10 * 60_000, queryFn: fetchProductCategories });
+}
+function usePilotVineyard() {
+  const { selectedVineyardId, memberships } = useVineyard();
+  const name = memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
+  return { vineyardId: selectedVineyardId, vineyardName: name };
+}
 
 type Row = Record<string, any>;
 const JOB_KEY = "vt.chemical-v3.current-job";
@@ -116,6 +127,11 @@ function JobProgress({ jobId, onRevision }: { jobId: string; onRevision: (id: st
 }
 
 function ResultCard({ row, onView }: { row: Row; onView: () => void }) {
+  const { isAdmin } = useIsSystemAdmin();
+  const cats = useCategories();
+  const { vineyardId, vineyardName } = usePilotVineyard();
+  const revId = pick(row, "revision_id", "current_revision_id", "approved_revision_id");
+  const rowStatus = String(pick(row, "review_status", "status") ?? "").toLowerCase();
   const approved = isApprovedResult(row);
   const note = freshnessNote(freshnessOf(row));
   const reg = pick(row, "registration_number");
@@ -129,7 +145,7 @@ function ResultCard({ row, onView }: { row: Row; onView: () => void }) {
           <FreshnessBadge row={row} />
         </div>
         <div className="text-muted-foreground">
-          {[pick(row, "manufacturer", "registrant"), pick(row, "product_category"), pick(row, "country_code", "country"), reg ? `Reg. ${reg}` : null].filter(Boolean).join(" · ")}
+          {[pick(row, "manufacturer", "registrant"), v3CategoryLabel(row, cats.data), pick(row, "country_code", "country"), reg ? `Reg. ${reg}` : null].filter(Boolean).join(" · ")}
         </div>
         {pick(row, "active_ingredient_summary") && <div>{pick(row, "active_ingredient_summary")}</div>}
         <div className="text-xs text-muted-foreground">
@@ -140,7 +156,10 @@ function ResultCard({ row, onView }: { row: Row; onView: () => void }) {
       </div>
       <div className="flex flex-col gap-1">
         <Button size="sm" variant="outline" onClick={onView}>View</Button>
-        <Button size="sm" disabled title="Not connected in V3.0">Add to Vineyard</Button>
+        {canUseInventoryPilot(isAdmin) && revId && isV3Addable(rowStatus) && (
+          <V3AddToVineyardButton revisionId={String(revId)} productName={pick(row, "product_name") ?? "this product"} status={rowStatus}
+            vineyardId={vineyardId} vineyardName={vineyardName} />
+        )}
       </div>
     </div>
   );
@@ -151,6 +170,26 @@ function Field({ label, value, status }: { label: string; value: React.ReactNode
     <div className={cn("rounded border p-2 text-sm", STATUS_CLASS[status])} data-status={status}>
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="break-words">{value ?? "Missing"}</div>
+    </div>
+  );
+}
+
+function CategoryField({ row, options, editable, busy, onChange, msg }: {
+  row: Row; options: CategoryOption[]; editable: boolean; busy: boolean; onChange: (key: string) => void;
+  msg: { tone: "ok" | "err"; text: string } | null;
+}) {
+  const key = pick(row, "product_category_key");
+  const label = v3CategoryLabel(row, options);
+  return (
+    <div className={cn("rounded border p-2 text-sm", STATUS_CLASS[key ? "ok" : "missing"])} data-status={key ? "ok" : "missing"} data-testid="v3-category">
+      <div className="text-xs text-muted-foreground">Product category</div>
+      {editable && options.length > 0 ? (
+        <Select value={key ?? undefined} onValueChange={onChange} disabled={busy}>
+          <SelectTrigger aria-label="Product category" className="h-8"><SelectValue placeholder="Missing" /></SelectTrigger>
+          <SelectContent>{options.map((o) => <SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>)}</SelectContent>
+        </Select>
+      ) : <div>{label ?? "Missing"}</div>}
+      {msg && <p className={cn("text-xs", msg.tone === "err" ? "text-destructive" : "text-success")}>{msg.text}</p>}
     </div>
   );
 }
@@ -188,6 +227,15 @@ function ReviewSheet({ revisionId, onClose }: { revisionId: string | null; onClo
       if (a.kind === "save") setRateErr(text); else setRateMsg({ tone: "err", text });
     },
   });
+  const cats = useCategories();
+  const { vineyardId, vineyardName } = usePilotVineyard();
+  const [catMsg, setCatMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
+  useEffect(() => { setCatMsg(null); }, [revisionId]);
+  const catMut = useMutation({
+    mutationFn: (key: string) => setV3ProductCategory(revisionId!, key),
+    onSuccess: async () => { setCatMsg({ tone: "ok", text: "Category saved." }); await qc.invalidateQueries({ queryKey: ["chemical-v3-revision", revisionId] }); },
+    onError: (e: any) => setCatMsg({ tone: "err", text: e?.message ?? "The backend refused this change." }),
+  });
   const r = q.data;
   const has = (...k: string[]) => pick(r, ...k) !== undefined;
   const st = (...k: string[]): FieldStatus => (has(...k) ? "ok" : "missing");
@@ -218,7 +266,7 @@ function ReviewSheet({ revisionId, onClose }: { revisionId: string | null; onClo
             <SheetHeader>
               <SheetTitle className="text-2xl">{pick(r, "product_name") ?? "Product name missing"}</SheetTitle>
               <div className="text-sm text-muted-foreground">
-                {[pick(r, "manufacturer", "registrant"), pick(r, "country_code", "country"), pick(r, "product_category")].filter(Boolean).join(" · ")}
+                {[pick(r, "manufacturer", "registrant"), pick(r, "country_code", "country"), v3CategoryLabel(r, cats.data)].filter(Boolean).join(" · ")}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{humaniseStage(status) || "Status unknown"}</Badge>
@@ -229,6 +277,10 @@ function ReviewSheet({ revisionId, onClose }: { revisionId: string | null; onClo
                   <Button size="sm" asChild><a href={labelUrl} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-1 h-4 w-4" />Open Manufacturer Label</a></Button>
                 ) : <Badge className="border-transparent bg-destructive/15 text-destructive">Manufacturer label missing</Badge>}
               </div>
+              {canUseInventoryPilot(isAdmin) && revisionId && isV3Addable(status) && (
+                <V3AddToVineyardButton revisionId={revisionId} productName={pick(r, "product_name") ?? "this product"} status={status}
+                  vineyardId={vineyardId} vineyardName={vineyardName} />
+              )}
             </SheetHeader>
             <div className="flex flex-col gap-4 md:flex-row">
               {pick(r, "front_label_image_path") ? <Thumb path={pick(r, "front_label_image_path")} className="h-72 w-full md:w-72" /> : (
@@ -238,7 +290,8 @@ function ReviewSheet({ revisionId, onClose }: { revisionId: string | null; onClo
                 <Field label="Product name" value={pick(r, "product_name")} status={st("product_name")} />
                 <Field label="Manufacturer / registrant" value={pick(r, "manufacturer", "registrant")} status={st("manufacturer", "registrant")} />
                 <Field label="Country" value={pick(r, "country_code", "country")} status={st("country_code", "country")} />
-                <Field label="Product category" value={pick(r, "product_category")} status={st("product_category")} />
+                <CategoryField row={r} options={cats.data ?? []} editable={canUseInventoryPilot(isAdmin) && isV3RevisionEditable(status)}
+                  busy={catMut.isPending} onChange={(k) => catMut.mutate(k)} msg={catMsg} />
                 <Field label="Product form" value={pick(r, "product_form", "formulation")} status={has("product_form", "formulation") ? "ok" : "review"} />
                 <Field label="Active ingredients" value={actives.length ? actives.map(labelOf).join("; ") : undefined} status={actives.length ? "ok" : "missing"} />
                 <Field label="Registration scheme" value={pick(r, "registration_scheme") ?? "Not applicable"} status={opt("registration_scheme")} />
@@ -289,6 +342,7 @@ function ReviewSheet({ revisionId, onClose }: { revisionId: string | null; onClo
 }
 
 function ReviewQueue({ onOpen }: { onOpen: (id: string) => void }) {
+  const cats = useCategories();
   const q = useQuery({ queryKey: ["chemical-v3-queue"], queryFn: v3ReviewQueue });
   if (q.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (q.error) return <p className="text-sm text-destructive">{(q.error as Error).message}</p>;
@@ -309,7 +363,7 @@ function ReviewQueue({ onOpen }: { onOpen: (id: string) => void }) {
               <td className="p-2 font-medium">{pick(r, "product_name") ?? "—"}</td>
               <td className="p-2">{pick(r, "manufacturer") ?? "—"}</td>
               <td className="p-2">{pick(r, "country_code", "country") ?? "—"}</td>
-              <td className="p-2">{pick(r, "product_category") ?? "—"}</td>
+              <td className="p-2">{v3CategoryLabel(r, cats.data) ?? "—"}</td>
               <td className="p-2">{r.core_fields_complete ? "Yes" : "No"}</td>
               <td className="p-2">{humaniseStage(pick(r, "vineyard_rate_status")) || "—"}</td>
               <td className="p-2">{humaniseStage(pick(r, "manufacturer_label_status")) || (pick(r, "manufacturer_label_url") ? "Present" : "Missing")}</td>
