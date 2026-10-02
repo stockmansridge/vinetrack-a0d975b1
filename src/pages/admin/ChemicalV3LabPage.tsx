@@ -8,7 +8,7 @@ import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import { v3EntryBadge } from "@/lib/chemicalInventory";
 import {
   APPROVED_TOAST, DECISIONS_REQUIRED, approvedRevisionId, fetchApprovedCatalogue, fetchReviewIssues,
-  findSavedForV3, isDecisionsRefusal, isPendingQueueRow, outstandingWithoutIssue,
+  findSavedForV3, vineyardChemicalsKey, isDecisionsRefusal, isPendingQueueRow, outstandingWithoutIssue,
 } from "@/lib/chemicalV3Review";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Camera, ExternalLink, FlaskConical, Search } from "lucide-react";
@@ -258,7 +258,7 @@ function ReviewSheet({ revisionId, onClose, onApproved }: { revisionId: string |
   const cats = useCategories();
   const { vineyardId, vineyardName } = usePilotVineyard();
   const savedQ = useQuery({
-    queryKey: ["saved_chemicals", vineyardId, "active"],
+    queryKey: vineyardChemicalsKey(vineyardId),
     enabled: !!vineyardId && canUseInventoryPilot(isAdmin) && !!revisionId,
     queryFn: () => fetchSavedChemicalsForVineyard(vineyardId!),
   });
@@ -475,7 +475,7 @@ function ApprovedList({ onOpen }: { onOpen: (id: string) => void }) {
 function InventoryTab() {
   const { vineyardId, vineyardName } = usePilotVineyard();
   const [sel, setSel] = useState<string | null>(null);
-  const q = useQuery({ queryKey: ["saved_chemicals", vineyardId, "active"], enabled: !!vineyardId, queryFn: () => fetchSavedChemicalsForVineyard(vineyardId!) });
+  const q = useQuery({ queryKey: vineyardChemicalsKey(vineyardId), enabled: !!vineyardId, queryFn: () => fetchSavedChemicalsForVineyard(vineyardId!) });
   if (!vineyardId) return <p className="rounded border bg-card p-3 text-sm">Select a vineyard first.</p>;
   const rows = [...(q.data?.chemicals ?? [])].sort((a: any, b: any) => Number(!v3EntryBadge(a)) - Number(!v3EntryBadge(b)) || String(a.name).localeCompare(String(b.name)));
   return (

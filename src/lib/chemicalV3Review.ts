@@ -113,3 +113,6 @@ export function findSavedForV3(saved: Row[], revision: Row | null | undefined): 
   const cols = ["v3_revision_id", "chemical_v3_revision_id", "source_revision_id", "v3_product_id", "chemical_v3_product_id", "source_product_id"];
   return saved.find((s) => cols.some((c) => s?.[c] != null && ids.has(String(s[c])))) ?? null;
 }
+
+/** Same cache entry the Chemicals page uses, so an Add to Vineyard refresh is shared. */
+export const vineyardChemicalsKey = (vineyardId: string | null) => ["saved_chemicals", vineyardId, "active"] as const;
