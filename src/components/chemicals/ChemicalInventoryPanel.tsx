@@ -265,7 +265,7 @@ export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { sav
               {needsOpening && (
                 <div className="col-span-2 space-y-2 rounded border bg-muted/30 p-2" data-testid="opening-capacity">
                   <div className="text-xs font-medium">Container capacity</div>
-                  <ContainerFields box={capBox} setBox={(b) => setCapBox({ ...b, unit: stock.unit })} units={units} unitLocked idPrefix="o" />
+                  <ContainerFields box={{ ...capBox, unit: stock.unit }} setBox={(b) => setCapBox({ ...b, unit: stock.unit })} units={units} unitLocked idPrefix="o" />
                   {capacity !== null && <p className="text-xs text-muted-foreground" data-testid="opening-capacity-total">Capacity {capBox.count} × {capBox.size} {stock.unit} = {capacity} {stock.unit}</p>}
                 </div>
               )}
