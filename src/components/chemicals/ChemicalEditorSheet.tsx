@@ -4,7 +4,7 @@
 // match, verification, Chemical Intelligence) can be reused inside nested
 // contexts such as the Spray Program Step wizard. There is deliberately no
 // simplified variant: this is the one Add New Chemical experience.
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   hasUsableRateOptions,
   showMissingRateOptionsRecovery,
@@ -201,8 +201,8 @@ export function ChemicalEditor({
   initialName, jurisdiction, restoredDraft, manualOnly = false,
 }: {
   /**
-   * Manual entry only: no product lookup mounts and no web/API lookup runs.
-   * Used by Chemical Search's "Enter manually" fallback.
+   * Kept for call-site compatibility. The editor NEVER searches: a new
+   * chemical is always manual entry; discovery belongs to Chemical Search.
    */
   manualOnly?: boolean;
   open: boolean;
@@ -1249,7 +1249,7 @@ export function ChemicalEditor({
                               type="button"
                               size="sm"
                               variant="outline"
-                              onClick={() => handleSelectionChange("none")}
+                              onClick={() => onOpenChange(false)}
                             >
                               Change product
                             </Button>
