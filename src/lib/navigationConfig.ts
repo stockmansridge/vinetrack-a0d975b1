@@ -575,7 +575,7 @@ const SYSTEM_ADMIN_ITEM_LIST: SystemAdminItem[] = [
   { label: "Invitations", path: "/admin/invitations", icon: UserCog },
   { label: "Integrations", path: "/admin/integrations", icon: Plug },
   { label: "Master Catalogue", path: "/admin/master-catalogue", icon: Beaker },
-  { label: "Chemical Lookup V3 Lab", path: "/admin/chemical-v3", icon: Beaker },
+  { label: "Chemical Catalogue Review", path: "/admin/chemical-v3", icon: Beaker },
   { label: "Block Troubleshooter", path: "/admin/block-troubleshooter", icon: ShieldCheck },
   { label: "Support Requests", path: "/admin/support-requests", icon: AlertTriangle },
   { label: "Email List", path: "/admin/email-list", icon: Mail },
@@ -626,7 +626,7 @@ export const SYSTEM_ADMIN_GROUPS: SystemAdminGroup[] = [
       systemAdminItem("Work Tasks"),
       systemAdminItem("Trips"),
       systemAdminItem("Master Catalogue"),
-      systemAdminItem("Chemical Lookup V3 Lab"),
+      systemAdminItem("Chemical Catalogue Review"),
     ],
   },
   {

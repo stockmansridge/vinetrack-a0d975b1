@@ -458,7 +458,7 @@ function ApprovedList({ onOpen }: { onOpen: (id: string) => void }) {
   if (q.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (q.error) return <p className="text-sm text-destructive">{(q.error as Error).message}</p>;
   const rows = q.data ?? [];
-  if (!rows.length) return <p className="rounded border bg-card p-3 text-sm text-muted-foreground">No approved V3 products yet.</p>;
+  if (!rows.length) return <p className="rounded border bg-card p-3 text-sm text-muted-foreground">No approved catalogue products yet.</p>;
   const date = (v: any) => (v ? new Date(v).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }) : "—");
   return (
     <div className="overflow-x-auto rounded border bg-card">
@@ -495,7 +495,7 @@ function InventoryTab() {
   const rows = [...(q.data?.chemicals ?? [])].sort((a: any, b: any) => Number(!v3EntryBadge(a)) - Number(!v3EntryBadge(b)) || String(a.name).localeCompare(String(b.name)));
   return (
     <div className="space-y-3 rounded border bg-card p-3" data-testid="v3-inventory-tab">
-      <p className="text-sm text-muted-foreground">Chemical inventory and purchases for {vineyardName ?? "this vineyard"}. V3 products are listed first.</p>
+      <p className="text-sm text-muted-foreground">Chemical inventory and purchases for {vineyardName ?? "this vineyard"}. Catalogue products are listed first.</p>
       <Select value={sel ?? undefined} onValueChange={setSel}>
         <SelectTrigger className="max-w-md" aria-label="Vineyard chemical"><SelectValue placeholder={q.isLoading ? "Loading…" : "Choose a chemical"} /></SelectTrigger>
         <SelectContent>{rows.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}{v3EntryBadge(c) ? ` — ${v3EntryBadge(c)!.label}` : ""}</SelectItem>)}</SelectContent>
@@ -550,8 +550,8 @@ export default function ChemicalV3LabPage() {
   return (
     <div className="space-y-6 p-6">
       <div>
-        <h1 className="flex items-center gap-2 text-2xl font-semibold"><FlaskConical className="h-6 w-6" />Chemical Lookup V3</h1>
-        <p className="text-sm text-muted-foreground">Prototype lab. Separate from the Master Catalogue and the customer Chemical Store.</p>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold"><FlaskConical className="h-6 w-6" />Chemical Catalogue Review</h1>
+        <p className="text-sm text-muted-foreground">Curate the VineTrack chemical catalogue. Customers search from Chemicals → Add Chemical.</p>
       </div>
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
