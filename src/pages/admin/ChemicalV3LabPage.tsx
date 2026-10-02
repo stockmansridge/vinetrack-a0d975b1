@@ -600,7 +600,7 @@ export default function ChemicalV3LabPage() {
           <TabsTrigger value="approved">Approved</TabsTrigger>
           {canUseInventoryPilot(isAdmin) && <TabsTrigger value="inventory">Inventory &amp; Purchases</TabsTrigger>}
         </TabsList>
-        <TabsContent value="review"><ReviewQueue onOpen={setOpenRevision} /></TabsContent>
+        <TabsContent value="review"><ReviewQueue onOpen={(id, j) => { setOpenRevision(id); setOpenJob(j ?? null); }} /></TabsContent>
         <TabsContent value="approved"><ApprovedList onOpen={setOpenRevision} /></TabsContent>
         {canUseInventoryPilot(isAdmin) && <TabsContent value="inventory"><InventoryTab /></TabsContent>}
       </Tabs>
