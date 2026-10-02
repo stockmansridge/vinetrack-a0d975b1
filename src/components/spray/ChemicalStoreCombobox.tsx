@@ -86,14 +86,26 @@ export function ChemicalStoreCombobox({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[min(28rem,90vw)] p-0" align="start">
+      <PopoverContent
+        className="w-[min(28rem,90vw)] p-0"
+        align="start"
+        collisionPadding={12}
+        onWheel={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+      >
         <Command shouldFilter={false}>
           <CommandInput
             placeholder={placeholder}
             value={query}
             onValueChange={setQuery}
           />
-          <CommandList>
+          <CommandList
+            className="max-h-[min(20rem,var(--radix-popover-content-available-height,20rem))] overflow-y-auto overscroll-contain"
+            onWheel={(e) => {
+              e.stopPropagation();
+              e.currentTarget.scrollTop += e.deltaY;
+            }}
+          >
             <CommandEmpty>No product in the Chemical Store matches that search.</CommandEmpty>
             <CommandGroup>
               <CommandItem value="__none" onSelect={() => { onSelect(null); setOpen(false); }}>
