@@ -57,3 +57,18 @@ export function buildManufacturerOptions(
   out.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
   return out;
 }
+
+/**
+ * Presentation-only short brand name for compact list cells.
+ * Strips a TRAILING legal suffix (Pty Ltd, Ltd, Limited, Inc…) and, only when
+ * it directly precedes that suffix, a country word ("Australia Pty Ltd").
+ * "Australia" elsewhere in the name is kept. Never use for storage.
+ */
+const TRAILING_LEGAL_RE =
+  /[\s,]*(?:\b\(?(?:Australia|Australasia|Aust\.?)\)?[\s,]+)?\b(?:Pty\.?\s*Ltd\.?|Pty\.?\s*Limited|Proprietary\s+Limited|Limited|Ltd\.?|Inc\.?)\s*$/i;
+export function shortManufacturerName(value: string | null | undefined): string {
+  const raw = String(value ?? "").trim().replace(/\s+/g, " ");
+  if (!raw) return "";
+  const short = raw.replace(TRAILING_LEGAL_RE, "").replace(/[\s,]+$/, "");
+  return short || raw;
+}

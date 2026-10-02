@@ -402,7 +402,7 @@ export default function SavedChemicalsPage() {
       case "verification": return <TableCell key="verification"><VerificationBadge status={toChemicalIntelligence(c).verification.status} /></TableCell>;
       case "use": return <TableCell key="use">{fmt(displayProductCategory(c))}</TableCell>;
       case "rate": return <TableCell key="rate">{defaultRateDisplayText(c)}</TableCell>;
-      case "manufacturer": return <TableCell key="manufacturer">{fmt(c.manufacturer)}</TableCell>;
+      case "manufacturer": return <TableCell key="manufacturer" className="max-w-[160px]"><span className="block truncate" title={c.manufacturer ?? undefined}>{fmt(shortManufacturerName(c.manufacturer))}</span></TableCell>;
       case "label": return (
         <TableCell key="label">
           <div className="flex flex-col gap-0.5 text-xs">
