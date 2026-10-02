@@ -6,6 +6,7 @@ import { ChemicalSearchDialog } from "@/components/chemicals/ChemicalSearchDialo
 import { V3ReSearchButton } from "@/components/chemicals/V3ReSearchButton";
 import { canReSearch, needsReSearch } from "@/lib/chemicalV3";
 import { V3ReviewDecisions } from "@/components/chemicals/V3ReviewDecisions";
+import { V3CatalogueMatch } from "@/components/chemicals/V3CatalogueMatch";
 import { ChemicalInventoryPanel } from "@/components/chemicals/ChemicalInventoryPanel";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import { v3EntryBadge } from "@/lib/chemicalInventory";
@@ -364,6 +365,7 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
                 </Sheet>
               )}
             </SheetHeader>
+            {revisionId && <V3CatalogueMatch revisionId={revisionId} isAdmin={isAdmin} onMatched={onClose} />}
             <div className="flex flex-col gap-4 md:flex-row">
               {pick(r, "front_label_image_path") ? <Thumb path={pick(r, "front_label_image_path")} className="h-72 w-full md:w-72" /> : (
                 <div className={cn("flex h-40 w-full items-center justify-center rounded border text-sm md:w-72", STATUS_CLASS.missing)}>Front label image missing</div>
