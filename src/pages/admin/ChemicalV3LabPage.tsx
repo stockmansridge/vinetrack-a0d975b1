@@ -28,6 +28,8 @@ import {
 } from "@/lib/chemicalV3";
 import { canUseInventoryPilot, fetchProductCategories, isV3Addable, setV3ProductCategory, v3CategoryLabel, type CategoryOption } from "@/lib/chemicalInventory";
 import { V3AddToVineyardButton } from "@/components/chemicals/V3AddToVineyardDialog";
+import { V3ResistanceBadge, V3ResistanceField } from "@/components/chemicals/V3ResistanceField";
+import { isV3ResistanceEditable, setV3ResistanceGroups, type V3ResistanceDraft } from "@/lib/chemicalV3Resistance";
 
 function useCategories() {
   return useQuery({ queryKey: ["chemical-product-categories"], staleTime: 10 * 60_000, queryFn: fetchProductCategories });
@@ -143,6 +145,7 @@ function ResultCard({ row, onView }: { row: Row; onView: () => void }) {
           <span className="font-semibold">{pick(row, "product_name") ?? "Unnamed product"}</span>
           {approved ? <Badge className="border-transparent bg-success/15 text-success">Approved</Badge> : <Badge variant="outline">Not approved</Badge>}
           <FreshnessBadge row={row} />
+          <V3ResistanceBadge row={row} />
         </div>
         <div className="text-muted-foreground">
           {[pick(row, "manufacturer", "registrant"), v3CategoryLabel(row, cats.data), pick(row, "country_code", "country"), reg ? `Reg. ${reg}` : null].filter(Boolean).join(" · ")}
@@ -236,6 +239,13 @@ function ReviewSheet({ revisionId, onClose }: { revisionId: string | null; onClo
     onSuccess: async () => { setCatMsg({ tone: "ok", text: "Category saved." }); await qc.invalidateQueries({ queryKey: ["chemical-v3-revision", revisionId] }); },
     onError: (e: any) => setCatMsg({ tone: "err", text: e?.message ?? "The backend refused this change." }),
   });
+  const [resMsg, setResMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
+  useEffect(() => { setResMsg(null); }, [revisionId]);
+  const resMut = useMutation({
+    mutationFn: (d: V3ResistanceDraft) => setV3ResistanceGroups(revisionId!, d),
+    onSuccess: async () => { setResMsg({ tone: "ok", text: "Resistance group saved." }); await qc.invalidateQueries({ queryKey: ["chemical-v3-revision", revisionId] }); },
+    onError: (e: any) => setResMsg({ tone: "err", text: e?.message ?? "The backend refused this change." }),
+  });
   const r = q.data;
   const has = (...k: string[]) => pick(r, ...k) !== undefined;
   const st = (...k: string[]): FieldStatus => (has(...k) ? "ok" : "missing");
@@ -292,6 +302,8 @@ function ReviewSheet({ revisionId, onClose }: { revisionId: string | null; onClo
                 <Field label="Country" value={pick(r, "country_code", "country")} status={st("country_code", "country")} />
                 <CategoryField row={r} options={cats.data ?? []} editable={canUseInventoryPilot(isAdmin) && isV3RevisionEditable(status)}
                   busy={catMut.isPending} onChange={(k) => catMut.mutate(k)} msg={catMsg} />
+                <V3ResistanceField row={r} editable={canUseInventoryPilot(isAdmin) && !!revisionId && isV3ResistanceEditable(status)}
+                  busy={resMut.isPending} onSave={(d) => resMut.mutate(d)} msg={resMsg} />
                 <Field label="Product form" value={pick(r, "product_form", "formulation")} status={has("product_form", "formulation") ? "ok" : "review"} />
                 <Field label="Active ingredients" value={actives.length ? actives.map(labelOf).join("; ") : undefined} status={actives.length ? "ok" : "missing"} />
                 <Field label="Registration scheme" value={pick(r, "registration_scheme") ?? "Not applicable"} status={opt("registration_scheme")} />
