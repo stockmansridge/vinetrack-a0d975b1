@@ -111,6 +111,27 @@ export async function startV3Discovery(args: {
   return { job_id: String(jobId), reused, status: pick(row, "status") ?? null, backendMissing };
 }
 
+/** Re-run an existing discovery job. Never calls start_chemical_v3_discovery; the backend creates the new revision. */
+export async function retryChemicalDiscovery(jobId: string): Promise<void> {
+  const { error } = await sb.functions.invoke(V3_EDGE_FUNCTION, { body: { action: "retry", job_id: jobId } });
+  if (error) throw error;
+}
+
+export const RESEARCH_FAILED = "We couldn't finish re-searching this product. The existing review record has not been changed.";
+export const RESEARCH_DONE = "Re-search complete. Review the updated information.";
+export const RESEARCH_STATUSES = ["pending_review", "needs_attention"];
+export const canReSearch = (isAdmin: boolean, status: string, jobId: string | null | undefined) =>
+  isAdmin && !!jobId && RESEARCH_STATUSES.includes(String(status).toLowerCase());
+/** Any reason the record looks incomplete — makes the button prominent. */
+export function needsReSearch(r: Row | null | undefined): boolean {
+  if (!r) return false;
+  const bad = (v: any) => /unresolved|missing|attention|review|conflict|none/i.test(String(v ?? ""));
+  const list = (v: any) => (Array.isArray(v) ? v : []);
+  return list(pick(r, "unresolved_fields")).length > 0 || bad(pick(r, "vineyard_rate_status")) ||
+    bad(pick(r, "manufacturer_label_status")) || !pick(r, "manufacturer_label_url") ||
+    !pick(r, "front_label_image_path") || bad(pick(r, "resistance_classification_state")) || bad(pick(r, "source_status"));
+}
+
 export async function fetchV3Job(jobId: string): Promise<Row | null> {
   const { data, error } = await sb.from(V3_JOBS_TABLE).select("*").eq("id", jobId).maybeSingle();
   if (error) throw error;
