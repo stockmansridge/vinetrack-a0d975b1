@@ -56,12 +56,39 @@ export function humaniseFieldKey(v: unknown): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-export interface IssueAction { decision: string; label: string; kind: "resolve" | "correction" | "chooser" }
+export interface IssueAction {
+  decision: string; label: string;
+  /** link = open manufacturer label; add_rate = open the rate editor (no RPC); confirm = ask first, then resolve. */
+  kind: "resolve" | "correction" | "chooser" | "link" | "add_rate" | "confirm";
+  confirmText?: string;
+}
 
-/** Each review decision always has at least one action. */
+export const CONFIRM_NO_RATES_TEXT = "Confirm that the manufacturer label contains no vineyard/grapevine use rate for this product.";
+export const MANUFACTURER_LABEL_NOTE = "The manufacturer hosts this label in an external document viewer. Confirm that the link opens the correct official manufacturer label.";
+export const NO_VINEYARD_RATE_NOTE = "No usable vineyard rate has been recorded yet.";
+
+const actionType = (issue: Row) => String(issue?.action_type ?? "").trim().toLowerCase();
+const issueKey = (issue: Row) => String(issue?.issue_key ?? issue?.field_key ?? "").trim().toLowerCase();
+export const isManufacturerLabelIssue = (i: Row) => actionType(i) === "confirm_manufacturer_label" || /(^|:)manufacturer_label$/.test(issueKey(i));
+export const isVineyardRatesIssue = (i: Row) => actionType(i) === "resolve_vineyard_rates" || /(^|:)vineyard_rates$/.test(issueKey(i));
+
+/** Each review decision always has at least one action. Decision codes come from action_type, not the button label. */
 export function issueActions(issue: Row): IssueAction[] {
-  const k = `${issue?.action_type ?? ""} ${issue?.issue_key ?? ""}`.toLowerCase();
   const fix: IssueAction = { decision: "needs_correction", label: "Needs correction", kind: "correction" };
+  const at = actionType(issue);
+  if (isManufacturerLabelIssue(issue)) return [
+    { decision: "open_label", label: "Open Manufacturer Label", kind: "link" },
+    { decision: "confirm_official_link", label: "Confirm official manufacturer label", kind: "resolve" },
+    fix,
+  ];
+  if (isVineyardRatesIssue(issue)) return [
+    { decision: "add_rate", label: "+ Add vineyard rate", kind: "add_rate" },
+    { decision: "confirm_no_vineyard_rates", label: "Confirm no vineyard rate", kind: "confirm", confirmText: CONFIRM_NO_RATES_TEXT },
+    fix,
+  ];
+  if (at === "resolve_field") return [{ decision: "resolved", label: "Mark resolved", kind: "resolve" }, fix];
+  if (at === "acknowledge") return [{ decision: "acknowledged", label: "Reviewed", kind: "resolve" }];
+  const k = `${at} ${issueKey(issue)}`;
   if (k.includes("front")) return [{ decision: "selected", label: "Choose front label", kind: "chooser" }];
   if (k.includes("identity")) return [{ decision: "confirm_correct", label: "Confirm this is the correct label", kind: "resolve" }, fix];
   if (k.includes("label_date") || k.includes("label date") || k.includes("newer")) return [
@@ -71,6 +98,16 @@ export function issueActions(issue: Row): IssueAction[] {
   if (k.includes("re_entry") || k.includes("reentry") || k.includes("not_stated")) return [{ decision: "confirm_not_stated", label: "Confirm not stated on label", kind: "resolve" }, fix];
   if (k.includes("complete") || k.includes("extraction")) return [{ decision: "acknowledged", label: "Reviewed", kind: "resolve" }, fix];
   return [{ decision: "acknowledged", label: "Reviewed", kind: "resolve" }];
+}
+
+export interface FingerprintView { tone: "ok" | "review" | "na"; value: string; note: string | null }
+/** Label SHA presentation. Never fabricates a SHA; absence is informational, not a red core-field error. */
+export function labelFingerprintView(revision: Row | null | undefined, issues: Row[]): FingerprintView {
+  const sha = revision?.label_sha256 ?? revision?.label_sha;
+  if (sha) return { tone: "ok", value: String(sha), note: null };
+  const labelIssue = issues.find(isManufacturerLabelIssue);
+  if (labelIssue && issueState(labelIssue) === "resolved") return { tone: "na", value: "Not captured — manufacturer-hosted viewer", note: null };
+  return { tone: "review", value: "Not captured", note: "VineTrack could not download the underlying PDF from the manufacturer's document viewer." };
 }
 
 export type IssueState = "open" | "resolved" | "needs_correction";
