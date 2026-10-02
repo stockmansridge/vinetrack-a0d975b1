@@ -1,6 +1,15 @@
 // Chemical Lookup V3 Lab — System Admin prototype. Independent of the Master
 // catalogue, Chemical Search V1/V2 and vineyard saved chemicals.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { V3ReviewDecisions } from "@/components/chemicals/V3ReviewDecisions";
+import { ChemicalInventoryPanel } from "@/components/chemicals/ChemicalInventoryPanel";
+import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
+import { v3EntryBadge } from "@/lib/chemicalInventory";
+import {
+  APPROVED_TOAST, DECISIONS_REQUIRED, approvedRevisionId, fetchApprovedCatalogue, fetchReviewIssues,
+  findSavedForV3, isDecisionsRefusal, isPendingQueueRow, outstandingWithoutIssue,
+} from "@/lib/chemicalV3Review";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Camera, ExternalLink, FlaskConical, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { RateColumn, V3DataSummary, V3Warnings, VineyardUseCard, type RateEditHandlers } from "@/components/chemicals/V3ReviewData";
+import { RateColumn, V3DataSummary, V3Warnings, VineyardUsesSection, type RateEditHandlers } from "@/components/chemicals/V3ReviewData";
 import { V3RateEditor } from "@/components/chemicals/V3RateEditor";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { useAuth } from "@/context/AuthContext";
@@ -229,12 +238,6 @@ function ReviewSheet({ revisionId, onClose, onApproved }: { revisionId: string |
     },
   });
   const { isAdmin } = useIsSystemAdmin();
-  const saved = useQuery({
-    queryKey: ["saved_chemicals", usePilotVineyard().vineyardId, "active"],
-    enabled: false,
-    queryFn: async () => null as any,
-  });
-  void saved;
   const [draft, setDraft] = useState<V3RateDraft | null>(null);
   const [rateErr, setRateErr] = useState<string | null>(null);
   const [rateMsg, setRateMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
@@ -254,6 +257,11 @@ function ReviewSheet({ revisionId, onClose, onApproved }: { revisionId: string |
   });
   const cats = useCategories();
   const { vineyardId, vineyardName } = usePilotVineyard();
+  const savedQ = useQuery({
+    queryKey: ["saved_chemicals", vineyardId, "active"],
+    enabled: !!vineyardId && canUseInventoryPilot(isAdmin) && !!revisionId,
+    queryFn: () => fetchSavedChemicalsForVineyard(vineyardId!),
+  });
   const [catMsg, setCatMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   useEffect(() => { setCatMsg(null); }, [revisionId]);
   const catMut = useMutation({
@@ -277,6 +285,8 @@ function ReviewSheet({ revisionId, onClose, onApproved }: { revisionId: string |
   const uses = asList(pick(r, "vineyard_uses", "uses"));
   const warnings = asList(pick(r, "warnings"));
   const unresolved = asList(pick(r, "unresolved_fields"));
+  const outstanding = outstandingWithoutIssue(unresolved, issuesQ.data ?? []);
+  const linkedSaved = canUseInventoryPilot(isAdmin) ? findSavedForV3(savedQ.data?.chemicals ?? [], r) : null;
   const labelUrl = pick(r, "manufacturer_label_url");
   const status = String(pick(r, "review_status", "status") ?? "").toLowerCase();
   const canEdit = isAdmin && !!revisionId && isV3RevisionEditable(status);
