@@ -80,6 +80,7 @@ import { ChemicalEditor } from "@/components/chemicals/ChemicalEditorSheet";
 import { ChemicalSearchDialog } from "@/components/chemicals/ChemicalSearchDialog";
 import { ChemicalInventoryPanel } from "@/components/chemicals/ChemicalInventoryPanel";
 import { canUseInventoryPilot, v3EntryBadge } from "@/lib/chemicalInventory";
+import { signedV3MediaUrl } from "@/lib/chemicalV3";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 
 // The legacy free-text `chemical_group` column is no longer displayed — the
@@ -584,6 +585,7 @@ export default function SavedChemicalsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-16">Label</TableHead>
                   {visibleChemColumns.map((id) => (
                     <React.Fragment key={id}>{renderChemHeader(id)}</React.Fragment>
                   ))}
