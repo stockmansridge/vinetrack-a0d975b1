@@ -71,7 +71,7 @@ import {
   type RateBasis, type ProductType, type ChemUnit,
 } from "@/lib/rateBasis";
 import { normaliseChemicalGroup, buildGroupOptions } from "@/lib/chemicalGroupNormalise";
-import { normaliseManufacturerName, buildManufacturerOptions } from "@/lib/manufacturerNormalise";
+import { normaliseManufacturerName, buildManufacturerOptions, shortManufacturerName } from "@/lib/manufacturerNormalise";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { DraggableHeaderCell } from "@/components/table/DraggableHeaderCell";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
