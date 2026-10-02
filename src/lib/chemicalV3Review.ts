@@ -35,6 +35,46 @@ export async function setFrontLabelImage(revisionId: string, storagePath: string
   await rpc(V3_REVIEW_RPC.setFrontLabel, { p_revision_id: revisionId, p_storage_path: storagePath });
 }
 
+// ---- System Admin manual front-label upload (visual override only) ----
+export const FRONT_LABEL_REGISTER_RPC = "chemical_v3_admin_register_front_label_upload";
+export const FRONT_LABEL_MEDIA_BUCKET = "chemical-v3-media";
+export const FRONT_LABEL_MAX_BYTES = 12 * 1024 * 1024;
+export const FRONT_LABEL_TYPES: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
+export const FRONT_LABEL_SAVED_TOAST = "Front label image saved";
+
+/** Null when acceptable, otherwise a user-facing error. PDF is never accepted here. */
+export function validateFrontLabelFile(file: { type: string; size: number; name?: string }): string | null {
+  const ext = String(file.name ?? "").toLowerCase().split(".").pop() ?? "";
+  const typeOk = !!FRONT_LABEL_TYPES[file.type] || (!file.type && ["png", "jpg", "jpeg", "webp"].includes(ext));
+  if (!typeOk) return "Unsupported image type. Use a PNG, JPG/JPEG or WebP image.";
+  if (file.size > FRONT_LABEL_MAX_BYTES) return "File too large. The maximum size is 12 MB.";
+  return null;
+}
+
+export function frontLabelUploadPath(revisionId: string, file: { type: string; name?: string }, id: string): string {
+  let ext = FRONT_LABEL_TYPES[file.type];
+  if (!ext) { const e = String(file.name ?? "").toLowerCase().split(".").pop(); ext = e === "jpeg" ? "jpg" : e || "jpg"; }
+  return `admin-front-labels/${revisionId}/${id}.${ext}`;
+}
+
+/** Upload to the private bucket, then register via the live RPC with the exact returned path. */
+export async function uploadAndRegisterFrontLabel(revisionId: string, file: File, id: string): Promise<string> {
+  const bad = validateFrontLabelFile(file);
+  if (bad) throw new Error(bad);
+  const path = frontLabelUploadPath(revisionId, file, id);
+  const { data, error } = await sb.storage.from(FRONT_LABEL_MEDIA_BUCKET).upload(path, file, {
+    contentType: file.type || "image/jpeg", upsert: false,
+  });
+  if (error) throw new Error(`Upload failed: ${error.message ?? error}`);
+  const stored = data?.path ?? path;
+  try {
+    await rpc(FRONT_LABEL_REGISTER_RPC, { p_revision_id: revisionId, p_storage_path: stored });
+  } catch (e: any) {
+    throw new Error(`The image uploaded but could not be saved as the front label: ${e?.message ?? e}`);
+  }
+  return stored;
+}
+
 export const V3_MATCH_RPC = "chemical_v3_match_revision_to_catalogue";
 export const MATCH_TOAST = "Matched to existing VineTrack catalogue product.";
 export const MATCH_CONFIRM_TEXT =
@@ -161,6 +201,7 @@ export function frontLabelPath(row: Row): string | null {
   return row?.storage_path ?? row?.image_path ?? row?.path ?? null;
 }
 export function frontLabelCaption(row: Row): string {
+  if (String(row?.source ?? row?.provenance ?? "").toLowerCase() === "system_admin_upload") return "System Admin upload";
   const p = row?.physical_page ?? row?.page_number ?? row?.page;
   return p != null ? `Physical page ${p}` : row?.label ?? "Label image";
 }
