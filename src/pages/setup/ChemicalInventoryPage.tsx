@@ -69,13 +69,13 @@ export default function ChemicalInventoryPage() {
       queryFn: () => fetchInventorySummary(c.id),
     })),
   });
-  const summaryOf = (i: number) => summaries[i]?.data as InventorySummary | undefined;
-
-  const items = useMemo(
-    () => chemicals.map((c, i) => ({ c, s: summaryOf(i), loading: summaries[i]?.isLoading, err: summaries[i]?.error as Error | null })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [chemicals, summaries.map((x) => x.dataUpdatedAt).join(",")],
-  );
+  // Derived directly every render — no memo, so cache writes show immediately.
+  const items = chemicals.map((c, i) => ({
+    c,
+    s: summaries[i]?.data as InventorySummary | undefined,
+    loading: summaries[i]?.isLoading,
+    err: summaries[i]?.error as Error | null,
+  }));
 
   const stateOf = (s?: InventorySummary): StockState | null => s?.state ?? (s ? "needs_opening_stock" : null);
   const count = (k: StockState) => items.filter((x) => stateOf(x.s) === k).length;
