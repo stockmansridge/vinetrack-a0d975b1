@@ -33,7 +33,9 @@ describe("Chemical Search production cutover", () => {
     expect(strings(dialog)).not.toMatch(/V3|Prototype/);
   });
   it("customer wording", () => {
-    expect(NOT_SEEN_BEFORE).toBe("We haven't seen this product before.");
+    expect(NOT_SEEN_BEFORE).toBe("We couldn't find this product in VineTrack yet.");
+    expect(dialog).toContain("<Sparkles");
+    expect(dialog).toContain("NOT_SEEN_BEFORE_DETAIL");
     expect(PENDING_REVIEW_LABEL).toBe("Pending VineTrack review");
     expect(DISCOVERY_NOTE).not.toMatch(/V3/);
     for (const s of ["searching", "label_download", "extracting", "directions", "rates", "pending_review"]) {
