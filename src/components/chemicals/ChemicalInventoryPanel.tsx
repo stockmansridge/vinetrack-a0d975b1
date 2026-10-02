@@ -112,8 +112,9 @@ export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { sav
   const [err, setErr] = useState<string | null>(null);
 
   const s = summary.data;
-  const needsOpening = !s || s.state === "needs_opening_stock" || s.state === null;
-  const existingUnit = needsOpening ? null : s?.unit ?? null;
+  const needsOpening = !s || s.state === "needs_opening_stock" || (s.state === null && s.tracked !== true);
+  // Existing inventory keeps its unit family, even before opening stock is set.
+  const existingUnit = s?.unit ?? null;
   const units = allowedStockUnits(existingUnit);
   const initialUnit = defaultStockUnit(existingUnit, savedChemical?.product_form, savedChemical?.inventory_unit);
 
@@ -225,6 +226,11 @@ export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { sav
             <div className="grid grid-cols-2 gap-2">
               <div><Label htmlFor="s-qty">Current physical quantity</Label><Input id="s-qty" inputMode="decimal" value={stock.quantity} onChange={(e) => setStock({ ...stock, quantity: e.target.value })} /></div>
               <div><Label>Unit</Label><UnitSelect label="Stock unit" units={units} value={stock.unit} onChange={(u) => setStock({ ...stock, unit: u })} /></div>
+              {existingUnit && units.length < 4 && (
+                <p className="col-span-2 text-xs text-muted-foreground" data-testid="unit-family-note">
+                  This inventory is tracked by {units.includes("L") ? "volume (L / mL)" : "weight (kg / g)"}. The unit type can't be changed here.
+                </p>
+              )}
               <div className="col-span-2"><Label>Reason</Label>
                 <Select value={stock.reason} onValueChange={(v) => setStock({ ...stock, reason: v as StockReason })}>
                   <SelectTrigger aria-label="Reason"><SelectValue /></SelectTrigger>
