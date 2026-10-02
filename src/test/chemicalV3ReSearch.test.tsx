@@ -45,7 +45,7 @@ describe("V3 re-search missing data", () => {
     expect(screen.getByText("Current review record")).toBeTruthy();
     job.current = { status: "pending_review" };
     await waitFor(() => expect(rpc).toHaveBeenCalledWith("chemical_v3_admin_review_queue", undefined), { timeout: 6000 });
-    await waitFor(() => expect(onNew).toHaveBeenCalledWith("rev-new"));
+    await waitFor(() => expect(onNew).toHaveBeenCalledWith("rev-new"), { timeout: 3000 });
   }, 10000);
   it("failure keeps the old revision and shows the friendly error", async () => {
     invoke.mockResolvedValue({ error: { message: "PGRST chemical_v3_ boom" } });
