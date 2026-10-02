@@ -214,6 +214,8 @@ function ReviewSheet({ revisionId, onClose, onApproved }: { revisionId: string |
   const [needDecisions, setNeedDecisions] = useState(false);
   const [invOpen, setInvOpen] = useState(false);
   const decisionsRef = useRef<HTMLElement>(null);
+  const ratesRef = useRef<HTMLElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
   const q = useQuery({ queryKey: ["chemical-v3-revision", revisionId], enabled: !!revisionId, queryFn: () => fetchV3Revision(revisionId!) });
   const issuesQ = useQuery({ queryKey: ["chemical-v3-issues", revisionId], enabled: !!revisionId, queryFn: () => fetchReviewIssues(revisionId!) });
   useEffect(() => { setNote(""); setMsg(null); setNeedDecisions(false); setInvOpen(false); }, [revisionId]);
@@ -249,7 +251,12 @@ function ReviewSheet({ revisionId, onClose, onApproved }: { revisionId: string |
     onSuccess: async (_d, a) => {
       setDraft(null); setRateErr(null);
       setRateMsg({ tone: "ok", text: a.kind === "save" ? "Rate saved." : "Rate deleted." });
-      await qc.invalidateQueries({ queryKey: ["chemical-v3-revision", revisionId] });
+      // The database resolves the vineyard_rates issue on save — reload revision + issues + queue.
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["chemical-v3-revision", revisionId] }),
+        qc.invalidateQueries({ queryKey: ["chemical-v3-issues", revisionId] }),
+        qc.invalidateQueries({ queryKey: ["chemical-v3-queue"] }),
+      ]);
     },
     onError: (e: any, a) => {
       const text = e?.message ?? "The backend refused this change.";
@@ -291,6 +298,17 @@ function ReviewSheet({ revisionId, onClose, onApproved }: { revisionId: string |
   const labelUrl = pick(r, "manufacturer_label_url");
   const status = String(pick(r, "review_status", "status") ?? "").toLowerCase();
   const canEdit = isAdmin && !!revisionId && isV3RevisionEditable(status);
+  const fp = labelFingerprintView(r, issuesQ.data ?? []);
+  const openAddRate = () => {
+    setRateErr(null);
+    setDraft(emptyRateDraft("per_hectare"));
+    ratesRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    ratesRef.current?.focus?.();
+    setTimeout(() => {
+      editorRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+      (editorRef.current?.querySelector("input, select, button") as HTMLElement | null)?.focus?.();
+    }, 0);
+  };
   const editHandlers = (fallback: V3RateBasis): RateEditHandlers | undefined => canEdit ? {
     disabled: rateMut.isPending,
     onEdit: (o) => { setRateErr(null); setDraft(draftFromOption(o, fallback)); },
@@ -354,15 +372,18 @@ function ReviewSheet({ revisionId, onClose, onApproved }: { revisionId: string |
                 <Field label="Registration number" value={pick(r, "registration_number") ?? "No registration number"} status={opt("registration_number")} />
                 <Field label="Manufacturer product URL" value={pick(r, "manufacturer_product_url")} status={has("manufacturer_product_url") ? "ok" : "review"} />
                 <Field label="Manufacturer label URL" value={labelUrl} status={st("manufacturer_label_url")} />
-                <Field label="Label fingerprint / SHA" value={pick(r, "label_sha256", "label_sha")} status={st("label_sha256", "label_sha")} />
+                <Field label="Label fingerprint" status={fp.tone}
+                  value={<span data-testid="v3-label-fingerprint" data-tone={fp.tone}>{fp.value}{fp.note && <span className="block text-xs text-muted-foreground">{fp.note}</span>}</span>} />
                 <Field label="Source retrieved" value={pick(r, "source_retrieved_at", "label_retrieved_at")} status={has("source_retrieved_at", "label_retrieved_at") ? "ok" : "review"} />
               </div>
             </div>
             <V3DataSummary uses={uses.length} perHa={rates.perHa.length} per100L={rates.per100L.length} />
             {issuesQ.error && warnings.length > 0 && <V3Warnings warnings={warnings} />}
             <V3ReviewDecisions ref={decisionsRef} revisionId={revisionId!} issues={issuesQ.data ?? []}
-              loading={issuesQ.isLoading} error={(issuesQ.error as Error) ?? null} highlight={needDecisions} />
-            <section className="space-y-2 rounded border bg-card p-3" data-testid="v3-rates-section">
+              loading={issuesQ.isLoading} error={(issuesQ.error as Error) ?? null} highlight={needDecisions}
+              labelUrl={labelUrl ?? null} rateCount={rates.perHa.length + rates.per100L.length + rates.other.length}
+              onAddRate={canEdit ? openAddRate : undefined} />
+            <section ref={ratesRef} tabIndex={-1} className="space-y-2 rounded border bg-card p-3 outline-none" data-testid="v3-rates-section">
               <h3 className="font-semibold">Vineyard rates</h3>
               {rateMsg && <p className={cn("text-sm", rateMsg.tone === "err" ? "text-destructive" : "text-success")}>{rateMsg.text}</p>}
               <div className="grid gap-3 md:grid-cols-2">
@@ -372,9 +393,11 @@ function ReviewSheet({ revisionId, onClose, onApproved }: { revisionId: string |
               {rates.other.length > 0 && <RateColumn title="Basis not stated" items={rates.other} edit={editHandlers("per_hectare")} />}
             </section>
             {canEdit && draft && (
-              <V3RateEditor draft={draft} revisionId={revisionId!} busy={rateMut.isPending} error={rateErr}
-                onCancel={() => { setDraft(null); setRateErr(null); }}
-                onSave={(d) => rateMut.mutate({ kind: "save", draft: d })} />
+              <div ref={editorRef} data-testid="v3-rate-editor-anchor">
+                <V3RateEditor draft={draft} revisionId={revisionId!} busy={rateMut.isPending} error={rateErr}
+                  onCancel={() => { setDraft(null); setRateErr(null); }}
+                  onSave={(d) => rateMut.mutate({ kind: "save", draft: d })} />
+              </div>
             )}
             <VineyardUsesSection uses={uses} />
             {outstanding.length > 0 && (
