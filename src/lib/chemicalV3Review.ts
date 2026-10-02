@@ -105,7 +105,7 @@ export function frontLabelCaption(row: Row): string {
   return p != null ? `Physical page ${p}` : row?.label ?? "Label image";
 }
 
-/** The vineyard chemical created from this V3 product, matched by stored id only (never by name). */
+/** The vineyard chemical created from this V3 product, matched by stored id only (never by name). Live columns: saved_chemicals.chemical_v3_product_id / chemical_v3_revision_id. */
 export function findSavedForV3(saved: Row[], revision: Row | null | undefined): Row | null {
   if (!revision) return null;
   const ids = new Set([revision.id, revision.revision_id, revision.product_id, revision.v3_product_id].filter(Boolean).map(String));
@@ -116,3 +116,16 @@ export function findSavedForV3(saved: Row[], revision: Row | null | undefined): 
 
 /** Same cache entry the Chemicals page uses, so an Add to Vineyard refresh is shared. */
 export const vineyardChemicalsKey = (vineyardId: string | null) => ["saved_chemicals", vineyardId, "active"] as const;
+
+/** Revision states in which Approve / Reject / Review note are offered. */
+export const V3_DECIDABLE_STATUSES = ["pending_review", "needs_attention"] as const;
+export type V3ApprovalPanel = "decide" | "approved" | "superseded" | "rejected" | "readonly";
+/** Which approval panel the drawer shows for a revision status. Post-approval review notes never change this. */
+export function approvalPanelFor(status: string | null | undefined): V3ApprovalPanel {
+  const s = String(status ?? "").toLowerCase();
+  if ((V3_DECIDABLE_STATUSES as readonly string[]).includes(s)) return "decide";
+  if (s === "approved") return "approved";
+  if (s === "superseded") return "superseded";
+  if (s === "rejected") return "rejected";
+  return "readonly";
+}
