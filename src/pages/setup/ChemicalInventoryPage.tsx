@@ -6,7 +6,7 @@
 //
 // Pilot gate: canUseInventoryPilot (System Admin only) — applied here and on the
 // Chemicals page button. Removing the gate in chemicalInventory.ts releases both.
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Package } from "lucide-react";
