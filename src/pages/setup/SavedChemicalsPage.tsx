@@ -80,15 +80,17 @@ import { ChemicalEditor } from "@/components/chemicals/ChemicalEditorSheet";
 import { ChemicalSearchDialog } from "@/components/chemicals/ChemicalSearchDialog";
 import { ChemicalInventoryPanel } from "@/components/chemicals/ChemicalInventoryPanel";
 import { canUseInventoryPilot, v3EntryBadge } from "@/lib/chemicalInventory";
-import { signedV3MediaUrl } from "@/lib/chemicalV3";
+import { ChemicalLabelThumb, UsedForCell } from "@/components/chemicals/ChemicalListCells";
+import { useV3RevisionDisplay, v3RevisionIdOf, usedForOf, productLinkOf } from "@/lib/chemicalV3Display";
+import { Link } from "react-router-dom";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 
 // The legacy free-text `chemical_group` column is no longer displayed — the
 // structured resistance group is the single visible authority. The value is
 // still persisted and still used by filters/search.
-type ChemColId = "name" | "active_ingredient" | "groups" | "verification" | "use" | "rate" | "manufacturer" | "label" | "cost";
+type ChemColId = "name" | "active_ingredient" | "groups" | "used_for" | "verification" | "use" | "rate" | "manufacturer" | "label" | "cost";
 const CHEM_DEFAULT_COLUMNS: ChemColId[] = [
-  "name", "active_ingredient", "groups", "use", "manufacturer", "cost",
+  "name", "active_ingredient", "groups", "used_for", "use", "manufacturer", "cost",
 ];
 // Retired from the main list view only — the underlying data is untouched and
 // still shown in the editor / Chemical intelligence panel. The label is now the
@@ -96,27 +98,6 @@ const CHEM_DEFAULT_COLUMNS: ChemColId[] = [
 const RETIRED_CHEM_COLUMNS = new Set(["group", "verification", "rate", "label"]);
 
 const httpOk = (v: unknown): v is string => typeof v === "string" && /^https?:\/\//i.test(v);
-
-/** Front label thumbnail, pinned as the first column. Opens the label URL. */
-function LabelThumb({ row }: { row: any }) {
-  const path: string | undefined = row?.front_label_image_path || row?.label_image_path || undefined;
-  const { data: src } = useQuery({
-    queryKey: ["chemical-search-media", path ?? null], enabled: !!path, staleTime: 30 * 60_000,
-    queryFn: () => signedV3MediaUrl(path),
-  });
-  const box = "flex h-12 w-12 items-center justify-center overflow-hidden rounded-md border bg-muted/40";
-  const inner = src
-    ? <img src={src} alt={`${row?.name ?? "Chemical"} label`} className="h-full w-full object-contain" loading="lazy" />
-    : <span className="px-1 text-center text-[9px] leading-tight text-muted-foreground">No label image</span>;
-  if (httpOk(row?.label_url)) {
-    return (
-      <a href={row.label_url} target="_blank" rel="noopener noreferrer" title="Open label" className={cn(box, "transition hover:border-primary hover:ring-1 hover:ring-primary/40")}>
-        {inner}
-      </a>
-    );
-  }
-  return <div className={box} title="No label link">{inner}</div>;
-}
 
 const ANY = "__any__";
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
@@ -194,6 +175,11 @@ export default function SavedChemicalsPage() {
     queryFn: () => fetchSavedChemicalsForVineyard(selectedVineyardId!),
   });
   const chemicals = data?.chemicals ?? [];
+  // Catalogue revision display metadata (image, label links, vineyard uses) —
+  // read-only, never written back to saved_chemicals.
+  const { data: revDisplay } = useV3RevisionDisplay(chemicals);
+  const revOf = (c: any) => { const id = v3RevisionIdOf(c); return id ? revDisplay?.get(id) ?? null : null; };
+  const usedFor = (c: any) => usedForOf(c, revOf(c), displayProductCategory(c));
 
   const archivedQuery = useQuery({
     queryKey: ["saved_chemicals", selectedVineyardId, "archived"],
@@ -263,12 +249,13 @@ export default function SavedChemicalsPage() {
         if (fNorm && groupNorm && groupNorm.includes(fNorm)) return true;
         const mfrNorm = normaliseManufacturerName(c.manufacturer);
         if (fMfr && mfrNorm && mfrNorm.includes(fMfr)) return true;
-        return [c.name, c.active_ingredient, c.manufacturer, c.chemical_group, c.use, c.crop, c.problem, c.notes, c.restrictions]
+        return [c.name, c.active_ingredient, c.manufacturer, c.chemical_group, c.use, c.crop, c.problem, c.notes, c.restrictions, ...usedFor(c)]
           .some((v) => String(v ?? "").toLowerCase().includes(f));
       });
     }
     return list;
-  }, [chemicals, filter, group, use, activeIngredient, manufacturer]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chemicals, filter, group, use, activeIngredient, manufacturer, revDisplay]);
 
   type ChemSortKey = "name" | "active_ingredient" | "use" | "rate" | "manufacturer" | "cost";
   const { sorted: sortedRows, getSortDirection: chemSortDir, toggleSort: chemToggle } = useSortableTable<typeof rows[number], ChemSortKey>(rows, {
@@ -377,6 +364,7 @@ export default function SavedChemicalsPage() {
       case "active_ingredient": return <SortableTableHead active={chemSortDir("active_ingredient")} onSort={() => chemToggle("active_ingredient")}><DraggableHeaderCell columnId="active_ingredient" onDropColumn={moveChemColumn}>Active ingredient</DraggableHeaderCell></SortableTableHead>;
       case "groups": return <TableHead><DraggableHeaderCell columnId="groups" onDropColumn={moveChemColumn}>Resistance group</DraggableHeaderCell></TableHead>;
       case "verification": return <TableHead><DraggableHeaderCell columnId="verification" onDropColumn={moveChemColumn}>Official data</DraggableHeaderCell></TableHead>;
+      case "used_for": return <TableHead><DraggableHeaderCell columnId="used_for" onDropColumn={moveChemColumn}>Used for</DraggableHeaderCell></TableHead>;
       case "use": return <SortableTableHead active={chemSortDir("use")} onSort={() => chemToggle("use")}><DraggableHeaderCell columnId="use" onDropColumn={moveChemColumn}>Category</DraggableHeaderCell></SortableTableHead>;
       case "rate": return <SortableTableHead active={chemSortDir("rate")} onSort={() => chemToggle("rate")}><DraggableHeaderCell columnId="rate" onDropColumn={moveChemColumn}>Default rate</DraggableHeaderCell></SortableTableHead>;
       case "manufacturer": return <SortableTableHead active={chemSortDir("manufacturer")} onSort={() => chemToggle("manufacturer")}><DraggableHeaderCell columnId="manufacturer" onDropColumn={moveChemColumn}>Manufacturer</DraggableHeaderCell></SortableTableHead>;
@@ -390,8 +378,8 @@ export default function SavedChemicalsPage() {
       case "name": return (
         <TableCell key="name">
           <div className="font-medium leading-tight">{fmt(c.name)}</div>
-          {httpOk(c.product_url) && (
-            <a href={c.product_url} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline" title={`Manufacturer/product page — not the official label: ${c.product_url}`}>
+          {productLinkOf(c, revOf(c)) && (
+            <a href={productLinkOf(c, revOf(c))} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline" title="Manufacturer/product page — not the official label">
               <Globe className="h-3 w-3" />Product page
             </a>
           )}
@@ -400,6 +388,7 @@ export default function SavedChemicalsPage() {
       case "active_ingredient": return <TableCell key="active_ingredient">{fmt(c.active_ingredient)}</TableCell>;
       case "groups": return <TableCell key="groups"><ActivityGroupSummary chem={toChemicalIntelligence(c)} /></TableCell>;
       case "verification": return <TableCell key="verification"><VerificationBadge status={toChemicalIntelligence(c).verification.status} /></TableCell>;
+      case "used_for": return <TableCell key="used_for"><UsedForCell targets={usedFor(c)} /></TableCell>;
       case "use": return <TableCell key="use">{fmt(displayProductCategory(c))}</TableCell>;
       case "rate": return <TableCell key="rate">{defaultRateDisplayText(c)}</TableCell>;
       case "manufacturer": return <TableCell key="manufacturer" className="max-w-[160px]"><span className="block truncate" title={c.manufacturer ?? undefined}>{fmt(shortManufacturerName(c.manufacturer))}</span></TableCell>;
@@ -437,11 +426,21 @@ export default function SavedChemicalsPage() {
             {" "}Soft-deleted records are excluded.
           </p>
         </div>
-        {canEdit && (
-          <Button onClick={() => setSearchOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" /> Add Chemical
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {canEdit && (
+            <Button onClick={() => setSearchOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" /> Add Chemical
+            </Button>
+          )}
+          {/* Inventory pilot gate (canUseInventoryPilot) — System Admin only for now. */}
+          {inventoryPilot && (
+            <Button variant="outline" asChild>
+              <Link to="/setup/chemicals/inventory" data-testid="chemical-inventory-link">
+                <Package className="h-4 w-4 mr-1" /> Chemical Inventory
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
 
 
@@ -608,7 +607,7 @@ export default function SavedChemicalsPage() {
                 )}
                 {sortedRows.map((c) => (
                   <TableRow key={c.id} className="[&>td]:py-2.5 [&>td]:align-middle">
-                    <TableCell className="w-16"><LabelThumb row={c} /></TableCell>
+                    <TableCell className="w-16"><ChemicalLabelThumb row={c} rev={revOf(c)} /></TableCell>
                     {visibleChemColumns.map((id) => (
                       <React.Fragment key={id}>{renderChemCell(id, c)}</React.Fragment>
                     ))}

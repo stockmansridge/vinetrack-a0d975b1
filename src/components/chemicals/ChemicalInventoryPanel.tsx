@@ -19,7 +19,7 @@ import {
   type InventorySummary, type PurchaseDraft, type SettingsDraft, type StockReason, type StockUnit, type StocktakeDraft,
 } from "@/lib/chemicalInventory";
 
-const TONE = {
+export const STOCK_TONE_CLASS = {
   green: "bg-success/15 text-success",
   amber: "bg-warning/20 text-warning-foreground",
   red: "bg-destructive/15 text-destructive",
@@ -49,7 +49,7 @@ export function InventorySummaryView({ s }: { s: InventorySummary }) {
           <span className="text-sm">{Math.round(s.percent)}%</span>
         </div>
       )}
-      <div className="text-sm">Status: <Badge className={cn("border-transparent", TONE[tone])}>{STOCK_STATE_LABEL[s.state]}</Badge></div>
+      <div className="text-sm">Status: <Badge className={cn("border-transparent", STOCK_TONE_CLASS[tone])}>{STOCK_STATE_LABEL[s.state]}</Badge></div>
     </div>
   );
 }
