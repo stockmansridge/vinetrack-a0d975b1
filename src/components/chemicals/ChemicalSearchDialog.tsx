@@ -3,7 +3,7 @@
 // Admin Catalogue Review (search_chemical_v3_catalogue,
 // start_chemical_v3_discovery + chemical-lookup-v3, chemical_v3_add_to_vineyard).
 // It contains NO admin review tools and NO opening-stock fields, and never
-// calls chemical-info-lookup or any V1/V2 search.
+// calls the older product lookup function or any V1/V2 search.
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Camera, ExternalLink, Search } from "lucide-react";
