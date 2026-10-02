@@ -176,7 +176,7 @@ export function ProductsStep({ app, patch, calc, intelligenceById, canEdit, vine
         </p>
       )}
 
-      <div className="space-y-3">
+      <div className="space-y-5">
         {app.products.map((line, i) => (
           <ProductRow
             key={i}
