@@ -15,9 +15,25 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AdminGate, AdminPageHeader, AdminError, AdminEmpty, StatusPill, formatDate } from "./_shared";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { useLicencePools, type LicencePool } from "@/lib/accessEntitlementsQuery";
 
 const MANUAL = new Set(["manual", "grant", "admin_grant", "complimentary"]);
+
+type SortKey = "customer" | "vineyard" | "plan" | "source" | "status" | "started" | "seats" | "used" | "available" | "renews";
+const low = (v: string | null | undefined) => (v ? v.toLowerCase() : null);
+const SORTERS: Record<SortKey, (p: LicencePool) => string | number | null> = {
+  customer: (p) => low(p.billing_owner_name || p.billing_owner_email),
+  vineyard: (p) => low(p.vineyard_name),
+  plan: (p) => low(p.plan_code),
+  source: (p) => low(p.billing_source ?? p.provider),
+  status: (p) => low(p.subscription_status),
+  started: (p) => p.starts_at,
+  seats: (p) => (p.is_unlimited ? Infinity : p.licence_limit),
+  used: (p) => p.assigned_licences,
+  available: (p) => (p.is_unlimited ? Infinity : p.available_licences),
+  renews: (p) => p.current_period_end ?? p.expires_at,
+};
 
 export function isPaidPool(p: LicencePool): boolean {
   const src = (p.billing_source ?? p.provider ?? "").toLowerCase();
@@ -29,14 +45,36 @@ export default function PaidCustomersPage() {
   const { data, isLoading, error } = useLicencePools({ limit: 500 });
 
   const paid = useMemo(() => (data?.pools ?? []).filter(isPaidPool), [data]);
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "started", dir: -1 });
   const rows = useMemo(() => {
     const s = search.trim().toLowerCase();
-    if (!s) return paid;
-    return paid.filter((p) =>
-      [p.billing_owner_name, p.billing_owner_email, p.vineyard_name, p.plan_code]
-        .some((v) => v?.toLowerCase().includes(s)),
-    );
-  }, [paid, search]);
+    const list = !s
+      ? [...paid]
+      : paid.filter((p) =>
+          [p.billing_owner_name, p.billing_owner_email, p.vineyard_name, p.plan_code]
+            .some((v) => v?.toLowerCase().includes(s)),
+        );
+    const get = SORTERS[sort.key];
+    return list.sort((a, b) => {
+      const x = get(a), y = get(b);
+      if (x == null && y == null) return 0;
+      if (x == null) return 1;
+      if (y == null) return -1;
+      return (x < y ? -1 : x > y ? 1 : 0) * sort.dir;
+    });
+  }, [paid, search, sort]);
+  const head = (key: SortKey, label: string, right = false) => (
+    <TableHead className={right ? "text-right" : undefined} aria-sort={sort.key === key ? (sort.dir === 1 ? "ascending" : "descending") : "none"}>
+      <button
+        type="button"
+        className={`inline-flex items-center gap-1 hover:text-foreground ${right ? "flex-row-reverse" : ""}`}
+        onClick={() => setSort((c) => ({ key, dir: c.key === key ? ((-c.dir) as 1 | -1) : key === "started" || key === "renews" ? -1 : 1 }))}
+      >
+        {label}
+        {sort.key === key ? (sort.dir === 1 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}
+      </button>
+    </TableHead>
+  );
 
   const totals = useMemo(
     () => ({
@@ -75,15 +113,16 @@ export default function PaidCustomersPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Customer</TableHead>
-                <TableHead>Vineyard</TableHead>
-                <TableHead>Plan</TableHead>
-                <TableHead>Paid via</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Seats</TableHead>
-                <TableHead className="text-right">In use</TableHead>
-                <TableHead className="text-right">Available</TableHead>
-                <TableHead>Renews</TableHead>
+                {head("customer", "Customer")}
+                {head("vineyard", "Vineyard")}
+                {head("plan", "Plan")}
+                {head("source", "Paid via")}
+                {head("status", "Status")}
+                {head("started", "Started")}
+                {head("seats", "Seats", true)}
+                {head("used", "In use", true)}
+                {head("available", "Available", true)}
+                {head("renews", "Renews")}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -101,6 +140,7 @@ export default function PaidCustomersPage() {
                   <TableCell className="capitalize">{p.plan_code ?? "—"}</TableCell>
                   <TableCell><Badge variant="outline" className="capitalize">{p.billing_source ?? p.provider}</Badge></TableCell>
                   <TableCell>{p.subscription_status ? <StatusPill status={p.subscription_status} /> : "—"}</TableCell>
+                  <TableCell>{formatDate(p.starts_at)}</TableCell>
                   <TableCell className="text-right">{p.is_unlimited ? "Unlimited" : p.licence_limit ?? "—"}</TableCell>
                   <TableCell className="text-right">{p.assigned_licences}</TableCell>
                   <TableCell className="text-right">{p.is_unlimited ? "Unlimited" : p.available_licences ?? "—"}</TableCell>
