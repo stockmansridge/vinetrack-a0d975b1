@@ -53,7 +53,7 @@ describe("post-save refresh", () => {
     });
     const qc = setup();
     fireEvent.click(await screen.findByText("Record Purchase"));
-    fireEvent.change(screen.getByLabelText("Quantity"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Container size"), { target: { value: "5" } });
     fireEvent.change(screen.getByLabelText("Total purchase amount"), { target: { value: "50" } });
     fireEvent.click(screen.getByText("Save"));
     await waitFor(() => expect(toast).toHaveBeenCalledWith({ title: "Purchase recorded" }));

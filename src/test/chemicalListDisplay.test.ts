@@ -29,7 +29,7 @@ describe("Chemicals list display enrichment", () => {
   it("search includes targets; Inventory link + page are pilot gated; stock only from RPC", () => {
     const page = read("src/pages/setup/SavedChemicalsPage.tsx");
     expect(page).toContain("...usedFor(c)]");
-    expect(page).toMatch(/inventoryPilot && \(\s*<Button variant="outline" asChild>/);
+    expect(page).toContain("<ChemicalSectionNav active=\"chemicals\"");
     const inv = read("src/pages/setup/ChemicalInventoryPage.tsx");
     expect(inv).toContain("canUseInventoryPilot(isAdmin)");
     expect(inv).toContain("fetchInventorySummary(c.id)");
