@@ -83,7 +83,7 @@ describe("THIOVIT review actions", () => {
     expect(issueActions({ issue_key: "former_product_name", action_type: "acknowledge" })[0].decision).toBe("acknowledged");
   });
   it("9. rate save reloads review issues", () => {
-    const save = page.slice(page.indexOf("const rateMut"), page.indexOf("const cats = useCategories"));
+    const save = page.slice(page.indexOf("const rateMut"), page.indexOf("const savedQ"));
     expect(save).toContain('queryKey: ["chemical-v3-issues", revisionId]');
   });
   it("10. V1/V2/Master code is not touched by the review module", () => {
