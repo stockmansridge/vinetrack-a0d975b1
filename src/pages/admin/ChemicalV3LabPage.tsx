@@ -2,6 +2,7 @@
 // catalogue, Chemical Search V1/V2 and vineyard saved chemicals.
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { ChemicalSearchDialog } from "@/components/chemicals/ChemicalSearchDialog";
 import { V3ReviewDecisions } from "@/components/chemicals/V3ReviewDecisions";
 import { ChemicalInventoryPanel } from "@/components/chemicals/ChemicalInventoryPanel";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
@@ -508,7 +509,9 @@ function InventoryTab() {
 export default function ChemicalV3LabPage() {
   const { user } = useAuth();
   const { isAdmin } = useIsSystemAdmin();
-  const [tab, setTab] = useState("search");
+  const [tab, setTab] = useState("review");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const { selectedVineyardId, memberships, currentRole } = useVineyard();
   const { currentCountry } = useVineyard();
   const [country, setCountry] = useState<string | null>(resolveVineyardCountry(currentCountry) ?? null);
   const [query, setQuery] = useState("");
@@ -553,42 +556,16 @@ export default function ChemicalV3LabPage() {
         <h1 className="flex items-center gap-2 text-2xl font-semibold"><FlaskConical className="h-6 w-6" />Chemical Catalogue Review</h1>
         <p className="text-sm text-muted-foreground">Curate the VineTrack chemical catalogue. Customers search from Chemicals → Add Chemical.</p>
       </div>
+      <Button variant="outline" onClick={() => setSearchOpen(true)}><Search className="mr-1 h-4 w-4" />Open Chemical Search</Button>
+      <ChemicalSearchDialog open={searchOpen} onOpenChange={setSearchOpen} vineyardId={selectedVineyardId}
+        vineyardName={memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null}
+        country={currentCountry} canEdit={currentRole === "owner" || currentRole === "manager" || isAdmin} />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="search">Search</TabsTrigger>
-          <TabsTrigger value="photo">Search by Photo</TabsTrigger>
           <TabsTrigger value="review">Pending Review</TabsTrigger>
           <TabsTrigger value="approved">Approved</TabsTrigger>
           {canUseInventoryPilot(isAdmin) && <TabsTrigger value="inventory">Inventory &amp; Purchases</TabsTrigger>}
         </TabsList>
-        <TabsContent value="search" className="space-y-4">
-          <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (query.trim()) setSearched(query.trim()); }}>
-            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Product name" className="max-w-md" aria-label="Search" />
-            <CountrySelect value={country} onChange={setCountry} />
-            <Button type="submit"><Search className="mr-1 h-4 w-4" />Search</Button>
-          </form>
-          {search.isFetching && <p className="text-sm text-muted-foreground">Searching…</p>}
-          {search.error && <p className="text-sm text-destructive">{(search.error as Error).message}</p>}
-          {approved.map((r, i) => (
-            <ResultCard key={String(pick(r, "revision_id", "product_id", "id") ?? i)} row={r}
-              onView={() => { const id = pick(r, "revision_id", "current_revision_id", "approved_revision_id"); if (id) setOpenRevision(String(id)); }} />
-          ))}
-          {searched && search.isSuccess && approved.length === 0 && (
-            <div className="space-y-2 rounded border bg-card p-4">
-              <p>We haven't seen this product before.</p>
-              <Button onClick={() => find.mutate()} disabled={find.isPending}>Find this product</Button>
-            </div>
-          )}
-        </TabsContent>
-        <TabsContent value="photo" className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Input type="file" accept="image/*" capture="environment" className="max-w-sm" aria-label="Upload photo"
-              onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
-            <CountrySelect value={country} onChange={setCountry} />
-            <Button disabled={!photo || !user || photoSearch.isPending} onClick={() => photoSearch.mutate()}><Camera className="mr-1 h-4 w-4" />Find from photo</Button>
-          </div>
-          <p className="text-xs text-muted-foreground">The photo is stored privately; product recognition is done by the V3 backend.</p>
-        </TabsContent>
         <TabsContent value="review"><ReviewQueue onOpen={setOpenRevision} /></TabsContent>
         <TabsContent value="approved"><ApprovedList onOpen={setOpenRevision} /></TabsContent>
         {canUseInventoryPilot(isAdmin) && <TabsContent value="inventory"><InventoryTab /></TabsContent>}
