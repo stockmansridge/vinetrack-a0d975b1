@@ -1,3 +1,4 @@
+import { Package } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { consumeCountryReturnContext } from "@/lib/vineyardCountryRecovery";
@@ -86,12 +87,10 @@ import { DraggableHeaderCell } from "@/components/table/DraggableHeaderCell";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { formatDate } from "@/lib/dateFormat";
 import { ChemicalEditor } from "@/components/chemicals/ChemicalEditorSheet";
-import { AddChemicalV2Dialog } from "@/components/chemicals/AddChemicalV2Dialog";
+import { ChemicalSearchDialog } from "@/components/chemicals/ChemicalSearchDialog";
 import { ChemicalInventoryPanel } from "@/components/chemicals/ChemicalInventoryPanel";
 import { canUseInventoryPilot, v3EntryBadge } from "@/lib/chemicalInventory";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
-import { Package } from "lucide-react";
-import { useChemicalSearchV2 } from "@/lib/chemicalSearchV2";
 
 // The legacy free-text `chemical_group` column is no longer displayed — the
 // structured resistance group is the single visible authority. The value is
@@ -132,10 +131,11 @@ const EMPTY: SavedChemicalInput = {
 };
 
 export default function SavedChemicalsPage() {
-  const { selectedVineyardId, currentRole, currentCountry } = useVineyard();
-  // Chemical Search V2 — controlled rollout (flag + System Admin), same gate
-  // as mobile. Everyone else keeps the existing editor workflow unchanged.
-  const searchV2 = useChemicalSearchV2();
+  const { selectedVineyardId, currentRole, currentCountry, memberships } = useVineyard();
+  // Add Chemical → the single customer Chemical Search. Manual entry opens the
+  // editor in manual-only mode (no lookup mounts).
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [manualName, setManualName] = useState<string | null>(null);
   const canEdit = currentRole === "owner" || currentRole === "manager";
   const canSeeCosts = useCanSeeCosts();
   const qc = useQueryClient();
@@ -412,8 +412,8 @@ export default function SavedChemicalsPage() {
           </p>
         </div>
         {canEdit && (
-          <Button onClick={() => setEditing("new")}>
-            <Plus className="h-4 w-4 mr-1" /> New chemical
+          <Button onClick={() => setSearchOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" /> Add Chemical
           </Button>
         )}
       </div>
@@ -585,7 +585,7 @@ export default function SavedChemicalsPage() {
                       <React.Fragment key={id}>{renderChemCell(id, c)}</React.Fragment>
                     ))}
                     <TableCell className="text-right">
-                      {inventoryPilot && v3EntryBadge(c) && (
+                      {v3EntryBadge(c) && (
                         <Badge variant="outline" className={cn("mr-1", v3EntryBadge(c)!.tone === "pending" && "border-warning/60 bg-warning/10")}>{v3EntryBadge(c)!.label}</Badge>
                       )}
                       {inventoryPilot && (
@@ -687,29 +687,24 @@ export default function SavedChemicalsPage() {
         </TabsContent>
       </Tabs>
 
-      {searchV2 && (
-        <AddChemicalV2Dialog
-          open={editing === "new"}
-          onOpenChange={(o) => {
-            if (!o) {
-              setEditing(null);
-              setRestoredDraft(null);
-            }
-          }}
-          vineyardId={selectedVineyardId!}
-          country={currentCountry}
-          existingLibrary={chemicals}
-          onSaved={() => {
-            invalidate();
-            setEditing(null);
-            setRestoredDraft(null);
-          }}
-          onOpenExisting={(c) => setEditing(c)}
-        />
-      )}
+      <ChemicalSearchDialog
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        vineyardId={selectedVineyardId}
+        vineyardName={memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null}
+        country={currentCountry}
+        canEdit={canEdit}
+        onAdded={() => invalidate()}
+        onManual={(name) => {
+          setSearchOpen(false);
+          setManualName(name);
+          setEditing("new");
+        }}
+      />
 
       <ChemicalEditor
-        open={!!editing && !(searchV2 && editing === "new")}
+        manualOnly={editing === "new"}
+        open={!!editing}
         onOpenChange={(o) => {
           if (!o) {
             setEditing(null);
@@ -718,8 +713,8 @@ export default function SavedChemicalsPage() {
         }}
         initial={editing && editing !== "new" ? editing : null}
         initialName={
-          editing === "new" && typeof restoredDraft?.searchText === "string"
-            ? (restoredDraft.searchText as string)
+          editing === "new"
+            ? (typeof restoredDraft?.searchText === "string" ? (restoredDraft.searchText as string) : manualName ?? undefined)
             : undefined
         }
         restoredDraft={editing === "new" ? restoredDraft : null}

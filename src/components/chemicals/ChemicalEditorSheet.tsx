@@ -211,8 +211,13 @@ const EMPTY: SavedChemicalInput = {
 
 export function ChemicalEditor({
   open, onOpenChange, initial, vineyardId, existingLibrary, canSeeCosts, onSaved,
-  initialName, jurisdiction, restoredDraft,
+  initialName, jurisdiction, restoredDraft, manualOnly = false,
 }: {
+  /**
+   * Manual entry only: no product lookup mounts and no web/API lookup runs.
+   * Used by Chemical Search's "Enter manually" fallback.
+   */
+  manualOnly?: boolean;
   open: boolean;
   onOpenChange: (o: boolean) => void;
   initial: SavedChemical | null;
@@ -1111,7 +1116,7 @@ export function ChemicalEditor({
     <>
       {/* Add = identify/search. Edit never mounts the lookup: opening an
           existing chemical performs no product search and no network call. */}
-      {!initial && (
+      {!initial && !manualOnly && (
         <ChemicalAILookup
           initialName={form.name ?? ""}
           country={currentCountry}

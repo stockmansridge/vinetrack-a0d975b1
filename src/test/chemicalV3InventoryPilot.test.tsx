@@ -44,7 +44,7 @@ describe("Add to vineyard", () => {
   it("7. candidate is visibly marked pending", () => {
     expect(isPendingCatalogueReview("pending_review")).toBe(true);
     expect(isPendingCatalogueReview("approved")).toBe(false);
-    expect(v3EntryBadge({ entry_source: "chemical_v3_candidate" })?.label).toBe("V3 — Pending review");
+    expect(v3EntryBadge({ entry_source: "chemical_v3_candidate" })?.label).toBe("Pending review");
     expect(v3EntryBadge({ entry_source: "chemical_v3_catalogue" })?.label).not.toMatch(/pending/i);
   });
   it("8. opening stock is optional and reused is reported", async () => {
