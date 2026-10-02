@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { ChemicalSearchDialog } from "@/components/chemicals/ChemicalSearchDialog";
 import { V3ReSearchButton } from "@/components/chemicals/V3ReSearchButton";
 import { canReSearch, needsReSearch } from "@/lib/chemicalV3";
-import { V3ReviewDecisions } from "@/components/chemicals/V3ReviewDecisions";
+import { V3ReviewDecisions, FrontLabelUploadButton } from "@/components/chemicals/V3ReviewDecisions";
 import { V3CatalogueMatch } from "@/components/chemicals/V3CatalogueMatch";
 import { ChemicalInventoryPanel } from "@/components/chemicals/ChemicalInventoryPanel";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
@@ -341,6 +341,7 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
                 {labelUrl ? (
                   <Button size="sm" asChild><a href={labelUrl} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-1 h-4 w-4" />Open Manufacturer Label</a></Button>
                 ) : <Badge className="border-transparent bg-destructive/15 text-destructive">Manufacturer label missing</Badge>}
+                {isAdmin && revisionId && <FrontLabelUploadButton revisionId={revisionId} hasImage={!!pick(r, "front_label_image_path")} />}
               </div>
               {(() => {
                 const jid = queueJobId ?? pick(r, "job_id", "discovery_job_id");

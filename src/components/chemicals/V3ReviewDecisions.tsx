@@ -221,3 +221,18 @@ export const V3ReviewDecisions = forwardRef<HTMLElement, {
     </section>
   );
 });
+
+/** Drawer-level "Upload / Replace front label" — opens the same chooser. System Admin only (caller gates). */
+export function FrontLabelUploadButton({ revisionId, hasImage }: { revisionId: string; hasImage: boolean }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const reload = () => Promise.all(frontLabelReloadKeys(revisionId).map((queryKey) => qc.invalidateQueries({ queryKey })));
+  return (
+    <>
+      <Button size="sm" variant={hasImage ? "outline" : "default"} onClick={() => setOpen(true)} data-testid="v3-upload-front-label">
+        <Upload className="mr-1 h-4 w-4" />{hasImage ? "Replace front label" : "Upload front label"}
+      </Button>
+      <FrontLabelChooser revisionId={revisionId} issueId={null} open={open} onClose={() => setOpen(false)} onSaved={reload} />
+    </>
+  );
+}
