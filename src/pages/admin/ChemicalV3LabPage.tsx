@@ -8,7 +8,7 @@ import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import { v3EntryBadge } from "@/lib/chemicalInventory";
 import {
   APPROVED_TOAST, DECISIONS_REQUIRED, approvedRevisionId, fetchApprovedCatalogue, fetchReviewIssues,
-  findSavedForV3, vineyardChemicalsKey, isDecisionsRefusal, isPendingQueueRow, outstandingWithoutIssue,
+  findSavedForV3, vineyardChemicalsKey, approvalPanelFor, isDecisionsRefusal, isPendingQueueRow, outstandingWithoutIssue,
 } from "@/lib/chemicalV3Review";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Camera, ExternalLink, FlaskConical, Search } from "lucide-react";
@@ -382,13 +382,28 @@ function ReviewSheet({ revisionId, onClose, onApproved }: { revisionId: string |
                 <ul className="list-disc pl-5 text-sm">{outstanding.map((w, i) => <li key={i}>{w}</li>)}</ul>
               </section>
             )}
-            <section className="space-y-2 border-t pt-3">
-              <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Review note (required to reject)" aria-label="Review note" />
-              {msg && <p className={cn("text-sm", msg.tone === "err" ? "text-destructive" : "text-success")}>{msg.text}</p>}
-              <div className="flex gap-2">
-                <Button disabled={act.isPending} onClick={() => act.mutate("approve")}>Approve</Button>
-                <Button variant="destructive" disabled={act.isPending || !note.trim()} onClick={() => act.mutate("reject")}>Reject</Button>
-              </div>
+            <section className="space-y-2 border-t pt-3" data-testid="v3-approval-panel" data-panel={approvalPanelFor(status)}>
+              {approvalPanelFor(status) === "decide" ? (
+                <>
+                  <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Review note (required to reject)" aria-label="Review note" />
+                  {msg && <p className={cn("text-sm", msg.tone === "err" ? "text-destructive" : "text-success")}>{msg.text}</p>}
+                  <div className="flex gap-2">
+                    <Button disabled={act.isPending} onClick={() => act.mutate("approve")}>Approve</Button>
+                    <Button variant="destructive" disabled={act.isPending || !note.trim()} onClick={() => act.mutate("reject")}>Reject</Button>
+                  </div>
+                </>
+              ) : approvalPanelFor(status) === "approved" ? (
+                <div className="rounded border border-success/40 bg-success/10 p-2 text-sm text-success">
+                  <div className="font-medium">Approved for V3 catalogue ✓</div>
+                  {pick(r, "approved_at", "approved_date", "reviewed_at") && <div className="text-xs">Approved {String(pick(r, "approved_at", "approved_date", "reviewed_at")).slice(0, 10)}</div>}
+                </div>
+              ) : approvalPanelFor(status) === "superseded" ? (
+                <p className="rounded border bg-muted p-2 text-sm text-muted-foreground">Superseded revision</p>
+              ) : approvalPanelFor(status) === "rejected" ? (
+                <p className="rounded border border-destructive/40 bg-destructive/10 p-2 text-sm text-destructive">Rejected</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">Read-only revision</p>
+              )}
             </section>
           </div>
         )}
