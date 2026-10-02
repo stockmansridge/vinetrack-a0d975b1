@@ -10,8 +10,8 @@ import {
 } from "@/lib/chemicalV3";
 import { customerStage, discoveryRevisionId } from "@/lib/chemicalSearchPublic";
 
-export function V3ReSearchButton({ jobId, revisionId, prominent, onNewRevision }: {
-  jobId: string; revisionId: string; prominent: boolean; onNewRevision: (id: string) => void;
+export function V3ReSearchButton({ jobId, revisionId, prominent, onNewRevision, label = "Re-search missing data" }: {
+  jobId: string; revisionId: string; prominent: boolean; onNewRevision: (id: string) => void; label?: string;
 }) {
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState(false);
@@ -41,15 +41,16 @@ export function V3ReSearchButton({ jobId, revisionId, prominent, onNewRevision }
       const next = fromJob && fromJob !== revisionId ? fromJob : fromQueue ? String(pick(fromQueue, "revision_id", "id")) : null;
       if (!next) { setPhase("failed"); return; }
       setPhase("done");
+      void qc.invalidateQueries({ queryKey: ["chemical-v3-queue"] });
       onNewRevision(next);
     })().catch(() => setPhase("failed"));
   }, [phase, st, job.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pct = Number(pick(job.data, "progress_percent", "progress", "percent") ?? 0);
   return (
-    <div className="space-y-2" data-testid="v3-research">
+    <div className="space-y-2" data-testid="v3-research" onClick={(e) => e.stopPropagation()}>
       <Button size="sm" variant={prominent ? "default" : "outline"} disabled={phase === "running"} onClick={() => setConfirm(true)}>
-        <Sparkles className="mr-1 h-4 w-4" />Re-search missing data
+        <Sparkles className="mr-1 h-4 w-4" />{label}
       </Button>
       {phase === "running" && (
         <div className="space-y-1 rounded border bg-card p-2 text-sm" data-testid="v3-research-progress">

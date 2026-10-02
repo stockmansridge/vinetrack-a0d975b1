@@ -446,29 +446,43 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
   );
 }
 
-function ReviewQueue({ onOpen }: { onOpen: (id: string, jobId?: string | null) => void }) {
+export function ReviewQueue({ onOpen }: { onOpen: (id: string, jobId?: string | null) => void }) {
   const cats = useCategories();
-  const q = useQuery({ queryKey: ["chemical-v3-queue"], queryFn: v3ReviewQueue });
+  const { isAdmin } = useIsSystemAdmin();
+  const q = useQuery({ queryKey: ["chemical-v3-queue"], queryFn: v3ReviewQueue, refetchOnMount: "always", refetchOnWindowFocus: "always" });
+  const refresh = (
+    <div className="mb-2 flex justify-end">
+      <Button size="sm" variant="outline" disabled={q.isFetching} onClick={() => void q.refetch()} data-testid="v3-queue-refresh">Refresh</Button>
+    </div>
+  );
   if (q.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
-  if (q.error) return <p className="text-sm text-destructive">{(q.error as Error).message}</p>;
-  const rows = (q.data ?? []).filter(isPendingQueueRow);
-  if (!rows.length) return <p className="rounded border bg-card p-3 text-sm text-muted-foreground">Nothing waiting for review.</p>;
+  if (q.error) return <div>{refresh}<p className="text-sm text-destructive">{(q.error as Error).message}</p></div>;
+  const seen = new Set<string>();
+  const rows = (q.data ?? []).filter(isPendingQueueRow).filter((r) => {
+    const id = String(pick(r, "revision_id", "id"));
+    if (seen.has(id)) return false;
+    seen.add(id); return true;
+  });
+  if (!rows.length) return <div>{refresh}<p className="rounded border bg-card p-3 text-sm text-muted-foreground">Nothing waiting for review.</p></div>;
   return (
+    <div>{refresh}
     <div className="overflow-x-auto rounded border bg-card">
       <table className="w-full text-sm">
         <thead className="bg-card text-left text-xs text-muted-foreground"><tr>
-          {["Product", "Manufacturer", "Country", "Category", "Core complete", "Vineyard rates", "Manufacturer label", "Front label", "Warnings", "Unresolved", "Age"].map((h) => <th key={h} className="p-2">{h}</th>)}
+          {["Product", "Manufacturer", "Country", "Category", "Core complete", "Vineyard rates", "Manufacturer label", "Front label", "Warnings", "Unresolved", "Age", "Actions"].map((h) => <th key={h} className="p-2">{h}</th>)}
         </tr></thead>
         <tbody>{rows.map((r) => {
           const id = String(pick(r, "revision_id", "id"));
           const created = pick(r, "created_at");
           const age = created ? `${Math.max(0, Math.round((Date.now() - new Date(created).getTime()) / 86_400_000))} d` : "—";
+          const jid = pick(r, "job_id");
+          const status = String(pick(r, "review_status", "status") ?? "");
           return (
-            <tr key={id} className={SOLID_ROW} data-testid="v3-review-row" onClick={() => onOpen(id, pick(r, "job_id") ? String(pick(r, "job_id")) : null)}>
+            <tr key={id} className={SOLID_ROW} data-testid="v3-review-row" onClick={() => onOpen(id, jid ? String(jid) : null)}>
               <td className="p-2 font-medium">{pick(r, "product_name") ?? "—"}</td>
               <td className="p-2">{pick(r, "manufacturer") ?? "—"}</td>
               <td className="p-2">{pick(r, "country_code", "country") ?? "—"}</td>
-              <td className="p-2">{v3CategoryLabel(r, cats.data) ?? "—"}</td>
+              <td className="p-2">{v3CategoryLabel(r, cats.data) ?? pick(r, "product_category") ?? "—"}</td>
               <td className="p-2">{r.core_fields_complete ? "Yes" : "No"}</td>
               <td className="p-2">{humaniseStage(pick(r, "vineyard_rate_status")) || "—"}</td>
               <td className="p-2">{humaniseStage(pick(r, "manufacturer_label_status")) || (pick(r, "manufacturer_label_url") ? "Present" : "Missing")}</td>
@@ -476,10 +490,17 @@ function ReviewQueue({ onOpen }: { onOpen: (id: string, jobId?: string | null) =
               <td className="p-2">{asList(pick(r, "warnings")).length || pick(r, "warning_count") || 0}</td>
               <td className="p-2">{asList(pick(r, "unresolved_fields")).length || pick(r, "unresolved_count") || 0}</td>
               <td className="p-2">{age}</td>
+              <td className="p-2" data-testid="v3-row-actions">
+                {canReSearch(isAdmin, status, jid ? String(jid) : null) ? (
+                  <V3ReSearchButton jobId={String(jid)} revisionId={id} prominent={false} label="Re-search"
+                    onNewRevision={(next) => onOpen(next, String(jid))} />
+                ) : "—"}
+              </td>
             </tr>
           );
         })}</tbody>
       </table>
+    </div>
     </div>
   );
 }
