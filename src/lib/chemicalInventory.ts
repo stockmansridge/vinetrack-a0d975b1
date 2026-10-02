@@ -141,6 +141,8 @@ export interface InventorySummary {
   warningsEnabled: boolean | null;
   lowStockPercent: number | null;
   lowStockQuantity: number | null;
+  /** Database-calculated value; never computed in the browser. */
+  estimatedStockValue: number | null;
   raw: Row | null;
 }
 
@@ -169,6 +171,7 @@ export function parseInventorySummary(data: any): InventorySummary {
     warningsEnabled: r && typeof r.warnings_enabled === "boolean" ? r.warnings_enabled : null,
     lowStockPercent: n(first(r, "low_stock_percent")),
     lowStockQuantity: n(first(r, "low_stock_threshold_quantity", "low_stock_quantity")),
+    estimatedStockValue: n(first(r, "estimated_stock_value")),
     raw: r,
   };
 }

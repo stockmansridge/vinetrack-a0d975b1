@@ -42,8 +42,7 @@ const FILTERS: Array<{ key: FilterKey; label: string }> = [
 
 /** Backend-supplied stock value only — never quantity × cost in the browser. */
 const backendValue = (s?: InventorySummary): number | null => {
-  const v = s?.raw?.estimated_stock_value ?? s?.raw?.estimated_value ?? s?.raw?.stock_value;
-  return v == null || !Number.isFinite(Number(v)) ? null : Number(v);
+  return s?.estimatedStockValue ?? null;
 };
 
 export default function ChemicalInventoryPage() {
@@ -111,7 +110,7 @@ export default function ChemicalInventoryPage() {
         {canSeeCosts && (
           <SummaryCard label="Estimated stock value"
             value={values.length ? formatMoney(values.reduce((a, b) => a + b, 0), currency) : "—"}
-            hint={values.length ? undefined : "Not supplied by inventory yet"} />
+            hint={values.length ? undefined : "Available once stock and purchase cost are recorded"} />
         )}
       </div>
 
