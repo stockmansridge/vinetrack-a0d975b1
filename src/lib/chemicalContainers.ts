@@ -1,16 +1,12 @@
 // Container-based stock entry (UI model only).
 //
-// BACKEND LIMITATION: the current inventory RPCs persist only aggregate
-// quantity + unit (purchase and stocktake). container_count, container_size,
-// container_unit and opening capacity are NOT stored anywhere yet. These
-// helpers turn the container entry into the existing aggregate write; nothing
-// container-specific is sent, kept in notes, or saved locally.
-// When Rork ships the extended contract, flip CONTAINER_BACKEND_SUPPORTED and
-// add the extra args in toPurchaseQuantity's callers — the UI model is ready.
+// Container details are persisted by the V2 inventory RPCs
+// (chemical_inventory_record_purchase_v2 / _record_stocktake_v2). The backend
+// calculates quantity and percentages; totals here are previews only.
 import type { StockUnit } from "@/lib/chemicalInventory";
 import { STOCK_UNITS } from "@/lib/chemicalInventory";
 
-export const CONTAINER_BACKEND_SUPPORTED = false;
+export const CONTAINER_BACKEND_SUPPORTED = true;
 
 export interface ContainerDraft { count: string; size: string; unit: StockUnit }
 

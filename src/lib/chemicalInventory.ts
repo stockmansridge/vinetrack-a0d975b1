@@ -19,6 +19,10 @@ export const PILOT_RPC = {
   settings: "chemical_inventory_set_settings",
   summary: "chemical_inventory_summary",
   history: "chemical_inventory_purchase_history",
+  // V2 (container-aware). Old RPCs stay for older clients; the Portal prefers V2.
+  purchaseV2: "chemical_inventory_record_purchase_v2",
+  stocktakeV2: "chemical_inventory_record_stocktake_v2",
+  historyV2: "chemical_inventory_purchase_history_v2",
 } as const;
 export const CATEGORY_TABLE = "chemical_product_categories";
 
@@ -185,6 +189,8 @@ export interface PurchaseRow {
   id: string; date: string | null; quantity: number | null; unit: string | null; total: number | null;
   unitCost: number | null; currency: string | null; batch: string | null; supplier: string | null;
   expiry: string | null; reference: string | null;
+  /** Container snapshot (V2). Null for legacy purchases — never fabricated. */
+  containerCount: number | null; containerSize: number | null; containerUnit: string | null;
 }
 export function parsePurchaseHistory(data: any): PurchaseRow[] {
   const rows: Row[] = Array.isArray(data) ? data : data ? [data] : [];
@@ -200,10 +206,13 @@ export function parsePurchaseHistory(data: any): PurchaseRow[] {
     supplier: first(r, "supplier") ?? null,
     expiry: first(r, "expiry_date") ?? null,
     reference: first(r, "invoice_reference") ?? null,
+    containerCount: n(r?.container_count),
+    containerSize: n(r?.container_size),
+    containerUnit: r?.container_unit ?? null,
   })).sort((a, b) => String(b.date ?? "").localeCompare(String(a.date ?? ""))); // newest first, never merged
 }
 export const fetchPurchaseHistory = async (savedChemicalId: string) =>
-  parsePurchaseHistory(await rpc(PILOT_RPC.history, { p_saved_chemical_id: savedChemicalId }));
+  parsePurchaseHistory(await rpc(PILOT_RPC.historyV2, { p_saved_chemical_id: savedChemicalId }));
 
 export interface PurchaseDraft {
   date: string; quantity: string; unit: StockUnit; total: string; currency: string;
@@ -227,6 +236,30 @@ export async function recordPurchase(savedChemicalId: string, d: PurchaseDraft) 
   return rpc(PILOT_RPC.purchase, b.args);
 }
 
+/** Container snapshot sent to the V2 RPCs. */
+export interface ContainerArgs { count: string; size: string; unit: StockUnit }
+const int = (s: string) => { const v = num(s); return v === null ? null : v; };
+
+/** V2 purchase: container count/size/unit + total amount. The backend works out quantity and unit cost. */
+export function buildPurchaseV2Args(savedChemicalId: string, d: PurchaseDraft, box: ContainerArgs): { args: Row } | { error: string } {
+  const c = int(box.count), sz = num(box.size), t = num(d.total);
+  if (!d.date) return { error: "Purchase date is required." };
+  if (c === null || !Number.isInteger(c) || c <= 0) return { error: "Number of containers must be a whole number above 0." };
+  if (sz === null || !Number.isFinite(sz) || sz <= 0) return { error: "Container size must be more than 0." };
+  if (t === null || !Number.isFinite(t) || t < 0) return { error: "Total purchase amount is required." };
+  return { args: {
+    p_saved_chemical_id: savedChemicalId, p_purchase_date: d.date,
+    p_container_count: c, p_container_size: sz, p_container_unit: box.unit,
+    p_total_cost: t, p_currency: txt(d.currency), p_batch_number: txt(d.batch), p_supplier: txt(d.supplier),
+    p_invoice_reference: txt(d.reference), p_expiry_date: txt(d.expiry), p_notes: txt(d.notes),
+  } };
+}
+export async function recordPurchaseV2(savedChemicalId: string, d: PurchaseDraft, box: ContainerArgs) {
+  const b = buildPurchaseV2Args(savedChemicalId, d, box);
+  if ("error" in b) throw new Error(b.error);
+  return rpc(PILOT_RPC.purchaseV2, b.args);
+}
+
 export interface StocktakeDraft { quantity: string; unit: StockUnit; reason: StockReason; notes: string }
 export function buildStocktakeArgs(savedChemicalId: string, d: StocktakeDraft): { args: Row } | { error: string } {
   const q = num(d.quantity);
@@ -237,6 +270,23 @@ export async function recordStocktake(savedChemicalId: string, d: StocktakeDraft
   const b = buildStocktakeArgs(savedChemicalId, d);
   if ("error" in b) throw new Error(b.error);
   return rpc(PILOT_RPC.stocktake, b.args);
+}
+
+/** V2 stocktake. Container info is sent when given (required by the backend for opening stock). */
+export function buildStocktakeV2Args(savedChemicalId: string, d: StocktakeDraft, box: ContainerArgs | null): { args: Row } | { error: string } {
+  const q = num(d.quantity);
+  if (q === null || !Number.isFinite(q) || q < 0) return { error: "Current physical quantity must be 0 or more." };
+  const c = box ? int(box.count) : null, sz = box ? num(box.size) : null;
+  return { args: {
+    p_saved_chemical_id: savedChemicalId, p_current_quantity: q, p_current_unit: d.unit, p_reason: d.reason,
+    p_container_count: c, p_container_size: sz, p_container_unit: box && (c !== null || sz !== null) ? box.unit : null,
+    p_notes: txt(d.notes), p_effective_at: new Date().toISOString(),
+  } };
+}
+export async function recordStocktakeV2(savedChemicalId: string, d: StocktakeDraft, box: ContainerArgs | null) {
+  const b = buildStocktakeV2Args(savedChemicalId, d, box);
+  if ("error" in b) throw new Error(b.error);
+  return rpc(PILOT_RPC.stocktakeV2, b.args);
 }
 
 export const markFinished = (savedChemicalId: string, notes: string | null) =>
