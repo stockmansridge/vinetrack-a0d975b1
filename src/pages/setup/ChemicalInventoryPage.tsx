@@ -48,7 +48,7 @@ const backendValue = (s?: InventorySummary): number | null => {
 
 export default function ChemicalInventoryPage() {
   const { selectedVineyardId } = useVineyard();
-  const { isAdmin, isLoading: adminLoading } = useIsSystemAdmin() as { isAdmin: boolean; isLoading?: boolean };
+  const { isAdmin, loading: adminLoading } = useIsSystemAdmin();
   const allowed = canUseInventoryPilot(isAdmin);
   const canSeeCosts = useCanSeeCosts();
   const [filter, setFilter] = useState<FilterKey>("all");
