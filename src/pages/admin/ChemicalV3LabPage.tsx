@@ -360,7 +360,7 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
                 <Sheet open={invOpen} onOpenChange={setInvOpen}>
                   <SheetContent className="w-screen max-w-none overflow-y-auto sm:w-[640px]">
                     <SheetHeader><SheetTitle>{linkedSaved.name}</SheetTitle></SheetHeader>
-                    <div className="mt-4"><ChemicalInventoryPanel savedChemicalId={String(linkedSaved.id)} /></div>
+                    <div className="mt-4"><ChemicalInventoryPanel savedChemicalId={String(linkedSaved.id)} savedChemical={linkedSaved as any} /></div>
                   </SheetContent>
                 </Sheet>
               )}
