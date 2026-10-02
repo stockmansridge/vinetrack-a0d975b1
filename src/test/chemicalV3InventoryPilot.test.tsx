@@ -107,7 +107,7 @@ describe("Gate, compact display, V1/V2 untouched", () => {
     expect((lab.match(/canUseInventoryPilot\(isAdmin\) && revi?s?I?d?/g) ?? []).length).toBeGreaterThanOrEqual(2);
   });
   it("17 + 18. long application text and restrictions collapsed by default", () => {
-    const { container } = render(<RateOptionCard option={{ min_value: 3, max_value: 6, unit: "L/ha", targets: ["Phalaris"], methods: ["Boom"], application_instructions: "Apply in 50 to 150 L water per hectare using a boom", condition: "Do not apply in wind" }} />);
+    const { container } = render(<RateOptionCard option={{ min_value: 3, max_value: 6, unit: "L/ha", targets: ["Phalaris"], methods: ["Boom"], application_directions: "Apply in 50 to 150 L water per hectare using a boom", condition: "Do not apply in wind" }} />);
     expect(container.textContent).toContain("3–6 L/ha");
     expect(container.textContent).toContain("Phalaris");
     expect(container.textContent).not.toContain("Apply in 50 to 150 L");
