@@ -168,7 +168,7 @@ describe("static source proofs", () => {
     const src = read("src/pages/setup/SavedChemicalsPage.tsx");
     expect(src).not.toContain('case "group": return');
     expect(src).toContain("Resistance group");
-    expect(src).toContain("Official data");
+    expect(src).toContain('"verification", "rate", "label"]');
     expect(src).toContain('onDropColumn={moveChemColumn}>Category<');
     expect(read("src/lib/chemicalProductCategory.ts")).toContain("product_category");
   });
