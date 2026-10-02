@@ -13,7 +13,6 @@ import { customerStage, discoveryRevisionId } from "@/lib/chemicalSearchPublic";
 export function V3ReSearchButton({ jobId, revisionId, prominent, onNewRevision, label = "Re-search missing data" }: {
   jobId: string; revisionId: string; prominent: boolean; onNewRevision: (id: string) => void; label?: string;
 }) {
-}) {
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState(false);
   const [phase, setPhase] = useState<"idle" | "running" | "failed" | "done">("idle");
