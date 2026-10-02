@@ -6,7 +6,7 @@
 // calls the older product lookup function or any V1/V2 search.
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Camera, ExternalLink, Search } from "lucide-react";
+import { Camera, ExternalLink, Search, Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ import { RateColumn } from "@/components/chemicals/V3ReviewData";
 import { V3ResistanceBadge } from "@/components/chemicals/V3ResistanceField";
 import { resolveVineyardCountry } from "@/lib/vineyardCountries";
 import {
-  CATALOGUE_LABEL, DISCOVERY_FAILED, DISCOVERY_NOTE, DISCOVERY_UNAVAILABLE, NOT_SEEN_BEFORE,
+  CATALOGUE_LABEL, DISCOVERY_FAILED, DISCOVERY_NOTE, DISCOVERY_UNAVAILABLE, NOT_SEEN_BEFORE, NOT_SEEN_BEFORE_DETAIL,
   OWNER_MANAGER_ONLY, PENDING_REVIEW_LABEL, PENDING_REVIEW_NOTE, REUSED_DISCOVERY,
   addedMessage, customerError, customerStage, discoveryRevisionId, isCustomerAddable, isPendingStatus, resultRevisionId,
 } from "@/lib/chemicalSearchPublic";
@@ -277,10 +277,14 @@ export function ChemicalSearchDialog(props: ChemicalSearchDialogProps) {
                   );
                 })}
                 {!jobId && searched && search.isSuccess && results.length === 0 && (
-                  <div className="space-y-2 rounded border bg-card p-4" data-testid="chemical-search-miss">
-                    <p>{NOT_SEEN_BEFORE}</p>
-                    <div className="flex gap-2">
-                      <Button onClick={() => find.mutate()} disabled={find.isPending}>Find this product</Button>
+                  <div className="space-y-3 rounded-lg border bg-muted/40 p-4" data-testid="chemical-search-miss">
+                    <p className="font-medium">{NOT_SEEN_BEFORE}</p>
+                    <p className="text-sm text-muted-foreground">{NOT_SEEN_BEFORE_DETAIL}</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button onClick={() => find.mutate()} disabled={find.isPending}>
+                        <Sparkles className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                        Find this product
+                      </Button>
                       <Button variant="outline" onClick={manual}>Enter manually</Button>
                     </div>
                   </div>

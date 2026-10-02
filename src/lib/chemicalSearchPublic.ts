@@ -4,7 +4,9 @@
 import { pick } from "@/lib/chemicalV3";
 
 export const CHEMICAL_SEARCH_TITLE = "Add Chemical";
-export const NOT_SEEN_BEFORE = "We haven't seen this product before.";
+export const NOT_SEEN_BEFORE = "We couldn't find this product in VineTrack yet.";
+export const NOT_SEEN_BEFORE_DETAIL =
+  "Find this product will search for the product online and use AI to extract the vineyard label details. Once added to your vineyard, it will be sent to VineTrack for review so our admins can verify the information and add it to the Chemical Catalogue.";
 export const DISCOVERY_NOTE =
   "This product hasn't been seen before. Finding the manufacturer's information may take a little while. You can leave this page and come back.";
 export const PENDING_REVIEW_LABEL = "Pending VineTrack review";
