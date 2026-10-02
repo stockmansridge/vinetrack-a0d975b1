@@ -87,9 +87,35 @@ import { useIsSystemAdmin } from "@/lib/systemAdmin";
 // still persisted and still used by filters/search.
 type ChemColId = "name" | "active_ingredient" | "groups" | "verification" | "use" | "rate" | "manufacturer" | "label" | "cost";
 const CHEM_DEFAULT_COLUMNS: ChemColId[] = [
-  "name", "active_ingredient", "groups", "verification", "use", "rate", "manufacturer", "label", "cost",
+  "name", "active_ingredient", "groups", "use", "manufacturer", "cost",
 ];
-const RETIRED_CHEM_COLUMNS = new Set(["group"]);
+// Retired from the main list view only — the underlying data is untouched and
+// still shown in the editor / Chemical intelligence panel. The label is now the
+// pinned thumbnail column; the product page link sits under the name.
+const RETIRED_CHEM_COLUMNS = new Set(["group", "verification", "rate", "label"]);
+
+const httpOk = (v: unknown): v is string => typeof v === "string" && /^https?:\/\//i.test(v);
+
+/** Front label thumbnail, pinned as the first column. Opens the label URL. */
+function LabelThumb({ row }: { row: any }) {
+  const path: string | undefined = row?.front_label_image_path || row?.label_image_path || undefined;
+  const { data: src } = useQuery({
+    queryKey: ["chemical-search-media", path ?? null], enabled: !!path, staleTime: 30 * 60_000,
+    queryFn: () => signedV3MediaUrl(path),
+  });
+  const box = "flex h-12 w-12 items-center justify-center overflow-hidden rounded-md border bg-muted/40";
+  const inner = src
+    ? <img src={src} alt={`${row?.name ?? "Chemical"} label`} className="h-full w-full object-contain" loading="lazy" />
+    : <span className="px-1 text-center text-[9px] leading-tight text-muted-foreground">No label image</span>;
+  if (httpOk(row?.label_url)) {
+    return (
+      <a href={row.label_url} target="_blank" rel="noopener noreferrer" title="Open label" className={cn(box, "transition hover:border-primary hover:ring-1 hover:ring-primary/40")}>
+        {inner}
+      </a>
+    );
+  }
+  return <div className={box} title="No label link">{inner}</div>;
+}
 
 const ANY = "__any__";
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
@@ -360,7 +386,16 @@ export default function SavedChemicalsPage() {
 
   const renderChemCell = (id: ChemColId, c: typeof rows[number]): React.ReactNode => {
     switch (id) {
-      case "name": return <TableCell key="name" className="font-medium">{fmt(c.name)}</TableCell>;
+      case "name": return (
+        <TableCell key="name">
+          <div className="font-medium leading-tight">{fmt(c.name)}</div>
+          {httpOk(c.product_url) && (
+            <a href={c.product_url} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline" title={`Manufacturer/product page — not the official label: ${c.product_url}`}>
+              <Globe className="h-3 w-3" />Product page
+            </a>
+          )}
+        </TableCell>
+      );
       case "active_ingredient": return <TableCell key="active_ingredient">{fmt(c.active_ingredient)}</TableCell>;
       case "groups": return <TableCell key="groups"><ActivityGroupSummary chem={toChemicalIntelligence(c)} /></TableCell>;
       case "verification": return <TableCell key="verification"><VerificationBadge status={toChemicalIntelligence(c).verification.status} /></TableCell>;
@@ -557,26 +592,27 @@ export default function SavedChemicalsPage() {
               </TableHeader>
               <TableBody>
                 {isLoading && (
-                  <TableRow><TableCell colSpan={visibleChemColumns.length + 1} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={visibleChemColumns.length + 2} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
                 )}
                 {error && (
-                  <TableRow><TableCell colSpan={visibleChemColumns.length + 1} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={visibleChemColumns.length + 2} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
                 )}
                 {!isLoading && !error && sortedRows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={visibleChemColumns.length + 1} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={visibleChemColumns.length + 2} className="text-center text-muted-foreground py-8">
                       No chemicals found for this vineyard.
                     </TableCell>
                   </TableRow>
                 )}
                 {sortedRows.map((c) => (
-                  <TableRow key={c.id}>
+                  <TableRow key={c.id} className="[&>td]:py-2.5 [&>td]:align-middle">
+                    <TableCell className="w-16"><LabelThumb row={c} /></TableCell>
                     {visibleChemColumns.map((id) => (
                       <React.Fragment key={id}>{renderChemCell(id, c)}</React.Fragment>
                     ))}
                     <TableCell className="text-right">
                       {v3EntryBadge(c) && (
-                        <Badge variant="outline" className={cn("mr-1", v3EntryBadge(c)!.tone === "pending" && "border-warning/60 bg-warning/10")}>{v3EntryBadge(c)!.label}</Badge>
+                        <Badge variant="outline" className={cn("mr-1 px-1.5 py-0 text-[10px] font-medium", v3EntryBadge(c)!.tone === "pending" ? "border-warning/60 bg-warning/10" : "border-primary/30 bg-primary/5 text-primary")}>{v3EntryBadge(c)!.label}</Badge>
                       )}
                       {inventoryPilot && (
                         <Button size="sm" variant="ghost" onClick={() => setInventoryRow(c)} title="Inventory">
