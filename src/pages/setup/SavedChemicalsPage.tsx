@@ -426,11 +426,21 @@ export default function SavedChemicalsPage() {
             {" "}Soft-deleted records are excluded.
           </p>
         </div>
-        {canEdit && (
-          <Button onClick={() => setSearchOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" /> Add Chemical
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {canEdit && (
+            <Button onClick={() => setSearchOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" /> Add Chemical
+            </Button>
+          )}
+          {/* Inventory pilot gate (canUseInventoryPilot) — System Admin only for now. */}
+          {inventoryPilot && (
+            <Button variant="outline" asChild>
+              <Link to="/setup/chemicals/inventory" data-testid="chemical-inventory-link">
+                <Package className="h-4 w-4 mr-1" /> Chemical Inventory
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
 
 

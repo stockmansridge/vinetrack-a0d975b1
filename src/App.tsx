@@ -44,6 +44,7 @@ import MaintenancePage from "./pages/setup/MaintenancePage";
 import TripsPage from "./pages/setup/TripsPage";
 import YieldReportsPage from "./pages/setup/YieldReportsPage";
 import SavedChemicalsPage from "./pages/setup/SavedChemicalsPage";
+import ChemicalInventoryPage from "./pages/setup/ChemicalInventoryPage";
 import SprayJobsPage from "./pages/setup/SprayJobsPage";
 import OperatorCategoriesPage from "./pages/setup/OperatorCategoriesPage";
 import MaterialLibraryPage from "./pages/setup/MaterialLibraryPage";
@@ -221,6 +222,7 @@ const App = () => (
                     <Route path="/fuel-purchases" element={<FuelPurchasesPage />} />
                     <Route path="/tractor-fuel-logs" element={<TractorFuelLogsPage />} />
                     <Route path="/setup/chemicals" element={<SavedChemicalsPage />} />
+                    <Route path="/setup/chemicals/inventory" element={<ChemicalInventoryPage />} />
                     <Route path="/setup/spray-presets" element={<Navigate to="/spray-jobs" replace />} />
                     <Route path="/spray-jobs" element={<SprayJobsPage />} />
                     <Route path="/setup/operator-categories" element={<OperatorCategoriesPage />} />
