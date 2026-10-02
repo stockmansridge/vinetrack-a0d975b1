@@ -6,7 +6,7 @@
 //
 // Pilot gate: canUseInventoryPilot (System Admin only) — applied here and on the
 // Chemicals page button. Removing the gate in chemicalInventory.ts releases both.
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Package } from "lucide-react";
@@ -69,13 +69,13 @@ export default function ChemicalInventoryPage() {
       queryFn: () => fetchInventorySummary(c.id),
     })),
   });
-  const summaryOf = (i: number) => summaries[i]?.data as InventorySummary | undefined;
-
-  const items = useMemo(
-    () => chemicals.map((c, i) => ({ c, s: summaryOf(i), loading: summaries[i]?.isLoading, err: summaries[i]?.error as Error | null })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [chemicals, summaries.map((x) => x.dataUpdatedAt).join(",")],
-  );
+  // Derived directly every render — no memo, so cache writes show immediately.
+  const items = chemicals.map((c, i) => ({
+    c,
+    s: summaries[i]?.data as InventorySummary | undefined,
+    loading: summaries[i]?.isLoading,
+    err: summaries[i]?.error as Error | null,
+  }));
 
   const stateOf = (s?: InventorySummary): StockState | null => s?.state ?? (s ? "needs_opening_stock" : null);
   const count = (k: StockState) => items.filter((x) => stateOf(x.s) === k).length;
@@ -182,7 +182,7 @@ export default function ChemicalInventoryPage() {
       <Sheet open={!!openRow} onOpenChange={(o) => !o && setOpenRow(null)}>
         <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
           <SheetHeader><SheetTitle>{openRow?.name}</SheetTitle></SheetHeader>
-          {openRow && <div className="mt-4"><ChemicalInventoryPanel savedChemicalId={openRow.id} /></div>}
+          {openRow && <div className="mt-4"><ChemicalInventoryPanel savedChemicalId={openRow.id} savedChemical={openRow} /></div>}
         </SheetContent>
       </Sheet>
     </div>

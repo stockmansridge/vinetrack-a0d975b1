@@ -759,7 +759,7 @@ export default function SavedChemicalsPage() {
         <Sheet open={!!inventoryRow} onOpenChange={(o) => !o && setInventoryRow(null)}>
           <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
             <SheetHeader><SheetTitle>{inventoryRow?.name}</SheetTitle></SheetHeader>
-            {inventoryRow && <div className="mt-4"><ChemicalInventoryPanel savedChemicalId={inventoryRow.id} /></div>}
+            {inventoryRow && <div className="mt-4"><ChemicalInventoryPanel savedChemicalId={inventoryRow.id} savedChemical={inventoryRow} /></div>}
           </SheetContent>
         </Sheet>
       )}

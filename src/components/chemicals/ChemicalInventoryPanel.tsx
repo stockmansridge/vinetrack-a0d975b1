@@ -13,6 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { formFromInventoryUnit, parsePhysicalForm } from "@/lib/chemicalPhysicalForm";
 import {
   DEFAULT_LOW_STOCK_PERCENT, MARK_FINISHED_CONFIRM, OPENING_STOCK_NOT_SET, STOCK_STATE_LABEL, STOCK_STATE_TONE, STOCK_UNITS,
   fetchInventorySummary, fetchPurchaseHistory, formatMoney, markFinished, recordPurchase, recordStocktake, saveInventorySettings,
@@ -26,11 +28,48 @@ export const STOCK_TONE_CLASS = {
   grey: "bg-muted text-muted-foreground",
 } as const;
 
-function UnitSelect({ value, onChange, label }: { value: StockUnit; onChange: (u: StockUnit) => void; label: string }) {
+const LIQUID_UNITS: StockUnit[] = ["L", "mL"];
+const SOLID_UNITS: StockUnit[] = ["kg", "g"];
+const asStockUnit = (u?: string | null): StockUnit | undefined =>
+  STOCK_UNITS.find((x) => x.toLowerCase() === String(u ?? "").trim().toLowerCase());
+
+/** Units allowed once inventory exists: the backend's unit family only. */
+export function allowedStockUnits(existingUnit?: string | null): readonly StockUnit[] {
+  const f = formFromInventoryUnit(existingUnit);
+  if (f === "solid") return SOLID_UNITS;
+  if (f === "liquid") return LIQUID_UNITS;
+  return STOCK_UNITS;
+}
+
+/**
+ * Initial unit for inventory dialogs. Priority: existing inventory unit,
+ * Saved Chemical product_form, Saved Chemical inventory_unit, then "L".
+ * Never guessed from the chemical name.
+ */
+export function defaultStockUnit(existingUnit?: string | null, productForm?: string | null, inventoryUnit?: string | null): StockUnit {
+  const existing = asStockUnit(existingUnit);
+  if (existing) return existing;
+  const form = parsePhysicalForm(productForm);
+  if (form === "solid") return "kg";
+  if (form === "liquid") return "L";
+  const inv = asStockUnit(String(inventoryUnit ?? "").replace(/\s*\/.*$/, ""));
+  if (inv) return inv;
+  return "L";
+}
+
+export const INVENTORY_SUCCESS = {
+  opening: "Opening stock saved",
+  purchase: "Purchase recorded",
+  stock: "Stock adjusted",
+  finish: "Chemical marked finished",
+  settings: "Low-stock settings saved",
+} as const;
+
+function UnitSelect({ value, onChange, label, units = STOCK_UNITS }: { value: StockUnit; onChange: (u: StockUnit) => void; label: string; units?: readonly StockUnit[] }) {
   return (
     <Select value={value} onValueChange={(v) => onChange(v as StockUnit)}>
       <SelectTrigger className="w-24" aria-label={label}><SelectValue /></SelectTrigger>
-      <SelectContent>{STOCK_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+      <SelectContent>{units.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
     </Select>
   );
 }
@@ -55,48 +94,66 @@ export function InventorySummaryView({ s }: { s: InventorySummary }) {
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
-const emptyPurchase = (): PurchaseDraft => ({ date: today(), quantity: "", unit: "L", total: "", currency: "AUD", batch: "", supplier: "", reference: "", expiry: "", notes: "" });
+const emptyPurchase = (unit: StockUnit = "L"): PurchaseDraft => ({ date: today(), quantity: "", unit, total: "", currency: "AUD", batch: "", supplier: "", reference: "", expiry: "", notes: "" });
 
-export function ChemicalInventoryPanel({ savedChemicalId }: { savedChemicalId: string }) {
+export type InventoryChemicalContext = { product_form?: string | null; inventory_unit?: string | null } | null | undefined;
+
+export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { savedChemicalId: string; savedChemical?: InventoryChemicalContext }) {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const summary = useQuery({ queryKey: ["chem-inventory", savedChemicalId], queryFn: () => fetchInventorySummary(savedChemicalId) });
   const [showHistory, setShowHistory] = useState(false);
   const history = useQuery({ queryKey: ["chem-inventory-history", savedChemicalId], enabled: showHistory, queryFn: () => fetchPurchaseHistory(savedChemicalId) });
   const [dialog, setDialog] = useState<null | "purchase" | "stock" | "finish" | "settings">(null);
-  const [purchase, setPurchase] = useState<PurchaseDraft>(emptyPurchase);
+  const [purchase, setPurchase] = useState<PurchaseDraft>(() => emptyPurchase());
   const [stock, setStock] = useState<StocktakeDraft>({ quantity: "", unit: "L", reason: "stocktake", notes: "" });
   const [finishNote, setFinishNote] = useState("");
   const [settings, setSettings] = useState<SettingsDraft>({ warningsEnabled: true, lowQuantity: "", lowUnit: "L", lowPercent: String(DEFAULT_LOW_STOCK_PERCENT) });
   const [err, setErr] = useState<string | null>(null);
 
-  const reload = async () => {
-    await Promise.all([
-      qc.invalidateQueries({ queryKey: ["chem-inventory", savedChemicalId] }),
-      qc.invalidateQueries({ queryKey: ["chem-inventory-history", savedChemicalId] }),
-      qc.invalidateQueries({ queryKey: ["saved_chemicals"] }),
-    ]);
+  const s = summary.data;
+  const needsOpening = !s || s.state === "needs_opening_stock" || s.state === null;
+  const existingUnit = needsOpening ? null : s?.unit ?? null;
+  const units = allowedStockUnits(existingUnit);
+  const initialUnit = defaultStockUnit(existingUnit, savedChemical?.product_form, savedChemical?.inventory_unit);
+
+  // Deterministic post-save update: fetch the fresh summary, write it into the
+  // shared cache (panel + Inventory page), then refetch in the background.
+  const refreshAfterSave = async (kind: "purchase" | "stock" | "finish" | "settings") => {
+    const fresh = await fetchInventorySummary(savedChemicalId);
+    qc.setQueryData(["chem-inventory", savedChemicalId], fresh);
+    if (kind === "purchase") {
+      const h = await fetchPurchaseHistory(savedChemicalId).catch(() => undefined);
+      if (h) qc.setQueryData(["chem-inventory-history", savedChemicalId], h);
+    }
+    void qc.invalidateQueries({ queryKey: ["chem-inventory-history", savedChemicalId] });
+    void qc.invalidateQueries({ queryKey: ["saved_chemicals"] });
   };
   const mut = useMutation({
     mutationFn: async (kind: "purchase" | "stock" | "finish" | "settings") => {
-      if (kind === "purchase") return recordPurchase(savedChemicalId, purchase);
-      if (kind === "stock") return recordStocktake(savedChemicalId, stock);
-      if (kind === "finish") return markFinished(savedChemicalId, finishNote);
-      return saveInventorySettings(savedChemicalId, settings);
+      const wasOpening = kind === "stock" && needsOpening;
+      if (kind === "purchase") await recordPurchase(savedChemicalId, purchase);
+      else if (kind === "stock") await recordStocktake(savedChemicalId, stock);
+      else if (kind === "finish") await markFinished(savedChemicalId, finishNote);
+      else await saveInventorySettings(savedChemicalId, settings);
+      await refreshAfterSave(kind);
+      return wasOpening ? "opening" : kind;
     },
-    onSuccess: async () => { setDialog(null); setErr(null); await reload(); },
+    onSuccess: (key) => {
+      setDialog(null); setErr(null);
+      toast({ title: INVENTORY_SUCCESS[key as keyof typeof INVENTORY_SUCCESS] });
+    },
     onError: (e: any) => setErr(e?.message ?? "The backend refused this change."),
   });
   const open = (d: typeof dialog) => {
     setErr(null);
-    if (d === "purchase") setPurchase(emptyPurchase());
-    if (d === "stock") setStock({ quantity: "", unit: (s?.unit as StockUnit) && STOCK_UNITS.includes(s!.unit as StockUnit) ? (s!.unit as StockUnit) : "L", reason: needsOpening ? "opening_stock" : "stocktake", notes: "" });
-    if (d === "settings" && s) setSettings({ warningsEnabled: s.warningsEnabled ?? true, lowQuantity: s.lowStockQuantity === null ? "" : String(s.lowStockQuantity), lowUnit: "L", lowPercent: String(s.lowStockPercent ?? DEFAULT_LOW_STOCK_PERCENT) });
+    if (d === "purchase") setPurchase(emptyPurchase(initialUnit));
+    if (d === "stock") setStock({ quantity: "", unit: initialUnit, reason: needsOpening ? "opening_stock" : "stocktake", notes: "" });
+    if (d === "settings" && s) setSettings({ warningsEnabled: s.warningsEnabled ?? true, lowQuantity: s.lowStockQuantity === null ? "" : String(s.lowStockQuantity), lowUnit: initialUnit, lowPercent: String(s.lowStockPercent ?? DEFAULT_LOW_STOCK_PERCENT) });
     if (d === "finish") setFinishNote("");
     setDialog(d);
   };
 
-  const s = summary.data;
-  const needsOpening = !s || s.state === "needs_opening_stock" || s.state === null;
   return (
     <section className="space-y-3 rounded border p-3" data-testid="inventory-panel">
       <h3 className="font-semibold">Inventory</h3>
@@ -152,7 +209,7 @@ export function ChemicalInventoryPanel({ savedChemicalId }: { savedChemicalId: s
             <div className="grid grid-cols-2 gap-2">
               <div className="col-span-2"><Label htmlFor="p-date">Purchase date</Label><Input id="p-date" type="date" value={purchase.date} onChange={(e) => setPurchase({ ...purchase, date: e.target.value })} /></div>
               <div><Label htmlFor="p-qty">Quantity</Label><Input id="p-qty" inputMode="decimal" value={purchase.quantity} onChange={(e) => setPurchase({ ...purchase, quantity: e.target.value })} /></div>
-              <div><Label>Unit</Label><UnitSelect label="Unit" value={purchase.unit} onChange={(u) => setPurchase({ ...purchase, unit: u })} /></div>
+              <div><Label>Unit</Label><UnitSelect label="Unit" units={units} value={purchase.unit} onChange={(u) => setPurchase({ ...purchase, unit: u })} /></div>
               <div><Label htmlFor="p-total">Total purchase amount</Label><Input id="p-total" inputMode="decimal" value={purchase.total} onChange={(e) => setPurchase({ ...purchase, total: e.target.value })} /></div>
               <div><Label htmlFor="p-cur">Currency</Label><Input id="p-cur" value={purchase.currency} onChange={(e) => setPurchase({ ...purchase, currency: e.target.value.toUpperCase() })} /></div>
               <div><Label htmlFor="p-batch">Batch number</Label><Input id="p-batch" value={purchase.batch} onChange={(e) => setPurchase({ ...purchase, batch: e.target.value })} /></div>
@@ -167,7 +224,7 @@ export function ChemicalInventoryPanel({ savedChemicalId }: { savedChemicalId: s
             <DialogHeader><DialogTitle>{needsOpening ? "Set Opening Stock" : "Adjust Stock"}</DialogTitle></DialogHeader>
             <div className="grid grid-cols-2 gap-2">
               <div><Label htmlFor="s-qty">Current physical quantity</Label><Input id="s-qty" inputMode="decimal" value={stock.quantity} onChange={(e) => setStock({ ...stock, quantity: e.target.value })} /></div>
-              <div><Label>Unit</Label><UnitSelect label="Stock unit" value={stock.unit} onChange={(u) => setStock({ ...stock, unit: u })} /></div>
+              <div><Label>Unit</Label><UnitSelect label="Stock unit" units={units} value={stock.unit} onChange={(u) => setStock({ ...stock, unit: u })} /></div>
               <div className="col-span-2"><Label>Reason</Label>
                 <Select value={stock.reason} onValueChange={(v) => setStock({ ...stock, reason: v as StockReason })}>
                   <SelectTrigger aria-label="Reason"><SelectValue /></SelectTrigger>
@@ -193,7 +250,7 @@ export function ChemicalInventoryPanel({ savedChemicalId }: { savedChemicalId: s
               <div className="flex items-center gap-2"><Switch id="w-en" checked={settings.warningsEnabled} onCheckedChange={(v) => setSettings({ ...settings, warningsEnabled: v })} /><Label htmlFor="w-en">Warnings enabled</Label></div>
               <div className="flex items-end gap-2">
                 <div><Label htmlFor="w-q">Low stock quantity — optional</Label><Input id="w-q" inputMode="decimal" value={settings.lowQuantity} onChange={(e) => setSettings({ ...settings, lowQuantity: e.target.value })} /></div>
-                <UnitSelect label="Low stock unit" value={settings.lowUnit} onChange={(u) => setSettings({ ...settings, lowUnit: u })} />
+                <UnitSelect label="Low stock unit" units={units} value={settings.lowUnit} onChange={(u) => setSettings({ ...settings, lowUnit: u })} />
               </div>
               <div><Label htmlFor="w-p">Low stock percentage</Label><Input id="w-p" inputMode="decimal" value={settings.lowPercent} onChange={(e) => setSettings({ ...settings, lowPercent: e.target.value })} /></div>
             </div>
@@ -202,7 +259,7 @@ export function ChemicalInventoryPanel({ savedChemicalId }: { savedChemicalId: s
           <DialogFooter>
             <Button variant="outline" disabled={mut.isPending} onClick={() => setDialog(null)}>Cancel</Button>
             <Button disabled={mut.isPending} variant={dialog === "finish" ? "destructive" : "default"} onClick={() => dialog && mut.mutate(dialog)}>
-              {dialog === "finish" ? "Mark Finished" : "Save"}
+              {mut.isPending ? "Saving…" : dialog === "finish" ? "Mark Finished" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>
