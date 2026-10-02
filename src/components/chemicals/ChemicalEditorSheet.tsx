@@ -4,7 +4,7 @@
 // match, verification, Chemical Intelligence) can be reused inside nested
 // contexts such as the Spray Program Step wizard. There is deliberately no
 // simplified variant: this is the one Add New Chemical experience.
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   hasUsableRateOptions,
   showMissingRateOptionsRecovery,
@@ -126,11 +126,8 @@ import { ChemicalIntelligenceDialog } from "@/components/chemicals/ChemicalIntel
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import {
-  ChemicalAILookup,
-  type AppliedSuggestion,
-  type ChemicalSelectionMode,
-} from "@/components/spray/ChemicalAILookup";
+/** Editor mode: an existing saved chemical, or deliberate manual entry. */
+type ChemicalSelectionMode = "existing" | "manual";
 import {
   PHYSICAL_FORM_LABEL,
   formFromInventoryUnit,
@@ -142,17 +139,7 @@ import {
 import { JurisdictionNoticeBanner } from "@/components/chemicals/JurisdictionNotice";
 import { countryLabel, jurisdictionSuitability } from "@/lib/chemicalJurisdiction";
 
-import { MasterUpdateDialog } from "@/components/chemicals/MasterUpdateDialog";
-import {
-  fetchMasterChemical,
-  masterChemicalDraft,
-  masterRevision,
-  masterUpdateAvailable,
-  MASTER_CURRENT_MESSAGE,
-  MASTER_UPDATE_MESSAGE,
-} from "@/lib/masterChemicals";
 import { ChemicalIntelligenceEditor } from "@/components/chemicals/ChemicalIntelligenceEditor";
-import { ChemicalReverifyDialog } from "@/components/chemicals/ChemicalReverifyDialog";
 import {
   type ChemicalIntelligenceDraft,
   activityGroupReferenceSource,
@@ -214,8 +201,8 @@ export function ChemicalEditor({
   initialName, jurisdiction, restoredDraft, manualOnly = false,
 }: {
   /**
-   * Manual entry only: no product lookup mounts and no web/API lookup runs.
-   * Used by Chemical Search's "Enter manually" fallback.
+   * Kept for call-site compatibility. The editor NEVER searches: a new
+   * chemical is always manual entry; discovery belongs to Chemical Search.
    */
   manualOnly?: boolean;
   open: boolean;
@@ -264,9 +251,7 @@ export function ChemicalEditor({
    * registered candidate or explicitly chooses manual entry. Editing an
    * existing saved chemical always starts unlocked.
    */
-  const [selectionMode, setSelectionMode] = useState<ChemicalSelectionMode>("none");
-  // Explicit, operator-initiated re-verification of an existing chemical.
-  const [editorReverifyOpen, setEditorReverifyOpen] = useState(false);
+  const [selectionMode, setSelectionMode] = useState<ChemicalSelectionMode>("manual");
   const [existingCost, setExistingCost] = useState<number | null>(null);
   const [currency, setCurrency] = useState("AUD");
   const [whp, setWhp] = useState("");
@@ -281,7 +266,6 @@ export function ChemicalEditor({
   // SQL 199 Master Catalogue link. Written only when the operator picked a
   // Master product or accepted a Master update — never inferred by name.
   const [masterLink, setMasterLink] = useState<{ id: string; revision: number | null } | null>(null);
-  const [masterUpdateOpen, setMasterUpdateOpen] = useState(false);
   // Manufacturer's own label URL from the lookup. Never the regulator label.
   const [manufacturerLabelUrl, setManufacturerLabelUrl] = useState<string | undefined>();
   // ---- SQL 214 / D3 persisted operator default rates (Gates D4B-P2B / P2B.1).
@@ -293,9 +277,6 @@ export function ChemicalEditor({
     newDefaultRateLifecycle(),
   );
   const { defaultRates, canonicalOptions: canonicalRateOptions } = rateLife;
-  // Enrichment-only retry handle published by the lookup component. Reusing the
-  // already-selected registration — never a new search.
-  const retryLabelRef = useRef<(() => void) | null>(null);
   // Recovery-only manual RATE draft. The product stays `registered`: this never
   // switches the selection mode and never clears the resolved identity.
   const [manualRate, setManualRate] = useState<ManualRateDraft>(emptyManualRateDraft());
@@ -310,25 +291,6 @@ export function ChemicalEditor({
 
 
 
-  // Linked Master record — used only for revision-drift detection. The saved
-  // chemical's own columns remain the source of truth for display.
-  const masterQ = useQuery({
-    queryKey: ["master-chemical", masterLink?.id ?? null],
-    enabled: open && !!masterLink?.id,
-    staleTime: 60_000,
-    queryFn: () => fetchMasterChemical(masterLink!.id),
-  });
-  const masterRow = masterQ.data ?? null;
-  const masterUpdate = masterUpdateAvailable(
-    { master_chemical_id: masterLink?.id, master_source_revision: masterLink?.revision },
-    masterRow,
-  );
-  // A linked Master record is also checked against the vineyard country: an AU
-  // Master revision is never "current verified information" for an NZ vineyard.
-  const masterJurisdiction = jurisdictionSuitability(
-    masterRow?.registration_country,
-    currentCountry,
-  );
 
 
 
@@ -444,17 +406,27 @@ export function ChemicalEditor({
         setPackPriceStr("");
         setPackUnit("");
         setPhysicalForm("unknown");
-        setSelectionMode("none");
+        // A new chemical in the editor is ALWAYS deliberate manual entry.
+        // Product discovery belongs exclusively to Chemical Search.
+        setSelectionMode("manual");
         setWhpLegalText("");
         setUnresolvedItems([]);
         setCurrency("AUD");
         setWhp("");
         setRei("");
         setRestNotes("");
-        setIntel(emptyDraft());
-        setIntelBase(emptyDraft());
-        setUpgraded(false);
+        {
+          const manualDraft: ChemicalIntelligenceDraft = {
+            ...emptyDraft(),
+            registration: currentCountry ? { country: currentCountry } : {},
+            claimedStatus: "unverified",
+          };
+          setIntel(manualDraft);
+          setIntelBase(manualDraft);
+        }
+        setUpgraded(true);
         setMasterLink(null);
+        setManufacturerLabelUrl(undefined);
         setRateLife(newDefaultRateLifecycle());
         setManualBaseline([]);
         // Restore whatever the operator had typed before they were sent to
@@ -497,8 +469,6 @@ export function ChemicalEditor({
             }).violations
           : [],
       );
-      setMasterUpdateOpen(false);
-      setEditorReverifyOpen(false);
     }
   }, [open, initial, initialName, restoredDraft]);
 
@@ -659,237 +629,6 @@ export function ChemicalEditor({
 
 
 
-  const applySuggestion = (s: AppliedSuggestion) => {
-    // ---- DELIBERATE MANUAL ENTRY. Terminal branch: every candidate, Master
-    // link, resolved evidence and rate state from an earlier lookup attempt is
-    // cleared, and only the typed name and the vineyard country are kept.
-    if (s.manual) {
-      setForm({ ...EMPTY, name: s.name?.trim() ?? "" });
-      setRateStr("");
-      setWhp("");
-      setRei("");
-      setRestNotes("");
-      setWhpLegalText("");
-      setUnresolvedItems([]);
-      setPhysicalForm("unknown");
-      setPackUnit("");
-      setPackSizeStr("");
-      setPackPriceStr("");
-      setExistingCost(null);
-      setMasterLink(null);
-      setManufacturerLabelUrl(undefined);
-      setRateLife(newDefaultRateLifecycle());
-      setManualRate(emptyManualRateDraft());
-      const blank = emptyDraft();
-      const manualDraft: ChemicalIntelligenceDraft = {
-        ...blank,
-        registration: currentCountry ? { country: currentCountry } : {},
-        claimedStatus: "unverified",
-      };
-      setIntel(manualDraft);
-      setIntelBase(manualDraft);
-      setUpgraded(true);
-      setManualBaseline([]);
-      return;
-    }
-    // ---- Upgraded resolver result. This branch is TERMINAL: once a
-    // structured resolver result has been handled, no legacy AI/lookup
-    // fallback below may run or overwrite a canonical field.
-    //
-    // Canonical fields come ONLY from the authoritative structured response;
-    // `ai_suggestion` is never applied, and an unresolved rate / WHP / REI is
-    // left blank rather than inherited from a legacy suggestion.
-    if (s.resolved) {
-      const r = s.resolved;
-      if (!r.authoritative || !r.draft) {
-        // Unresolved / ambiguous / AI-only: only the typed product name is
-        // kept so the operator can enter the product manually.
-        setForm((p) => ({ ...p, name: s.name ?? p.name ?? "" }));
-        return;
-      }
-      setIntel(r.draft);
-      setIntelBase(r.draft);
-      setUpgraded(true);
-      // A new authoritative result owns the rate question again: a manual rate
-      // entered for the previous product never survives.
-      setManualRate(emptyManualRateDraft());
-      if (s.master) {
-        setMasterLink({ id: s.master.id, revision: masterRevision(s.master) ?? null });
-      }
-      // ---- Default rates (Gate D4B-P2B).
-      // Canonical options come ONLY from the backend `default_rate_options`
-      // block. The local display-only buildDefaultRateOptions() may never stand
-      // in for it, and a lookup by itself NEVER changes default_rates.
-      const nextIdentity = r.fields.registrationNumber
-        ? {
-            country: r.fields.registrationCountry ?? null,
-            scheme: r.fields.registrationScheme ?? null,
-            number: r.fields.registrationNumber ?? null,
-          }
-        : null;
-      // A persisted default cites this product's rate_v1 identities. Clear both
-      // slots only when BOTH registrations are known and actually differ; a
-      // label revision change is NOT a product change. This applies to NEW
-      // chemicals too (P2B.1 §1): product A's default may never survive a
-      // subsequent authoritative lookup of product B.
-      // Canonical options live only for the lookup that supplied them
-      // (P2B.1 §2/§6): an authoritative apply with no option block makes the
-      // previous options unavailable while the persisted selection and dirty
-      // flag stay untouched. Product-ownership clearing applies to NEW
-      // chemicals too (§1): product A's default may not survive a later
-      // authoritative lookup of product B.
-      setRateLife((prev) =>
-        applyAuthoritativeChemistry(prev, {
-          productIdentity: nextIdentity,
-          options: r.defaultRateOptions ?? null,
-          labelVersion: r.fields.labelVersion ?? null,
-        }),
-      );
-      // PART 5/6 — honour the authoritative `form_type` verbatim and derive
-      // only the INVENTORY unit default from it. Unknown stays unset.
-      const authForm = r.fields.physicalForm;
-      setPhysicalForm(authForm);
-      const inventory = inventoryUnitForForm(authForm);
-      const pack = packUnitForForm(authForm);
-      setPackUnit(pack ?? "");
-      setManufacturerLabelUrl(r.fields.manufacturerLabelUrl);
-      setForm((p) => ({
-        ...p,
-        name: r.fields.name ?? s.name ?? p.name ?? "",
-        product_category:
-          matchProductCategoryKey(r.fields.category) ?? p.product_category ?? "",
-        use:
-          productCategoryLabel(matchProductCategoryKey(r.fields.category)) ??
-          r.fields.category ??
-          p.use ??
-          "",
-        manufacturer: r.fields.registrant ?? p.manufacturer ?? "",
-        active_ingredient: r.fields.activeIngredientText ?? p.active_ingredient ?? "",
-        chemical_group: r.fields.chemicalGroupText ?? p.chemical_group ?? "",
-        problem: r.fields.target ?? p.problem ?? "",
-        // §13: a canonical/recommended option never projects into the legacy
-        // rate value. The unit here is the INVENTORY unit implied by the
-        // authoritative physical form only — never by a rate unit.
-        unit: inventory ? composeUnit(inventory, inferRateBasis(p.unit)) : "",
-        // ONLY the resolved regulator eLabel document may populate label_url.
-        // A `label_reference` is registration evidence, never a product label,
-        // and is never promoted here (it surfaces as the registration source).
-        label_url: r.fields.regulatorLabelUrl ?? p.label_url ?? "",
-        // The manufacturer's own product page — never the regulator URL.
-        product_url: r.fields.manufacturerProductUrl ?? p.product_url ?? "",
-      }));
-
-
-      // Label-backed only. When the structured response does not return a
-      // WHP / REI with authoritative provenance the field is CLEARED, so a
-      // stale or AI-sourced number can never survive an authoritative apply.
-      setWhp(r.fields.withholdingDays != null ? String(r.fields.withholdingDays) : "");
-      setRei(r.fields.reEntryHours != null ? String(r.fields.reEntryHours) : "");
-      setWhpLegalText(r.fields.withholdingText ?? "");
-      setUnresolvedItems(r.unresolvedFields ?? []);
-      setRestNotes(r.fields.restrictions ?? "");
-      return;
-
-    }
-
-
-    // ---- Master Catalogue result: copy the verified SQL 194 intelligence
-    // verbatim and record the link + revision. It is never re-derived from
-    // free text and never sent back through AI.
-    if (s.master) {
-      const draft = masterChemicalDraft(s.master);
-      setIntel(draft);
-      setIntelBase(draft);
-      setUpgraded(true);
-      setMasterLink({ id: s.master.id, revision: masterRevision(s.master) ?? null });
-      // P2B.1 §5 — applying another Master product replaces the chemistry, so
-      // options from an earlier authoritative lookup are no longer current.
-      // Canonical options are NEVER manufactured from Master data.
-      setRateLife((prev) =>
-        applyReplacedChemistry(prev, {
-          productIdentity: draftRateProductIdentity(draft),
-        }),
-      );
-      setForm((p) => ({
-        ...p,
-        name: s.master!.registered_product_name?.trim() || s.name || p.name || "",
-        manufacturer: s.master!.registrant ?? p.manufacturer ?? "",
-        // Master supplies `label_reference` (registration evidence) only. It is
-        // never promoted to label_url — the regulator label stays unresolved
-        // until an authoritative lookup returns a real eLabel document.
-        label_url: p.label_url ?? "",
-      }));
-      return;
-    }
-    // Compose unit text from product type + chem unit + basis when AI gives
-    // structured fields; fall back to whatever rate_unit string was returned.
-    const basis = s.rate_basis ?? inferRateBasis(s.rate_unit);
-    const productType = s.product_type ?? inferProductType(s.unit ?? s.rate_unit);
-    const chemUnit = s.unit ?? (normaliseUnit(s.rate_unit) || defaultUnitFor(productType));
-    const composed = s.rate_unit ?? composeUnit(chemUnit, basis);
-    setForm((p) => ({
-      ...p,
-      name: s.name ?? p.name ?? "",
-      active_ingredient: s.active_ingredient ?? p.active_ingredient ?? "",
-      product_category: matchProductCategoryKey(s.category) ?? p.product_category ?? "",
-      use:
-        productCategoryLabel(matchProductCategoryKey(s.category)) ??
-        s.category ??
-        p.use ??
-        "",
-      chemical_group: s.chemical_group ?? p.chemical_group ?? "",
-      manufacturer: s.manufacturer ?? p.manufacturer ?? "",
-      problem: s.target ?? p.problem ?? "",
-      unit: composed,
-      notes: s.notes ?? p.notes ?? "",
-      label_url: s.label_url && /^https?:\/\//i.test(s.label_url) ? s.label_url : (p.label_url ?? ""),
-      product_url: s.product_url && /^https?:\/\//i.test(s.product_url) ? s.product_url : (p.product_url ?? ""),
-    }));
-    // Seed structured chemistry from the AI suggestion. AI is never
-    // authoritative: identity is recorded as ai_interpretation and only the
-    // built-in FRAC/HRAC/IRAC table may supply an authoritative group.
-    setIntel((prev) => {
-      if (hasStructuredIntelligence(prev)) return prev;
-      const actives = parseLegacyActiveIngredient(
-        s.active_ingredient ?? form.active_ingredient ?? "",
-        "ai_interpretation",
-      ).map((a) => {
-        const group = suggestActivityGroup(a.name);
-        return group
-          ? { ...a, activity_group: group, group_source: "authoritative_classification" as const }
-          : a;
-      });
-      if (!actives.length) return prev;
-      let sources = withSource(prev.sources, {
-        kind: "ai_interpretation",
-        name: "VineTrack AI chemical lookup",
-        reference: s.label_url ?? undefined,
-        retrieved_at: new Date().toISOString(),
-      });
-      if (actives.some((a) => a.group_source === "authoritative_classification")) {
-        sources = withSource(sources, activityGroupReferenceSource());
-      }
-      // AI cannot certify registration identity or label evidence. Both stay
-      // empty and are recorded as unresolved until a re-verify resolves the
-      // actual registered product and its label.
-      const unresolved = new Set(prev.unresolvedFields);
-      unresolved.add("registration_number");
-      unresolved.add("label_reference");
-      return {
-        ...prev,
-        actives,
-        sources,
-        unresolvedFields: Array.from(unresolved),
-        claimedStatus: "unverified",
-      };
-
-    });
-    if (s.rate_per_ha != null) setRateStr(String(s.rate_per_ha));
-    // WHP / REI are label facts. A legacy AI candidate is not label evidence,
-    // so it may never populate them — they stay blank for manual entry.
-
-  };
-
   const structuredUses = intel.registeredUses.length > 0;
   // Per-basis match state of the persisted selection against the canonical set.
   const defaultRateSlots = useMemo(
@@ -910,7 +649,7 @@ export function ChemicalEditor({
   // confirmed operational rate. The gate applies to the LOOKUP MODE, never to
   // whether uses were extracted: a lookup returning zero uses is still gated.
   // Manual entry stays exempt; existing records are never stranded.
-  const lookupSelected = selectionMode === "registered" || selectionMode === "master";
+  const lookupSelected = false;
   /**
    * MANUAL ENTRY. A deliberately operator-authored product: no lookup
    * evidence, no Master link and never presented as verified. An existing row
@@ -1074,34 +813,7 @@ export function ChemicalEditor({
    */
   // Editing an existing saved chemical is ALWAYS unlocked: the search workflow
   // belongs to Add only and can never re-lock a stored record.
-  const editorUnlocked = !!initial || selectionMode !== "none";
-  const handleSelectionChange = (mode: ChemicalSelectionMode) => {
-    // An existing record's identity is only changed by the explicit re-verify
-    // action, never by a lookup child's initial state broadcast.
-    if (initial) return;
-    setSelectionMode((prev) => {
-      if (prev === mode) return prev;
-      if (mode === "none" && !initial) {
-        setForm({ ...EMPTY });
-        setIntel(emptyDraft());
-        setIntelBase(emptyDraft());
-        setUpgraded(false);
-        setMasterLink(null);
-        setManufacturerLabelUrl(undefined);
-        setPhysicalForm("unknown");
-        setPackUnit("");
-        setRateStr("");
-        setWhp("");
-        setRei("");
-        setWhpLegalText("");
-        setRestNotes("");
-        setUnresolvedItems([]);
-        setRateLife(newDefaultRateLifecycle());
-        setManualRate(emptyManualRateDraft());
-      }
-      return mode;
-    });
-  };
+  const editorUnlocked = true;
 
   const labelLinks = resolveChemicalLabelLinks({
     sources: intel.sources,
@@ -1114,68 +826,6 @@ export function ChemicalEditor({
 
   const lookupBlock = (
     <>
-      {/* Add = identify/search. Edit never mounts the lookup: opening an
-          existing chemical performs no product search and no network call. */}
-      {!initial && !manualOnly && (
-        <ChemicalAILookup
-          initialName={form.name ?? ""}
-          country={currentCountry}
-          existingLibrary={existingLibrary
-            .filter((c) => !initial || c.id !== initial.id)
-            .map((c) => ({
-              id: c.id,
-              name: c.name,
-              active_ingredient: c.active_ingredient,
-              registration_number: (c as { registration_number?: string | null }).registration_number,
-            }))}
-          onApply={applySuggestion}
-          onSelectionChange={handleSelectionChange}
-          retryLabelRef={retryLabelRef}
-          returnLabel="the chemical you were adding"
-          captureDraft={() => ({
-            editor: "new",
-            form,
-            rateStr,
-            whp,
-            rei,
-            restNotes,
-          })}
-        />
-      )}
-      {initial && (
-        <div className="flex items-center justify-between gap-2 rounded-md border border-border/60 p-2 text-xs">
-          <span className="text-muted-foreground">
-            Editing the saved chemical. Product details are only re-checked when you ask.
-          </span>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => setEditorReverifyOpen(true)}
-          >
-            Check for updates
-          </Button>
-        </div>
-      )}
-      {initial && (
-        <ChemicalReverifyDialog
-          open={editorReverifyOpen}
-          onOpenChange={setEditorReverifyOpen}
-          draft={intel}
-          productName={form.name}
-          country={currentCountry}
-          onAccept={(next) => {
-            handleIntelChange(next);
-            setIntelBase(next);
-            setUpgraded(true);
-            toast({
-              title: "Re-verified details applied",
-              description: "Save the chemical to keep these changes.",
-            });
-          }}
-        />
-      )}
-
       {/* Jurisdiction suitability is computed, never stored. Chemistry is
           kept; only label authority changes. */}
       {manualMode && (
@@ -1188,66 +838,6 @@ export function ChemicalEditor({
         registrationCountry={intel.registration.country}
         vineyardCountry={currentCountry}
       />
-      {masterLink && (
-        <div
-          className={`rounded-md border p-2 text-xs ${
-            masterUpdate ? "border-warning/50 bg-warning/10" : "border-primary/30 bg-primary/5"
-          }`}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-medium">
-              {masterUpdate
-                ? MASTER_UPDATE_MESSAGE
-                : masterJurisdiction === "compatible"
-                ? MASTER_CURRENT_MESSAGE
-                : `Current ${countryLabel(masterRow?.registration_country)} Master information`}
-            </span>
-            {masterUpdate && masterRow && (
-              <Button type="button" size="sm" variant="outline" onClick={() => setMasterUpdateOpen(true)}>
-                Review update
-              </Button>
-            )}
-          </div>
-          <p className="mt-1 text-muted-foreground">
-            Linked to the VineTrack Master Catalogue (revision {masterLink.revision ?? "—"}).
-            Catalogue updates are only applied when you accept them.
-          </p>
-          {masterRow && masterJurisdiction === "mismatch" && (
-            <p className="mt-1 text-muted-foreground">
-              This is the applicable registration for{" "}
-              {countryLabel(masterRow.registration_country)}, not for the current
-              vineyard ({countryLabel(currentCountry)}).
-            </p>
-          )}
-        </div>
-      )}
-      {masterRow && (
-        <MasterUpdateDialog
-          open={masterUpdateOpen}
-          onOpenChange={setMasterUpdateOpen}
-          current={intel}
-          master={masterRow}
-          onAccept={(next, revision) => {
-            setIntel(next);
-            setIntelBase(next);
-            setUpgraded(true);
-            setMasterLink((prev) => (prev ? { ...prev, revision } : prev));
-            // P2B.1 §4 — an accepted Master update can change registered uses,
-            // identity or label revision: invalidate the in-memory options and
-            // require a fresh authoritative lookup. Defaults are preserved
-            // unless the registered product is provably different.
-            setRateLife((prev) =>
-              applyReplacedChemistry(prev, {
-                productIdentity: draftRateProductIdentity(next),
-              }),
-            );
-            toast({
-              title: "Verified update applied",
-              description: "Save the chemical to keep these changes.",
-            });
-          }}
-        />
-      )}
     </>
   );
 
@@ -1558,11 +1148,11 @@ export function ChemicalEditor({
                   {showRateRecovery && (
                     <MissingRateOptionsPanel
                       labelUrl={labelLinks.regulatorLabelUrl ?? null}
-                      canRetry={!!retryLabelRef.current}
+                      canRetry={false}
                       manualOpen={manualRateActive}
-                      onRetry={() => retryLabelRef.current?.()}
+                      onRetry={() => undefined}
                       onManual={handleManualFromRecovery}
-                      onChangeProduct={() => handleSelectionChange("none")}
+                      onChangeProduct={() => undefined}
                     />
                   )}
                   {showRateRecovery && manualRateActive && (
@@ -1659,7 +1249,7 @@ export function ChemicalEditor({
                               type="button"
                               size="sm"
                               variant="outline"
-                              onClick={() => handleSelectionChange("none")}
+                              onClick={() => onOpenChange(false)}
                             >
                               Change product
                             </Button>

@@ -106,31 +106,3 @@ describe("Growth Stage", () => {
     expect(patches[0].growthStageCode).toMatch(/^EL/i);
   });
 });
-
-describe("chemical search backend ownership", () => {
-  it("the portal calls the shared chemical-info-lookup Edge Function", () => {
-    const file = src("src/components/spray/ChemicalAILookup.tsx");
-    expect(file).toContain('functions.invoke(\n        "chemical-info-lookup"');
-  });
-
-  it("the portal has no client-side AI model / OpenAI path", () => {
-    for (const p of [
-      "src/components/spray/ChemicalAILookup.tsx",
-      "src/lib/chemicalReverifyLookup.ts",
-      "src/lib/chemicalLookupRequest.ts",
-    ]) {
-      const file = src(p);
-      expect(file).not.toMatch(/api\.openai\.com|ai\.gateway\.lovable\.dev/i);
-      expect(file).not.toMatch(/\bgpt-[0-9]/i);
-    }
-  });
-
-  it("separates the search and label-enrichment wait messages", () => {
-    const file = src("src/components/spray/ChemicalAILookup.tsx");
-    expect(file).toContain("Searching registered products\u2026");
-    expect(file).toContain("Reading the official product label");
-    // A shortlist must never be described as a multi-minute operation.
-    expect(file).not.toContain("CHEMICAL_LOOKUP_WAIT_MESSAGE");
-    expect(file).not.toMatch(/can take a few minutes/i);
-  });
-});

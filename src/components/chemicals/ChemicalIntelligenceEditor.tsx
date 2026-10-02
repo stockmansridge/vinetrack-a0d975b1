@@ -48,7 +48,6 @@ import {
   normaliseStructuredRateUnit,
 } from "@/lib/chemicalRateUnitContract";
 import { VERIFICATION_LABEL } from "@/lib/chemicalIntelligence";
-import { ChemicalReverifyDialog } from "@/components/chemicals/ChemicalReverifyDialog";
 
 const STATUS_CLASS: Record<string, string> = {
   verified: "border-transparent bg-primary/15 text-primary",
@@ -109,7 +108,6 @@ export function ChemicalIntelligenceEditor({
   compact?: boolean;
 }) {
   const show = { ...ALL_SECTIONS, ...(sections ?? {}) };
-  const [reverifyOpen, setReverifyOpen] = useState(false);
   const preview = useMemo(() => {
     const withConflicts = { ...draft, conflicts: reconcileConflicts(draft) };
     return {
@@ -155,29 +153,11 @@ export function ChemicalIntelligenceEditor({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="gap-1"
-            disabled={disabled}
-            onClick={() => setReverifyOpen(true)}
-          >
-            <ShieldCheck className="h-3.5 w-3.5" /> Re-verify
-          </Button>
           <Badge className={STATUS_CLASS[preview.status]}>{VERIFICATION_LABEL[preview.status]}</Badge>
         </div>
       </div>
       )}
 
-      <ChemicalReverifyDialog
-        open={reverifyOpen}
-        onOpenChange={setReverifyOpen}
-        draft={draft}
-        productName={productName}
-        country={country}
-        onAccept={onChange}
-      />
 
 
       {preview.conflicts.length > 0 && (

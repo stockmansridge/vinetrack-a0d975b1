@@ -117,30 +117,19 @@ describe("Edit existing chemical", () => {
     expect(createSavedChemical).not.toHaveBeenCalled();
   });
 
-  it("exposes an explicit Check for updates action that opens re-verify", async () => {
+  it("offers no legacy re-verify / Check for updates action", async () => {
     renderEditor(existing);
-    fireEvent.click(await screen.findByRole("button", { name: /Check for updates/i }));
-    expect(await screen.findByText("Re-verify chemical")).toBeTruthy();
-    expect(invoke).not.toHaveBeenCalled();
-  });
-
-  it("cancelling re-verify returns to the unchanged edit draft and writes nothing", async () => {
-    renderEditor(existing);
-    fireEvent.click(await screen.findByRole("button", { name: /Check for updates/i }));
-    await screen.findByText("Re-verify chemical");
-    const closes = screen.getAllByRole("button", { name: "Close" });
-    fireEvent.click(closes[closes.length - 1]);
-    await waitFor(() => expect(screen.queryByText("Re-verify chemical")).toBeNull());
     expect(await screen.findByDisplayValue("Thiovit Jet")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Check for updates|Re-verify/i })).toBeNull();
     expect(invoke).not.toHaveBeenCalled();
-    expect(updateSavedChemical).not.toHaveBeenCalled();
   });
 });
 
 describe("New chemical", () => {
-  it("still opens the search-first lookup flow", async () => {
+  it("is manual entry only — never mounts a product search", async () => {
     renderEditor(null);
-    expect(await screen.findByLabelText("Search product")).toBeTruthy();
+    await waitFor(() => expect(screen.queryByLabelText("Search product")).toBeNull());
+    expect(invoke).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /Check for updates/i })).toBeNull();
   });
 });

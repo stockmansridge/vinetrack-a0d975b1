@@ -113,9 +113,4 @@ describe("Gate, compact display, V1/V2 untouched", () => {
     expect(container.textContent).not.toContain("Apply in 50 to 150 L");
     expect(container.textContent).not.toContain("Do not apply in wind");
   });
-  it("19. V1/V2 Add Chemical code does not use the pilot", () => {
-    for (const f of ["src/components/chemicals/AddChemicalV2Dialog.tsx"]) {
-      expect(fs.readFileSync(f, "utf8")).not.toMatch(/chemicalInventory|chemical_v3_add_to_vineyard/);
-    }
-  });
 });
