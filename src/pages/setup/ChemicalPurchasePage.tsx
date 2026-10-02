@@ -1,7 +1,7 @@
 // Chemical Purchase — record a purchase against an existing Saved Chemical.
 // System Admin inventory pilot gate (canUseInventoryPilot). Writes go through
-// the existing recordPurchase RPC with aggregate quantity + unit only; the
-// container entry is a UI model until the backend stores container fields.
+// chemical_inventory_record_purchase_v2 with container count/size/unit; the
+// backend calculates the stored quantity and unit cost.
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
@@ -9,13 +9,13 @@ import { ShoppingCart } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
-import { canUseInventoryPilot, fetchInventorySummary, fetchPurchaseHistory, recordPurchase, type PurchaseDraft } from "@/lib/chemicalInventory";
+import { canUseInventoryPilot, fetchInventorySummary, fetchPurchaseHistory, recordPurchaseV2, type PurchaseDraft } from "@/lib/chemicalInventory";
 import { defaultContainer, type ContainerDraft } from "@/lib/chemicalContainers";
 import { useV3RevisionDisplay, v3RevisionIdOf } from "@/lib/chemicalV3Display";
 import { shortManufacturerName } from "@/lib/manufacturerNormalise";
 import { ChemicalSectionNav } from "@/components/chemicals/ChemicalSectionNav";
 import { ChemicalLabelThumb } from "@/components/chemicals/ChemicalListCells";
-import { PurchaseFields, allowedStockUnits, defaultStockUnit, emptyPurchase, purchaseFromContainers } from "@/components/chemicals/ChemicalInventoryPanel";
+import { PurchaseFields, allowedStockUnits, defaultStockUnit, emptyPurchase } from "@/components/chemicals/ChemicalInventoryPanel";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -56,7 +56,7 @@ export default function ChemicalPurchasePage() {
 
   const mut = useMutation({
     mutationFn: async () => {
-      await recordPurchase(chemId, purchaseFromContainers(purchase, effectiveBox));
+      await recordPurchaseV2(chemId, purchase, effectiveBox);
       qc.setQueryData(["chem-inventory", chemId], await fetchInventorySummary(chemId));
       const h = await fetchPurchaseHistory(chemId).catch(() => undefined);
       if (h) qc.setQueryData(["chem-inventory-history", chemId], h);

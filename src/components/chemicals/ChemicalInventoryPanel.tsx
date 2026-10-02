@@ -17,10 +17,10 @@ import { useToast } from "@/hooks/use-toast";
 import { formFromInventoryUnit, parsePhysicalForm } from "@/lib/chemicalPhysicalForm";
 import {
   DEFAULT_LOW_STOCK_PERCENT, MARK_FINISHED_CONFIRM, OPENING_STOCK_NOT_SET, STOCK_STATE_LABEL, STOCK_STATE_TONE, STOCK_UNITS,
-  fetchInventorySummary, fetchPurchaseHistory, formatMoney, markFinished, recordPurchase, recordStocktake, saveInventorySettings,
+  fetchInventorySummary, fetchPurchaseHistory, formatMoney, markFinished, recordPurchaseV2, recordStocktakeV2, saveInventorySettings,
   type InventorySummary, type PurchaseDraft, type SettingsDraft, type StockReason, type StockUnit, type StocktakeDraft,
 } from "@/lib/chemicalInventory";
-import { CONTAINER_BACKEND_SUPPORTED, containerTotal, defaultContainer, previewUnitCost, type ContainerDraft } from "@/lib/chemicalContainers";
+import { containerTotal, defaultContainer, previewUnitCost, type ContainerDraft } from "@/lib/chemicalContainers";
 
 export const STOCK_TONE_CLASS = {
   green: "bg-success/15 text-success",
@@ -97,7 +97,7 @@ export function InventorySummaryView({ s }: { s: InventorySummary }) {
 const today = () => new Date().toISOString().slice(0, 10);
 export const emptyPurchase = (unit: StockUnit = "L"): PurchaseDraft => ({ date: today(), quantity: "", unit, total: "", currency: "AUD", batch: "", supplier: "", reference: "", expiry: "", notes: "" });
 
-/** Containers × size → aggregate quantity. Only quantity + unit are written today. */
+/** Containers × size → aggregate quantity (legacy helper; V2 sends container fields instead). */
 export const purchaseFromContainers = (p: PurchaseDraft, box: ContainerDraft): PurchaseDraft => {
   const t = containerTotal(box);
   return { ...p, quantity: t === null ? "" : String(t), unit: box.unit };
@@ -134,7 +134,6 @@ export function PurchaseFields({ purchase, setPurchase, box, setBox, units }: { 
         <div><Label htmlFor="p-exp">Expiry date — optional</Label><Input id="p-exp" type="date" value={purchase.expiry} onChange={(e) => setPurchase({ ...purchase, expiry: e.target.value })} /></div>
         <div className="col-span-2"><Label htmlFor="p-notes">Notes — optional</Label><Textarea id="p-notes" value={purchase.notes} onChange={(e) => setPurchase({ ...purchase, notes: e.target.value })} /></div>
       </div>
-      {!CONTAINER_BACKEND_SUPPORTED && <p className="text-xs text-muted-foreground">The total quantity is saved. Container details aren't stored yet.</p>}
     </div>
   );
 }
@@ -179,9 +178,9 @@ export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { sav
   const mut = useMutation({
     mutationFn: async (kind: "purchase" | "stock" | "finish" | "settings") => {
       const wasOpening = kind === "stock" && needsOpening;
-      // Only the aggregate quantity + unit reach the backend (no container fields yet).
-      if (kind === "purchase") await recordPurchase(savedChemicalId, purchaseFromContainers(purchase, box));
-      else if (kind === "stock") await recordStocktake(savedChemicalId, stock);
+      // Same V2 contract as the Chemical Purchase page; the backend computes quantity.
+      if (kind === "purchase") await recordPurchaseV2(savedChemicalId, purchase, box);
+      else if (kind === "stock") await recordStocktakeV2(savedChemicalId, stock, needsOpening ? { ...capBox, unit: stock.unit } : null);
       else if (kind === "finish") await markFinished(savedChemicalId, finishNote);
       else await saveInventorySettings(savedChemicalId, settings);
       await refreshAfterSave(kind);
@@ -197,8 +196,11 @@ export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { sav
     setErr(null);
     if (d === "purchase") { setPurchase(emptyPurchase(initialUnit)); setBox(defaultContainer(savedChemical?.pack_size, savedChemical?.pack_unit, initialUnit, units)); }
     if (d === "stock") {
-      setStock({ quantity: "", unit: initialUnit, reason: needsOpening ? "opening_stock" : "stocktake", notes: "" });
-      setCapBox(defaultContainer(savedChemical?.pack_size, savedChemical?.pack_unit, initialUnit, units));
+      const cap = defaultContainer(savedChemical?.pack_size, savedChemical?.pack_unit, initialUnit, units);
+      const full = needsOpening ? containerTotal(cap) : null;
+      // Opening stock defaults to full containers; the operator lowers it if partly used.
+      setStock({ quantity: full === null ? "" : String(full), unit: needsOpening ? cap.unit : initialUnit, reason: needsOpening ? "opening_stock" : "stocktake", notes: "" });
+      setCapBox(cap);
     }
     if (d === "settings" && s) setSettings({ warningsEnabled: s.warningsEnabled ?? true, lowQuantity: s.lowStockQuantity === null ? "" : String(s.lowStockQuantity), lowUnit: initialUnit, lowPercent: String(s.lowStockPercent ?? DEFAULT_LOW_STOCK_PERCENT) });
     if (d === "finish") setFinishNote("");
@@ -239,7 +241,10 @@ export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { sav
               <tbody>{history.data.map((p) => (
                 <tr key={p.id} className="border-t">
                   <td className="p-1">{p.date ? new Date(p.date).toLocaleDateString() : "—"}</td>
-                  <td className="p-1">{p.quantity ?? "—"} {p.unit ?? ""}</td>
+                  <td className="p-1" data-testid="history-quantity">
+                    {p.containerCount !== null && p.containerSize !== null && <div>{p.containerCount} × {p.containerSize} {p.containerUnit ?? p.unit ?? ""}</div>}
+                    <div className={p.containerCount !== null ? "text-xs text-muted-foreground" : undefined}>{p.quantity ?? "—"} {p.unit ?? ""}{p.containerCount !== null ? " total" : ""}</div>
+                  </td>
                   <td className="p-1">{formatMoney(p.total, p.currency)}</td>
                   <td className="p-1">{p.unitCost === null ? "—" : `${formatMoney(p.unitCost, p.currency)}${p.unit ? ` / ${p.unit}` : ""}`}</td>
                   <td className="p-1">{p.batch ?? "—"}</td>
@@ -265,7 +270,12 @@ export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { sav
               {needsOpening && (
                 <div className="col-span-2 space-y-2 rounded border bg-muted/30 p-2" data-testid="opening-capacity">
                   <div className="text-xs font-medium">Container capacity</div>
-                  <ContainerFields box={{ ...capBox, unit: stock.unit }} setBox={(b) => setCapBox({ ...b, unit: stock.unit })} units={units} unitLocked idPrefix="o" />
+                  <ContainerFields box={{ ...capBox, unit: stock.unit }} setBox={(b) => {
+                    // Keep "full" in step with capacity until the operator types their own amount.
+                    const prev = containerTotal(capBox), next = containerTotal(b);
+                    if (stock.quantity === "" || (prev !== null && Number(stock.quantity) === prev)) setStock({ ...stock, quantity: next === null ? "" : String(next) });
+                    setCapBox({ ...b, unit: stock.unit });
+                  }} units={units} unitLocked idPrefix="o" />
                   {capacity !== null && <p className="text-xs text-muted-foreground" data-testid="opening-capacity-total">Capacity {capBox.count} × {capBox.size} {stock.unit} = {capacity} {stock.unit}</p>}
                 </div>
               )}
@@ -273,7 +283,7 @@ export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { sav
               <div><Label>Unit</Label><UnitSelect label="Stock unit" units={units} value={stock.unit} onChange={(u) => setStock({ ...stock, unit: u })} /></div>
               {needsOpening && capacity !== null && Number(stock.quantity) > 0 && (
                 <p className="col-span-2 text-xs text-muted-foreground" data-testid="opening-remaining-preview">
-                  {stock.quantity} {stock.unit} remaining of {capacity} {stock.unit} ({Math.round((Number(stock.quantity) / capacity) * 100)}%)
+                  {stock.quantity} {stock.unit} remaining of {capacity} {stock.unit} ({Math.round((Number(stock.quantity) / capacity) * 100)}% — preview; VineTrack calculates the saved figure)
                 </p>
               )}
               {existingUnit && units.length < 4 && (
@@ -294,7 +304,6 @@ export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { sav
               <div className="col-span-2"><Label htmlFor="s-notes">Note</Label><Textarea id="s-notes" value={stock.notes} onChange={(e) => setStock({ ...stock, notes: e.target.value })} /></div>
             </div>
             <p className="text-xs text-muted-foreground">This sets a new starting point. Past purchases are kept.</p>
-            {needsOpening && !CONTAINER_BACKEND_SUPPORTED && <p className="text-xs text-muted-foreground" data-testid="container-not-saved">Only the current physical quantity is saved for now. Container details aren't stored yet.</p>}
           </>)}
           {dialog === "finish" && (<>
             <DialogHeader><DialogTitle>Mark Finished</DialogTitle></DialogHeader>
