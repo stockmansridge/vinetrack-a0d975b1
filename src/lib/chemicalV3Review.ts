@@ -230,3 +230,9 @@ export function approvalPanelFor(status: string | null | undefined): V3ApprovalP
   if (s === "rejected") return "rejected";
   return "readonly";
 }
+
+/** Proposed backend contract (Rork to confirm): sets the revision's manufacturer label link. */
+export const V3_SET_LABEL_URL_RPC = "chemical_v3_set_manufacturer_label_url";
+export async function setManufacturerLabelUrl(revisionId: string, url: string, note: string | null) {
+  await rpc(V3_SET_LABEL_URL_RPC, { p_revision_id: revisionId, p_url: url, p_note: note });
+}

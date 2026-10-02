@@ -6,9 +6,12 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { validateLabelUrl } from "@/lib/labelUrl";
 import { signedV3MediaUrl } from "@/lib/chemicalV3";
 import { generateUuid } from "@/lib/uuid";
 import {
+  setManufacturerLabelUrl,
   fetchFrontLabels, frontLabelCaption, frontLabelPath, issueActions, issueState,
   resolveReviewIssue, setFrontLabelImage, humaniseFieldKey,
   isManufacturerLabelIssue, isVineyardRatesIssue, MANUFACTURER_LABEL_NOTE, NO_VINEYARD_RATE_NOTE,
@@ -213,6 +216,7 @@ export const V3ReviewDecisions = forwardRef<HTMLElement, {
             onChoose={() => setChooser({ issueId: String(i.issue_id) })} />
         ))}
       </div>
+      <LabelUrlEditor revisionId={revisionId} current={labelUrl ?? null} onSaved={reload} />
       {!issues.some((i) => issueActions(i)[0].kind === "chooser") && (
         <Button size="sm" variant="outline" onClick={() => setChooser({ issueId: null })}>Choose front label</Button>
       )}
@@ -234,5 +238,40 @@ export function FrontLabelUploadButton({ revisionId, hasImage }: { revisionId: s
       </Button>
       <FrontLabelChooser revisionId={revisionId} issueId={null} open={open} onClose={() => setOpen(false)} onSaved={reload} />
     </>
+  );
+}
+
+/** System Admin: correct the manufacturer label link. Only http(s) links; saved via the backend. */
+export function LabelUrlEditor({ revisionId, current, onSaved }: { revisionId: string; current: string | null; onSaved: () => unknown }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(current ?? "");
+  const [err, setErr] = useState<string | null>(null);
+  const mut = useMutation({
+    mutationFn: async () => {
+      const v = validateLabelUrl(value);
+      if (!v.ok || !v.value) throw new Error(v.error ?? "Enter a link starting with https://");
+      await setManufacturerLabelUrl(revisionId, v.value, null);
+    },
+    onSuccess: async () => { setErr(null); setEditing(false); await onSaved(); },
+    onError: (e: Error) => setErr(e.message),
+  });
+  if (!editing) {
+    return (
+      <Button size="sm" variant="outline" data-testid="v3-edit-label-url"
+        onClick={() => { setValue(current ?? ""); setErr(null); setEditing(true); }}>
+        {current ? "Correct label link" : "Add label link"}
+      </Button>
+    );
+  }
+  return (
+    <div className="space-y-2 rounded border p-3 text-sm">
+      <label className="font-medium" htmlFor={`label-url-${revisionId}`}>Manufacturer label link</label>
+      <Input id={`label-url-${revisionId}`} value={value} onChange={(e) => setValue(e.target.value)} placeholder="https://…/label.pdf" />
+      {err && <p className="text-xs text-destructive">{err}</p>}
+      <div className="flex gap-2">
+        <Button size="sm" disabled={mut.isPending} onClick={() => mut.mutate()}>{mut.isPending ? "Saving…" : "Save link"}</Button>
+        <Button size="sm" variant="ghost" disabled={mut.isPending} onClick={() => setEditing(false)}>Cancel</Button>
+      </div>
+    </div>
   );
 }
