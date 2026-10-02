@@ -1,7 +1,7 @@
 // Actionable review decisions + front-label chooser for the V3 review drawer.
 import { forwardRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ import { signedV3MediaUrl } from "@/lib/chemicalV3";
 import {
   fetchFrontLabels, frontLabelCaption, frontLabelPath, issueActions, issueState,
   resolveReviewIssue, setFrontLabelImage, humaniseFieldKey,
+  isManufacturerLabelIssue, isVineyardRatesIssue, MANUFACTURER_LABEL_NOTE, NO_VINEYARD_RATE_NOTE,
 } from "@/lib/chemicalV3Review";
 
 type Row = Record<string, any>;
@@ -59,12 +60,16 @@ export function FrontLabelChooser({ revisionId, issueId, open, onClose, onSaved 
   );
 }
 
-function IssueCard({ issue, busy, onDecide, onChoose }: {
+function IssueCard({ issue, busy, onDecide, onChoose, labelUrl, onAddRate, rateCount }: {
   issue: Row; busy: boolean; onDecide: (decision: string) => void; onChoose: () => void;
+  labelUrl?: string | null; onAddRate?: () => void; rateCount?: number;
 }) {
   const state = issueState(issue);
   const [open, setOpen] = useState(false);
-  const title = issue.title || humaniseFieldKey(issue.issue_key) || "Review item";
+  const label = isManufacturerLabelIssue(issue);
+  const rates = isVineyardRatesIssue(issue);
+  const title = label ? "Manufacturer label" : rates ? "Vineyard rates" : issue.title || humaniseFieldKey(issue.issue_key) || "Review item";
+  const detail = label ? MANUFACTURER_LABEL_NOTE : rates && !rateCount ? NO_VINEYARD_RATE_NOTE : issue.detail;
   if (state === "resolved" && !open) {
     return (
       <button type="button" onClick={() => setOpen(true)} data-testid="v3-issue" data-state="resolved"
@@ -82,13 +87,28 @@ function IssueCard({ issue, busy, onDecide, onChoose }: {
         {state === "needs_correction" && <span className="text-xs font-semibold text-destructive">Needs correction</span>}
         {state === "resolved" && <button type="button" className="text-xs text-success" onClick={() => setOpen(false)}>Resolved ✓</button>}
       </div>
-      {issue.detail && <p className="whitespace-pre-wrap">{issue.detail}</p>}
+      {detail && <p className="whitespace-pre-wrap">{detail}</p>}
       {issue.resolution_note && <p className="text-xs text-muted-foreground">Note: {issue.resolution_note}</p>}
       <div className="flex flex-wrap gap-2">
-        {issueActions(issue).map((a) => (
-          <Button key={a.decision} size="sm" variant={a.kind === "correction" ? "outline" : "default"} disabled={busy}
-            onClick={() => (a.kind === "chooser" ? onChoose() : onDecide(a.decision))}>{a.label}</Button>
-        ))}
+        {issueActions(issue).map((a) => {
+          if (a.kind === "link") {
+            return labelUrl ? (
+              <Button key={a.decision} size="sm" variant="outline" asChild>
+                <a href={labelUrl} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-1 h-4 w-4" />{a.label}</a>
+              </Button>
+            ) : <span key={a.decision} className="text-xs text-destructive">Manufacturer label link missing</span>;
+          }
+          if (a.kind === "add_rate" && !onAddRate) return null;
+          return (
+            <Button key={a.decision} size="sm" variant={a.kind === "correction" || a.kind === "add_rate" ? "outline" : "default"} disabled={busy}
+              onClick={() => {
+                if (a.kind === "chooser") return onChoose();
+                if (a.kind === "add_rate") return onAddRate?.();
+                if (a.kind === "confirm" && !window.confirm(a.confirmText ?? "Are you sure?")) return;
+                onDecide(a.decision);
+              }}>{a.label}</Button>
+          );
+        })}
       </div>
     </div>
   );
@@ -96,7 +116,8 @@ function IssueCard({ issue, busy, onDecide, onChoose }: {
 
 export const V3ReviewDecisions = forwardRef<HTMLElement, {
   revisionId: string; issues: Row[]; loading: boolean; error: Error | null; highlight: boolean;
-}>(function V3ReviewDecisions({ revisionId, issues, loading, error, highlight }, ref) {
+  labelUrl?: string | null; onAddRate?: () => void; rateCount?: number;
+}>(function V3ReviewDecisions({ revisionId, issues, loading, error, highlight, labelUrl, onAddRate, rateCount }, ref) {
   const qc = useQueryClient();
   const [chooser, setChooser] = useState<{ issueId: string | null } | null>(null);
   const reload = () => Promise.all([
@@ -123,6 +144,7 @@ export const V3ReviewDecisions = forwardRef<HTMLElement, {
       <div className="space-y-2">
         {issues.map((i) => (
           <IssueCard key={String(i.issue_id)} issue={i} busy={mut.isPending}
+            labelUrl={labelUrl} onAddRate={onAddRate} rateCount={rateCount}
             onDecide={(d) => mut.mutate({ id: String(i.issue_id), decision: d })}
             onChoose={() => setChooser({ issueId: String(i.issue_id) })} />
         ))}

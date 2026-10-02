@@ -86,3 +86,30 @@ export async function setV3ResistanceGroups(revisionId: string, d: V3ResistanceD
   const { error } = await sb.rpc(V3_RESISTANCE_RPC, built.args);
   if (error) throw error;
 }
+
+/* ---- Suggestion from the existing VineTrack activity group reference (no second table). */
+import { lookupActivityGroup } from "@/lib/activityGroupReference";
+
+export interface V3ResistanceSuggestion { scheme: V3ResistanceScheme; groups: string[]; commonName: string | null }
+
+const activeName = (a: unknown): string => {
+  if (a == null) return "";
+  if (typeof a === "string") return a;
+  const o = a as Row;
+  return String(o.name ?? o.active_ingredient ?? o.ingredient ?? o.active_name ?? o.label ?? "");
+};
+
+/** Suggest a classification only when every active matches the reference in one scheme. */
+export function suggestV3Resistance(row: Row | null | undefined): V3ResistanceSuggestion | null {
+  const raw = row?.active_ingredients;
+  const actives: unknown[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const names = actives.map(activeName).map((s) => s.trim()).filter(Boolean);
+  if (!names.length) return null;
+  const refs = names.map(lookupActivityGroup);
+  if (refs.some((r) => !r)) return null;
+  const scheme = refs[0]!.scheme;
+  if (refs.some((r) => r!.scheme !== scheme)) return null;
+  const groups = [...new Set(refs.map((r) => r!.code))];
+  const commons = [...new Set(refs.map((r) => r!.common_name).filter(Boolean))] as string[];
+  return { scheme, groups, commonName: commons.join(" / ") || null };
+}
