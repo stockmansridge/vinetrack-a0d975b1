@@ -18,7 +18,7 @@ const idle = "text-muted-foreground hover:bg-background/60 hover:text-foreground
 const active = "bg-background font-medium text-foreground shadow-sm";
 
 export function ChemicalSectionNav({ active: current, onAddChemical }: { active: ChemicalSection; onAddChemical?: () => void }) {
-  const { currentRole } = useVineyard() as any;
+  const { currentRole } = useVineyard();
   const { isAdmin } = useIsSystemAdmin();
   const navigate = useNavigate();
   const canAdd = currentRole === "owner" || currentRole === "manager";
