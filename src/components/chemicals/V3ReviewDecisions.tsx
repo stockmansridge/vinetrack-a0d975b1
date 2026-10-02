@@ -6,9 +6,12 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { validateLabelUrl } from "@/lib/labelUrl";
 import { signedV3MediaUrl } from "@/lib/chemicalV3";
 import { generateUuid } from "@/lib/uuid";
 import {
+  setManufacturerLabelUrl,
   fetchFrontLabels, frontLabelCaption, frontLabelPath, issueActions, issueState,
   resolveReviewIssue, setFrontLabelImage, humaniseFieldKey,
   isManufacturerLabelIssue, isVineyardRatesIssue, MANUFACTURER_LABEL_NOTE, NO_VINEYARD_RATE_NOTE,
