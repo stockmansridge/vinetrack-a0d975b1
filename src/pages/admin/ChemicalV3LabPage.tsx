@@ -490,10 +490,17 @@ export function ReviewQueue({ onOpen }: { onOpen: (id: string, jobId?: string | 
               <td className="p-2">{asList(pick(r, "warnings")).length || pick(r, "warning_count") || 0}</td>
               <td className="p-2">{asList(pick(r, "unresolved_fields")).length || pick(r, "unresolved_count") || 0}</td>
               <td className="p-2">{age}</td>
+              <td className="p-2" data-testid="v3-row-actions">
+                {canReSearch(isAdmin, status, jid ? String(jid) : null) ? (
+                  <V3ReSearchButton jobId={String(jid)} revisionId={id} prominent={false} label="Re-search"
+                    onNewRevision={(next) => onOpen(next, String(jid))} />
+                ) : "—"}
+              </td>
             </tr>
           );
         })}</tbody>
       </table>
+    </div>
     </div>
   );
 }
