@@ -254,6 +254,12 @@ export const ACTIVITIES: NavActivity[] = [
         keywords: ["spray records", "spray diary", "register"],
       },
       {
+        id: "spraying.chemicals",
+        label: "Chemicals",
+        path: "/setup/chemicals",
+        keywords: ["chemicals", "saved chemicals", "products", "label"],
+      },
+      {
         id: "spraying.compliance",
         label: "Compliance Exports",
         path: "/reports/spray",
@@ -265,12 +271,6 @@ export const ACTIVITIES: NavActivity[] = [
         label: "Resistance Planner",
         path: "/tools/resistance-planner",
         keywords: ["resistance", "frac", "powdery", "downy", "strategy"],
-      },
-      {
-        id: "spraying.chemicals",
-        label: "Chemicals",
-        path: "/setup/chemicals",
-        keywords: ["chemicals", "saved chemicals", "products", "label"],
       },
     ],
     crossLinks: [{ label: "Spray Equipment", path: "/setup/spray-equipment" }],
