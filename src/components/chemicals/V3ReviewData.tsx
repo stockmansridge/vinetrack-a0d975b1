@@ -1,6 +1,7 @@
 // Chemical Lookup V3 — structured, human-readable review rendering.
 // Never JSON-stringifies uses or rate options; never converts between bases.
 import { useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatRateOption, pick, textList, textOf } from "@/lib/chemicalV3";
@@ -43,17 +44,41 @@ function TextBlock({ title, value }: { title: string; value: string }) {
   return <Block title={title}><p className="whitespace-pre-wrap text-sm">{value}</p></Block>;
 }
 
+/** Collapsed-by-default detail section. Renders nothing when there is no content. */
+export function CollapsibleText({ title, value, testId }: { title: string; value: string; testId?: string }) {
+  const [open, setOpen] = useState(false);
+  if (!value) return null;
+  return (
+    <div data-testid={testId}>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+      >
+        {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        {title}
+      </button>
+      {open && <p className="mt-1 whitespace-pre-wrap pl-5 text-sm">{value}</p>}
+    </div>
+  );
+}
+
+export const SHORT_METHOD_MAX = 30;
+
 export function VineyardUseCard({ use }: { use: Row }) {
   const crop = textOf(pick(use, "crop_situation", "situation", "crop", "crops")) || "Situation not stated";
   const targets = textList(pick(use, "targets", "target", "weeds", "pests"));
+  const withholding = textOf(pick(use, "withholding_statement", "withholding_text", "withholding_period", "withholding"));
+  const reEntry = textOf(pick(use, "re_entry_statement", "re_entry_text", "re_entry_period", "re_entry"));
+  const whRe = [withholding && `Withholding: ${withholding}`, reEntry && `Re-entry: ${reEntry}`].filter(Boolean).join("\n");
   return (
-    <div className="space-y-2 rounded border p-3" data-testid="v3-use-card">
+    <div className="space-y-1.5 rounded border p-3" data-testid="v3-use-card">
       <div className="font-medium">{crop}</div>
-      {targets.length > 0 && <Block title="Targets"><TargetList targets={targets} /></Block>}
-      <TextBlock title="Application" value={textOf(pick(use, "application_directions", "directions", "method", "methods", "application_method"))} />
-      <TextBlock title="Restrictions" value={textOf(pick(use, "restrictions", "critical_comments", "comments"))} />
-      <TextBlock title="Withholding" value={textOf(pick(use, "withholding_statement", "withholding_text", "withholding_period", "withholding"))} />
-      <TextBlock title="Re-entry" value={textOf(pick(use, "re_entry_statement", "re_entry_text", "re_entry_period", "re_entry"))} />
+      {targets.length > 0 && <TargetList targets={targets} />}
+      <CollapsibleText title="Application instructions" value={textOf(pick(use, "application_directions", "directions", "method", "methods", "application_method"))} />
+      <CollapsibleText title="Restrictions" value={textOf(pick(use, "restrictions", "critical_comments", "comments"))} />
+      <CollapsibleText title="Withholding / re-entry" value={whRe} />
     </div>
   );
 }
@@ -67,7 +92,10 @@ export interface RateEditHandlers {
 export function RateOptionCard({ option, edit }: { option: Row; edit?: RateEditHandlers }) {
   const targets = textList(pick(option, "targets", "target"));
   const methods = textOf(pick(option, "methods", "method"));
-  const condition = textOf(pick(option, "condition", "conditions"));
+  const shortMethod = methods && methods.length <= SHORT_METHOD_MAX ? methods : "";
+  const directions = textOf(pick(option, "application_directions", "directions", "application"));
+  const application = [shortMethod ? "" : methods, directions].filter(Boolean).join("\n");
+  const condition = [textOf(pick(option, "condition", "conditions")), textOf(pick(option, "restrictions"))].filter(Boolean).join("\n");
   const hasId = pick(option, "id", "option_id") != null;
   return (
     <div className="space-y-1 rounded border p-2" data-testid="v3-rate-card">
@@ -81,8 +109,9 @@ export function RateOptionCard({ option, edit }: { option: Row; edit?: RateEditH
         )}
       </div>
       {targets.length > 0 && <TargetList targets={targets} />}
-      {methods && <div className="text-xs font-medium">{methods}</div>}
-      {condition && <div className="text-xs text-muted-foreground">{condition}</div>}
+      {shortMethod && <div className="text-xs font-medium">{shortMethod}</div>}
+      <CollapsibleText title="Application instructions" value={application} testId="v3-rate-application" />
+      <CollapsibleText title="Restrictions / conditions" value={condition} testId="v3-rate-conditions" />
     </div>
   );
 }

@@ -32,7 +32,9 @@ describe("V3 first live result display", () => {
     expect(container.textContent).not.toMatch(/[{}"]/);
     expect(container.textContent).toContain("+30 more");
     expect(screen.queryByText(/Weed 6\b/)).toBeNull();
+    expect(container.textContent).not.toContain("NOT REQUIRED WHEN USED AS DIRECTED");
     fireEvent.click(screen.getByText("Show all 35"));
+    fireEvent.click(screen.getByText("Withholding / re-entry"));
     expect(container.textContent).toContain("Weed 35");
     expect(container.textContent).toContain("NOT REQUIRED WHEN USED AS DIRECTED");
   });
@@ -41,6 +43,25 @@ describe("V3 first live result display", () => {
     expect(formatRateOption({ value: 3, unit: "L/ha" })).toBe("3 L/ha");
     expect(formatRateOption({ raw_text: "See label for rate" })).toBe("See label for rate");
     expect(textOf({ foo: 1 })).toBe("");
+  });
+  it("rate cards keep rate, target, short method visible and collapse long text", () => {
+    const { container } = render(<RateColumn title="Per hectare" items={[opt(1, "per_hectare"), { ...opt(2, "per_hectare"), condition: "" }]} />);
+    const [a, b] = screen.getAllByTestId("v3-rate-card");
+    expect(a.textContent).toContain("3–6 L/ha");
+    expect(a.textContent).toContain("Phalaris");
+    expect(a.textContent).toContain("Handgun");
+    expect(container.textContent).not.toContain("knockdown");
+    expect(within(b).queryByText("Restrictions / conditions")).toBeNull();
+    fireEvent.click(within(a).getByText("Restrictions / conditions"));
+    expect(a.textContent).toContain("knockdown");
+    expect(b.textContent).not.toContain("knockdown");
+  });
+  it("long method moves into collapsed Application instructions", () => {
+    const long = "Apply as a directed spray using a shielded boom avoiding vine contact";
+    render(<RateColumn title="x" items={[{ ...opt(1, "per_hectare"), methods: [long] }]} />);
+    expect(screen.queryByText(long)).toBeNull();
+    fireEvent.click(screen.getByText("Application instructions"));
+    expect(screen.getByText(long)).toBeTruthy();
   });
   it("warnings stay visible in amber", () => {
     render(<V3Warnings warnings={[{ message: "Perennial-rate transcription may be partial" }, "Second warning"]} />);
