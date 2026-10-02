@@ -574,7 +574,6 @@ const SYSTEM_ADMIN_ITEM_LIST: SystemAdminItem[] = [
   { label: "Trips", path: "/admin/trips", icon: Route },
   { label: "Invitations", path: "/admin/invitations", icon: UserCog },
   { label: "Integrations", path: "/admin/integrations", icon: Plug },
-  { label: "Master Catalogue", path: "/admin/master-catalogue", icon: Beaker },
   { label: "Chemical Catalogue Review", path: "/admin/chemical-v3", icon: Beaker },
   { label: "Block Troubleshooter", path: "/admin/block-troubleshooter", icon: ShieldCheck },
   { label: "Support Requests", path: "/admin/support-requests", icon: AlertTriangle },

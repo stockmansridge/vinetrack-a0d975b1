@@ -125,7 +125,6 @@ import AdminNewsletterEditorPage from "./pages/admin/AdminNewsletterEditorPage";
 import AdminUserActivityPage from "./pages/admin/AdminUserActivityPage";
 import EmailDiagnosticsPage from "./pages/admin/EmailDiagnosticsPage";
 import AdminIntegrationsPage from "./pages/admin/AdminIntegrationsPage";
-import MasterCataloguePage from "./pages/admin/MasterCataloguePage";
 import AdminIntegrationDetailPage from "./pages/admin/AdminIntegrationDetailPage";
 import BillingPage from "./pages/BillingPage";
 import AdminBillingPreviewPage from "./pages/admin/AdminBillingPreviewPage";
@@ -283,7 +282,6 @@ const App = () => (
                     </Route>
                     <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
                     <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
-                    <Route path="/admin/master-catalogue" element={<MasterCataloguePage />} />
                     <Route path="/admin/chemical-v3" element={<ChemicalV3LabPage />} />
                     <Route path="/admin/users" element={<AdminUsersPage />} />
                     <Route path="/admin/users/:id" element={<AdminUserDetailPage />} />
