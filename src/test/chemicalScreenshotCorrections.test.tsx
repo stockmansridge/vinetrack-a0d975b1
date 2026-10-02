@@ -164,13 +164,6 @@ describe("static source proofs", () => {
     );
   });
 
-  it("shows exactly one enrichment loading message and no manual entry while enriching", () => {
-    const src = read("src/components/spray/ChemicalAILookup.tsx");
-    expect(src).toContain("Reading the official product label");
-    expect(src.match(/Loading product label details/g)).toBeNull();
-    expect(src).toContain('{phase !== "enriching" && !selected && search');
-  });
-
   it("drops the legacy Group column and sources Category from product_category", () => {
     const src = read("src/pages/setup/SavedChemicalsPage.tsx");
     expect(src).not.toContain('case "group": return');

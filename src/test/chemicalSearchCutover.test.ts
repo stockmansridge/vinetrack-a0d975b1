@@ -74,3 +74,54 @@ describe("Inventory & Purchases correction", () => {
     expect(s.quantity).toBeNull();
   });
 });
+
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+describe("Full Portal production cutover", () => {
+  const files: string[] = [];
+  const walk = (d: string) => {
+    for (const n of readdirSync(d)) {
+      const p = join(d, n);
+      if (statSync(p).isDirectory()) { if (!p.startsWith("src/test")) walk(p); }
+      else if (/\.tsx?$/.test(n)) files.push(p);
+    }
+  };
+  walk("src");
+  const prod = files.map((f) => [f, readFileSync(f, "utf8")] as const);
+  it("no production code reaches the old lookup systems", () => {
+    for (const bad of [
+      '"chemical-info-lookup"', "search_master_chemicals_v2", "web_lookup_v2",
+      "AddChemicalV2Dialog", "useChemicalSearchV2", "ChemicalAILookup",
+      "chemicalStagedLookup", "chemicalSearchFlow", "chemicalLookupRequest",
+      "chemicalLookupResolver", "chemicalReverifyLookup", "MasterUpdateDialog", "fetchMasterChemical",
+    ]) {
+      for (const [f, s] of prod) {
+        const code = s.split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
+        expect(code.includes(bad), `${f} → ${bad}`).toBe(false);
+      }
+    }
+  });
+  it("obsolete files are deleted", () => {
+    for (const f of [
+      "src/components/chemicals/AddChemicalV2Dialog.tsx", "src/components/spray/ChemicalAILookup.tsx",
+      "src/lib/chemicalSearchV2.ts", "src/lib/chemicalStagedLookup.ts", "src/lib/chemicalReverifyLookup.ts",
+      "src/lib/chemicalSearchFlow.ts", "src/lib/chemicalLookupRequest.ts", "src/lib/chemicalLookupResolver.ts",
+      "src/components/chemicals/MasterUpdateDialog.tsx", "src/pages/admin/MasterCataloguePage.tsx",
+    ]) expect(existsSync(f), f).toBe(false);
+  });
+  it("ChemicalEditor is edit/manual only and has no re-verify", () => {
+    const ed = src("src/components/chemicals/ChemicalEditorSheet.tsx");
+    expect(ed).not.toMatch(/ChemicalReverifyDialog|Check for updates|Review update/);
+    expect(src("src/components/chemicals/ChemicalIntelligenceEditor.tsx")).not.toMatch(/Re-verify|ChemicalReverifyDialog/);
+  });
+  it("Store picker stays local; Catalogue Review stays System Admin; old Master nav gone", () => {
+    expect(src("src/components/spray/ChemicalStoreCombobox.tsx")).not.toMatch(/functions\.invoke|rpc\(/);
+    const nav = src("src/lib/navigationConfig.ts");
+    expect(nav).not.toContain("/admin/master-catalogue");
+    expect(nav).toContain("Chemical Catalogue Review");
+    expect(src("src/App.tsx")).not.toContain("MasterCataloguePage");
+  });
+  it("customer search has no System Admin gate", () => {
+    expect(dialog).not.toMatch(/useIsSystemAdmin|isSystemAdmin/);
+  });
+});
