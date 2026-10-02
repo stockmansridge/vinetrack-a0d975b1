@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ChemicalSearchDialog } from "@/components/chemicals/ChemicalSearchDialog";
+import { V3ReSearchButton } from "@/components/chemicals/V3ReSearchButton";
+import { canReSearch, needsReSearch } from "@/lib/chemicalV3";
 import { V3ReviewDecisions } from "@/components/chemicals/V3ReviewDecisions";
 import { ChemicalInventoryPanel } from "@/components/chemicals/ChemicalInventoryPanel";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
@@ -208,7 +210,7 @@ function CategoryField({ row, options, editable, busy, onChange, msg }: {
   );
 }
 
-function ReviewSheet({ revisionId, onClose, onApproved }: { revisionId: string | null; onClose: () => void; onApproved?: () => void }) {
+function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpenRevision }: { revisionId: string | null; jobId?: string | null; onClose: () => void; onApproved?: () => void; onOpenRevision?: (id: string) => void }) {
   const qc = useQueryClient();
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
@@ -339,6 +341,13 @@ function ReviewSheet({ revisionId, onClose, onApproved }: { revisionId: string |
                   <Button size="sm" asChild><a href={labelUrl} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-1 h-4 w-4" />Open Manufacturer Label</a></Button>
                 ) : <Badge className="border-transparent bg-destructive/15 text-destructive">Manufacturer label missing</Badge>}
               </div>
+              {(() => {
+                const jid = queueJobId ?? pick(r, "job_id", "discovery_job_id");
+                return revisionId && canReSearch(isAdmin, status, jid) ? (
+                  <V3ReSearchButton jobId={String(jid)} revisionId={revisionId} prominent={needsReSearch(r)}
+                    onNewRevision={(id) => onOpenRevision?.(id)} />
+                ) : null;
+              })()}
               {canUseInventoryPilot(isAdmin) && revisionId && isV3Addable(status) && (
                 <div className="flex flex-wrap items-start gap-2">
                   <V3AddToVineyardButton revisionId={revisionId} productName={pick(r, "product_name") ?? "this product"} status={status}
@@ -437,7 +446,7 @@ function ReviewSheet({ revisionId, onClose, onApproved }: { revisionId: string |
   );
 }
 
-function ReviewQueue({ onOpen }: { onOpen: (id: string) => void }) {
+function ReviewQueue({ onOpen }: { onOpen: (id: string, jobId?: string | null) => void }) {
   const cats = useCategories();
   const q = useQuery({ queryKey: ["chemical-v3-queue"], queryFn: v3ReviewQueue });
   if (q.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
@@ -455,7 +464,7 @@ function ReviewQueue({ onOpen }: { onOpen: (id: string) => void }) {
           const created = pick(r, "created_at");
           const age = created ? `${Math.max(0, Math.round((Date.now() - new Date(created).getTime()) / 86_400_000))} d` : "—";
           return (
-            <tr key={id} className={SOLID_ROW} data-testid="v3-review-row" onClick={() => onOpen(id)}>
+            <tr key={id} className={SOLID_ROW} data-testid="v3-review-row" onClick={() => onOpen(id, pick(r, "job_id") ? String(pick(r, "job_id")) : null)}>
               <td className="p-2 font-medium">{pick(r, "product_name") ?? "—"}</td>
               <td className="p-2">{pick(r, "manufacturer") ?? "—"}</td>
               <td className="p-2">{pick(r, "country_code", "country") ?? "—"}</td>
@@ -544,6 +553,7 @@ export default function ChemicalV3LabPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openRevision, setOpenRevision] = useState<string | null>(null);
+  const [openJob, setOpenJob] = useState<string | null>(null);
   const [photo, setPhoto] = useState<File | null>(null);
 
   useEffect(() => { if (jobId) localStorage.setItem(JOB_KEY, jobId); else localStorage.removeItem(JOB_KEY); }, [jobId]);
@@ -590,7 +600,7 @@ export default function ChemicalV3LabPage() {
           <TabsTrigger value="approved">Approved</TabsTrigger>
           {canUseInventoryPilot(isAdmin) && <TabsTrigger value="inventory">Inventory &amp; Purchases</TabsTrigger>}
         </TabsList>
-        <TabsContent value="review"><ReviewQueue onOpen={setOpenRevision} /></TabsContent>
+        <TabsContent value="review"><ReviewQueue onOpen={(id, j) => { setOpenRevision(id); setOpenJob(j ?? null); }} /></TabsContent>
         <TabsContent value="approved"><ApprovedList onOpen={setOpenRevision} /></TabsContent>
         {canUseInventoryPilot(isAdmin) && <TabsContent value="inventory"><InventoryTab /></TabsContent>}
       </Tabs>
@@ -602,7 +612,8 @@ export default function ChemicalV3LabPage() {
           <Button size="sm" variant="ghost" onClick={() => { setJobId(null); setNotice(null); }}>Dismiss</Button>
         </div>
       )}
-      <ReviewSheet revisionId={openRevision} onClose={() => setOpenRevision(null)}
+      <ReviewSheet revisionId={openRevision} jobId={openJob} onClose={() => { setOpenRevision(null); setOpenJob(null); }}
+        onOpenRevision={(id) => setOpenRevision(id)}
         onApproved={() => { setTab("approved"); if (jobId) { setJobId(null); setNotice(null); } }} />
 
     </div>
