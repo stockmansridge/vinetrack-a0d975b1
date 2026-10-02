@@ -143,6 +143,8 @@ export interface InventorySummary {
   lowStockQuantity: number | null;
   /** Database-calculated value; never computed in the browser. */
   estimatedStockValue: number | null;
+  /** Backend `tracked` flag; true means stock is set up even if the state is unknown. */
+  tracked: boolean | null;
   raw: Row | null;
 }
 
@@ -150,15 +152,15 @@ const n = (v: any) => (v === null || v === undefined || v === "" || !Number.isFi
 
 export function parseInventorySummary(data: any): InventorySummary {
   const r = one(data);
-  // tracking_status = "needs_opening_stock" always wins: stock is not set up yet.
-  const tracking = String(first(r, "tracking_status") ?? "").toLowerCase();
-  const s = tracking === "needs_opening_stock"
-    ? tracking
-    : String(first(r, "stock_status", "status", "state") ?? "").toLowerCase();
-  const state = (Object.keys(STOCK_STATE_LABEL) as StockState[]).includes(s as StockState) ? (s as StockState) : null;
+  // tracking_status is the primary state field; older fields are fallbacks only.
+  const valid = Object.keys(STOCK_STATE_LABEL) as StockState[];
+  const pickState = (v: unknown) => { const x = String(v ?? "").toLowerCase(); return valid.includes(x as StockState) ? (x as StockState) : null; };
+  const state = pickState(first(r, "tracking_status")) ?? pickState(first(r, "stock_status", "status", "state"));
+  const tracked = r && typeof r.tracked === "boolean" ? r.tracked : null;
   const unknown = state === "needs_opening_stock";
   return {
     state,
+    tracked,
     // Unknown stock is never shown as zero.
     quantity: unknown ? null : n(first(r, "current_quantity")),
     unit: first(r, "display_unit") ?? null,

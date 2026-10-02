@@ -77,7 +77,9 @@ export default function ChemicalInventoryPage() {
     err: summaries[i]?.error as Error | null,
   }));
 
-  const stateOf = (s?: InventorySummary): StockState | null => s?.state ?? (s ? "needs_opening_stock" : null);
+  // Unknown state only means "opening stock not set" when the backend doesn't say tracked.
+  const stateOf = (s?: InventorySummary): StockState | null =>
+    s?.state ?? (s && s.tracked !== true ? "needs_opening_stock" : null);
   const count = (k: StockState) => items.filter((x) => stateOf(x.s) === k).length;
   const tracked = items.filter((x) => { const st = stateOf(x.s); return st && st !== "needs_opening_stock"; }).length;
   const values = items.map((x) => backendValue(x.s)).filter((v): v is number => v !== null);
