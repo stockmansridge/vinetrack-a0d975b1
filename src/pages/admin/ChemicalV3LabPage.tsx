@@ -12,7 +12,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { RateColumn, V3DataSummary, V3Warnings, VineyardUseCard } from "@/components/chemicals/V3ReviewData";
+import { RateColumn, V3DataSummary, V3Warnings, VineyardUseCard, type RateEditHandlers } from "@/components/chemicals/V3ReviewData";
+import { V3RateEditor } from "@/components/chemicals/V3RateEditor";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { useAuth } from "@/context/AuthContext";
 import { useVineyard } from "@/context/VineyardContext";
 import { VINEYARD_COUNTRIES, resolveVineyardCountry } from "@/lib/vineyardCountries";
@@ -21,6 +23,8 @@ import {
   approveV3, asList, fetchV3Job, fetchV3Revision, freshnessNote, freshnessOf, humaniseStage,
   isApprovedResult, labelOf, pick, rejectV3, searchV3, signedV3MediaUrl, splitRates,
   startV3Discovery, uploadV3SearchPhoto, v3ReviewQueue,
+  deleteV3RateOption, draftFromOption, emptyRateDraft, formatRateOption, isV3RevisionEditable, saveV3RateOption,
+  type V3RateBasis, type V3RateDraft,
 } from "@/lib/chemicalV3";
 
 type Row = Record<string, any>;
@@ -166,6 +170,24 @@ function ReviewSheet({ revisionId, onClose }: { revisionId: string | null; onClo
     },
     onError: (e: any) => setMsg({ tone: "err", text: e?.message ?? "The backend refused this action." }),
   });
+  const { isAdmin } = useIsSystemAdmin();
+  const [draft, setDraft] = useState<V3RateDraft | null>(null);
+  const [rateErr, setRateErr] = useState<string | null>(null);
+  const [rateMsg, setRateMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
+  useEffect(() => { setDraft(null); setRateErr(null); setRateMsg(null); }, [revisionId]);
+  const rateMut = useMutation({
+    mutationFn: async (a: { kind: "save"; draft: V3RateDraft } | { kind: "delete"; optionId: string }) =>
+      a.kind === "save" ? saveV3RateOption(revisionId!, a.draft) : deleteV3RateOption(revisionId!, a.optionId),
+    onSuccess: async (_d, a) => {
+      setDraft(null); setRateErr(null);
+      setRateMsg({ tone: "ok", text: a.kind === "save" ? "Rate saved." : "Rate deleted." });
+      await qc.invalidateQueries({ queryKey: ["chemical-v3-revision", revisionId] });
+    },
+    onError: (e: any, a) => {
+      const text = e?.message ?? "The backend refused this change.";
+      if (a.kind === "save") setRateErr(text); else setRateMsg({ tone: "err", text });
+    },
+  });
   const r = q.data;
   const has = (...k: string[]) => pick(r, ...k) !== undefined;
   const st = (...k: string[]): FieldStatus => (has(...k) ? "ok" : "missing");
@@ -177,6 +199,15 @@ function ReviewSheet({ revisionId, onClose }: { revisionId: string | null; onClo
   const unresolved = asList(pick(r, "unresolved_fields"));
   const labelUrl = pick(r, "manufacturer_label_url");
   const status = String(pick(r, "review_status", "status") ?? "").toLowerCase();
+  const canEdit = isAdmin && !!revisionId && isV3RevisionEditable(status);
+  const editHandlers = (fallback: V3RateBasis): RateEditHandlers | undefined => canEdit ? {
+    disabled: rateMut.isPending,
+    onEdit: (o) => { setRateErr(null); setDraft(draftFromOption(o, fallback)); },
+    onDelete: (o) => {
+      const id = pick(o, "id", "option_id");
+      if (id != null && window.confirm(`Delete rate ${formatRateOption(o)}?`)) rateMut.mutate({ kind: "delete", optionId: String(id) });
+    },
+  } : undefined;
   return (
     <Sheet open={!!revisionId} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="w-screen max-w-none sm:w-[90vw] sm:max-w-none lg:w-[75vw] overflow-y-auto">
@@ -226,12 +257,18 @@ function ReviewSheet({ revisionId, onClose }: { revisionId: string | null; onClo
             </section>
             <section className="space-y-2">
               <h3 className="font-semibold">Vineyard rates</h3>
+              {rateMsg && <p className={cn("text-sm", rateMsg.tone === "err" ? "text-destructive" : "text-success")}>{rateMsg.text}</p>}
               <div className="grid gap-3 md:grid-cols-2">
-                <RateColumn title="Per hectare" items={rates.perHa} testId="v3-rates-per-ha" />
-                <RateColumn title="Per 100 litres" items={rates.per100L} testId="v3-rates-per-100l" />
+                <RateColumn title="Per hectare" items={rates.perHa} testId="v3-rates-per-ha" edit={editHandlers("per_hectare")} onAdd={canEdit ? () => setDraft(emptyRateDraft("per_hectare")) : undefined} addLabel="+ Add per hectare rate" />
+                <RateColumn title="Per 100 litres" items={rates.per100L} testId="v3-rates-per-100l" edit={editHandlers("per_100_litres")} onAdd={canEdit ? () => setDraft(emptyRateDraft("per_100_litres")) : undefined} addLabel="+ Add per 100 L rate" />
               </div>
-              {rates.other.length > 0 && <RateColumn title="Basis not stated" items={rates.other} />}
+              {rates.other.length > 0 && <RateColumn title="Basis not stated" items={rates.other} edit={editHandlers("per_hectare")} />}
             </section>
+            {canEdit && draft && (
+              <V3RateEditor draft={draft} revisionId={revisionId!} busy={rateMut.isPending} error={rateErr}
+                onCancel={() => { setDraft(null); setRateErr(null); }}
+                onSave={(d) => rateMut.mutate({ kind: "save", draft: d })} />
+            )}
             <section className={cn("rounded border p-2", unresolved.length ? STATUS_CLASS.review : STATUS_CLASS.na)}>
               <h3 className="font-semibold">Outstanding / unresolved fields</h3>
               {unresolved.length ? <ul className="list-disc pl-5 text-sm">{unresolved.map((w, i) => <li key={i}>{labelOf(w)}</li>)}</ul> : <p className="text-sm">None</p>}
