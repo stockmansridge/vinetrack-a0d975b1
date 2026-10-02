@@ -87,6 +87,10 @@ import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { formatDate } from "@/lib/dateFormat";
 import { ChemicalEditor } from "@/components/chemicals/ChemicalEditorSheet";
 import { AddChemicalV2Dialog } from "@/components/chemicals/AddChemicalV2Dialog";
+import { ChemicalInventoryPanel } from "@/components/chemicals/ChemicalInventoryPanel";
+import { canUseInventoryPilot, v3EntryBadge } from "@/lib/chemicalInventory";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import { Package } from "lucide-react";
 import { useChemicalSearchV2 } from "@/lib/chemicalSearchV2";
 
 // The legacy free-text `chemical_group` column is no longer displayed — the
@@ -150,6 +154,10 @@ export default function SavedChemicalsPage() {
   const [confirmRestore, setConfirmRestore] = useState<SavedChemical | null>(null);
   const [confirmHardDelete, setConfirmHardDelete] = useState<SavedChemical | null>(null);
   const [detailRow, setDetailRow] = useState<SavedChemical | null>(null);
+  // Inventory / V3 pilot — System Admin only; customers see nothing new.
+  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
+  const inventoryPilot = canUseInventoryPilot(isSystemAdmin);
+  const [inventoryRow, setInventoryRow] = useState<SavedChemical | null>(null);
   // Coming back from "Set vineyard country": reopen the chemical the operator
   // was adding, with their unsaved draft and search text intact.
   const location = useLocation();
@@ -577,6 +585,14 @@ export default function SavedChemicalsPage() {
                       <React.Fragment key={id}>{renderChemCell(id, c)}</React.Fragment>
                     ))}
                     <TableCell className="text-right">
+                      {inventoryPilot && v3EntryBadge(c) && (
+                        <Badge variant="outline" className={cn("mr-1", v3EntryBadge(c)!.tone === "pending" && "border-warning/60 bg-warning/10")}>{v3EntryBadge(c)!.label}</Badge>
+                      )}
+                      {inventoryPilot && (
+                        <Button size="sm" variant="ghost" onClick={() => setInventoryRow(c)} title="Inventory">
+                          <Package className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       <Button size="sm" variant="ghost" onClick={() => setDetailRow(c)} title="Chemical intelligence">
                         <Info className="h-3.5 w-3.5" />
                       </Button>
@@ -717,6 +733,14 @@ export default function SavedChemicalsPage() {
         }}
       />
 
+      {inventoryPilot && (
+        <Sheet open={!!inventoryRow} onOpenChange={(o) => !o && setInventoryRow(null)}>
+          <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+            <SheetHeader><SheetTitle>{inventoryRow?.name}</SheetTitle></SheetHeader>
+            {inventoryRow && <div className="mt-4"><ChemicalInventoryPanel savedChemicalId={inventoryRow.id} /></div>}
+          </SheetContent>
+        </Sheet>
+      )}
       <ChemicalIntelligenceDialog row={detailRow} open={!!detailRow} onOpenChange={(o) => !o && setDetailRow(null)} />
 
       <AlertDialog open={!!confirmArchive} onOpenChange={(o) => !o && setConfirmArchive(null)}>
