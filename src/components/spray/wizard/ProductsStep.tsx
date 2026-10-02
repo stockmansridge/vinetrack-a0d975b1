@@ -34,6 +34,8 @@ import type { StepProps } from "./types";
 import { useVineyard } from "@/context/VineyardContext";
 import { ChemicalStoreCombobox } from "@/components/spray/ChemicalStoreCombobox";
 import { ChemicalEditor } from "@/components/chemicals/ChemicalEditorSheet";
+import { ChemicalSearchDialog } from "@/components/chemicals/ChemicalSearchDialog";
+import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCanSeeCosts } from "@/lib/permissions";
 import { toChemicalIntelligence, type ChemicalIntelligence as ChemIntel } from "@/lib/chemicalIntelligence";
@@ -83,6 +85,18 @@ export function ProductsStep({ app, patch, calc, intelligenceById, canEdit, vine
   const canSeeCosts = useCanSeeCosts();
   // `null` = closed. `{ index: null }` = create then append a new line.
   const [creating, setCreating] = useState<{ index: number | null; name: string | null } | null>(null);
+  // Manual-only editor opened from Chemical Search's "Enter manually".
+  const [manual, setManual] = useState(false);
+  const { memberships, currentCountry } = useVineyard();
+  const vineyardName = memberships.find((m) => m.vineyard_id === vineyardId)?.vineyard_name ?? null;
+  // Chemical Search returns the exact saved chemical id; load that row and
+  // bind it by id through the same path as a manual save.
+  const onSearchAdded = async ({ savedChemicalId }: { savedChemicalId: string | null }) => {
+    if (!savedChemicalId || !vineyardId) return;
+    const res = await fetchSavedChemicalsForVineyard(vineyardId);
+    const row = res.chemicals.find((c) => c.id === savedChemicalId);
+    if (row) onChemicalSaved(row);
+  };
   const chemicals = useMemo(
     () => Array.from(intelligenceById.values()).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "")),
     [intelligenceById],
@@ -125,6 +139,7 @@ export function ProductsStep({ app, patch, calc, intelligenceById, canEdit, vine
     }
     qc.invalidateQueries({ queryKey: ["saved-chemicals"] });
     setCreating(null);
+    setManual(false);
   };
 
   return (
@@ -180,11 +195,23 @@ export function ProductsStep({ app, patch, calc, intelligenceById, canEdit, vine
         ))}
       </div>
 
-      {/* The same Add New Chemical experience used by the Chemical Store,
-          nested here so the Program Step draft is never saved or discarded. */}
-      <ChemicalEditor
-        open={!!creating}
+      {/* Add chemical → the shared Chemical Search, nested so the draft is
+          never saved or discarded. The added product binds by exact id. */}
+      <ChemicalSearchDialog
+        open={!!creating && !manual}
         onOpenChange={(o) => { if (!o) setCreating(null); }}
+        vineyardId={vineyardId}
+        vineyardName={vineyardName}
+        country={currentCountry}
+        canEdit={canEdit}
+        initialQuery={creating?.name ?? null}
+        onAdded={onSearchAdded}
+        onManual={(name) => { setCreating((c) => ({ index: c?.index ?? null, name: name ?? c?.name ?? null })); setManual(true); }}
+      />
+      <ChemicalEditor
+        manualOnly
+        open={!!creating && manual}
+        onOpenChange={(o) => { if (!o) { setCreating(null); setManual(false); } }}
         initial={null}
         initialName={creating?.name ?? null}
         vineyardId={vineyardId}
