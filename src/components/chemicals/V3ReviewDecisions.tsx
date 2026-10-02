@@ -1,15 +1,18 @@
 // Actionable review decisions + front-label chooser for the V3 review drawer.
-import { forwardRef, useState } from "react";
+import { forwardRef, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ExternalLink } from "lucide-react";
+import { CheckCircle2, ExternalLink, Upload } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { signedV3MediaUrl } from "@/lib/chemicalV3";
+import { generateUuid } from "@/lib/uuid";
 import {
   fetchFrontLabels, frontLabelCaption, frontLabelPath, issueActions, issueState,
   resolveReviewIssue, setFrontLabelImage, humaniseFieldKey,
   isManufacturerLabelIssue, isVineyardRatesIssue, MANUFACTURER_LABEL_NOTE, NO_VINEYARD_RATE_NOTE,
+  validateFrontLabelFile, uploadAndRegisterFrontLabel, FRONT_LABEL_SAVED_TOAST,
 } from "@/lib/chemicalV3Review";
 
 type Row = Record<string, any>;
@@ -19,8 +22,67 @@ function ChooserThumb({ path }: { path: string }) {
   return q.data ? <img src={q.data} alt="" className="h-48 w-full rounded bg-muted object-contain" /> : <div className="h-48 w-full rounded bg-muted" />;
 }
 
+/** Manual System Admin override: drop/browse → preview → explicit confirm → upload + register. */
+export function FrontLabelUpload({ revisionId, onSaved }: { revisionId: string; onSaved: () => void | Promise<unknown> }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+  const pickFile = (f: File | undefined | null) => {
+    if (!f) return;
+    const bad = validateFrontLabelFile(f);
+    if (bad) { setErr(bad); setFile(null); setPreview(null); return; }
+    setErr(null); setFile(f);
+    setPreview(typeof URL.createObjectURL === "function" ? URL.createObjectURL(f) : null);
+  };
+  const clear = () => { setFile(null); setPreview(null); setErr(null); if (inputRef.current) inputRef.current.value = ""; };
+  const mut = useMutation({
+    mutationFn: (f: File) => uploadAndRegisterFrontLabel(revisionId, f, generateUuid()),
+    onSuccess: async () => { toast.success(FRONT_LABEL_SAVED_TOAST); clear(); await onSaved(); },
+    onError: (e: Error) => setErr(e.message),
+  });
+  return (
+    <div className="space-y-2" data-testid="v3-front-label-upload">
+      {!file ? (
+        <div role="button" tabIndex={0} data-testid="v3-front-label-dropzone" data-dragging={dragging}
+          onClick={() => inputRef.current?.click()}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && inputRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragEnter={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => { e.preventDefault(); setDragging(false); pickFile(e.dataTransfer?.files?.[0]); }}
+          className={cn("flex cursor-pointer flex-col items-center justify-center gap-2 rounded border-2 border-dashed p-6 text-sm",
+            dragging ? "border-primary bg-primary/10" : "border-muted-foreground/30 bg-muted/30")}>
+          <Upload className="h-6 w-6 text-muted-foreground" />
+          <span className="font-medium">{dragging ? "Drop image to upload" : "Drag & drop a front label image here"}</span>
+          <span className="text-xs text-muted-foreground">or</span>
+          <Button type="button" size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}>Choose image</Button>
+          <span className="text-xs text-muted-foreground">PNG, JPG/JPEG or WebP · up to 12 MB</span>
+        </div>
+      ) : (
+        <div className="space-y-2 rounded border p-3" data-testid="v3-front-label-selected">
+          {preview ? <img src={preview} alt="Selected front label" className="h-72 w-full rounded bg-muted object-contain" />
+            : <div className="text-sm">{file.name}</div>}
+          <div className="text-xs text-muted-foreground">{file.name} · will be saved as a System Admin upload</div>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" size="sm" disabled={mut.isPending} onClick={clear}>Cancel</Button>
+            <Button type="button" size="sm" disabled={mut.isPending} onClick={() => mut.mutate(file)}>
+              {mut.isPending ? "Saving…" : "Use this image"}
+            </Button>
+          </div>
+        </div>
+      )}
+      <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" data-testid="v3-front-label-input"
+        onChange={(e) => pickFile(e.target.files?.[0])} />
+      {err && <p className="text-sm text-destructive" role="alert">{err}</p>}
+    </div>
+  );
+}
+
 export function FrontLabelChooser({ revisionId, issueId, open, onClose, onSaved }: {
-  revisionId: string; issueId: string | null; open: boolean; onClose: () => void; onSaved: () => void;
+  revisionId: string; issueId: string | null; open: boolean; onClose: () => void; onSaved: () => void | Promise<unknown>;
 }) {
   const [sel, setSel] = useState<string | null>(null);
   const q = useQuery({ queryKey: ["chemical-v3-front-labels", revisionId], enabled: open, queryFn: () => fetchFrontLabels(revisionId) });
@@ -33,8 +95,9 @@ export function FrontLabelChooser({ revisionId, issueId, open, onClose, onSaved 
   const items = (q.data ?? []).filter((r) => frontLabelPath(r));
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !mut.isPending && onClose()}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader><DialogTitle>Choose front label</DialogTitle></DialogHeader>
+        <FrontLabelUpload revisionId={revisionId} onSaved={async () => { await onSaved(); onClose(); }} />
         {q.isLoading && <p className="text-sm text-muted-foreground">Loading images…</p>}
         {q.error && <p className="text-sm text-destructive">{(q.error as Error).message}</p>}
         {q.isSuccess && !items.length && <p className="text-sm text-muted-foreground">No label images are available for this product.</p>}
@@ -58,6 +121,11 @@ export function FrontLabelChooser({ revisionId, issueId, open, onClose, onSaved 
       </DialogContent>
     </Dialog>
   );
+}
+
+/** Invalidate everything a front-label change affects. Never touches label URL, rates or resistance. */
+export function frontLabelReloadKeys(revisionId: string) {
+  return [["chemical-v3-issues", revisionId], ["chemical-v3-revision", revisionId], ["chemical-v3-front-labels", revisionId], ["chemical-v3-queue"], ["chemical-v3-approved"]];
 }
 
 function IssueCard({ issue, busy, onDecide, onChoose, labelUrl, onAddRate, rateCount }: {
@@ -120,11 +188,7 @@ export const V3ReviewDecisions = forwardRef<HTMLElement, {
 }>(function V3ReviewDecisions({ revisionId, issues, loading, error, highlight, labelUrl, onAddRate, rateCount }, ref) {
   const qc = useQueryClient();
   const [chooser, setChooser] = useState<{ issueId: string | null } | null>(null);
-  const reload = () => Promise.all([
-    qc.invalidateQueries({ queryKey: ["chemical-v3-issues", revisionId] }),
-    qc.invalidateQueries({ queryKey: ["chemical-v3-revision", revisionId] }),
-    qc.invalidateQueries({ queryKey: ["chemical-v3-front-labels", revisionId] }),
-  ]);
+  const reload = () => Promise.all(frontLabelReloadKeys(revisionId).map((queryKey) => qc.invalidateQueries({ queryKey })));
   const mut = useMutation({
     mutationFn: (a: { id: string; decision: string }) => resolveReviewIssue(a.id, a.decision, null, null),
     onSuccess: reload,
