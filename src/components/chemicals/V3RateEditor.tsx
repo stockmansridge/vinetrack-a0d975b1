@@ -9,6 +9,12 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { buildRateOptionArgs, type V3RateDraft } from "@/lib/chemicalV3";
 
+/** Accepted rate units per basis — keeps saved units standardised. */
+export const V3_RATE_UNITS: Record<V3RateDraft["basis"], string[]> = {
+  per_hectare: ["L/ha", "mL/ha", "kg/ha", "g/ha"],
+  per_100_litres: ["L/100 L", "mL/100 L", "kg/100 L", "g/100 L"],
+};
+
 export function V3RateEditor({
   draft, revisionId, busy, error, onCancel, onSave,
 }: {
@@ -30,7 +36,9 @@ export function V3RateEditor({
     setLocalErr(null);
     onSave(d);
   };
-  const unitHint = d.basis === "per_hectare" ? "e.g. L/ha" : "e.g. mL/100 L";
+  const standard = V3_RATE_UNITS[d.basis];
+  const legacyUnit = !!d.unit && !standard.includes(d.unit);
+  const unitOptions = legacyUnit ? [d.unit, ...standard] : [...standard];
   return (
     <Dialog open onOpenChange={(o) => !o && !busy && onCancel()}>
       <DialogContent className="max-w-lg" data-testid="v3-rate-editor">
@@ -39,7 +47,10 @@ export function V3RateEditor({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>Basis</Label>
-              <Select value={d.basis} onValueChange={(v) => set("basis", v)}>
+              <Select value={d.basis} onValueChange={(v) => {
+                const b = v as V3RateDraft["basis"];
+                setD({ ...d, basis: b, unit: V3_RATE_UNITS[b].includes(d.unit) ? d.unit : "" });
+              }}>
                 <SelectTrigger aria-label="Basis"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="per_hectare">Per hectare</SelectItem>
@@ -61,13 +72,23 @@ export function V3RateEditor({
           {d.rateType === "single" ? (
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1"><Label htmlFor="v3r-value">Rate</Label><Input id="v3r-value" inputMode="decimal" value={d.value} onChange={(e) => set("value", e.target.value)} /></div>
-              <div className="space-y-1"><Label htmlFor="v3r-unit">Unit</Label><Input id="v3r-unit" placeholder={unitHint} value={d.unit} onChange={(e) => set("unit", e.target.value)} /></div>
+              <div className="space-y-1"><Label htmlFor="v3r-unit">Unit</Label><Select value={d.unit || undefined} onValueChange={(v) => set("unit", v)}>
+                <SelectTrigger id="v3r-unit" aria-label="Unit"><SelectValue placeholder="Select unit" /></SelectTrigger>
+                <SelectContent>
+                  {unitOptions.map((u) => <SelectItem key={u} value={u}>{u}{legacyUnit && u === d.unit ? " (non-standard)" : ""}</SelectItem>)}
+                </SelectContent>
+              </Select></div>
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1"><Label htmlFor="v3r-min">Minimum</Label><Input id="v3r-min" inputMode="decimal" value={d.min} onChange={(e) => set("min", e.target.value)} /></div>
               <div className="space-y-1"><Label htmlFor="v3r-max">Maximum</Label><Input id="v3r-max" inputMode="decimal" value={d.max} onChange={(e) => set("max", e.target.value)} /></div>
-              <div className="space-y-1"><Label htmlFor="v3r-unit">Unit</Label><Input id="v3r-unit" placeholder={unitHint} value={d.unit} onChange={(e) => set("unit", e.target.value)} /></div>
+              <div className="space-y-1"><Label htmlFor="v3r-unit">Unit</Label><Select value={d.unit || undefined} onValueChange={(v) => set("unit", v)}>
+                <SelectTrigger id="v3r-unit" aria-label="Unit"><SelectValue placeholder="Select unit" /></SelectTrigger>
+                <SelectContent>
+                  {unitOptions.map((u) => <SelectItem key={u} value={u}>{u}{legacyUnit && u === d.unit ? " (non-standard)" : ""}</SelectItem>)}
+                </SelectContent>
+              </Select></div>
             </div>
           )}
           <div className="space-y-1"><Label htmlFor="v3r-targets">Targets (one per line)</Label><Textarea id="v3r-targets" rows={3} value={d.targets} onChange={(e) => set("targets", e.target.value)} /></div>
