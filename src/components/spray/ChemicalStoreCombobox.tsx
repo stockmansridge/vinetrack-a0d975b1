@@ -101,10 +101,7 @@ export function ChemicalStoreCombobox({
           />
           <CommandList
             className="max-h-[min(20rem,var(--radix-popover-content-available-height,20rem))] overflow-y-auto overscroll-contain"
-            onWheel={(e) => {
-              e.stopPropagation();
-              e.currentTarget.scrollTop += e.deltaY;
-            }}
+            onWheel={(e) => e.stopPropagation()}
           >
             <CommandEmpty>No product in the Chemical Store matches that search.</CommandEmpty>
             <CommandGroup>
