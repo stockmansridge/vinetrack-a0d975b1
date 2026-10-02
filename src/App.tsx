@@ -115,6 +115,7 @@ import CanopyImagesPage from "./pages/admin/CanopyImagesPage";
 import GuideContentPage from "./pages/admin/GuideContentPage";
 import GuideContentSectionPage from "./pages/admin/GuideContentSectionPage";
 import BillingGrantsPage from "./pages/admin/BillingGrantsPage";
+import PaidCustomersPage from "./pages/admin/PaidCustomersPage";
 import AccessEntitlementsPage from "./pages/admin/AccessEntitlementsPage";
 import BlockTroubleshooterPage from "./pages/admin/BlockTroubleshooterPage";
 import AdminSupportRequestsPage from "./pages/admin/AdminSupportRequestsPage";
@@ -297,6 +298,7 @@ const App = () => (
                     <Route path="/admin/trips" element={<AdminTripsPage />} />
                     <Route path="/admin/system-admins" element={<SystemAdminsPage />} />
                     <Route path="/admin/billing-grants" element={<BillingGrantsPage />} />
+                    <Route path="/admin/paid-customers" element={<PaidCustomersPage />} />
                     <Route path="/admin/access-entitlements" element={<AccessEntitlementsPage />} />
                     <Route path="/admin/block-troubleshooter" element={<BlockTroubleshooterPage />} />
                     <Route path="/admin/support-requests" element={<AdminSupportRequestsPage />} />
