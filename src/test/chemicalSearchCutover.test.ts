@@ -57,3 +57,18 @@ describe("Chemical Search production cutover", () => {
     expect(page).toContain("canUseInventoryPilot(isSystemAdmin)");
   });
 });
+
+import { parseInventorySummary } from "@/lib/chemicalInventory";
+describe("Inventory & Purchases correction", () => {
+  const lab = readFileSync("src/pages/admin/ChemicalV3LabPage.tsx", "utf8");
+  it("wording and alphabetical order", () => {
+    expect(lab).toContain("Select a chemical to review its stock and purchase history.");
+    expect(lab).not.toMatch(/listed first/);
+    expect(lab).not.toMatch(/Number\(!v3EntryBadge/);
+  });
+  it("tracking_status needs_opening_stock never shows zero", () => {
+    const s = parseInventorySummary({ tracking_status: "needs_opening_stock", stock_status: "out_of_stock", current_quantity: 0 });
+    expect(s.state).toBe("needs_opening_stock");
+    expect(s.quantity).toBeNull();
+  });
+});

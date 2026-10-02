@@ -148,7 +148,11 @@ const n = (v: any) => (v === null || v === undefined || v === "" || !Number.isFi
 
 export function parseInventorySummary(data: any): InventorySummary {
   const r = one(data);
-  const s = String(first(r, "stock_status", "status", "state") ?? "").toLowerCase();
+  // tracking_status = "needs_opening_stock" always wins: stock is not set up yet.
+  const tracking = String(first(r, "tracking_status") ?? "").toLowerCase();
+  const s = tracking === "needs_opening_stock"
+    ? tracking
+    : String(first(r, "stock_status", "status", "state") ?? "").toLowerCase();
   const state = (Object.keys(STOCK_STATE_LABEL) as StockState[]).includes(s as StockState) ? (s as StockState) : null;
   const unknown = state === "needs_opening_stock";
   return {

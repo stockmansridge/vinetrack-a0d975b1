@@ -493,10 +493,10 @@ function InventoryTab() {
   const [sel, setSel] = useState<string | null>(null);
   const q = useQuery({ queryKey: vineyardChemicalsKey(vineyardId), enabled: !!vineyardId, queryFn: () => fetchSavedChemicalsForVineyard(vineyardId!) });
   if (!vineyardId) return <p className="rounded border bg-card p-3 text-sm">Select a vineyard first.</p>;
-  const rows = [...(q.data?.chemicals ?? [])].sort((a: any, b: any) => Number(!v3EntryBadge(a)) - Number(!v3EntryBadge(b)) || String(a.name).localeCompare(String(b.name)));
+  const rows = [...(q.data?.chemicals ?? [])].sort((a: any, b: any) => String(a.name).localeCompare(String(b.name)));
   return (
     <div className="space-y-3 rounded border bg-card p-3" data-testid="v3-inventory-tab">
-      <p className="text-sm text-muted-foreground">Chemical inventory and purchases for {vineyardName ?? "this vineyard"}. Catalogue products are listed first.</p>
+      <p className="text-sm text-muted-foreground">Chemical inventory and purchases for {vineyardName ?? "this vineyard"}. Select a chemical to review its stock and purchase history.</p>
       <Select value={sel ?? undefined} onValueChange={setSel}>
         <SelectTrigger className="max-w-md" aria-label="Vineyard chemical"><SelectValue placeholder={q.isLoading ? "Loading…" : "Choose a chemical"} /></SelectTrigger>
         <SelectContent>{rows.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}{v3EntryBadge(c) ? ` — ${v3EntryBadge(c)!.label}` : ""}</SelectItem>)}</SelectContent>
