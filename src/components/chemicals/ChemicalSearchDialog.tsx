@@ -268,6 +268,9 @@ export function ChemicalSearchDialog(props: ChemicalSearchDialogProps) {
                 </form>
                 {search.isFetching && <p className="text-sm text-muted-foreground">Searching…</p>}
                 {search.error && <Failed text={customerError(search.error, "search")} onRetry={() => search.refetch()} onManual={manual} />}
+                {!jobId && results.length > 0 && (
+                  <p className="font-medium" data-testid="chemical-search-matches">Matches in the VineTrack catalogue</p>
+                )}
                 {!jobId && results.map((r, i) => {
                   const revId = resultRevisionId(r);
                   return (
@@ -276,6 +279,14 @@ export function ChemicalSearchDialog(props: ChemicalSearchDialogProps) {
                     </ProductSummary>
                   );
                 })}
+                {!jobId && results.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground" data-testid="chemical-search-different">
+                    <span>Can't find the right product?</span>
+                    <Button size="sm" variant="ghost" onClick={() => find.mutate()} disabled={find.isPending}>
+                      <Sparkles className="mr-1.5 h-4 w-4" aria-hidden="true" />Find a different product
+                    </Button>
+                  </div>
+                )}
                 {!jobId && searched && search.isSuccess && results.length === 0 && (
                   <div className="space-y-3 rounded-lg border bg-muted/40 p-4" data-testid="chemical-search-miss">
                     <p className="font-medium">{NOT_SEEN_BEFORE}</p>

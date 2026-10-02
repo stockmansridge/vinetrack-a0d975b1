@@ -35,6 +35,29 @@ export async function setFrontLabelImage(revisionId: string, storagePath: string
   await rpc(V3_REVIEW_RPC.setFrontLabel, { p_revision_id: revisionId, p_storage_path: storagePath });
 }
 
+export const V3_MATCH_RPC = "chemical_v3_match_revision_to_catalogue";
+export const MATCH_TOAST = "Matched to existing VineTrack catalogue product.";
+export const MATCH_CONFIRM_TEXT =
+  "The newly discovered revision will be superseded and vineyard chemicals linked to it will be moved to the approved VineTrack catalogue entry.\n\nExisting vineyard operational data and Saved Chemical identity are preserved.";
+export async function matchRevisionToCatalogue(revisionId: string, catalogueProductId: string, note: string | null) {
+  await rpc(V3_MATCH_RPC, { p_revision_id: revisionId, p_catalogue_product_id: catalogueProductId, p_note: note });
+}
+export interface CatalogueMatch { productId: string; revisionId: string | null; name: string | null; manufacturer: string | null; score: number | null; reason: string; confidence: "high" | "possible" }
+const HIGH_REASONS = ["same_product_approved_revision", "same_registration"];
+/** Catalogue match from a review-queue row; null when there's no matched product. */
+export function catalogueMatchOf(row: Row | null | undefined): CatalogueMatch | null {
+  const id = row?.catalogue_match_product_id;
+  const reason = String(row?.catalogue_match_reason ?? "").toLowerCase();
+  if (id == null || !reason) return null;
+  if (!HIGH_REASONS.includes(reason) && reason !== "close_name_manufacturer") return null;
+  return {
+    productId: String(id), revisionId: row?.catalogue_match_revision_id != null ? String(row.catalogue_match_revision_id) : null,
+    name: row?.catalogue_match_name ?? null, manufacturer: row?.catalogue_match_manufacturer ?? null,
+    score: row?.catalogue_match_score != null ? Number(row.catalogue_match_score) : null,
+    reason, confidence: HIGH_REASONS.includes(reason) ? "high" : "possible",
+  };
+}
+
 /** The revision a row of the approved list points to — never looked up elsewhere. */
 export function approvedRevisionId(row: Row): string | null {
   const id = row?.approved_revision_id ?? row?.revision_id ?? row?.id;
