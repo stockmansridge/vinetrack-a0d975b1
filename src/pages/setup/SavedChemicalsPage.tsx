@@ -87,7 +87,9 @@ import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { formatDate } from "@/lib/dateFormat";
 import { ChemicalEditor } from "@/components/chemicals/ChemicalEditorSheet";
 import { ChemicalSearchDialog } from "@/components/chemicals/ChemicalSearchDialog";
-...
+import { ChemicalInventoryPanel } from "@/components/chemicals/ChemicalInventoryPanel";
+import { canUseInventoryPilot, v3EntryBadge } from "@/lib/chemicalInventory";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
 
 // The legacy free-text `chemical_group` column is no longer displayed — the
 // structured resistance group is the single visible authority. The value is
@@ -710,8 +712,8 @@ export default function SavedChemicalsPage() {
         }}
         initial={editing && editing !== "new" ? editing : null}
         initialName={
-          editing === "new" && typeof restoredDraft?.searchText === "string"
-            ? (restoredDraft.searchText as string)
+          editing === "new"
+            ? (typeof restoredDraft?.searchText === "string" ? (restoredDraft.searchText as string) : manualName ?? undefined)
             : undefined
         }
         restoredDraft={editing === "new" ? restoredDraft : null}
