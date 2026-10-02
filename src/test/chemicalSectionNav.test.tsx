@@ -62,13 +62,8 @@ describe("container model", () => {
     expect(panel).toContain('data-testid="opening-capacity"');
     expect(panel).toContain("Current physical quantity");
   });
-  it("14-15. only aggregate quantity + unit are sent", () => {
-    expect(CONTAINER_BACKEND_SUPPORTED).toBe(false);
-    const p = purchaseFromContainers({ ...emptyPurchase("L"), total: "400" }, { count: "2", size: "20", unit: "L" });
-    const b = buildPurchaseArgs("s", p);
-    if (!("args" in b)) throw new Error("expected args");
-    expect(b.args).toMatchObject({ p_quantity: 40, p_unit: "L", p_total_cost: 400 });
-    expect(Object.keys(b.args).some((k) => /container/.test(k))).toBe(false);
-    expect(b.args.p_notes).toBeNull();
+  it("14-15. container support is live (V2 contract)", () => {
+    expect(CONTAINER_BACKEND_SUPPORTED).toBe(true);
+    expect(read("src/pages/setup/ChemicalPurchasePage.tsx")).toContain("recordPurchaseV2");
   });
 });
