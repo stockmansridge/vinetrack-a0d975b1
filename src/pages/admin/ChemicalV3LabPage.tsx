@@ -10,6 +10,7 @@ import { v3EntryBadge } from "@/lib/chemicalInventory";
 import {
   APPROVED_TOAST, DECISIONS_REQUIRED, approvedRevisionId, fetchApprovedCatalogue, fetchReviewIssues,
   findSavedForV3, vineyardChemicalsKey, approvalPanelFor, isDecisionsRefusal, isPendingQueueRow, outstandingWithoutIssue,
+  labelFingerprintView,
 } from "@/lib/chemicalV3Review";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Camera, ExternalLink, FlaskConical, Search } from "lucide-react";
