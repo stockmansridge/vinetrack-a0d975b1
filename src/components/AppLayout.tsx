@@ -29,6 +29,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { ELStagesButton } from "@/components/ELStagesButton";
 import { DemoModeToggle } from "@/components/DemoModeToggle";
 import { SupportAlertPill } from "@/components/support/SupportAlertPill";
+import { ChemicalReviewAlertPill } from "@/components/chemicals/ChemicalReviewAlertPill";
 import { useCurrentProfile, displayNameFor } from "@/hooks/useCurrentProfile";
 import { ProfileDialog } from "@/components/ProfileDialog";
 import { GlobalSearch } from "@/components/GlobalSearch";
@@ -154,6 +155,7 @@ export default function AppLayout() {
                 <Search className="h-4 w-4" />
               </Button>
               <SupportAlertPill />
+              <ChemicalReviewAlertPill />
               <DemoModeToggle />
               <ELStagesButton />
               <ThemeToggle />
