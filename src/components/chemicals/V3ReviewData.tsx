@@ -58,13 +58,28 @@ export function VineyardUseCard({ use }: { use: Row }) {
   );
 }
 
-export function RateOptionCard({ option }: { option: Row }) {
+export interface RateEditHandlers {
+  onEdit: (option: Row) => void;
+  onDelete: (option: Row) => void;
+  disabled?: boolean;
+}
+
+export function RateOptionCard({ option, edit }: { option: Row; edit?: RateEditHandlers }) {
   const targets = textList(pick(option, "targets", "target"));
   const methods = textOf(pick(option, "methods", "method"));
   const condition = textOf(pick(option, "condition", "conditions"));
+  const hasId = pick(option, "id", "option_id") != null;
   return (
     <div className="space-y-1 rounded border p-2" data-testid="v3-rate-card">
-      <div className="text-base font-semibold">{formatRateOption(option)}</div>
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-base font-semibold">{formatRateOption(option)}</div>
+        {edit && (
+          <div className="flex shrink-0 gap-1">
+            <Button size="sm" variant="outline" className="h-7" disabled={edit.disabled} onClick={() => edit.onEdit(option)}>Edit</Button>
+            <Button size="sm" variant="outline" className="h-7 text-destructive" disabled={edit.disabled || !hasId} onClick={() => edit.onDelete(option)}>Delete</Button>
+          </div>
+        )}
+      </div>
       {targets.length > 0 && <TargetList targets={targets} />}
       {methods && <div className="text-xs font-medium">{methods}</div>}
       {condition && <div className="text-xs text-muted-foreground">{condition}</div>}
@@ -72,12 +87,17 @@ export function RateOptionCard({ option }: { option: Row }) {
   );
 }
 
-export function RateColumn({ title, items, testId }: { title: string; items: Row[]; testId?: string }) {
+export function RateColumn({ title, items, testId, edit, onAdd, addLabel }: {
+  title: string; items: Row[]; testId?: string; edit?: RateEditHandlers; onAdd?: () => void; addLabel?: string;
+}) {
   return (
     <div className="space-y-1" data-testid={testId}>
-      <div className="text-sm font-medium">{title} ({items.length})</div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm font-medium">{title} ({items.length})</div>
+        {onAdd && <Button size="sm" variant="outline" className="h-7" disabled={edit?.disabled} onClick={onAdd}>{addLabel ?? "+ Add rate"}</Button>}
+      </div>
       {items.length === 0 ? <p className="text-xs text-muted-foreground">None extracted</p> : (
-        <div className="space-y-2">{items.map((o, i) => <RateOptionCard key={pick(o, "id", "option_id") ?? i} option={o} />)}</div>
+        <div className="space-y-2">{items.map((o, i) => <RateOptionCard key={pick(o, "id", "option_id") ?? i} option={o} edit={edit} />)}</div>
       )}
     </div>
   );

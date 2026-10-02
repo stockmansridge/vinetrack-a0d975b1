@@ -240,3 +240,108 @@ export function formatRateOption(o: Row): string {
   if (value != null) return `${value}${u}`;
   return textOf(pick(o, "raw_text", "rate_text", "text")) || "Rate not stated";
 }
+
+// ---- Admin rate editing (System Admin, pending / needs-attention revisions) ----
+export const V3_RATE_RPC = {
+  save: "chemical_v3_admin_save_rate_option",
+  remove: "chemical_v3_admin_delete_rate_option",
+} as const;
+export const V3_EDITABLE_STATUSES = ["pending_review", "needs_attention"];
+export type V3RateBasis = "per_hectare" | "per_100_litres";
+export interface V3RateDraft {
+  optionId: string | null;
+  basis: V3RateBasis;
+  rateType: "single" | "range";
+  value: string;
+  min: string;
+  max: string;
+  unit: string;
+  targets: string;
+  method: string;
+  condition: string;
+  notes: string;
+}
+
+export function isV3RevisionEditable(status: unknown): boolean {
+  return V3_EDITABLE_STATUSES.includes(String(status ?? "").toLowerCase());
+}
+
+export function basisOfOption(o: Row, fallback: V3RateBasis): V3RateBasis {
+  const b = String(pick(o, "basis", "rate_basis", "unit_basis") ?? "").toLowerCase();
+  if (/100\s*l|per_100/.test(b)) return "per_100_litres";
+  if (/ha|hectare/.test(b)) return "per_hectare";
+  return fallback;
+}
+
+export function emptyRateDraft(basis: V3RateBasis): V3RateDraft {
+  return { optionId: null, basis, rateType: "single", value: "", min: "", max: "", unit: "", targets: "", method: "", condition: "", notes: "" };
+}
+
+export function draftFromOption(o: Row, fallback: V3RateBasis): V3RateDraft {
+  const min = pick(o, "min_value", "rate_min");
+  const max = pick(o, "max_value", "rate_max");
+  const range = min != null || max != null;
+  const s = (v: unknown) => (v == null ? "" : String(v));
+  return {
+    optionId: s(pick(o, "id", "option_id")) || null,
+    basis: basisOfOption(o, fallback),
+    rateType: range ? "range" : "single",
+    value: s(pick(o, "value", "rate_value")),
+    min: s(min),
+    max: s(max),
+    unit: textOf(pick(o, "unit", "rate_unit")),
+    targets: textList(pick(o, "targets", "target")).join("\n"),
+    method: textOf(pick(o, "methods", "method")),
+    condition: textOf(pick(o, "condition", "conditions")),
+    notes: textOf(pick(o, "raw_text", "rate_text", "notes")),
+  };
+}
+
+const num = (s: string): number | null => {
+  const t = s.trim();
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : NaN;
+};
+
+/** Validates and builds RPC args exactly as entered — never calculates or converts. */
+export function buildRateOptionArgs(revisionId: string, d: V3RateDraft): { args: Row } | { error: string } {
+  if (!d.unit.trim()) return { error: "Unit is required." };
+  let value: number | null = null, min: number | null = null, max: number | null = null;
+  if (d.rateType === "single") {
+    value = num(d.value);
+    if (value == null || Number.isNaN(value)) return { error: "Enter a numeric rate." };
+  } else {
+    min = num(d.min); max = num(d.max);
+    if (min == null || max == null || Number.isNaN(min) || Number.isNaN(max)) return { error: "Enter numeric minimum and maximum." };
+    if (min > max) return { error: "Minimum cannot be greater than maximum." };
+  }
+  const targets = d.targets.split(/\n|,/).map((t) => t.trim()).filter(Boolean);
+  return {
+    args: {
+      p_revision_id: revisionId,
+      p_option_id: d.optionId,
+      p_basis: d.basis,
+      p_value: value,
+      p_min_value: min,
+      p_max_value: max,
+      p_unit: d.unit.trim(),
+      p_targets: targets,
+      p_method: d.method.trim() || null,
+      p_condition: d.condition.trim() || null,
+      p_raw_text: d.notes.trim() || null,
+    },
+  };
+}
+
+export async function saveV3RateOption(revisionId: string, d: V3RateDraft): Promise<void> {
+  const built = buildRateOptionArgs(revisionId, d);
+  if ("error" in built) throw new Error(built.error);
+  const { error } = await sb.rpc(V3_RATE_RPC.save, built.args);
+  if (error) throw error;
+}
+
+export async function deleteV3RateOption(revisionId: string, optionId: string): Promise<void> {
+  const { error } = await sb.rpc(V3_RATE_RPC.remove, { p_revision_id: revisionId, p_option_id: optionId });
+  if (error) throw error;
+}
