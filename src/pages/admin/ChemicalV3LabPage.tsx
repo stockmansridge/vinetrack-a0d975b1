@@ -1,6 +1,15 @@
 // Chemical Lookup V3 Lab — System Admin prototype. Independent of the Master
 // catalogue, Chemical Search V1/V2 and vineyard saved chemicals.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { V3ReviewDecisions } from "@/components/chemicals/V3ReviewDecisions";
+import { ChemicalInventoryPanel } from "@/components/chemicals/ChemicalInventoryPanel";
+import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
+import { v3EntryBadge } from "@/lib/chemicalInventory";
+import {
+  APPROVED_TOAST, DECISIONS_REQUIRED, approvedRevisionId, fetchApprovedCatalogue, fetchReviewIssues,
+  findSavedForV3, vineyardChemicalsKey, isDecisionsRefusal, isPendingQueueRow, outstandingWithoutIssue,
+} from "@/lib/chemicalV3Review";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Camera, ExternalLink, FlaskConical, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { RateColumn, V3DataSummary, V3Warnings, VineyardUseCard, type RateEditHandlers } from "@/components/chemicals/V3ReviewData";
+import { RateColumn, V3DataSummary, V3Warnings, VineyardUsesSection, type RateEditHandlers } from "@/components/chemicals/V3ReviewData";
 import { V3RateEditor } from "@/components/chemicals/V3RateEditor";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { useAuth } from "@/context/AuthContext";
@@ -197,20 +206,36 @@ function CategoryField({ row, options, editable, busy, onChange, msg }: {
   );
 }
 
-function ReviewSheet({ revisionId, onClose }: { revisionId: string | null; onClose: () => void }) {
+function ReviewSheet({ revisionId, onClose, onApproved }: { revisionId: string | null; onClose: () => void; onApproved?: () => void }) {
   const qc = useQueryClient();
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
+  const [needDecisions, setNeedDecisions] = useState(false);
+  const [invOpen, setInvOpen] = useState(false);
+  const decisionsRef = useRef<HTMLElement>(null);
   const q = useQuery({ queryKey: ["chemical-v3-revision", revisionId], enabled: !!revisionId, queryFn: () => fetchV3Revision(revisionId!) });
-  useEffect(() => { setNote(""); setMsg(null); }, [revisionId]);
+  const issuesQ = useQuery({ queryKey: ["chemical-v3-issues", revisionId], enabled: !!revisionId, queryFn: () => fetchReviewIssues(revisionId!) });
+  useEffect(() => { setNote(""); setMsg(null); setNeedDecisions(false); setInvOpen(false); }, [revisionId]);
   const act = useMutation({
     mutationFn: async (kind: "approve" | "reject") => (kind === "approve" ? approveV3(revisionId!, note) : rejectV3(revisionId!, note)),
     onSuccess: (_d, kind) => {
-      setMsg({ tone: "ok", text: kind === "approve" ? "Approved." : "Rejected." });
       qc.invalidateQueries({ queryKey: ["chemical-v3-queue"] });
+      qc.invalidateQueries({ queryKey: ["chemical-v3-approved"] });
       qc.invalidateQueries({ queryKey: ["chemical-v3-revision", revisionId] });
+      if (kind === "approve") { toast.success(APPROVED_TOAST); onApproved?.(); setMsg(null); }
+      else setMsg({ tone: "ok", text: "Rejected." });
     },
-    onError: (e: any) => setMsg({ tone: "err", text: e?.message ?? "The backend refused this action." }),
+    onError: (e: any, kind) => {
+      if (kind === "approve" && isDecisionsRefusal(e)) {
+        setNeedDecisions(true);
+        setMsg({ tone: "err", text: DECISIONS_REQUIRED });
+        qc.invalidateQueries({ queryKey: ["chemical-v3-issues", revisionId] });
+        decisionsRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+        decisionsRef.current?.focus?.();
+        return;
+      }
+      setMsg({ tone: "err", text: e?.message ?? "The backend refused this action." });
+    },
   });
   const { isAdmin } = useIsSystemAdmin();
   const [draft, setDraft] = useState<V3RateDraft | null>(null);
@@ -232,6 +257,11 @@ function ReviewSheet({ revisionId, onClose }: { revisionId: string | null; onClo
   });
   const cats = useCategories();
   const { vineyardId, vineyardName } = usePilotVineyard();
+  const savedQ = useQuery({
+    queryKey: vineyardChemicalsKey(vineyardId),
+    enabled: !!vineyardId && canUseInventoryPilot(isAdmin) && !!revisionId,
+    queryFn: () => fetchSavedChemicalsForVineyard(vineyardId!),
+  });
   const [catMsg, setCatMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   useEffect(() => { setCatMsg(null); }, [revisionId]);
   const catMut = useMutation({
@@ -255,6 +285,8 @@ function ReviewSheet({ revisionId, onClose }: { revisionId: string | null; onClo
   const uses = asList(pick(r, "vineyard_uses", "uses"));
   const warnings = asList(pick(r, "warnings"));
   const unresolved = asList(pick(r, "unresolved_fields"));
+  const outstanding = outstandingWithoutIssue(unresolved, issuesQ.data ?? []);
+  const linkedSaved = canUseInventoryPilot(isAdmin) ? findSavedForV3(savedQ.data?.chemicals ?? [], r) : null;
   const labelUrl = pick(r, "manufacturer_label_url");
   const status = String(pick(r, "review_status", "status") ?? "").toLowerCase();
   const canEdit = isAdmin && !!revisionId && isV3RevisionEditable(status);
@@ -288,8 +320,19 @@ function ReviewSheet({ revisionId, onClose }: { revisionId: string | null; onClo
                 ) : <Badge className="border-transparent bg-destructive/15 text-destructive">Manufacturer label missing</Badge>}
               </div>
               {canUseInventoryPilot(isAdmin) && revisionId && isV3Addable(status) && (
-                <V3AddToVineyardButton revisionId={revisionId} productName={pick(r, "product_name") ?? "this product"} status={status}
-                  vineyardId={vineyardId} vineyardName={vineyardName} />
+                <div className="flex flex-wrap items-start gap-2">
+                  <V3AddToVineyardButton revisionId={revisionId} productName={pick(r, "product_name") ?? "this product"} status={status}
+                    vineyardId={vineyardId} vineyardName={vineyardName} />
+                  {linkedSaved && <Button size="sm" variant="outline" onClick={() => setInvOpen(true)}>Open Inventory / Purchases</Button>}
+                </div>
+              )}
+              {linkedSaved && (
+                <Sheet open={invOpen} onOpenChange={setInvOpen}>
+                  <SheetContent className="w-screen max-w-none overflow-y-auto sm:w-[640px]">
+                    <SheetHeader><SheetTitle>{linkedSaved.name}</SheetTitle></SheetHeader>
+                    <div className="mt-4"><ChemicalInventoryPanel savedChemicalId={String(linkedSaved.id)} /></div>
+                  </SheetContent>
+                </Sheet>
               )}
             </SheetHeader>
             <div className="flex flex-col gap-4 md:flex-row">
@@ -315,12 +358,10 @@ function ReviewSheet({ revisionId, onClose }: { revisionId: string | null; onClo
               </div>
             </div>
             <V3DataSummary uses={uses.length} perHa={rates.perHa.length} per100L={rates.per100L.length} />
-            <V3Warnings warnings={warnings} />
-            <section className="space-y-2">
-              <h3 className="font-semibold">Vineyard uses</h3>
-              {uses.length ? <div className="space-y-2">{uses.map((u, i) => <VineyardUseCard key={i} use={u} />)}</div> : <p className="text-sm text-muted-foreground">None extracted</p>}
-            </section>
-            <section className="space-y-2">
+            {issuesQ.error && warnings.length > 0 && <V3Warnings warnings={warnings} />}
+            <V3ReviewDecisions ref={decisionsRef} revisionId={revisionId!} issues={issuesQ.data ?? []}
+              loading={issuesQ.isLoading} error={(issuesQ.error as Error) ?? null} highlight={needDecisions} />
+            <section className="space-y-2 rounded border bg-card p-3" data-testid="v3-rates-section">
               <h3 className="font-semibold">Vineyard rates</h3>
               {rateMsg && <p className={cn("text-sm", rateMsg.tone === "err" ? "text-destructive" : "text-success")}>{rateMsg.text}</p>}
               <div className="grid gap-3 md:grid-cols-2">
@@ -334,10 +375,13 @@ function ReviewSheet({ revisionId, onClose }: { revisionId: string | null; onClo
                 onCancel={() => { setDraft(null); setRateErr(null); }}
                 onSave={(d) => rateMut.mutate({ kind: "save", draft: d })} />
             )}
-            <section className={cn("rounded border p-2", unresolved.length ? STATUS_CLASS.review : STATUS_CLASS.na)}>
-              <h3 className="font-semibold">Outstanding / unresolved fields</h3>
-              {unresolved.length ? <ul className="list-disc pl-5 text-sm">{unresolved.map((w, i) => <li key={i}>{labelOf(w)}</li>)}</ul> : <p className="text-sm">None</p>}
-            </section>
+            <VineyardUsesSection uses={uses} />
+            {outstanding.length > 0 && (
+              <section className={cn("rounded border p-2", STATUS_CLASS.review)} data-testid="v3-outstanding">
+                <h3 className="font-semibold">Outstanding fields</h3>
+                <ul className="list-disc pl-5 text-sm">{outstanding.map((w, i) => <li key={i}>{w}</li>)}</ul>
+              </section>
+            )}
             <section className="space-y-2 border-t pt-3">
               <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Review note (required to reject)" aria-label="Review note" />
               {msg && <p className={cn("text-sm", msg.tone === "err" ? "text-destructive" : "text-success")}>{msg.text}</p>}
@@ -358,12 +402,12 @@ function ReviewQueue({ onOpen }: { onOpen: (id: string) => void }) {
   const q = useQuery({ queryKey: ["chemical-v3-queue"], queryFn: v3ReviewQueue });
   if (q.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (q.error) return <p className="text-sm text-destructive">{(q.error as Error).message}</p>;
-  const rows = q.data ?? [];
-  if (!rows.length) return <p className="text-sm text-muted-foreground">Nothing waiting for review.</p>;
+  const rows = (q.data ?? []).filter(isPendingQueueRow);
+  if (!rows.length) return <p className="rounded border bg-card p-3 text-sm text-muted-foreground">Nothing waiting for review.</p>;
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto rounded border bg-card">
       <table className="w-full text-sm">
-        <thead className="text-left text-xs text-muted-foreground"><tr>
+        <thead className="bg-card text-left text-xs text-muted-foreground"><tr>
           {["Product", "Manufacturer", "Country", "Category", "Core complete", "Vineyard rates", "Manufacturer label", "Front label", "Warnings", "Unresolved", "Age"].map((h) => <th key={h} className="p-2">{h}</th>)}
         </tr></thead>
         <tbody>{rows.map((r) => {
@@ -371,7 +415,7 @@ function ReviewQueue({ onOpen }: { onOpen: (id: string) => void }) {
           const created = pick(r, "created_at");
           const age = created ? `${Math.max(0, Math.round((Date.now() - new Date(created).getTime()) / 86_400_000))} d` : "—";
           return (
-            <tr key={id} className="cursor-pointer border-t hover:bg-muted/50" onClick={() => onOpen(id)}>
+            <tr key={id} className={SOLID_ROW} data-testid="v3-review-row" onClick={() => onOpen(id)}>
               <td className="p-2 font-medium">{pick(r, "product_name") ?? "—"}</td>
               <td className="p-2">{pick(r, "manufacturer") ?? "—"}</td>
               <td className="p-2">{pick(r, "country_code", "country") ?? "—"}</td>
@@ -391,8 +435,65 @@ function ReviewQueue({ onOpen }: { onOpen: (id: string) => void }) {
   );
 }
 
+const SOLID_ROW = "cursor-pointer border-t bg-card hover:bg-muted";
+
+function ApprovedList({ onOpen }: { onOpen: (id: string) => void }) {
+  const cats = useCategories();
+  const q = useQuery({ queryKey: ["chemical-v3-approved"], queryFn: fetchApprovedCatalogue });
+  if (q.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (q.error) return <p className="text-sm text-destructive">{(q.error as Error).message}</p>;
+  const rows = q.data ?? [];
+  if (!rows.length) return <p className="rounded border bg-card p-3 text-sm text-muted-foreground">No approved V3 products yet.</p>;
+  const date = (v: any) => (v ? new Date(v).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }) : "—");
+  return (
+    <div className="overflow-x-auto rounded border bg-card">
+      <table className="w-full text-sm" data-testid="v3-approved-table">
+        <thead className="bg-card text-left text-xs text-muted-foreground"><tr>
+          {["Product", "Manufacturer", "Country", "Category", "Resistance group", "Approved date", "Last verified", "Warnings", "Front label"].map((h) => <th key={h} className="p-2">{h}</th>)}
+        </tr></thead>
+        <tbody>{rows.map((r, i) => {
+          const id = approvedRevisionId(r);
+          return (
+            <tr key={id ?? i} className={SOLID_ROW} data-testid="v3-approved-row" onClick={() => id && onOpen(id)}>
+              <td className="p-2 font-medium">{pick(r, "product_name") ?? "—"}</td>
+              <td className="p-2">{pick(r, "manufacturer", "registrant") ?? "—"}</td>
+              <td className="p-2">{pick(r, "country_code", "country") ?? "—"}</td>
+              <td className="p-2">{v3CategoryLabel(r, cats.data) ?? "—"}</td>
+              <td className="p-2"><V3ResistanceBadge row={r} /></td>
+              <td className="p-2">{date(pick(r, "approved_at"))}</td>
+              <td className="p-2">{date(pick(r, "last_verified_at"))}</td>
+              <td className="p-2">{asList(pick(r, "warnings")).length || pick(r, "warning_count") || 0}</td>
+              <td className="p-2"><Thumb path={pick(r, "front_label_image_path")} className="h-10 w-10" /></td>
+            </tr>
+          );
+        })}</tbody>
+      </table>
+    </div>
+  );
+}
+
+function InventoryTab() {
+  const { vineyardId, vineyardName } = usePilotVineyard();
+  const [sel, setSel] = useState<string | null>(null);
+  const q = useQuery({ queryKey: vineyardChemicalsKey(vineyardId), enabled: !!vineyardId, queryFn: () => fetchSavedChemicalsForVineyard(vineyardId!) });
+  if (!vineyardId) return <p className="rounded border bg-card p-3 text-sm">Select a vineyard first.</p>;
+  const rows = [...(q.data?.chemicals ?? [])].sort((a: any, b: any) => Number(!v3EntryBadge(a)) - Number(!v3EntryBadge(b)) || String(a.name).localeCompare(String(b.name)));
+  return (
+    <div className="space-y-3 rounded border bg-card p-3" data-testid="v3-inventory-tab">
+      <p className="text-sm text-muted-foreground">Chemical inventory and purchases for {vineyardName ?? "this vineyard"}. V3 products are listed first.</p>
+      <Select value={sel ?? undefined} onValueChange={setSel}>
+        <SelectTrigger className="max-w-md" aria-label="Vineyard chemical"><SelectValue placeholder={q.isLoading ? "Loading…" : "Choose a chemical"} /></SelectTrigger>
+        <SelectContent>{rows.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}{v3EntryBadge(c) ? ` — ${v3EntryBadge(c)!.label}` : ""}</SelectItem>)}</SelectContent>
+      </Select>
+      {sel && <ChemicalInventoryPanel savedChemicalId={sel} />}
+    </div>
+  );
+}
+
 export default function ChemicalV3LabPage() {
   const { user } = useAuth();
+  const { isAdmin } = useIsSystemAdmin();
+  const [tab, setTab] = useState("search");
   const { currentCountry } = useVineyard();
   const [country, setCountry] = useState<string | null>(resolveVineyardCountry(currentCountry) ?? null);
   const [query, setQuery] = useState("");
@@ -437,11 +538,13 @@ export default function ChemicalV3LabPage() {
         <h1 className="flex items-center gap-2 text-2xl font-semibold"><FlaskConical className="h-6 w-6" />Chemical Lookup V3</h1>
         <p className="text-sm text-muted-foreground">Prototype lab. Separate from the Master Catalogue and the customer Chemical Store.</p>
       </div>
-      <Tabs defaultValue="search">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="search">Search</TabsTrigger>
           <TabsTrigger value="photo">Search by Photo</TabsTrigger>
           <TabsTrigger value="review">Pending Review</TabsTrigger>
+          <TabsTrigger value="approved">Approved</TabsTrigger>
+          {canUseInventoryPilot(isAdmin) && <TabsTrigger value="inventory">Inventory &amp; Purchases</TabsTrigger>}
         </TabsList>
         <TabsContent value="search" className="space-y-4">
           <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (query.trim()) setSearched(query.trim()); }}>
@@ -456,7 +559,7 @@ export default function ChemicalV3LabPage() {
               onView={() => { const id = pick(r, "revision_id", "current_revision_id", "approved_revision_id"); if (id) setOpenRevision(String(id)); }} />
           ))}
           {searched && search.isSuccess && approved.length === 0 && (
-            <div className="space-y-2 rounded border p-4">
+            <div className="space-y-2 rounded border bg-card p-4">
               <p>We haven't seen this product before.</p>
               <Button onClick={() => find.mutate()} disabled={find.isPending}>Find this product</Button>
             </div>
@@ -472,6 +575,8 @@ export default function ChemicalV3LabPage() {
           <p className="text-xs text-muted-foreground">The photo is stored privately; product recognition is done by the V3 backend.</p>
         </TabsContent>
         <TabsContent value="review"><ReviewQueue onOpen={setOpenRevision} /></TabsContent>
+        <TabsContent value="approved"><ApprovedList onOpen={setOpenRevision} /></TabsContent>
+        {canUseInventoryPilot(isAdmin) && <TabsContent value="inventory"><InventoryTab /></TabsContent>}
       </Tabs>
       {notice && <div className="flex items-center gap-2 rounded border border-warning/50 bg-warning/10 p-3 text-sm"><AlertTriangle className="h-4 w-4" />{notice}</div>}
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -481,7 +586,9 @@ export default function ChemicalV3LabPage() {
           <Button size="sm" variant="ghost" onClick={() => { setJobId(null); setNotice(null); }}>Dismiss</Button>
         </div>
       )}
-      <ReviewSheet revisionId={openRevision} onClose={() => setOpenRevision(null)} />
+      <ReviewSheet revisionId={openRevision} onClose={() => setOpenRevision(null)}
+        onApproved={() => { setTab("approved"); if (jobId) { setJobId(null); setNotice(null); } }} />
+
     </div>
   );
 }

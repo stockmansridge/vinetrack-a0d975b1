@@ -132,6 +132,25 @@ export function RateColumn({ title, items, testId, edit, onAdd, addLabel }: {
   );
 }
 
+/** Whole Vineyard uses section — collapsed by default so the cards are not rendered until asked. */
+export function VineyardUsesSection({ uses }: { uses: Row[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="space-y-2 rounded border bg-card p-3" data-testid="v3-uses-section">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold">Vineyard uses ({uses.length})</h3>
+        {uses.length > 0 && <Button size="sm" variant="outline" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? "Hide" : "Show"}</Button>}
+      </div>
+      {!uses.length && <p className="text-sm text-muted-foreground">None extracted</p>}
+      {open && (
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2" data-testid="v3-uses-grid">
+          {uses.map((u, i) => <VineyardUseCard key={i} use={u} />)}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function V3DataSummary({ uses, perHa, per100L }: { uses: number; perHa: number; per100L: number }) {
   return (
     <div className="flex flex-wrap gap-4 rounded border bg-muted/40 p-2 text-sm" data-testid="v3-data-summary">
