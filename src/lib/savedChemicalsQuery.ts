@@ -173,6 +173,8 @@ export interface SavedChemicalInput {
    * `saved_chemicals.unit` base unit, so `iosUnitFromAny` must never touch it.
    */
   default_rates?: PersistedDefaultRates | null;
+  /** SQL 261 vineyard operational rate. Omitted = untouched, null = cleared. */
+  vineyard_preferred_rate?: Record<string, unknown> | null;
   /* ---- Shared mobile operational columns. Omitted = left untouched. ---- */
   /** Physical form of the product as sold ("liquid" | "solid" | "unknown"). */
   product_form?: string | null;
@@ -192,6 +194,7 @@ const ALLOWED_FIELDS: (keyof SavedChemicalInput)[] = [
   "label_url", "product_url", "purchase",
   "master_chemical_id", "master_source_revision",
   "default_rates",
+  "vineyard_preferred_rate",
   "resistance_classification_state",
   // Mobile operational fields. Without these the editor's controls would be
   // shown and then silently dropped on save.
@@ -220,7 +223,7 @@ function sanitize(input: SavedChemicalInput, mode: "insert" | "update" = "insert
     // Omitted means "leave the column alone" — critical for default_rates so a
     // commercial-only edit can never wipe a persisted operator default.
     if (v === undefined) continue;
-    if (k === "default_rates") {
+    if (k === "default_rates" || k === "vineyard_preferred_rate") {
       // Canonical JSON passes through untouched: no trimming, no unit
       // coercion, no basis rewriting (wire basis stays per_100_litres).
       out[k] = v;

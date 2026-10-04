@@ -1,3 +1,4 @@
+import { decodeVineyardPreferredRate, type VineyardPreferredRate } from "@/lib/vineyardPreferredRate";
 // SQL 194 Chemical Intelligence — portal READ model.
 //
 // Source of truth: `public.saved_chemicals` on the production VineTrack
@@ -175,6 +176,8 @@ export interface ChemicalIntelligence {
    * stays a legacy compatibility projection.
    */
   defaultRates: PersistedDefaultRates | null;
+  /** SQL 261 vineyard operational rate — never a registered rate. */
+  vineyardPreferredRate: VineyardPreferredRate | null;
   /**
    * SQL 210 — backend-owned resistance classification state. `null` means the
    * backend did not supply it (older row/deployment); it is never inferred.
@@ -650,6 +653,7 @@ export function toChemicalIntelligence(row: Record<string, any>): ChemicalIntell
     },
     labelRateBases: stringList(row.label_rate_bases),
     defaultRates: decodePersistedDefaultRates(row.default_rates),
+    vineyardPreferredRate: decodeVineyardPreferredRate(row.vineyard_preferred_rate),
     // SQL 210 — backend-owned. Absent stays null; never inferred from groups.
     resistanceClassificationState: normaliseResistanceClassificationState(
       row.resistance_classification_state ?? row.resistanceClassificationState,
