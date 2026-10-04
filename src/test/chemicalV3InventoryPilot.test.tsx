@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+vi.mock("@/context/VineyardContext", () => ({ useVineyard: () => ({ currentRole: "owner", selectedVineyardId: "v1", loading: false }) }));
 import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import fs from "node:fs";
