@@ -67,6 +67,14 @@ import {
 
 import { DefaultRatesCard } from "@/components/chemicals/DefaultRatesCard";
 import {
+  PREFERRED_RATE_HELPER,
+  PREFERRED_RATE_UNITS,
+  buildVineyardPreferredRate,
+  decodeVineyardPreferredRate,
+  formatPreferredRate,
+  preferredRateTitle,
+} from "@/lib/vineyardPreferredRate";
+import {
   decodePersistedDefaultRates,
   type CanonicalDefaultRateOption,
   type CanonicalRateBasis,
@@ -228,7 +236,15 @@ export function ChemicalEditor({
   onSaved: (saved: SavedChemical) => void;
 }) {
   const { toast } = useToast();
-  const { currentCountry } = useVineyard();
+  const { currentCountry, memberships } = useVineyard();
+  const editorVineyardName =
+    memberships.find((m) => m.vineyard_id === vineyardId)?.vineyard_name ?? null;
+  // SQL 261 Vineyard Preferred Rate — separate from default_rates.
+  const [prefValue, setPrefValue] = useState("");
+  const [prefUnit, setPrefUnit] = useState<string>("");
+  const [prefBasis, setPrefBasis] = useState<string>("per_hectare");
+  const [prefNote, setPrefNote] = useState("");
+  const [prefDirty, setPrefDirty] = useState(false);
 
   const [form, setForm] = useState<SavedChemicalInput>(EMPTY);
   const [rateStr, setRateStr] = useState("");
@@ -459,6 +475,14 @@ export function ChemicalEditor({
         manualRateDraftFromSelection(storedDefaults?.per_hectare ?? null) ??
         manualRateDraftFromSelection(storedDefaults?.per_100_litres ?? null);
       setManualRate(storedManualDraft ?? emptyManualRateDraft());
+      const storedPref = initial
+        ? decodeVineyardPreferredRate((initial as any).vineyard_preferred_rate)
+        : null;
+      setPrefValue(storedPref ? String(storedPref.value) : "");
+      setPrefUnit(storedPref?.unit ?? "");
+      setPrefBasis(storedPref?.basis ?? "per_hectare");
+      setPrefNote(storedPref?.note ?? "");
+      setPrefDirty(false);
       // Existing records: only violations introduced in THIS session block a
       // save, so a saved chemical with no typed default rate stays editable.
       setManualBaseline(
@@ -488,6 +512,10 @@ export function ChemicalEditor({
       // in the mutation as well as the UI so no path can persist a manual
       // record that cannot be sprayed.
       if (manualBlocking.length > 0) throw new Error(manualBlocking[0].message);
+      const prefBuild = buildVineyardPreferredRate({
+        value: prefValue, unit: prefUnit, basis: prefBasis, note: prefNote,
+      });
+      if (prefDirty && prefBuild.ok === false) throw new Error(prefBuild.message);
       const restrictions = composeRestrictions({ whpDays: whp, reiHours: rei, rest: restNotes });
       // Re-resolve trust before encoding: a hand-edited critical value can no
       // longer lean on the evidence that certified the previous value.
@@ -567,6 +595,10 @@ export function ChemicalEditor({
                   },
             }
           : {}),
+
+        // Omitted unless edited, so saving before SQL 261 is live (or an
+        // unrelated edit) never touches the column.
+        ...(prefDirty && prefBuild.ok ? { vineyard_preferred_rate: prefBuild.value as any } : {}),
 
         // Shared mobile operational columns. Written only when the operator
         // actually supplied them, so an unrelated edit never blanks a value
@@ -1214,6 +1246,65 @@ export function ChemicalEditor({
                   />
                 </Section>
               )}
+
+              <Section title={preferredRateTitle(editorVineyardName)}>
+                <div className="space-y-2">
+                  <p className="text-[11px] text-muted-foreground">{PREFERRED_RATE_HELPER}</p>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Amount</Label>
+                      <Input
+                        type="number" min="0" step="0.01" inputMode="decimal"
+                        aria-label="Preferred rate amount"
+                        value={prefValue}
+                        onChange={(e) => { setPrefValue(e.target.value); setPrefDirty(true); }}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Unit</Label>
+                      <Select value={prefUnit || "__none"} onValueChange={(v) => { setPrefUnit(v === "__none" ? "" : v); setPrefDirty(true); }}>
+                        <SelectTrigger aria-label="Preferred rate unit"><SelectValue placeholder="Unit" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">Not set</SelectItem>
+                          {PREFERRED_RATE_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Basis</Label>
+                      <Select value={prefBasis} onValueChange={(v) => { setPrefBasis(v); setPrefDirty(true); }}>
+                        <SelectTrigger aria-label="Preferred rate basis"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="per_hectare">Per hectare</SelectItem>
+                          <SelectItem value="per_100_litres">Per 100 L</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <Input
+                    placeholder="Short note (optional)"
+                    aria-label="Preferred rate note"
+                    value={prefNote}
+                    maxLength={200}
+                    onChange={(e) => { setPrefNote(e.target.value); setPrefDirty(true); }}
+                  />
+                  {prefValue.trim() !== "" && (
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-muted-foreground">
+                        {formatPreferredRate(
+                          (() => { const b = buildVineyardPreferredRate({ value: prefValue, unit: prefUnit, basis: prefBasis }); return b.ok ? b.value : null; })(),
+                        ) ?? "Choose a unit to complete the preferred rate."}
+                      </span>
+                      <Button
+                        type="button" size="sm" variant="ghost"
+                        onClick={() => { setPrefValue(""); setPrefUnit(""); setPrefNote(""); setPrefDirty(true); }}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </Section>
 
               {/* Manual entry never asks the operator to recreate the label's
                   structured Grapevine uses & rates: the section is hidden unless

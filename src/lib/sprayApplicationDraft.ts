@@ -102,6 +102,7 @@ import {
   confirmedSprayPrefill,
   confirmedSprayRangeGuidance,
 } from "@/lib/chemicalDefaultRateHandoff";
+import { productRateBasisForPreferred } from "@/lib/vineyardPreferredRate";
 
 export function productLineFromChemical(args: {
   savedChemicalId: string | null;
@@ -122,7 +123,16 @@ export function productLineFromChemical(args: {
   // Rate prefill (release contract §1/§2): ONLY a single confirmed basis with an
   // explicit scalar amount may prefill, paired with the CONFIRMED label-rate
   // unit. Ranges, label rates, rate_per_ha and inventory units never prefill.
-  const prefill = confirmedSprayPrefill(intel?.defaultRates ?? null);
+  // Priority 2: the vineyard's own preferred rate beats any registered default.
+  const preferred = intel?.vineyardPreferredRate ?? null;
+  const prefill = preferred
+    ? {
+        rate: preferred.value,
+        unit: preferred.unit as string,
+        rateBasis: productRateBasisForPreferred(preferred.basis),
+        entryMethod: "vineyard_preferred" as const,
+      }
+    : confirmedSprayPrefill(intel?.defaultRates ?? null);
   // A confirmed RANGE (canonical or user-entered) never prefills a dose: it is
   // shown as guidance and the operator must choose the dose inside it. The
   // saved Chemical Store range is never rewritten by that choice.
@@ -138,6 +148,7 @@ export function productLineFromChemical(args: {
     labelRateUnit: range ? range.unit : null,
     rateEntryMethod:
       prefill?.entryMethod === "manual" ? "manual" : range ? "manual" : null,
+    rateSource: preferred ? "vineyard_preferred" : null,
     activityGroups,
     verificationStatus: (intel?.verification.status ?? "unverified") as WriteVerificationStatus,
     intelligence: intel,

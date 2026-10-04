@@ -358,6 +358,8 @@ export interface SprayProductLine {
   chemistryStamp?: JobChemistryStamp | null;
   costPerUnit?: number | null;
   notes?: string | null;
+  /** UI-only provenance of the current rate; never persisted. */
+  rateSource?: "vineyard_preferred" | null;
 }
 
 /* ---------------------------------------------------------- application */
