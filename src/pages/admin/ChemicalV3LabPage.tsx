@@ -472,7 +472,7 @@ export function ReviewQueue({ onOpen }: { onOpen: (id: string, jobId?: string | 
     <div className="overflow-x-auto rounded border bg-card">
       <table className="w-full text-sm">
         <thead className="bg-card text-left text-xs text-muted-foreground"><tr>
-          {["Product", "Manufacturer", "Country", "Category", "Core complete", "Vineyard rates", "Manufacturer label", "Front label", "Warnings", "Unresolved", "Age", "Actions"].map((h) => <th key={h} className="p-2">{h}</th>)}
+          {["Product", "Manufacturer", "Country", "Category", "Core complete", "Vineyard rates", "Manufacturer label", "Front label", "Warnings", "Unresolved", "Age", "Added by"].map((h) => <th key={h} className="p-2">{h}</th>)}
         </tr></thead>
         <tbody>{rows.map((r) => {
           const id = String(pick(r, "revision_id", "id"));
@@ -494,10 +494,21 @@ export function ReviewQueue({ onOpen }: { onOpen: (id: string, jobId?: string | 
               <td className="p-2">{asList(pick(r, "unresolved_fields")).length || pick(r, "unresolved_count") || 0}</td>
               <td className="p-2">{age}</td>
               <td className="p-2" data-testid="v3-row-actions">
+                {(() => {
+                  const who = pick(r, "requested_by_name", "requester_name", "created_by_name", "user_name", "requested_by_email", "requester_email", "created_by_email", "user_email");
+                  const vy = pick(r, "vineyard_name", "requested_vineyard_name", "source_vineyard_name");
+                  if (!who && !vy) return null;
+                  return (
+                    <div className="mb-1 leading-tight" data-testid="v3-row-added-by">
+                      <div className="font-medium">{who ?? "Unknown user"}</div>
+                      <div className="text-xs text-muted-foreground">{vy ?? "No vineyard"}</div>
+                    </div>
+                  );
+                })()}
                 {canReSearch(isAdmin, status, jid ? String(jid) : null) ? (
                   <V3ReSearchButton jobId={String(jid)} revisionId={id} prominent={false} label="Re-search"
                     onNewRevision={(next) => onOpen(next, String(jid))} />
-                ) : "—"}
+                ) : (pick(r, "requested_by_name", "requester_name", "created_by_name", "user_name", "requested_by_email", "requester_email", "created_by_email", "user_email", "vineyard_name", "requested_vineyard_name", "source_vineyard_name") ? null : "—")}
               </td>
             </tr>
           );
