@@ -4,17 +4,16 @@
 // call per saved chemical, shared cache key with ChemicalInventoryPanel so the
 // panel's actions refresh this page). Nothing is calculated in the browser.
 //
-// Access: canManageChemicalInventory(selected vineyard role) — Owner/Manager only.
+// Access: canViewChemicalInventory (any vineyard member); costs gated by canViewChemicalInventoryCosts.
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Package } from "lucide-react";
 import { ChemicalSectionNav } from "@/components/chemicals/ChemicalSectionNav";
 import { useVineyard } from "@/context/VineyardContext";
-import { useCanSeeCosts } from "@/lib/permissions";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import {
-  canManageChemicalInventory, fetchInventorySummary, formatMoney, OPENING_STOCK_NOT_SET,
+  canViewChemicalInventory, canViewChemicalInventoryCosts, canManageChemicalInventory, fetchInventorySummary, formatMoney, OPENING_STOCK_NOT_SET,
   STOCK_STATE_LABEL, STOCK_STATE_TONE, type InventorySummary, type StockState,
 } from "@/lib/chemicalInventory";
 import { useV3RevisionDisplay, v3RevisionIdOf } from "@/lib/chemicalV3Display";
@@ -41,13 +40,15 @@ const FILTERS: Array<{ key: FilterKey; label: string }> = [
 
 /** Backend-supplied stock value only — never quantity × cost in the browser. */
 const backendValue = (s?: InventorySummary): number | null => {
+  // Callers only use this when canViewChemicalInventoryCosts is true.
   return s?.estimatedStockValue ?? null;
 };
 
 export default function ChemicalInventoryPage() {
   const { selectedVineyardId, currentRole, loading: vyLoading } = useVineyard();
-  const allowed = canManageChemicalInventory(currentRole);
-  const canSeeCosts = useCanSeeCosts();
+  const allowed = canViewChemicalInventory(currentRole);
+  const canSeeCosts = canViewChemicalInventoryCosts(currentRole);
+  const canManage = canManageChemicalInventory(currentRole);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [q, setQ] = useState("");
   const [openRow, setOpenRow] = useState<any | null>(null);
@@ -80,8 +81,8 @@ export default function ChemicalInventoryPage() {
     s?.state ?? (s && s.tracked !== true ? "needs_opening_stock" : null);
   const count = (k: StockState) => items.filter((x) => stateOf(x.s) === k).length;
   const tracked = items.filter((x) => { const st = stateOf(x.s); return st && st !== "needs_opening_stock"; }).length;
-  const values = items.map((x) => backendValue(x.s)).filter((v): v is number => v !== null);
-  const currency = items.find((x) => x.s?.currency)?.s?.currency ?? "AUD";
+  const values = !canSeeCosts ? [] : items.map((x) => backendValue(x.s)).filter((v): v is number => v !== null);
+  const currency = !canSeeCosts ? "AUD" : items.find((x) => x.s?.currency)?.s?.currency ?? "AUD";
 
   const visible = items.filter(({ c, s }) => {
     if (filter !== "all" && stateOf(s) !== filter) return false;
@@ -91,7 +92,7 @@ export default function ChemicalInventoryPage() {
   });
 
   if (vyLoading && !currentRole) return <p className="text-sm text-muted-foreground">Loading…</p>;
-  if (!allowed) return <Navigate to="/setup/chemicals" replace />;
+  if (!allowed) return <Navigate to="/" replace />;
 
   return (
     <div className="space-y-5">
@@ -149,7 +150,7 @@ export default function ChemicalInventoryPage() {
                   : unknown ? (
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-muted-foreground">{OPENING_STOCK_NOT_SET}</span>
-                      <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setOpenRow(c); }}>Set opening stock</Button>
+                      {canManage && <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setOpenRow(c); }}>Set opening stock</Button>}
                     </div>
                   ) : (
                     <div className="space-y-1">
@@ -171,6 +172,8 @@ export default function ChemicalInventoryPage() {
               <div className="w-40 text-xs text-muted-foreground">
                 <div>{s?.latestPurchaseDate ? `Purchased ${formatDate(new Date(s.latestPurchaseDate))}` : "No purchases"}</div>
                 {s?.latestBatch && <div>Batch {s.latestBatch}</div>}
+                {s?.latestBatchDate && <div>Batch date {formatDate(new Date(s.latestBatchDate))}</div>}
+                {s?.latestSerial && <div>Serial {s.latestSerial}</div>}
               </div>
             </div>
           );

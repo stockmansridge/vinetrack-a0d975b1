@@ -1,5 +1,6 @@
-// Inventory panel for one vineyard chemical. Owner/Manager only
-// (canManageChemicalInventory, applied by the caller). Every action goes through the inventory RPCs and the
+// Inventory panel for one vineyard chemical. Actions split by selected-vineyard
+// role: Owner/Manager everything; Supervisor purchase + history; Operator read-only.
+// Costs only for canViewChemicalInventoryCosts. Every action goes through the inventory RPCs and the
 // panel reloads the database summary afterwards — nothing is calculated here.
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -15,10 +16,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/dateFormat";
 import { useToast } from "@/hooks/use-toast";
+import { useVineyard } from "@/context/VineyardContext";
 import { formFromInventoryUnit, parsePhysicalForm } from "@/lib/chemicalPhysicalForm";
 import {
   DEFAULT_LOW_STOCK_PERCENT, MARK_FINISHED_CONFIRM, OPENING_STOCK_NOT_SET, STOCK_STATE_LABEL, STOCK_STATE_TONE, STOCK_UNITS,
   fetchInventorySummary, fetchPurchaseHistory, formatMoney, markFinished, recordPurchaseV2, recordStocktakeV2, saveInventorySettings,
+  canManageChemicalInventory, canRecordChemicalPurchase, canViewChemicalInventoryCosts,
   type InventorySummary, type PurchaseDraft, type SettingsDraft, type StockReason, type StockUnit, type StocktakeDraft,
 } from "@/lib/chemicalInventory";
 import { containerTotal, defaultContainer, previewUnitCost, type ContainerDraft } from "@/lib/chemicalContainers";
@@ -151,6 +154,10 @@ export type InventoryChemicalContext = { product_form?: string | null; inventory
 export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { savedChemicalId: string; savedChemical?: InventoryChemicalContext }) {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { currentRole } = useVineyard();
+  const canManage = canManageChemicalInventory(currentRole);
+  const canBuy = canRecordChemicalPurchase(currentRole);
+  const canCost = canViewChemicalInventoryCosts(currentRole);
   const summary = useQuery({ queryKey: ["chem-inventory", savedChemicalId], queryFn: () => fetchInventorySummary(savedChemicalId) });
   const [showHistory, setShowHistory] = useState(false);
   const history = useQuery({ queryKey: ["chem-inventory-history", savedChemicalId], enabled: showHistory, queryFn: () => fetchPurchaseHistory(savedChemicalId) });
@@ -185,6 +192,7 @@ export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { sav
   };
   const mut = useMutation({
     mutationFn: async (kind: "purchase" | "stock" | "finish" | "settings") => {
+      if (kind === "purchase" ? !canBuy : !canManage) throw new Error("Your role on this vineyard can't make this change.");
       const wasOpening = kind === "stock" && needsOpening;
       // Same V2 contract as the Chemical Purchase page; the backend computes quantity.
       if (kind === "purchase") await recordPurchaseV2(savedChemicalId, purchase, box);
@@ -223,7 +231,7 @@ export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { sav
       {s && <InventorySummaryView s={s} />}
       {s && !needsOpening && (
         <dl className="grid grid-cols-2 gap-2 text-sm">
-          <div><dt className="text-xs text-muted-foreground">Latest price</dt><dd data-testid="inventory-latest-price">{s.latestUnitCost === null ? "—" : `${formatMoney(s.latestUnitCost, s.currency)}${s.latestCostUnit ? ` / ${s.latestCostUnit}` : ""}`}</dd></div>
+          {canCost && <div><dt className="text-xs text-muted-foreground">Latest price</dt><dd data-testid="inventory-latest-price">{s.latestUnitCost === null ? "—" : `${formatMoney(s.latestUnitCost, s.currency)}${s.latestCostUnit ? ` / ${s.latestCostUnit}` : ""}`}</dd></div>}
           <div><dt className="text-xs text-muted-foreground">Latest purchase</dt><dd>{s.latestPurchaseDate ? new Date(s.latestPurchaseDate).toLocaleDateString() : "—"}</dd></div>
           {s.latestBatch && <div><dt className="text-xs text-muted-foreground">Batch / Lot</dt><dd data-testid="inventory-latest-batch">{s.latestBatch}</dd></div>}
           {s.latestBatchDate && <div><dt className="text-xs text-muted-foreground">Production / Batch date</dt><dd data-testid="inventory-latest-batch-date">{formatDate(s.latestBatchDate)}</dd></div>}
@@ -231,11 +239,11 @@ export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { sav
         </dl>
       )}
       <div className="flex flex-wrap gap-2">
-        {needsOpening ? <Button size="sm" onClick={() => open("stock")}>Set Opening Stock</Button> : null}
-        <Button size="sm" variant={needsOpening ? "outline" : "default"} onClick={() => open("purchase")}>Record Purchase</Button>
-        {!needsOpening && <Button size="sm" variant="outline" onClick={() => open("stock")}>Stocktake / Adjust</Button>}
-        {!needsOpening && <Button size="sm" variant="outline" onClick={() => open("finish")}>Mark Finished</Button>}
-        <Button size="sm" variant="ghost" onClick={() => open("settings")}>Low stock settings</Button>
+        {canManage && needsOpening ? <Button size="sm" onClick={() => open("stock")}>Set Opening Stock</Button> : null}
+        {canBuy && <Button size="sm" variant={needsOpening && canManage ? "outline" : "default"} onClick={() => open("purchase")}>Record Purchase</Button>}
+        {canManage && !needsOpening && <Button size="sm" variant="outline" onClick={() => open("stock")}>Stocktake / Adjust</Button>}
+        {canManage && !needsOpening && <Button size="sm" variant="outline" onClick={() => open("finish")}>Mark Finished</Button>}
+        {canManage && <Button size="sm" variant="ghost" onClick={() => open("settings")}>Low stock settings</Button>}
         <Button size="sm" variant="ghost" onClick={() => setShowHistory((v) => !v)}>Purchase History</Button>
       </div>
 
@@ -246,7 +254,7 @@ export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { sav
           {history.data && (history.data.length === 0 ? <p className="text-sm text-muted-foreground">No purchases recorded.</p> : (
             <table className="w-full text-sm">
               <thead className="text-left text-xs text-muted-foreground"><tr>
-                {["Purchase date", "Quantity", "Total amount", "Unit cost", "Batch / Lot", "Production / Batch date", "Serial", "Supplier", "Expiry", "Invoice/reference"].map((h) => <th key={h} className="p-1">{h}</th>)}
+                {["Purchase date", "Quantity", ...(canCost ? ["Total amount", "Unit cost"] : []), "Batch / Lot", "Production / Batch date", "Serial", "Supplier", "Expiry", "Invoice/reference"].map((h) => <th key={h} className="p-1">{h}</th>)}
               </tr></thead>
               <tbody>{history.data.map((p) => (
                 <tr key={p.id} className="border-t">
@@ -255,8 +263,8 @@ export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { sav
                     {p.containerCount !== null && p.containerSize !== null && <div>{p.containerCount} × {p.containerSize} {p.containerUnit ?? p.unit ?? ""}</div>}
                     <div className={p.containerCount !== null ? "text-xs text-muted-foreground" : undefined}>{p.quantity ?? "—"} {p.unit ?? ""}{p.containerCount !== null ? " total" : ""}</div>
                   </td>
-                  <td className="p-1">{formatMoney(p.total, p.currency)}</td>
-                  <td className="p-1">{p.unitCost === null ? "—" : `${formatMoney(p.unitCost, p.currency)}${p.unit ? ` / ${p.unit}` : ""}`}</td>
+                  {canCost && <td className="p-1">{formatMoney(p.total, p.currency)}</td>}
+                  {canCost && <td className="p-1">{p.unitCost === null ? "—" : `${formatMoney(p.unitCost, p.currency)}${p.unit ? ` / ${p.unit}` : ""}`}</td>}
                   <td className="p-1" data-testid="history-batch">{p.batch ?? "—"}</td>
                   <td className="p-1" data-testid="history-batch-date">{p.batchDate ? formatDate(p.batchDate) : "—"}</td>
                   <td className="p-1" data-testid="history-serial">{p.serialNumber ?? "—"}</td>

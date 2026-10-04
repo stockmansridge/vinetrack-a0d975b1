@@ -3,7 +3,7 @@
 // All writes go through the live database RPCs below — the Portal never
 // writes the inventory tables directly, never derives unit cost, never
 // deducts spray use and never invents stock from pack size. Access is the
-// selected vineyard role (canManageChemicalInventory) — never System Admin.
+// selected vineyard role (canView/canRecord/canManage/canViewCosts helpers) — never System Admin.
 import { supabase } from "@/integrations/ios-supabase/client";
 import { productCategoryLabel } from "@/lib/chemicalProductCategory";
 
@@ -26,8 +26,23 @@ export const PILOT_RPC = {
 } as const;
 export const CATEGORY_TABLE = "chemical_product_categories";
 
-/** Inventory, purchases, stock values and traceability records: Owner/Manager of the selected vineyard only. */
-export function canManageChemicalInventory(role: string | null | undefined): boolean {
+// Chemical Inventory permissions — selected-vineyard membership role only.
+// System Admin status is never an inventory permission source (SQL 262 live).
+type MaybeRole = string | null | undefined;
+/** View inventory, stock status and traceability: any vineyard member. */
+export function canViewChemicalInventory(role: MaybeRole): boolean {
+  return role === "owner" || role === "manager" || role === "supervisor" || role === "operator";
+}
+/** Record a purchase: Owner / Manager / Supervisor. */
+export function canRecordChemicalPurchase(role: MaybeRole): boolean {
+  return role === "owner" || role === "manager" || role === "supervisor";
+}
+/** Opening stock, stocktake, Mark Finished, settings: Owner / Manager. */
+export function canManageChemicalInventory(role: MaybeRole): boolean {
+  return role === "owner" || role === "manager";
+}
+/** Unit cost, historical totals, stock value: Owner / Manager. */
+export function canViewChemicalInventoryCosts(role: MaybeRole): boolean {
   return role === "owner" || role === "manager";
 }
 

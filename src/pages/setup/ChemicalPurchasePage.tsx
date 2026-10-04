@@ -1,5 +1,5 @@
 // Chemical Purchase — record a purchase against an existing Saved Chemical.
-// Owner/Manager only (canManageChemicalInventory on the selected vineyard role). Writes go through
+// Owner/Manager/Supervisor (canRecordChemicalPurchase on the selected vineyard role). Writes go through
 // chemical_inventory_record_purchase_v2 with container count/size/unit; the
 // backend calculates the stored quantity and unit cost.
 import { useState } from "react";
@@ -8,7 +8,7 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { ShoppingCart } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
-import { canManageChemicalInventory, fetchInventorySummary, fetchPurchaseHistory, recordPurchaseV2, type PurchaseDraft } from "@/lib/chemicalInventory";
+import { canRecordChemicalPurchase, fetchInventorySummary, fetchPurchaseHistory, recordPurchaseV2, type PurchaseDraft } from "@/lib/chemicalInventory";
 import { defaultContainer, type ContainerDraft } from "@/lib/chemicalContainers";
 import { useV3RevisionDisplay, v3RevisionIdOf } from "@/lib/chemicalV3Display";
 import { shortManufacturerName } from "@/lib/manufacturerNormalise";
@@ -24,7 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 export default function ChemicalPurchasePage() {
   const { selectedVineyardId, currentRole, loading: vyLoading } = useVineyard();
   const loading = !!vyLoading && !currentRole;
-  const allowed = canManageChemicalInventory(currentRole);
+  const allowed = canRecordChemicalPurchase(currentRole);
   const qc = useQueryClient();
   const { toast } = useToast();
   const [chemId, setChemId] = useState<string>("");
@@ -65,7 +65,7 @@ export default function ChemicalPurchasePage() {
   });
 
   if (loading) return <p className="text-sm text-muted-foreground">Loading…</p>;
-  if (!allowed) return <Navigate to="/setup/chemicals" replace />;
+  if (!allowed) return <Navigate to="/setup/chemicals/inventory" replace />;
 
   return (
     <div className="space-y-5">
