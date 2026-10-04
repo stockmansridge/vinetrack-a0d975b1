@@ -239,7 +239,7 @@ export function ChemicalEditor({
   const { currentCountry, memberships } = useVineyard();
   const editorVineyardName =
     memberships.find((m) => m.vineyard_id === vineyardId)?.vineyard_name ?? null;
-  // SQL 261 Vineyard Preferred Rate — separate from default_rates.
+  // Vineyard Preferred Rate (canonical amount shape) — separate from default_rates.
   const [prefValue, setPrefValue] = useState("");
   const [prefUnit, setPrefUnit] = useState<string>("");
   const [prefBasis, setPrefBasis] = useState<string>("per_hectare");
@@ -596,7 +596,7 @@ export function ChemicalEditor({
             }
           : {}),
 
-        // Omitted unless edited, so saving before SQL 261 is live (or an
+        // Omitted unless edited, so saving (or an
         // unrelated edit) never touches the column.
         ...(prefDirty && prefBuild.ok ? { vineyard_preferred_rate: prefBuild.value as any } : {}),
 
