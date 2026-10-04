@@ -36,7 +36,7 @@ export function rankActions(rows: PlatformActionStat[]): PlatformActionStat[] {
 const fmt = (v: number | null | undefined) => (v == null ? "—" : Number(v).toLocaleString());
 
 export function PlatformActionStatsSection() {
-  const [range, setRange] = useState<(typeof ACTION_RANGES)[number]["key"]>("30");
+  const [range, setRange] = useState<(typeof ACTION_RANGES)[number]["key"]>("1");
   const days = ACTION_RANGES.find((r) => r.key === range)!.days;
   const q = useQuery({
     queryKey: ["admin", "platform-action-stats", days],
