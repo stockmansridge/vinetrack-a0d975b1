@@ -11,7 +11,7 @@ import { validateLabelUrl } from "@/lib/labelUrl";
 import { signedV3MediaUrl } from "@/lib/chemicalV3";
 import { generateUuid } from "@/lib/uuid";
 import {
-  setManufacturerLabelUrl,
+  setManufacturerLabelUrl, setManufacturerProductUrl,
   fetchFrontLabels, frontLabelCaption, frontLabelPath, issueActions, issueState,
   resolveReviewIssue, setFrontLabelImage, humaniseFieldKey,
   isManufacturerLabelIssue, isVineyardRatesIssue, MANUFACTURER_LABEL_NOTE, NO_VINEYARD_RATE_NOTE,
