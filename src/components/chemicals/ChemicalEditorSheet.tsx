@@ -478,7 +478,7 @@ export function ChemicalEditor({
       const storedPref = initial
         ? decodeVineyardPreferredRate((initial as any).vineyard_preferred_rate)
         : null;
-      setPrefValue(storedPref ? String(storedPref.value) : "");
+      setPrefValue(storedPref ? String(storedPref.amount) : "");
       setPrefUnit(storedPref?.unit ?? "");
       setPrefBasis(storedPref?.basis ?? "per_hectare");
       setPrefNote(storedPref?.note ?? "");

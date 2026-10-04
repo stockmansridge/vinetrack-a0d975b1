@@ -127,7 +127,7 @@ export function productLineFromChemical(args: {
   const preferred = intel?.vineyardPreferredRate ?? null;
   const prefill = preferred
     ? {
-        rate: preferred.value,
+        rate: preferred.amount,
         unit: preferred.unit as string,
         rateBasis: productRateBasisForPreferred(preferred.basis),
         entryMethod: "vineyard_preferred" as const,
