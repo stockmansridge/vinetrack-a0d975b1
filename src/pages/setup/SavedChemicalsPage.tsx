@@ -81,7 +81,7 @@ import { ChemicalSearchDialog } from "@/components/chemicals/ChemicalSearchDialo
 import { ChemicalSectionNav, ADD_CHEMICAL_PARAM } from "@/components/chemicals/ChemicalSectionNav";
 import { useSearchParams } from "react-router-dom";
 import { ChemicalInventoryPanel } from "@/components/chemicals/ChemicalInventoryPanel";
-import { canUseInventoryPilot, v3EntryBadge } from "@/lib/chemicalInventory";
+import { canManageChemicalInventory, v3EntryBadge } from "@/lib/chemicalInventory";
 import { ChemicalLabelThumb, UsedForCell } from "@/components/chemicals/ChemicalListCells";
 import { useV3RevisionDisplay, v3RevisionIdOf, usedForOf, productLinkOf } from "@/lib/chemicalV3Display";
 import { Link } from "react-router-dom";
@@ -163,8 +163,7 @@ export default function SavedChemicalsPage() {
   const [confirmHardDelete, setConfirmHardDelete] = useState<SavedChemical | null>(null);
   const [detailRow, setDetailRow] = useState<SavedChemical | null>(null);
   // Inventory / V3 pilot — System Admin only; customers see nothing new.
-  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
-  const inventoryPilot = canUseInventoryPilot(isSystemAdmin);
+  const inventoryPilot = canManageChemicalInventory(currentRole);
   const [inventoryRow, setInventoryRow] = useState<SavedChemical | null>(null);
   // Coming back from "Set vineyard country": reopen the chemical the operator
   // was adding, with their unsaved draft and search text intact.

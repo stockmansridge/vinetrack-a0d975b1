@@ -4,19 +4,17 @@
 // call per saved chemical, shared cache key with ChemicalInventoryPanel so the
 // panel's actions refresh this page). Nothing is calculated in the browser.
 //
-// Pilot gate: canUseInventoryPilot (System Admin only) — applied here and on the
-// Chemicals page button. Removing the gate in chemicalInventory.ts releases both.
+// Access: canManageChemicalInventory(selected vineyard role) — Owner/Manager only.
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Package } from "lucide-react";
 import { ChemicalSectionNav } from "@/components/chemicals/ChemicalSectionNav";
 import { useVineyard } from "@/context/VineyardContext";
-import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { useCanSeeCosts } from "@/lib/permissions";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import {
-  canUseInventoryPilot, fetchInventorySummary, formatMoney, OPENING_STOCK_NOT_SET,
+  canManageChemicalInventory, fetchInventorySummary, formatMoney, OPENING_STOCK_NOT_SET,
   STOCK_STATE_LABEL, STOCK_STATE_TONE, type InventorySummary, type StockState,
 } from "@/lib/chemicalInventory";
 import { useV3RevisionDisplay, v3RevisionIdOf } from "@/lib/chemicalV3Display";
@@ -47,9 +45,8 @@ const backendValue = (s?: InventorySummary): number | null => {
 };
 
 export default function ChemicalInventoryPage() {
-  const { selectedVineyardId } = useVineyard();
-  const { isAdmin, loading: adminLoading } = useIsSystemAdmin();
-  const allowed = canUseInventoryPilot(isAdmin);
+  const { selectedVineyardId, currentRole, loading: vyLoading } = useVineyard() as any;
+  const allowed = canManageChemicalInventory(currentRole);
   const canSeeCosts = useCanSeeCosts();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [q, setQ] = useState("");
@@ -93,7 +90,7 @@ export default function ChemicalInventoryPage() {
     return [c.name, c.manufacturer].some((v) => String(v ?? "").toLowerCase().includes(f));
   });
 
-  if (adminLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (vyLoading && !currentRole) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (!allowed) return <Navigate to="/setup/chemicals" replace />;
 
   return (

@@ -42,7 +42,7 @@ import {
   deleteV3RateOption, draftFromOption, emptyRateDraft, formatRateOption, isV3RevisionEditable, saveV3RateOption,
   type V3RateBasis, type V3RateDraft,
 } from "@/lib/chemicalV3";
-import { canUseInventoryPilot, fetchProductCategories, isV3Addable, setV3ProductCategory, v3CategoryLabel, type CategoryOption } from "@/lib/chemicalInventory";
+import { fetchProductCategories, isV3Addable, setV3ProductCategory, v3CategoryLabel, type CategoryOption } from "@/lib/chemicalInventory";
 import { V3AddToVineyardButton } from "@/components/chemicals/V3AddToVineyardDialog";
 import { V3ResistanceBadge, V3ResistanceField } from "@/components/chemicals/V3ResistanceField";
 import { isV3ResistanceEditable, setV3ResistanceGroups, type V3ResistanceDraft } from "@/lib/chemicalV3Resistance";
@@ -175,7 +175,7 @@ function ResultCard({ row, onView }: { row: Row; onView: () => void }) {
       </div>
       <div className="flex flex-col gap-1">
         <Button size="sm" variant="outline" onClick={onView}>View</Button>
-        {canUseInventoryPilot(isAdmin) && revId && isV3Addable(rowStatus) && (
+        {isAdmin && revId && isV3Addable(rowStatus) && (
           <V3AddToVineyardButton revisionId={String(revId)} productName={pick(row, "product_name") ?? "this product"} status={rowStatus}
             vineyardId={vineyardId} vineyardName={vineyardName} />
         )}
@@ -273,7 +273,7 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
   const { vineyardId, vineyardName } = usePilotVineyard();
   const savedQ = useQuery({
     queryKey: vineyardChemicalsKey(vineyardId),
-    enabled: !!vineyardId && canUseInventoryPilot(isAdmin) && !!revisionId,
+    enabled: !!vineyardId && isAdmin && !!revisionId,
     queryFn: () => fetchSavedChemicalsForVineyard(vineyardId!),
   });
   const [catMsg, setCatMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
@@ -300,7 +300,7 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
   const warnings = asList(pick(r, "warnings"));
   const unresolved = asList(pick(r, "unresolved_fields"));
   const outstanding = outstandingWithoutIssue(unresolved, issuesQ.data ?? []);
-  const linkedSaved = canUseInventoryPilot(isAdmin) ? findSavedForV3(savedQ.data?.chemicals ?? [], r) : null;
+  const linkedSaved = isAdmin ? findSavedForV3(savedQ.data?.chemicals ?? [], r) : null;
   const labelUrl = pick(r, "manufacturer_label_url");
   const status = String(pick(r, "review_status", "status") ?? "").toLowerCase();
   const canEdit = isAdmin && !!revisionId && isV3RevisionEditable(status);
@@ -354,7 +354,7 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
                     onNewRevision={(id) => onOpenRevision?.(id)} />
                 ) : null;
               })()}
-              {canUseInventoryPilot(isAdmin) && revisionId && isV3Addable(status) && (
+              {isAdmin && revisionId && isV3Addable(status) && (
                 <div className="flex flex-wrap items-start gap-2">
                   <V3AddToVineyardButton revisionId={revisionId} productName={pick(r, "product_name") ?? "this product"} status={status}
                     vineyardId={vineyardId} vineyardName={vineyardName} />
@@ -379,9 +379,9 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
                 <Field label="Product name" value={pick(r, "product_name")} status={st("product_name")} />
                 <Field label="Manufacturer / registrant" value={pick(r, "manufacturer", "registrant")} status={st("manufacturer", "registrant")} />
                 <Field label="Country" value={pick(r, "country_code", "country")} status={st("country_code", "country")} />
-                <CategoryField row={r} options={cats.data ?? []} editable={canUseInventoryPilot(isAdmin) && isV3RevisionEditable(status)}
+                <CategoryField row={r} options={cats.data ?? []} editable={isAdmin && isV3RevisionEditable(status)}
                   busy={catMut.isPending} onChange={(k) => catMut.mutate(k)} msg={catMsg} />
-                <V3ResistanceField row={r} editable={canUseInventoryPilot(isAdmin) && !!revisionId && isV3ResistanceEditable(status)}
+                <V3ResistanceField row={r} editable={isAdmin && !!revisionId && isV3ResistanceEditable(status)}
                   busy={resMut.isPending} onSave={(d) => resMut.mutate(d)} msg={resMsg} />
                 <Field label="Product form" value={pick(r, "product_form", "formulation")} status={has("product_form", "formulation") ? "ok" : "review"} />
                 <Field label="Active ingredients" value={actives.length ? actives.map(labelOf).join("; ") : undefined} status={actives.length ? "ok" : "missing"} />
@@ -651,11 +651,11 @@ export default function ChemicalV3LabPage() {
         <TabsList>
           <TabsTrigger value="review">Pending Review</TabsTrigger>
           <TabsTrigger value="approved">Approved</TabsTrigger>
-          {canUseInventoryPilot(isAdmin) && <TabsTrigger value="inventory">Inventory &amp; Purchases</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="inventory">Inventory &amp; Purchases</TabsTrigger>}
         </TabsList>
         <TabsContent value="review"><ReviewQueue onOpen={(id, j) => { setOpenRevision(id); setOpenJob(j ?? null); }} /></TabsContent>
         <TabsContent value="approved"><ApprovedList onOpen={setOpenRevision} /></TabsContent>
-        {canUseInventoryPilot(isAdmin) && <TabsContent value="inventory"><InventoryTab /></TabsContent>}
+        {isAdmin && <TabsContent value="inventory"><InventoryTab /></TabsContent>}
       </Tabs>
       {notice && <div className="flex items-center gap-2 rounded border border-warning/50 bg-warning/10 p-3 text-sm"><AlertTriangle className="h-4 w-4" />{notice}</div>}
       {error && <p className="text-sm text-destructive">{error}</p>}
