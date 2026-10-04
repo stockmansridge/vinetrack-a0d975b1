@@ -16,20 +16,20 @@ import { emptyPurchase } from "@/components/chemicals/ChemicalInventoryPanel";
 const nav = () => render(<MemoryRouter><ChemicalSectionNav active="chemicals" onAddChemical={() => {}} /></MemoryRouter>);
 beforeEach(() => isAdmin.mockReturnValue({ isAdmin: false, loading: false }));
 
-describe("inventory access = vineyard Owner/Manager", () => {
-  for (const r of ["owner", "manager"]) it(`${r} sees Inventory and Purchase`, () => {
+describe("inventory access = selected vineyard role", () => {
+  for (const r of ["owner", "manager", "supervisor"]) it(`${r} sees Inventory and Purchase`, () => {
     role = r; nav();
     expect(screen.getByText("Chemical Inventory")).toBeTruthy();
     expect(screen.getByText("Chemical Purchase")).toBeTruthy();
   });
-  for (const r of ["supervisor", "operator"]) it(`${r} does not`, () => {
-    role = r; nav();
-    expect(screen.queryByText("Chemical Inventory")).toBeNull();
+  it("operator sees Inventory but not Purchase", () => {
+    role = "operator"; nav();
+    expect(screen.getByText("Chemical Inventory")).toBeTruthy();
     expect(screen.queryByText("Chemical Purchase")).toBeNull();
   });
   it("System Admin status is not the permission source", () => {
     isAdmin.mockReturnValue({ isAdmin: true, loading: false });
-    role = "operator"; nav();
+    role = null; nav();
     expect(screen.queryByText("Chemical Inventory")).toBeNull();
     expect(canManageChemicalInventory(null)).toBe(false);
     for (const p of ["src/pages/setup/ChemicalInventoryPage.tsx", "src/pages/setup/ChemicalPurchasePage.tsx", "src/components/chemicals/ChemicalSectionNav.tsx", "src/lib/chemicalInventory.ts"])

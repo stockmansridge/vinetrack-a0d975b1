@@ -23,6 +23,9 @@ const ROUTE_ALLOW: Record<string, Role[]> = {
   "/setup/spray-equipment": ADMIN_ROLES,
   "/setup/equipment-other": ADMIN_ROLES,
   "/setup/chemicals": ADMIN_ROLES,
+  // Chemical Inventory (SQL 262): any member views; Owner/Manager/Supervisor purchase.
+  "/setup/chemicals/inventory": ALL_ROLES,
+  "/setup/chemicals/purchases": FIELD_ROLES,
   "/setup/saved-inputs": ADMIN_ROLES,
   "/setup/materials": ADMIN_ROLES,
   "/setup/weather": ADMIN_ROLES,

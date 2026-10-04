@@ -1,8 +1,10 @@
 // Vineyard Preferred Rate — the vineyard's own normal operational rate for a
-// Saved Chemical (`saved_chemicals.vineyard_preferred_rate`, SQL 261).
+// Saved Chemical (`saved_chemicals.vineyard_preferred_rate`, live shared schema).
 //
-// Shared contract with iOS/Android (version 1):
-//   { "version": 1, "value": 2.0, "unit": "L", "basis": "per_hectare", "note": null }
+// Canonical live/iOS/Android contract:
+//   { "amount": 2.0, "unit": "L", "basis": "per_hectare", "note": null,
+//     "updated_at"?: ISO-8601, "updated_by"?: user UUID }
+// The old Portal-only {version:1,value} shape is read-only compatibility; never written.
 // unit ∈ L | mL | kg | g, basis ∈ per_hectare | per_100_litres.
 //
 // It is an exact operational rate, never a registered/label rate: it is never
@@ -23,11 +25,12 @@ export const PREFERRED_RATE_BASES = ["per_hectare", "per_100_litres"] as const;
 export type PreferredRateBasis = (typeof PREFERRED_RATE_BASES)[number];
 
 export interface VineyardPreferredRate {
-  version: 1;
-  value: number;
+  amount: number;
   unit: PreferredRateUnit;
   basis: PreferredRateBasis;
   note: string | null;
+  updated_at?: string;
+  updated_by?: string;
 }
 
 export const PREFERRED_RATE_HELPER =
@@ -45,13 +48,18 @@ export function decodeVineyardPreferredRate(raw: unknown): VineyardPreferredRate
     try { v = JSON.parse(v); } catch { return null; }
   }
   if (!v || typeof v !== "object") return null;
-  if (Number(v.version) !== 1) return null;
-  const value = typeof v.value === "number" ? v.value : Number(v.value);
-  if (!Number.isFinite(value) || value <= 0) return null;
+  // Canonical `amount`; legacy Portal `{version:1,value}` tolerated on read only.
+  const rawAmount = v.amount ?? (Number(v.version) === 1 ? v.value : undefined);
+  if (rawAmount === undefined || rawAmount === null || rawAmount === "") return null;
+  const amount = typeof rawAmount === "number" ? rawAmount : Number(rawAmount);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
   if (!PREFERRED_RATE_UNITS.includes(v.unit)) return null;
   if (!PREFERRED_RATE_BASES.includes(v.basis)) return null;
   const note = typeof v.note === "string" && v.note.trim() ? v.note.trim() : null;
-  return { version: 1, value, unit: v.unit, basis: v.basis, note };
+  const out: VineyardPreferredRate = { amount, unit: v.unit, basis: v.basis, note };
+  if (typeof v.updated_at === "string" && v.updated_at) out.updated_at = v.updated_at;
+  if (typeof v.updated_by === "string" && v.updated_by) out.updated_by = v.updated_by;
+  return out;
 }
 
 export type PreferredRateBuild =
@@ -81,8 +89,7 @@ export function buildVineyardPreferredRate(input: {
   return {
     ok: true,
     value: {
-      version: 1,
-      value,
+      amount: value,
       unit: input.unit as PreferredRateUnit,
       basis: input.basis as PreferredRateBasis,
       note,
@@ -92,7 +99,7 @@ export function buildVineyardPreferredRate(input: {
 
 export function formatPreferredRate(r: VineyardPreferredRate | null): string | null {
   if (!r) return null;
-  return `${r.value} ${r.unit}${r.basis === "per_hectare" ? "/ha" : "/100 L"}`;
+  return `${r.amount} ${r.unit}${r.basis === "per_hectare" ? "/ha" : "/100 L"}`;
 }
 
 export function productRateBasisForPreferred(
@@ -107,7 +114,7 @@ export function preferredRateLineFields(r: VineyardPreferredRate): Pick<
   "rate" | "unit" | "rateBasis" | "rateSource"
 > {
   return {
-    rate: r.value,
+    rate: r.amount,
     unit: r.unit,
     rateBasis: productRateBasisForPreferred(r.basis),
     rateSource: "vineyard_preferred",
@@ -133,7 +140,7 @@ export function lineMatchesPreferred(
 ): boolean {
   if (!preferred || line.rate == null) return false;
   return (
-    line.rate === preferred.value &&
+    line.rate === preferred.amount &&
     line.unit === preferred.unit &&
     line.rateBasis === productRateBasisForPreferred(preferred.basis)
   );

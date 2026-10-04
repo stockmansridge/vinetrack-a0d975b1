@@ -5,7 +5,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { FlaskConical, Package, Plus, ShoppingCart } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
-import { canManageChemicalInventory } from "@/lib/chemicalInventory";
+import { canRecordChemicalPurchase, canViewChemicalInventory } from "@/lib/chemicalInventory";
 import { cn } from "@/lib/utils";
 
 export type ChemicalSection = "chemicals" | "inventory" | "purchases";
@@ -20,7 +20,8 @@ export function ChemicalSectionNav({ active: current, onAddChemical }: { active:
   const { currentRole } = useVineyard();
   const navigate = useNavigate();
   const canAdd = currentRole === "owner" || currentRole === "manager";
-  const pilot = canManageChemicalInventory(currentRole);
+  const canView = canViewChemicalInventory(currentRole);
+  const canBuy = canRecordChemicalPurchase(currentRole);
   const add = () => (onAddChemical ? onAddChemical() : navigate(`/setup/chemicals?${ADD_CHEMICAL_PARAM}=1`));
   return (
     <nav aria-label="Chemicals section" data-testid="chemical-section-nav"
@@ -34,12 +35,12 @@ export function ChemicalSectionNav({ active: current, onAddChemical }: { active:
             <Plus className="h-4 w-4" />Add Chemical
           </button>
         )}
-        {pilot && (
+        {canView && (
           <Link to="/setup/chemicals/inventory" data-testid="chemical-inventory-link" aria-current={current === "inventory" ? "page" : undefined} className={cn(base, current === "inventory" ? active : idle)}>
             <Package className="h-4 w-4" />Chemical Inventory
           </Link>
         )}
-        {pilot && (
+        {canBuy && (
           <Link to="/setup/chemicals/purchases" data-testid="chemical-purchase-link" aria-current={current === "purchases" ? "page" : undefined} className={cn(base, current === "purchases" ? active : idle)}>
             <ShoppingCart className="h-4 w-4" />Chemical Purchase
           </Link>
