@@ -32,8 +32,9 @@ export default function PortalInfoBanner() {
           <span className="font-medium text-foreground">
             Welcome to the <BrandName /> Admin Portal.
           </span>{" "}
-          Use the iOS app to record vineyard work; use this portal to review,
-          export and plan. Pins and trips are completed from the iOS app.
+          Use the iOS or Android app to record vineyard work; use this portal to
+          review, export and plan. Pins and trips are completed from the iOS or
+          Android app.
         </p>
       </div>
       <Button
