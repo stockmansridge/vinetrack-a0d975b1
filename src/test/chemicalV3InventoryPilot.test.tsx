@@ -58,7 +58,7 @@ describe("Add to vineyard", () => {
 
 describe("Inventory", () => {
   it("9. purchase sends quantity + total, no unit cost", () => {
-    const b = buildPurchaseArgs("s", { date: "2026-09-18", quantity: "20", unit: "L", total: "340", currency: "AUD", batch: "ABC123", supplier: "", reference: "", expiry: "", notes: "" });
+    const b = buildPurchaseArgs("s", { date: "2026-09-18", quantity: "20", unit: "L", total: "340", currency: "AUD", batch: "ABC123", batchDate: "", serialNumber: "", supplier: "", reference: "", expiry: "", notes: "" });
     if (!("args" in b)) throw new Error("expected args");
     expect(b.args).toMatchObject({ p_quantity: 20, p_total_cost: 340, p_batch_number: "ABC123", p_supplier: null });
     expect(Object.keys(b.args).some((k) => /unit_cost|per_unit/.test(k))).toBe(false);
