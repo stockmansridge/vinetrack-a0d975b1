@@ -5,7 +5,9 @@ import { toast } from "sonner";
 import { ChemicalSearchDialog } from "@/components/chemicals/ChemicalSearchDialog";
 import { V3ReSearchButton } from "@/components/chemicals/V3ReSearchButton";
 import { canReSearch, needsReSearch } from "@/lib/chemicalV3";
-import { V3ReviewDecisions, FrontLabelUploadButton } from "@/components/chemicals/V3ReviewDecisions";
+import { Link } from "react-router-dom";
+import { useQueryClient as useQC } from "@tanstack/react-query";
+import { V3ReviewDecisions, FrontLabelUploadButton, LabelUrlEditor, frontLabelReloadKeys } from "@/components/chemicals/V3ReviewDecisions";
 import { V3CatalogueMatch } from "@/components/chemicals/V3CatalogueMatch";
 import { ChemicalInventoryPanel } from "@/components/chemicals/ChemicalInventoryPanel";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
@@ -341,6 +343,7 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
                 {labelUrl ? (
                   <Button size="sm" asChild><a href={labelUrl} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-1 h-4 w-4" />Open Manufacturer Label</a></Button>
                 ) : <Badge className="border-transparent bg-destructive/15 text-destructive">Manufacturer label missing</Badge>}
+                {isAdmin && revisionId && <HeaderLabelUrlEditor revisionId={revisionId} current={labelUrl ?? null} />}
                 {isAdmin && revisionId && <FrontLabelUploadButton revisionId={revisionId} hasImage={!!pick(r, "front_label_image_path")} />}
               </div>
               {(() => {
@@ -625,7 +628,10 @@ export default function ChemicalV3LabPage() {
         <h1 className="flex items-center gap-2 text-2xl font-semibold"><FlaskConical className="h-6 w-6" />Chemical Catalogue Review</h1>
         <p className="text-sm text-muted-foreground">Curate the VineTrack chemical catalogue. Customers search from Chemicals → Add Chemical.</p>
       </div>
-      <Button variant="outline" onClick={() => setSearchOpen(true)}><Search className="mr-1 h-4 w-4" />Open Chemical Search</Button>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" asChild><Link to="/setup/chemicals"><FlaskConical className="mr-1 h-4 w-4" />Chemicals</Link></Button>
+        <Button variant="outline" onClick={() => setSearchOpen(true)}><Search className="mr-1 h-4 w-4" />Open Chemical Search</Button>
+      </div>
       <ChemicalSearchDialog open={searchOpen} onOpenChange={setSearchOpen} vineyardId={selectedVineyardId}
         vineyardName={memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null}
         country={currentCountry} canEdit={currentRole === "owner" || currentRole === "manager" || isAdmin} />
@@ -653,4 +659,10 @@ export default function ChemicalV3LabPage() {
 
     </div>
   );
+}
+
+function HeaderLabelUrlEditor({ revisionId, current }: { revisionId: string; current: string | null }) {
+  const qc = useQC();
+  return <LabelUrlEditor revisionId={revisionId} current={current}
+    onSaved={() => Promise.all(frontLabelReloadKeys(revisionId).map((queryKey) => qc.invalidateQueries({ queryKey })))} />;
 }
