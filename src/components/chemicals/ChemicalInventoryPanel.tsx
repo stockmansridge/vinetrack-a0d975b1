@@ -1,5 +1,5 @@
-// Inventory pilot panel for one vineyard chemical. System Admin only (gate
-// applied by the caller). Every action goes through the inventory RPCs and the
+// Inventory panel for one vineyard chemical. Owner/Manager only
+// (canManageChemicalInventory, applied by the caller). Every action goes through the inventory RPCs and the
 // panel reloads the database summary afterwards — nothing is calculated here.
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { formatDate } from "@/lib/dateFormat";
 import { useToast } from "@/hooks/use-toast";
 import { formFromInventoryUnit, parsePhysicalForm } from "@/lib/chemicalPhysicalForm";
 import {
@@ -95,7 +96,7 @@ export function InventorySummaryView({ s }: { s: InventorySummary }) {
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
-export const emptyPurchase = (unit: StockUnit = "L"): PurchaseDraft => ({ date: today(), quantity: "", unit, total: "", currency: "AUD", batch: "", supplier: "", reference: "", expiry: "", notes: "" });
+export const emptyPurchase = (unit: StockUnit = "L"): PurchaseDraft => ({ date: today(), quantity: "", unit, total: "", currency: "AUD", batch: "", batchDate: "", serialNumber: "", supplier: "", reference: "", expiry: "", notes: "" });
 
 /** Containers × size → aggregate quantity (legacy helper; V2 sends container fields instead). */
 export const purchaseFromContainers = (p: PurchaseDraft, box: ContainerDraft): PurchaseDraft => {
@@ -118,7 +119,6 @@ export function PurchaseFields({ purchase, setPurchase, box, setBox, units }: { 
   const unitCost = previewUnitCost(purchase.total, total);
   return (
     <div className="space-y-3">
-      <div><Label htmlFor="p-date">Purchase date</Label><Input id="p-date" type="date" value={purchase.date} onChange={(e) => setPurchase({ ...purchase, date: e.target.value })} /></div>
       <ContainerFields box={box} setBox={setBox} units={units} idPrefix="p" />
       <div className="rounded bg-muted/40 px-3 py-2 text-sm" data-testid="purchase-total-preview">
         {total === null ? <span className="text-muted-foreground">Enter containers and size to see the total.</span>
@@ -128,10 +128,18 @@ export function PurchaseFields({ purchase, setPurchase, box, setBox, units }: { 
         <div><Label htmlFor="p-total">Total purchase amount</Label><Input id="p-total" inputMode="decimal" value={purchase.total} onChange={(e) => setPurchase({ ...purchase, total: e.target.value })} /></div>
         <div><Label htmlFor="p-cur">Currency</Label><Input id="p-cur" value={purchase.currency} onChange={(e) => setPurchase({ ...purchase, currency: e.target.value.toUpperCase() })} /></div>
         {unitCost !== null && <p className="col-span-2 text-xs text-muted-foreground" data-testid="purchase-unit-cost-preview">{formatMoney(Number(purchase.total), purchase.currency)} purchase ≈ {formatMoney(unitCost, purchase.currency)}/{box.unit} (preview — VineTrack calculates the saved unit cost)</p>}
-        <div><Label htmlFor="p-batch">Batch number</Label><Input id="p-batch" value={purchase.batch} onChange={(e) => setPurchase({ ...purchase, batch: e.target.value })} /></div>
+      </div>
+      <fieldset className="grid grid-cols-2 gap-2 rounded border p-2" data-testid="purchase-traceability">
+        <legend className="px-1 text-xs font-medium">Traceability</legend>
+        <div><Label htmlFor="p-date">Purchase date</Label><Input id="p-date" type="date" value={purchase.date} onChange={(e) => setPurchase({ ...purchase, date: e.target.value })} /></div>
+        <div><Label htmlFor="p-batch">Batch / Lot number</Label><Input id="p-batch" value={purchase.batch} onChange={(e) => setPurchase({ ...purchase, batch: e.target.value })} /></div>
+        <div><Label htmlFor="p-bdate">Production / Batch date</Label><Input id="p-bdate" type="date" value={purchase.batchDate} onChange={(e) => setPurchase({ ...purchase, batchDate: e.target.value })} /></div>
+        <div><Label htmlFor="p-serial">Serial number (if applicable)</Label><Input id="p-serial" value={purchase.serialNumber} onChange={(e) => setPurchase({ ...purchase, serialNumber: e.target.value })} /></div>
         <div><Label htmlFor="p-sup">Supplier — optional</Label><Input id="p-sup" value={purchase.supplier} onChange={(e) => setPurchase({ ...purchase, supplier: e.target.value })} /></div>
         <div><Label htmlFor="p-ref">Invoice/reference — optional</Label><Input id="p-ref" value={purchase.reference} onChange={(e) => setPurchase({ ...purchase, reference: e.target.value })} /></div>
         <div><Label htmlFor="p-exp">Expiry date — optional</Label><Input id="p-exp" type="date" value={purchase.expiry} onChange={(e) => setPurchase({ ...purchase, expiry: e.target.value })} /></div>
+      </fieldset>
+      <div className="grid grid-cols-2 gap-2">
         <div className="col-span-2"><Label htmlFor="p-notes">Notes — optional</Label><Textarea id="p-notes" value={purchase.notes} onChange={(e) => setPurchase({ ...purchase, notes: e.target.value })} /></div>
       </div>
     </div>
@@ -217,7 +225,9 @@ export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { sav
         <dl className="grid grid-cols-2 gap-2 text-sm">
           <div><dt className="text-xs text-muted-foreground">Latest price</dt><dd data-testid="inventory-latest-price">{s.latestUnitCost === null ? "—" : `${formatMoney(s.latestUnitCost, s.currency)}${s.latestCostUnit ? ` / ${s.latestCostUnit}` : ""}`}</dd></div>
           <div><dt className="text-xs text-muted-foreground">Latest purchase</dt><dd>{s.latestPurchaseDate ? new Date(s.latestPurchaseDate).toLocaleDateString() : "—"}</dd></div>
-          <div><dt className="text-xs text-muted-foreground">Batch</dt><dd>{s.latestBatch ?? "—"}</dd></div>
+          {s.latestBatch && <div><dt className="text-xs text-muted-foreground">Batch / Lot</dt><dd data-testid="inventory-latest-batch">{s.latestBatch}</dd></div>}
+          {s.latestBatchDate && <div><dt className="text-xs text-muted-foreground">Production / Batch date</dt><dd data-testid="inventory-latest-batch-date">{formatDate(s.latestBatchDate)}</dd></div>}
+          {s.latestSerial && <div><dt className="text-xs text-muted-foreground">Serial</dt><dd data-testid="inventory-latest-serial">{s.latestSerial}</dd></div>}
         </dl>
       )}
       <div className="flex flex-wrap gap-2">
@@ -236,7 +246,7 @@ export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { sav
           {history.data && (history.data.length === 0 ? <p className="text-sm text-muted-foreground">No purchases recorded.</p> : (
             <table className="w-full text-sm">
               <thead className="text-left text-xs text-muted-foreground"><tr>
-                {["Date", "Quantity", "Total amount", "Unit cost", "Batch", "Supplier", "Expiry", "Invoice/reference"].map((h) => <th key={h} className="p-1">{h}</th>)}
+                {["Purchase date", "Quantity", "Total amount", "Unit cost", "Batch / Lot", "Production / Batch date", "Serial", "Supplier", "Expiry", "Invoice/reference"].map((h) => <th key={h} className="p-1">{h}</th>)}
               </tr></thead>
               <tbody>{history.data.map((p) => (
                 <tr key={p.id} className="border-t">
@@ -247,7 +257,9 @@ export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { sav
                   </td>
                   <td className="p-1">{formatMoney(p.total, p.currency)}</td>
                   <td className="p-1">{p.unitCost === null ? "—" : `${formatMoney(p.unitCost, p.currency)}${p.unit ? ` / ${p.unit}` : ""}`}</td>
-                  <td className="p-1">{p.batch ?? "—"}</td>
+                  <td className="p-1" data-testid="history-batch">{p.batch ?? "—"}</td>
+                  <td className="p-1" data-testid="history-batch-date">{p.batchDate ? formatDate(p.batchDate) : "—"}</td>
+                  <td className="p-1" data-testid="history-serial">{p.serialNumber ?? "—"}</td>
                   <td className="p-1">{p.supplier ?? "—"}</td>
                   <td className="p-1">{p.expiry ? new Date(p.expiry).toLocaleDateString() : "—"}</td>
                   <td className="p-1">{p.reference ?? "—"}</td>
