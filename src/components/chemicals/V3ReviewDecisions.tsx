@@ -242,7 +242,8 @@ export function FrontLabelUploadButton({ revisionId, hasImage }: { revisionId: s
 }
 
 /** System Admin: correct the manufacturer label link. Only http(s) links; saved via the backend. */
-export function LabelUrlEditor({ revisionId, current, onSaved }: { revisionId: string; current: string | null; onSaved: () => unknown }) {
+export function LabelUrlEditor({ revisionId, current, onSaved, kind = "label" }: { revisionId: string; current: string | null; onSaved: () => unknown; kind?: "label" | "product" }) {
+  const isProduct = kind === "product";
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(current ?? "");
   const [err, setErr] = useState<string | null>(null);
@@ -250,23 +251,23 @@ export function LabelUrlEditor({ revisionId, current, onSaved }: { revisionId: s
     mutationFn: async () => {
       const v = validateLabelUrl(value);
       if (!v.ok || !v.value) throw new Error(v.error ?? "Enter a link starting with https://");
-      await setManufacturerLabelUrl(revisionId, v.value, null);
+      await (isProduct ? setManufacturerProductUrl : setManufacturerLabelUrl)(revisionId, v.value, null);
     },
     onSuccess: async () => { setErr(null); setEditing(false); await onSaved(); },
     onError: (e: Error) => setErr(e.message),
   });
   if (!editing) {
     return (
-      <Button size="sm" variant="outline" data-testid="v3-edit-label-url"
+      <Button size="sm" variant="outline" data-testid={isProduct ? "v3-edit-product-url" : "v3-edit-label-url"}
         onClick={() => { setValue(current ?? ""); setErr(null); setEditing(true); }}>
-        {current ? "Correct label link" : "Add label link"}
+        {isProduct ? (current ? "Correct product page link" : "Add product page link") : (current ? "Correct label link" : "Add label link")}
       </Button>
     );
   }
   return (
     <div className="space-y-2 rounded border p-3 text-sm">
-      <label className="font-medium" htmlFor={`label-url-${revisionId}`}>Manufacturer label link</label>
-      <Input id={`label-url-${revisionId}`} value={value} onChange={(e) => setValue(e.target.value)} placeholder="https://…/label.pdf" />
+      <label className="font-medium" htmlFor={`${kind}-url-${revisionId}`}>{isProduct ? "Manufacturer product page link" : "Manufacturer label link"}</label>
+      <Input id={`${kind}-url-${revisionId}`} value={value} onChange={(e) => setValue(e.target.value)} placeholder={isProduct ? "https://…/product-page" : "https://…/label.pdf"} />
       {err && <p className="text-xs text-destructive">{err}</p>}
       <div className="flex gap-2">
         <Button size="sm" disabled={mut.isPending} onClick={() => mut.mutate()}>{mut.isPending ? "Saving…" : "Save link"}</Button>
