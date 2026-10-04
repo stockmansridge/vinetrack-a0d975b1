@@ -135,7 +135,7 @@ describe("Layout", () => {
 
 describe("Inventory entry point", () => {
   it("15-16. System Admin only, reuses ChemicalInventoryPanel", () => {
-    expect(page).toContain('canUseInventoryPilot(isAdmin) && <TabsTrigger value="inventory">Inventory &amp; Purchases');
+    expect(page).toContain('isAdmin && <TabsTrigger value="inventory">Inventory &amp; Purchases');
     expect(page).toContain("<ChemicalInventoryPanel savedChemicalId=");
     expect(page).toContain("Open Inventory / Purchases");
   });

@@ -85,7 +85,6 @@ import { canManageChemicalInventory, v3EntryBadge } from "@/lib/chemicalInventor
 import { ChemicalLabelThumb, UsedForCell } from "@/components/chemicals/ChemicalListCells";
 import { useV3RevisionDisplay, v3RevisionIdOf, usedForOf, productLinkOf } from "@/lib/chemicalV3Display";
 import { Link } from "react-router-dom";
-import { useIsSystemAdmin } from "@/lib/systemAdmin";
 
 // The legacy free-text `chemical_group` column is no longer displayed — the
 // structured resistance group is the single visible authority. The value is

@@ -45,7 +45,7 @@ const backendValue = (s?: InventorySummary): number | null => {
 };
 
 export default function ChemicalInventoryPage() {
-  const { selectedVineyardId, currentRole, loading: vyLoading } = useVineyard() as any;
+  const { selectedVineyardId, currentRole, loading: vyLoading } = useVineyard();
   const allowed = canManageChemicalInventory(currentRole);
   const canSeeCosts = useCanSeeCosts();
   const [filter, setFilter] = useState<FilterKey>("all");

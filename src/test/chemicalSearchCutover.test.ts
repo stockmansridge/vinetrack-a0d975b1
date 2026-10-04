@@ -55,8 +55,8 @@ describe("Chemical Search production cutover", () => {
     expect(v3EntryBadge({ entry_source: "chemical_v3_candidate" })?.label).toBe("Pending review");
     expect(v3EntryBadge({ entry_source: "chemical_v3_catalogue" })?.label).toBe("VineTrack catalogue");
   });
-  it("inventory stays System Admin only on the Chemicals page", () => {
-    expect(page).toContain("canUseInventoryPilot(isSystemAdmin)");
+  it("inventory follows Owner/Manager on the Chemicals page", () => {
+    expect(page).toContain("canManageChemicalInventory(currentRole)");
   });
 });
 

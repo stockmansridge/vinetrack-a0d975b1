@@ -7,7 +7,7 @@ const rpc = vi.fn();
 vi.mock("@/integrations/ios-supabase/client", () => ({ supabase: { rpc: (...a: any[]) => rpc(...a), from: () => ({ select: async () => ({ data: [], error: null }) }) } }));
 
 import {
-  MARK_FINISHED_CONFIRM, OPENING_STOCK_NOT_SET, buildAddToVineyardArgs, buildPurchaseArgs, canUseInventoryPilot, isPendingCatalogueReview,
+  MARK_FINISHED_CONFIRM, OPENING_STOCK_NOT_SET, buildAddToVineyardArgs, buildPurchaseArgs, canManageChemicalInventory, isPendingCatalogueReview,
   isV3Addable, parseCategoryRows, parseInventorySummary, parsePurchaseHistory, setV3ProductCategory, v3CategoryLabel, v3EntryBadge, addV3ToVineyard,
 } from "@/lib/chemicalInventory";
 import { ChemicalInventoryPanel, InventorySummaryView } from "@/components/chemicals/ChemicalInventoryPanel";
@@ -98,13 +98,12 @@ describe("Inventory", () => {
 });
 
 describe("Gate, compact display, V1/V2 untouched", () => {
-  it("16. non-System-Admin sees no pilot controls", () => {
-    expect(canUseInventoryPilot(false)).toBe(false);
+  it("16. inventory controls follow the vineyard Owner/Manager role", () => {
+    expect(canManageChemicalInventory("supervisor")).toBe(false);
     const page = fs.readFileSync("src/pages/setup/SavedChemicalsPage.tsx", "utf8");
-    expect(page).toContain("canUseInventoryPilot(isSystemAdmin)");
+    expect(page).toContain("canManageChemicalInventory(currentRole)");
+    expect(page).not.toContain("useIsSystemAdmin");
     expect(page).toMatch(/\{inventoryPilot && \(\s*<Sheet/);
-    const lab = fs.readFileSync("src/pages/admin/ChemicalV3LabPage.tsx", "utf8");
-    expect((lab.match(/canUseInventoryPilot\(isAdmin\) && revi?s?I?d?/g) ?? []).length).toBeGreaterThanOrEqual(2);
   });
   it("17 + 18. long application text and restrictions collapsed by default", () => {
     const { container } = render(<RateOptionCard option={{ min_value: 3, max_value: 6, unit: "L/ha", targets: ["Phalaris"], methods: ["Boom"], application_directions: "Apply in 50 to 150 L water per hectare using a boom", condition: "Do not apply in wind" }} />);

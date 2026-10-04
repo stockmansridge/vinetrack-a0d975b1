@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 
 export default function ChemicalPurchasePage() {
-  const { selectedVineyardId, currentRole, loading: vyLoading } = useVineyard() as any;
+  const { selectedVineyardId, currentRole, loading: vyLoading } = useVineyard();
   const loading = !!vyLoading && !currentRole;
   const allowed = canManageChemicalInventory(currentRole);
   const qc = useQueryClient();
