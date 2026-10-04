@@ -147,7 +147,25 @@ export async function fetchV3Revision(revisionId: string): Promise<Row | null> {
 export async function v3ReviewQueue(): Promise<Row[]> {
   const { data, error } = await sb.rpc(V3_RPC.queue);
   if (error) throw error;
-  return (data ?? []) as Row[];
+  const rows = (data ?? []) as Row[];
+  // Optional "Added by" details (sql/260). Missing service → rows unchanged.
+  try {
+    const { data: who, error: werr } = await sb.rpc("chemical_v3_admin_review_queue_requesters");
+    if (werr || !Array.isArray(who)) return rows;
+    const byRev = new Map<string, Row>(who.map((w: Row) => [String(w.revision_id), w]));
+    return rows.map((r) => {
+      const w = byRev.get(String(r.revision_id ?? r.id));
+      if (!w) return r;
+      return {
+        ...r,
+        requested_by_name: r.requested_by_name ?? w.requested_by_name ?? null,
+        requested_by_email: r.requested_by_email ?? w.requested_by_email ?? null,
+        vineyard_name: r.vineyard_name ?? w.vineyard_name ?? null,
+      };
+    });
+  } catch {
+    return rows;
+  }
 }
 
 export async function approveV3(revisionId: string, note: string | null): Promise<void> {
