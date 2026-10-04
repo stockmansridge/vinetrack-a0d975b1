@@ -430,7 +430,18 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
                   {msg && <p className={cn("text-sm", msg.tone === "err" ? "text-destructive" : "text-success")}>{msg.text}</p>}
                   <div className="flex gap-2">
                     <Button disabled={act.isPending} onClick={() => act.mutate("approve")}>Approve</Button>
-                    <Button variant="destructive" disabled={act.isPending || !note.trim()} onClick={() => act.mutate("reject")}>Reject</Button>
+                    <Button
+                      variant="destructive"
+                      disabled={act.isPending}
+                      onClick={() => {
+                        if (!note.trim()) {
+                          setMsg({ tone: "err", text: "Type a reason in the review note box above, then press Reject." });
+                          (document.querySelector('[aria-label="Review note"]') as HTMLTextAreaElement | null)?.focus();
+                          return;
+                        }
+                        act.mutate("reject");
+                      }}
+                    >{act.isPending ? "Saving…" : "Reject"}</Button>
                   </div>
                 </>
               ) : approvalPanelFor(status) === "approved" ? (
