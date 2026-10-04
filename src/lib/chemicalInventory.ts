@@ -1,9 +1,9 @@
-// Chemical V3 vineyard add + inventory pilot (System Admin only for now).
+// Chemical V3 vineyard add + vineyard chemical inventory (Owner/Manager).
 //
 // All writes go through the live database RPCs below — the Portal never
 // writes the inventory tables directly, never derives unit cost, never
-// deducts spray use and never invents stock from pack size. Remove the
-// pilot gate later by changing `canUseInventoryPilot` only.
+// deducts spray use and never invents stock from pack size. Access is the
+// selected vineyard role (canManageChemicalInventory) — never System Admin.
 import { supabase } from "@/integrations/ios-supabase/client";
 import { productCategoryLabel } from "@/lib/chemicalProductCategory";
 
@@ -26,9 +26,9 @@ export const PILOT_RPC = {
 } as const;
 export const CATEGORY_TABLE = "chemical_product_categories";
 
-/** Single switch for the pilot gate — today: System Admin only. */
-export function canUseInventoryPilot(isSystemAdmin: boolean): boolean {
-  return isSystemAdmin;
+/** Inventory, purchases, stock values and traceability records: Owner/Manager of the selected vineyard only. */
+export function canManageChemicalInventory(role: string | null | undefined): boolean {
+  return role === "owner" || role === "manager";
 }
 
 export const STOCK_UNITS = ["L", "mL", "kg", "g"] as const;
@@ -142,6 +142,8 @@ export interface InventorySummary {
   currency: string | null;
   latestPurchaseDate: string | null;
   latestBatch: string | null;
+  latestBatchDate: string | null;
+  latestSerial: string | null;
   warningsEnabled: boolean | null;
   lowStockPercent: number | null;
   lowStockQuantity: number | null;
@@ -174,6 +176,8 @@ export function parseInventorySummary(data: any): InventorySummary {
     currency: first(r, "latest_currency", "currency") ?? null,
     latestPurchaseDate: first(r, "latest_purchase_date") ?? null,
     latestBatch: first(r, "latest_batch_number", "batch_number") ?? null,
+    latestBatchDate: first(r, "latest_batch_date") ?? null,
+    latestSerial: first(r, "latest_serial_number") ?? null,
     warningsEnabled: r && typeof r.warnings_enabled === "boolean" ? r.warnings_enabled : null,
     lowStockPercent: n(first(r, "low_stock_percent")),
     lowStockQuantity: n(first(r, "low_stock_threshold_quantity", "low_stock_quantity")),
@@ -187,7 +191,8 @@ export const fetchInventorySummary = async (savedChemicalId: string) =>
 
 export interface PurchaseRow {
   id: string; date: string | null; quantity: number | null; unit: string | null; total: number | null;
-  unitCost: number | null; currency: string | null; batch: string | null; supplier: string | null;
+  unitCost: number | null; currency: string | null; batch: string | null;
+  batchDate: string | null; serialNumber: string | null; supplier: string | null;
   expiry: string | null; reference: string | null;
   /** Container snapshot (V2). Null for legacy purchases — never fabricated. */
   containerCount: number | null; containerSize: number | null; containerUnit: string | null;
@@ -203,6 +208,8 @@ export function parsePurchaseHistory(data: any): PurchaseRow[] {
     unitCost: n(first(r, "unit_cost", "cost_per_unit", "cost_per_base_unit")),
     currency: first(r, "currency") ?? null,
     batch: first(r, "batch_number") ?? null,
+    batchDate: first(r, "batch_date") ?? null,
+    serialNumber: first(r, "serial_number") ?? null,
     supplier: first(r, "supplier") ?? null,
     expiry: first(r, "expiry_date") ?? null,
     reference: first(r, "invoice_reference") ?? null,
@@ -216,7 +223,12 @@ export const fetchPurchaseHistory = async (savedChemicalId: string) =>
 
 export interface PurchaseDraft {
   date: string; quantity: string; unit: StockUnit; total: string; currency: string;
-  batch: string; supplier: string; reference: string; expiry: string; notes: string;
+  batch: string; batchDate: string; serialNumber: string; supplier: string; reference: string; expiry: string; notes: string;
+}
+
+/** Traceability args. Blank values are NULL (unknown / not printed), never "". */
+export function traceabilityArgs(d: Pick<PurchaseDraft, "batch" | "batchDate" | "serialNumber">): Row {
+  return { p_batch_number: txt(d.batch), p_batch_date: txt(d.batchDate), p_serial_number: txt(d.serialNumber) };
 }
 /** Quantity + total amount only — the database derives unit cost. */
 export function buildPurchaseArgs(savedChemicalId: string, d: PurchaseDraft): { args: Row } | { error: string } {
@@ -250,7 +262,7 @@ export function buildPurchaseV2Args(savedChemicalId: string, d: PurchaseDraft, b
   return { args: {
     p_saved_chemical_id: savedChemicalId, p_purchase_date: d.date,
     p_container_count: c, p_container_size: sz, p_container_unit: box.unit,
-    p_total_cost: t, p_currency: txt(d.currency), p_batch_number: txt(d.batch), p_supplier: txt(d.supplier),
+    p_total_cost: t, p_currency: txt(d.currency), ...traceabilityArgs(d), p_supplier: txt(d.supplier),
     p_invoice_reference: txt(d.reference), p_expiry_date: txt(d.expiry), p_notes: txt(d.notes),
   } };
 }

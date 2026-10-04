@@ -5,8 +5,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { FlaskConical, Package, Plus, ShoppingCart } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
-import { useIsSystemAdmin } from "@/lib/systemAdmin";
-import { canUseInventoryPilot } from "@/lib/chemicalInventory";
+import { canManageChemicalInventory } from "@/lib/chemicalInventory";
 import { cn } from "@/lib/utils";
 
 export type ChemicalSection = "chemicals" | "inventory" | "purchases";
@@ -19,10 +18,9 @@ const active = "bg-background font-medium text-foreground shadow-sm";
 
 export function ChemicalSectionNav({ active: current, onAddChemical }: { active: ChemicalSection; onAddChemical?: () => void }) {
   const { currentRole } = useVineyard();
-  const { isAdmin } = useIsSystemAdmin();
   const navigate = useNavigate();
   const canAdd = currentRole === "owner" || currentRole === "manager";
-  const pilot = canUseInventoryPilot(isAdmin);
+  const pilot = canManageChemicalInventory(currentRole);
   const add = () => (onAddChemical ? onAddChemical() : navigate(`/setup/chemicals?${ADD_CHEMICAL_PARAM}=1`));
   return (
     <nav aria-label="Chemicals section" data-testid="chemical-section-nav"

@@ -31,7 +31,7 @@ describe("Chemicals list display enrichment", () => {
     expect(page).toContain("...usedFor(c)]");
     expect(page).toContain("<ChemicalSectionNav active=\"chemicals\"");
     const inv = read("src/pages/setup/ChemicalInventoryPage.tsx");
-    expect(inv).toContain("canUseInventoryPilot(isAdmin)");
+    expect(inv).toContain("canManageChemicalInventory(currentRole)");
     expect(inv).toContain("fetchInventorySummary(c.id)");
     expect(inv).toContain("<ChemicalInventoryPanel");
   });

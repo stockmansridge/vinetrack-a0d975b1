@@ -1,5 +1,5 @@
 // Chemical Purchase — record a purchase against an existing Saved Chemical.
-// System Admin inventory pilot gate (canUseInventoryPilot). Writes go through
+// Owner/Manager only (canManageChemicalInventory on the selected vineyard role). Writes go through
 // chemical_inventory_record_purchase_v2 with container count/size/unit; the
 // backend calculates the stored quantity and unit cost.
 import { useState } from "react";
@@ -7,9 +7,8 @@ import { Navigate } from "react-router-dom";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { ShoppingCart } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
-import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
-import { canUseInventoryPilot, fetchInventorySummary, fetchPurchaseHistory, recordPurchaseV2, type PurchaseDraft } from "@/lib/chemicalInventory";
+import { canManageChemicalInventory, fetchInventorySummary, fetchPurchaseHistory, recordPurchaseV2, type PurchaseDraft } from "@/lib/chemicalInventory";
 import { defaultContainer, type ContainerDraft } from "@/lib/chemicalContainers";
 import { useV3RevisionDisplay, v3RevisionIdOf } from "@/lib/chemicalV3Display";
 import { shortManufacturerName } from "@/lib/manufacturerNormalise";
@@ -23,9 +22,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 
 export default function ChemicalPurchasePage() {
-  const { selectedVineyardId } = useVineyard();
-  const { isAdmin, loading } = useIsSystemAdmin();
-  const allowed = canUseInventoryPilot(isAdmin);
+  const { selectedVineyardId, currentRole, loading: vyLoading } = useVineyard();
+  const loading = !!vyLoading && !currentRole;
+  const allowed = canManageChemicalInventory(currentRole);
   const qc = useQueryClient();
   const { toast } = useToast();
   const [chemId, setChemId] = useState<string>("");
