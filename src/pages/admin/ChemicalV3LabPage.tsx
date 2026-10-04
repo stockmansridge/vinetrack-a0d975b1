@@ -344,6 +344,7 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
                   <Button size="sm" asChild><a href={labelUrl} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-1 h-4 w-4" />Open Manufacturer Label</a></Button>
                 ) : <Badge className="border-transparent bg-destructive/15 text-destructive">Manufacturer label missing</Badge>}
                 {isAdmin && revisionId && <HeaderLabelUrlEditor revisionId={revisionId} current={labelUrl ?? null} />}
+                {isAdmin && revisionId && <HeaderLabelUrlEditor kind="product" revisionId={revisionId} current={pick(r, "manufacturer_product_url") ?? null} />}
                 {isAdmin && revisionId && <FrontLabelUploadButton revisionId={revisionId} hasImage={!!pick(r, "front_label_image_path")} />}
               </div>
               {(() => {
@@ -661,8 +662,8 @@ export default function ChemicalV3LabPage() {
   );
 }
 
-function HeaderLabelUrlEditor({ revisionId, current }: { revisionId: string; current: string | null }) {
+function HeaderLabelUrlEditor({ revisionId, current, kind = "label" }: { revisionId: string; current: string | null; kind?: "label" | "product" }) {
   const qc = useQC();
-  return <LabelUrlEditor revisionId={revisionId} current={current}
+  return <LabelUrlEditor kind={kind} revisionId={revisionId} current={current}
     onSaved={() => Promise.all(frontLabelReloadKeys(revisionId).map((queryKey) => qc.invalidateQueries({ queryKey })))} />;
 }

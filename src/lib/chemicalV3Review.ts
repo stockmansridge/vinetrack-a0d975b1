@@ -236,3 +236,8 @@ export const V3_SET_LABEL_URL_RPC = "chemical_v3_set_manufacturer_label_url";
 export async function setManufacturerLabelUrl(revisionId: string, url: string, note: string | null) {
   await rpc(V3_SET_LABEL_URL_RPC, { p_revision_id: revisionId, p_url: url, p_note: note });
 }
+
+export const V3_SET_PRODUCT_URL_RPC = "chemical_v3_set_manufacturer_product_url";
+export async function setManufacturerProductUrl(revisionId: string, url: string, note: string | null) {
+  await rpc(V3_SET_PRODUCT_URL_RPC, { p_revision_id: revisionId, p_url: url, p_note: note });
+}
