@@ -37,8 +37,7 @@ begin
     join public.chemical_v3_discovery_jobs j on j.id = r.job_id
     left join public.profiles p on p.id = j.requested_by
     left join auth.users u on u.id = j.requested_by
-    left join public.vineyards v on v.id = j.vineyard_id
-   where r.review_status in ('pending', 'pending_review', 'needs_attention');
+    left join public.vineyards v on v.id = j.vineyard_id;
 end;
 $$;
 
