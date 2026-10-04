@@ -10,6 +10,7 @@ import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import { toChemicalIntelligence, type ChemicalIntelligence } from "@/lib/chemicalIntelligence";
 import { hydrateDraft } from "@/lib/sprayApplicationDraft";
 import { planSprayPrefillFromProgramStep } from "@/lib/sprayProgramStep";
+import { withPreferredRateFallback } from "@/lib/vineyardPreferredRate";
 import type { SprayJob } from "@/lib/sprayJobsQuery";
 import { SprayJobWizard } from "@/components/spray/wizard/SprayJobWizard";
 import type { WizardLookups } from "@/components/spray/wizard/types";
@@ -43,7 +44,16 @@ export function PlanSprayFromProgramStep({
       paddockIds: [],
       intelligenceById,
     });
-    return planSprayPrefillFromProgramStep(step);
+    const prefill = planSprayPrefillFromProgramStep(step);
+    // Program Step rate wins; an older step with no stored rate falls back to
+    // the Vineyard Preferred Rate before any registered/default logic.
+    prefill.products = (prefill.products ?? []).map((p) =>
+      withPreferredRateFallback(
+        p,
+        p.savedChemicalId ? intelligenceById.get(p.savedChemicalId)?.vineyardPreferredRate ?? null : null,
+      ),
+    );
+    return prefill;
   }, [chemResult, programStep, vineyardId]);
 
   if (chemResult === undefined) return null;

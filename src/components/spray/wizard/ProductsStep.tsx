@@ -31,6 +31,7 @@ import {
   type ChemicalIntelligence,
 } from "@/lib/chemicalIntelligence";
 import type { StepProps } from "./types";
+import { lineMatchesPreferred, preferredRateTitle } from "@/lib/vineyardPreferredRate";
 import { useVineyard } from "@/context/VineyardContext";
 import { ChemicalStoreCombobox } from "@/components/spray/ChemicalStoreCombobox";
 import { ChemicalEditor } from "@/components/chemicals/ChemicalEditorSheet";
@@ -45,6 +46,10 @@ import { JurisdictionNoticeBanner } from "@/components/chemicals/JurisdictionNot
 import { countryLabel, jurisdictionSuitability, labelFactsAuthoritative } from "@/lib/chemicalJurisdiction";
 
 const UNITS = ["L", "mL", "kg", "g"];
+
+function hasApplicableRegisteredRate(intel: ChemicalIntelligence): boolean {
+  return intel.registeredUses.some((u) => u.rates.some((r) => isApplicableLabelRate(r)));
+}
 
 /**
  * The single authoritative binding path: a product line is linked to a Chemical
@@ -183,6 +188,7 @@ export function ProductsStep({ app, patch, calc, intelligenceById, canEdit, vine
             index={i}
             mode={app.mode}
             isTemplate={!!app.isTemplate}
+            vineyardName={vineyardName}
             line={line}
             result={calc.products[i]}
             chemicals={chemicals}
@@ -231,6 +237,7 @@ function ProductRow({
   index,
   mode,
   isTemplate,
+  vineyardName,
   line,
   result,
   chemicals,
@@ -243,6 +250,7 @@ function ProductRow({
   index: number;
   mode: SprayApplication["mode"];
   isTemplate: boolean;
+  vineyardName: string | null;
   line: SprayProductLine;
   result: any;
   chemicals: ChemicalIntelligence[];
@@ -337,19 +345,19 @@ function ProductRow({
         )}
       </div>
 
-      {isTemplate ? (
-        <p className="rounded-md border bg-muted/30 p-2 text-xs text-muted-foreground">
-          A Program Step lists the product only. The label rate, unit and rate basis are chosen
-          together from the registered label when the spray is planned against real blocks.
+      {isTemplate && (
+        <p className="text-[11px] text-muted-foreground">
+          Set the rate you normally intend to use for this Program Step. You can still change it
+          when planning the actual spray.
         </p>
-      ) : (
+      )}
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="space-y-1">
           <Label className="text-xs">Rate</Label>
           <Input
             type="number" min="0" step="0.01" disabled={!canEdit}
             value={line.rate ?? ""}
-            onChange={(e) => onChange({ ...line, rate: e.target.value === "" ? null : Number(e.target.value) })}
+            onChange={(e) => onChange({ ...line, rateSource: null, rate: e.target.value === "" ? null : Number(e.target.value) })}
           />
         </div>
         <div className="space-y-1">
@@ -357,7 +365,7 @@ function ProductRow({
           <Select
             value={line.unit ?? "__none"}
             disabled={!canEdit}
-            onValueChange={(v) => onChange({ ...line, unit: v === "__none" ? null : v })}
+            onValueChange={(v) => onChange({ ...line, rateSource: null, unit: v === "__none" ? null : v })}
           >
             <SelectTrigger><SelectValue placeholder="Unit" /></SelectTrigger>
             <SelectContent>
@@ -372,7 +380,7 @@ function ProductRow({
             value={line.rateBasis ?? "__none"}
             disabled={!canEdit}
             onValueChange={(v) =>
-              onChange({ ...line, rateBasis: v === "__none" ? null : (v as ProductRateBasis) })
+              onChange({ ...line, rateSource: null, rateBasis: v === "__none" ? null : (v as ProductRateBasis) })
             }
           >
             <SelectTrigger><SelectValue placeholder="Choose basis" /></SelectTrigger>
@@ -385,6 +393,17 @@ function ProductRow({
           </Select>
         </div>
       </div>
+      {line.rate != null && (
+        <p className="text-[11px] text-muted-foreground">
+          {line.rateSource === "vineyard_preferred" || lineMatchesPreferred(line, intel?.vineyardPreferredRate ?? null)
+            ? `From ${preferredRateTitle(vineyardName).replace(/ Preferred Rate$/, "")} preferred rate`
+            : isTemplate
+              ? "Program Step rate"
+              : null}
+          {intel && !hasApplicableRegisteredRate(intel) && (
+            <span className="block">Vineyard rate — no registered grapevine rate available for comparison</span>
+          )}
+        </p>
       )}
 
       {/* Foreign label facts stay visible but are never authoritative here. */}
@@ -436,7 +455,7 @@ function ProductRow({
                       <button
                         key={r}
                         type="button"
-                        disabled={!canEdit || isTemplate}
+                        disabled={!canEdit}
                         className="block w-full rounded px-1 py-1 text-left hover:bg-muted/60"
                         onClick={() => onChange(applyLabelRate(line, rate, mode))}
                       >
