@@ -282,9 +282,26 @@ export function ChemicalSearchDialog(props: ChemicalSearchDialogProps) {
                 })}
                 {!jobId && results.length > 0 && (
                   <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground" data-testid="chemical-search-different">
-                    <span>Can't find the right product?</span>
-                    <Button size="sm" variant="ghost" onClick={() => find.mutate()} disabled={find.isPending}>
-                      <Sparkles className="mr-1.5 h-4 w-4" aria-hidden="true" />Find a different product
+                    <span>
+                      Can't find the product in the{" "}
+                      <span className="font-extrabold" style={{ fontFamily: "'Montserrat', sans-serif", letterSpacing: "-0.015em" }}>
+                        <span className="text-foreground">Vine</span><span style={{ color: "#85B830" }}>Track</span>
+                      </span>{" "}
+                      Catalogue?
+                    </span>
+                    <Button
+                      size="sm"
+                      onClick={() => find.mutate()}
+                      disabled={find.isPending}
+                      className="font-semibold shadow-sm hover:opacity-90"
+                      style={{ backgroundColor: "#85B830", color: "#FFFFFF" }}
+                    >
+                      {/* Find a different product */}
+                      <Sparkles className="mr-1.5 h-4 w-4" aria-hidden="true" />Let{" "}
+                      <span className="mx-1 font-extrabold" style={{ fontFamily: "'Montserrat', sans-serif", letterSpacing: "-0.015em" }}>
+                        <span style={{ color: "#1A1A1A" }}>Vine</span><span style={{ color: "#FFFFFF" }}>Track</span>
+                      </span>
+                      AI find it for you
                     </Button>
                   </div>
                 )}
