@@ -4,6 +4,8 @@
 // - product_id references saved_chemicals(id) — no separate product table.
 // - Writes go via ordinary inserts under the vineyard's RLS; owner/manager/
 //   supervisor/operator may insert or update.
+// - Allocation removal uses the RPC delete_fertiliser_record_allocation
+//   (owner/manager/supervisor/operator); direct child DELETE is blocked.
 // - Soft delete is enforced via the shared RPC soft_delete_fertiliser_record
 //   (owner/manager/supervisor only). Hard delete is blocked in the database.
 // - All writes are keyed on stable client-generated UUIDs so retries are
@@ -180,14 +182,10 @@ export async function saveFertiliserRecord(
   const desiredIds = new Set(input.allocations.map((a) => a.id));
   const existing = await fetchFertiliserAllocations(input.id);
   const toRemove = existing.filter((a) => !desiredIds.has(a.id));
-  if (toRemove.length) {
-    const { error } = await supabase
-      .from("fertiliser_record_allocations")
-      .delete()
-      .in(
-        "id",
-        toRemove.map((a) => a.id),
-      );
+  // Direct DELETE on allocations is blocked by RLS; the live RPC removes one
+  // child allocation (idempotent) and leaves the parent record untouched.
+  for (const a of toRemove) {
+    const { error } = await supabase.rpc("delete_fertiliser_record_allocation", { p_id: a.id } as any);
     if (error) throw error;
   }
   const allocPayloads = input.allocations.map((a) => ({
