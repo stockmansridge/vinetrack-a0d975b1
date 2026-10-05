@@ -13,6 +13,7 @@ import {
   parseRows,
   parseVarietyAllocations,
 } from "@/lib/paddockGeometry";
+import { summaryVineCount } from "@/lib/paddockRowVines";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -174,7 +175,7 @@ export default function PaddocksListPage() {
                     </TableCell>
                     <TableCell>{rowRange}</TableCell>
                     <TableCell className="text-right">
-                      {metrics.vineCount != null ? fmt(metrics.vineCount) : "—"}
+                      {(() => { const v = summaryVineCount(paddock, metrics.vineCount); return v != null ? fmt(v) : "—"; })()}
                     </TableCell>
                     <TableCell className="text-right">
                       {metrics.emitterCount != null

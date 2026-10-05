@@ -32,7 +32,7 @@
 //   the raw JSON object and return a shallow copy with only the one key
 //   changed.
 
-import { parseRows, rowLengthMeters, type PaddockRow } from "./paddockGeometry";
+import { parseRows, rowLengthMeters, readRowLengthOverrides, type PaddockRow } from "./paddockGeometry";
 
 /** The raw, untouched JSON object exactly as stored in paddocks.rows. */
 export type RawPaddockRow = Record<string, any>;
@@ -167,4 +167,31 @@ export function mergeGeneratedGeometry(
       id: prev.id ?? g.id,
     };
   });
+}
+
+/**
+ * USER-FACING vine-count summary (display only — iOS/Android parity).
+ * Precedence:
+ *   1. valid paddocks.vine_count_override
+ *   2. if ANY row has rows[].vineCountOverride → SUM(effectiveVineCount(row))
+ *   3. otherwise the existing calculated block count (deriveMetrics.vineCount)
+ * Never written back to storage; never used by spray/irrigation/fertiliser/
+ * yield/piece-rate calculations (they keep deriveMetrics).
+ */
+export function summaryVineCount(
+  paddock: any,
+  calculatedBlockCount: number | null,
+): number | null {
+  const block = Number(paddock?.vine_count_override);
+  if (isFiniteNum(block) && block > 0) return Math.round(block);
+  const rows = parseRawRows(paddock?.rows);
+  if (rows.some((r) => readVineCountOverride(r) != null)) {
+    const lenMap = readRowLengthOverrides(paddock);
+    return rows.reduce((s, r) => {
+      const n = Number(r?.number);
+      const len = lenMap && Number.isFinite(n) ? lenMap.get(n) : undefined;
+      return s + (effectiveRowVineCount(r, paddock?.vine_spacing, len) ?? 0);
+    }, 0);
+  }
+  return calculatedBlockCount;
 }
