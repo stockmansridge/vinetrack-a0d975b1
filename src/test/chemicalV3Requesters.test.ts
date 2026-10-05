@@ -19,7 +19,7 @@ describe("sql/260 matches the live provenance contract", () => {
     expect(code).toMatch(/chemical_v3_job_requests jr on jr\.job_id = lj\.job_id/);
     expect(code).toMatch(/coalesce\(jr\.user_id, lj\.created_by\)/);
     expect(code).toMatch(/jr\.vineyard_id/);
-    expect(code).not.toMatch(/r\.job_id|j\.requested_by|j\.vineyard_id/);
+    expect(code).not.toMatch(/\br\.job_id|\bj\.requested_by|\bj\.vineyard_id/);
   });
   it("keeps admin-only, security definer, fixed search_path, grants", () => {
     expect(code).toMatch(/is_system_admin\(\)/);
