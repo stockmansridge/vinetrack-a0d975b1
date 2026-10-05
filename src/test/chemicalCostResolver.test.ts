@@ -123,9 +123,13 @@ const planned: PlannedTank[] = [
     { plannedChemicalId: "p2", savedChemicalId: "c2", name: "B", unit: "Litres", amount: 1000, amountIsBase: true, legacyCostPerUnit: 10 },
   ] },
 ];
-const act = (lines: ActualTank["lines"]): ActualTank[] => [{ tankNumber: 1, recorded: true, lines }];
+const ID = { vineyardId: "v", sprayRecordId: "r", tripId: "t", sessionsByTank: new Map([[1, new Set(["s1"])]]) };
+const act = (lines: ActualTank["lines"]): ActualTank[] => [{
+  tankNumber: 1, recorded: true, vineyardId: "v", sprayRecordId: "r", tripId: "t", tankSessionId: "s1", waterL: 500, lines,
+}];
+let alId = 0;
 const al = (o: Partial<ActualTank["lines"][number]>) => ({
-  plannedChemicalId: null, savedChemicalId: null, replacesPlannedChemicalId: null, usageKind: "planned" as const,
+  id: `a${++alId}`, plannedChemicalId: null, savedChemicalId: null, replacesPlannedChemicalId: null, usageKind: "planned" as const,
   name: null, unit: "Litres", actualAmountBase: null, ...o,
 });
 
@@ -136,19 +140,19 @@ describe("Tank Actuals", () => {
     al({ savedChemicalId: "c4", usageKind: "additional", actualAmountBase: 100 }),
   ]);
   it("24/26: complete actuals use actual quantities, not clamped to plan", () => {
-    expect(tankActualsComplete(planned, completeActuals)).toBe(true);
-    const sel = selectChemicalUsage(planned, completeActuals);
+    expect(tankActualsComplete(planned, completeActuals, ID)).toBe(true);
+    const sel = selectChemicalUsage(planned, completeActuals, ID);
     expect(sel.quantityBasis).toBe("actual");
     expect(sel.lines.find((l) => l.savedChemicalId === "c1")?.amount).toBe(3000);
   });
   it("25: incomplete actuals use planned quantities", () => {
     const partial = act([al({ plannedChemicalId: "p1", savedChemicalId: "c1", actualAmountBase: 3000 })]);
-    const sel = selectChemicalUsage(planned, partial);
+    const sel = selectChemicalUsage(planned, partial, ID);
     expect(sel.quantityBasis).toBe("estimated_planned");
     expect(sel.lines.map((l) => l.amount)).toEqual([2000, 1000]);
   });
   it("27/28: substitute and additional use their own Saved Chemical IDs (no inherited snapshot)", () => {
-    const sel = selectChemicalUsage(planned, completeActuals);
+    const sel = selectChemicalUsage(planned, completeActuals, ID);
     const sub = sel.lines.find((l) => l.usageKind === "substitution")!;
     const add = sel.lines.find((l) => l.usageKind === "additional")!;
     expect(sub.savedChemicalId).toBe("c3");
@@ -163,7 +167,7 @@ describe("Tank Actuals", () => {
       al({ plannedChemicalId: "p2", savedChemicalId: "c2", actualAmountBase: 1000 }),
       al({ savedChemicalId: null, name: "A", usageKind: "additional", actualAmountBase: 50 }),
     ]);
-    const sel = selectChemicalUsage(planned, acts);
+    const sel = selectChemicalUsage(planned, acts, ID);
     const res = resolveChemicalCost(sel.lines, map(price("c1"), price("c2")), sel.quantityBasis);
     expect(res.status).toBe("partial");
     expect(res.lines.find((l) => l.name === "A")?.cost).toBeNull();
