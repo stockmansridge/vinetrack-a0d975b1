@@ -96,7 +96,7 @@ export default function ChemicalPurchasePage() {
   return (
     <div className="space-y-5">
       <div className="min-h-14 space-y-1">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold"><ShoppingCart className="h-6 w-6 text-primary" />Chemical Purchase</h1>
+        <h1 className="text-2xl font-semibold">Chemical Purchase</h1>
         <p className="text-sm text-muted-foreground">Record chemical purchases and add them to vineyard inventory.</p>
       </div>
       <ChemicalSectionNav active="purchases" />

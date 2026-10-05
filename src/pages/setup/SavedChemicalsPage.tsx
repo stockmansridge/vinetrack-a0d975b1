@@ -483,7 +483,7 @@ export default function SavedChemicalsPage() {
     <div className="space-y-5">
       <div className="space-y-5">
         <div className="min-h-14 space-y-1">
-          <h1 className="flex items-center gap-2 text-2xl font-semibold"><FlaskConical className="h-6 w-6 text-primary" />Chemicals</h1>
+          <h1 className="text-2xl font-semibold">Chemicals</h1>
           <p className="text-sm text-muted-foreground">
             {canEdit ? "Owner/Manager can add, edit and archive vineyard chemicals." : "Read-only view."}
             {" "}Soft-deleted records are excluded.
