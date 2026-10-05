@@ -2,13 +2,14 @@
 // Owner/Manager/Supervisor (canRecordChemicalPurchase on the selected vineyard role). Writes go through
 // chemical_inventory_record_purchase_v2 with container count/size/unit; the
 // backend calculates the stored quantity and unit cost.
-import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { ShoppingCart } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import { canRecordChemicalPurchase, fetchInventorySummary, fetchPurchaseHistory, recordPurchaseV2, type PurchaseDraft } from "@/lib/chemicalInventory";
+import { suggestPurchaseContainer } from "@/lib/chemicalPurchaseAuthority";
 import { defaultContainer, type ContainerDraft } from "@/lib/chemicalContainers";
 import { useV3RevisionDisplay, v3RevisionIdOf } from "@/lib/chemicalV3Display";
 import { shortManufacturerName } from "@/lib/manufacturerNormalise";
@@ -48,8 +49,28 @@ export default function ChemicalPurchasePage() {
     const c = chemicals.find((x) => x.id === id);
     const unit = defaultStockUnit(null, c?.product_form, c?.inventory_unit);
     setPurchase(emptyPurchase(unit));
+    // Legacy pack size/unit is a fallback only; the latest real purchase wins below.
     setBox(defaultContainer(c?.pack_size, c?.pack_unit, unit));
+    setSeeded(null);
   };
+  // Prefer the latest recorded purchase's container as the new-purchase default.
+  const [seeded, setSeeded] = useState<string | null>(null);
+  const latestQ = useQuery({ queryKey: ["chem-inventory-history", chemId], enabled: !!chemId && allowed, queryFn: () => fetchPurchaseHistory(chemId) });
+  useEffect(() => {
+    if (!chemId || seeded === chemId || !latestQ.data) return;
+    const s = suggestPurchaseContainer(latestQ.data[0] ?? null, chem);
+    if (s.size != null && latestQ.data[0]?.containerSize != null) {
+      setBox((b) => defaultContainer(s.size, s.unit, b.unit));
+    }
+    setSeeded(chemId);
+  }, [chemId, seeded, latestQ.data, chem]);
+  // Optional ?chemical=<savedChemicalId> preselect, only within this vineyard's list.
+  const [params] = useSearchParams();
+  const pre = params.get("chemical");
+  useEffect(() => {
+    if (pre && !chemId && chemicals.some((c) => c.id === pre)) pick(pre);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pre, chemicals.length]);
   // Once the summary arrives, keep the container unit inside the stored unit family.
   const effectiveBox = units.includes(box.unit) ? box : { ...box, unit: defaultStockUnit(summary.data?.unit ?? null) };
 

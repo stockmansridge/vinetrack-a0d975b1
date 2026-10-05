@@ -140,7 +140,6 @@ import {
   PHYSICAL_FORM_LABEL,
   formFromInventoryUnit,
   inventoryUnitForForm,
-  packUnitForForm,
   parsePhysicalForm,
   type PhysicalForm,
 } from "@/lib/chemicalPhysicalForm";
@@ -178,21 +177,6 @@ import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { formatDate } from "@/lib/dateFormat";
 
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
-const fmtMoney = (v?: number | null, currency = "AUD") => {
-  if (v == null || !Number.isFinite(Number(v))) return "—";
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(v));
-  } catch {
-    return `$${Number(v).toFixed(2)}`;
-  }
-};
-
-function purchaseCostPerUnit(purchase: any): number | null {
-  const raw = purchase?.costPerBaseUnit ?? purchase?.cost_per_base_unit
-    ?? purchase?.costPerUnit ?? purchase?.cost_per_unit;
-  const value = Number(raw);
-  return Number.isFinite(value) && value >= 0 ? value : null;
-}
 
 function displayBaseUnit(unit?: string | null): string {
   const base = normaliseUnit(unit);
