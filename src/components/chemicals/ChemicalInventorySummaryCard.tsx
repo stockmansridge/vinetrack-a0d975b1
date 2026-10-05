@@ -1,6 +1,7 @@
 // Read-only "Inventory & purchase" summary inside Edit Chemical.
 // Chemical Inventory / Chemical Purchase are the authority; nothing here is
 // editable, computed locally, or copied back into the Saved Chemical.
+import { Fragment } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -52,7 +53,7 @@ function Loaded({ id, role }: { id: string; role: Role }) {
         <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1 text-xs">
           <dt className="text-muted-foreground">Current quantity</dt><dd>{qty}</dd>
           <dt className="text-muted-foreground">Stock status</dt><dd>{s?.state ? STOCK_STATE_LABEL[s.state] : "—"}</dd>
-          {rows.filter(([, v]) => v).map(([k, v]) => (<><dt key={`${k}-k`} className="text-muted-foreground">{k}</dt><dd key={`${k}-v`}>{v}</dd></>))}
+          {rows.filter(([, v]) => v).map(([k, v]) => (<Fragment key={k}><dt className="text-muted-foreground">{k}</dt><dd>{v}</dd></Fragment>))}
         </dl>
       )}
       <div className="flex flex-wrap gap-2 pt-1">
