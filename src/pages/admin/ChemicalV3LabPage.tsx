@@ -225,17 +225,19 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
   const q = useQuery({ queryKey: ["chemical-v3-revision", revisionId], enabled: !!revisionId, queryFn: () => fetchV3Revision(revisionId!) });
   const issuesQ = useQuery({ queryKey: ["chemical-v3-issues", revisionId], enabled: !!revisionId, queryFn: () => fetchReviewIssues(revisionId!) });
   useEffect(() => { setNote(""); setMsg(null); setNeedDecisions(false); setInvOpen(false); }, [revisionId]);
-  const act = useMutation({
-    mutationFn: async (kind: "approve" | "reject") => (kind === "approve" ? approveV3(revisionId!, note) : rejectV3(revisionId!, note)),
-    onSuccess: (_d, kind) => {
-      qc.invalidateQueries({ queryKey: ["chemical-v3-queue"] });
-      qc.invalidateQueries({ queryKey: ["chemical-v3-approved"] });
-      qc.invalidateQueries({ queryKey: ["chemical-v3-revision", revisionId] });
-      if (kind === "approve") { toast.success(APPROVED_TOAST); onApproved?.(); setMsg(null); }
-      else setMsg({ tone: "ok", text: "Rejected." });
+  const refreshAfterReview = () => {
+    qc.invalidateQueries({ queryKey: ["chemical-v3-queue"] });
+    qc.invalidateQueries({ queryKey: ["chemical-v3-approved"] });
+    qc.invalidateQueries({ queryKey: ["chemical-v3-revision", revisionId] });
+  };
+  const approveMut = useMutation({
+    mutationFn: async () => approveV3(revisionId!, note),
+    onSuccess: () => {
+      refreshAfterReview();
+      toast.success(APPROVED_TOAST); onApproved?.(); setMsg(null);
     },
-    onError: (e: any, kind) => {
-      if (kind === "approve" && isDecisionsRefusal(e)) {
+    onError: (e: any) => {
+      if (isDecisionsRefusal(e)) {
         setNeedDecisions(true);
         setMsg({ tone: "err", text: DECISIONS_REQUIRED });
         qc.invalidateQueries({ queryKey: ["chemical-v3-issues", revisionId] });
@@ -246,6 +248,15 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
       setMsg({ tone: "err", text: e?.message ?? "The backend refused this action." });
     },
   });
+  const rejectMut = useMutation({
+    mutationFn: async () => rejectV3(revisionId!, note),
+    onSuccess: () => {
+      refreshAfterReview();
+      setMsg({ tone: "ok", text: "Rejected." });
+    },
+    onError: (e: any) => setMsg({ tone: "err", text: e?.message ?? "The backend refused this action." }),
+  });
+  const reviewBusy = approveMut.isPending || rejectMut.isPending;
   const { isAdmin } = useIsSystemAdmin();
   const [draft, setDraft] = useState<V3RateDraft | null>(null);
   const [rateErr, setRateErr] = useState<string | null>(null);
@@ -429,19 +440,19 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
                   <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Review note (required to reject)" aria-label="Review note" />
                   {msg && <p className={cn("text-sm", msg.tone === "err" ? "text-destructive" : "text-success")}>{msg.text}</p>}
                   <div className="flex gap-2">
-                    <Button disabled={act.isPending} onClick={() => act.mutate("approve")}>Approve</Button>
+                    <Button disabled={reviewBusy} onClick={() => approveMut.mutate()}>Approve</Button>
                     <Button
                       variant="destructive"
-                      disabled={act.isPending}
+                      disabled={reviewBusy}
                       onClick={() => {
                         if (!note.trim()) {
                           setMsg({ tone: "err", text: "Type a reason in the review note box above, then press Reject." });
                           (document.querySelector('[aria-label="Review note"]') as HTMLTextAreaElement | null)?.focus();
                           return;
                         }
-                        act.mutate("reject");
+                        rejectMut.mutate();
                       }}
-                    >{act.isPending ? "Saving…" : "Reject"}</Button>
+                    >{rejectMut.isPending ? "Saving…" : "Reject"}</Button>
                   </div>
                 </>
               ) : approvalPanelFor(status) === "approved" ? (
