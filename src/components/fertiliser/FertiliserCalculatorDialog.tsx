@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/select";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import {
-  FERTILISER_CATEGORY_KEYS,
+  isFertiliserProduct,
   PRODUCT_CATEGORY_LABEL,
   compareInventory,
   computeCalculation,

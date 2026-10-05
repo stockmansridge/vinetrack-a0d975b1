@@ -365,3 +365,8 @@ export const PRODUCT_CATEGORY_LABEL: Record<ProductCategoryKey, string> = {
   soilAmendment: "Soil amendment",
   other: "Other",
 };
+
+/** iOS parity: only explicit fertiliser/nutrition categories; null is NOT fertiliser. */
+export function isFertiliserProduct(p: { product_category?: string | null }): boolean {
+  return !!p.product_category && FERTILISER_CATEGORY_KEYS.includes(p.product_category as ProductCategoryKey);
+}
