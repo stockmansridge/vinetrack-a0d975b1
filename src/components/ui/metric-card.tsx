@@ -3,6 +3,8 @@
 import { Link } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export type MetricTone = "primary" | "accent" | "teal" | "amber" | "purple" | "neutral" | "white" | "equipment" | "team";
 
@@ -11,6 +13,8 @@ export interface MetricCardProps {
   value: React.ReactNode;
   icon: LucideIcon;
   hint?: string;
+  /** Optional explanation shown in a hover/tap bubble next to the value. */
+  info?: string;
   to?: string;
   /** Tone of the icon badge. Defaults to primary green. */
   tone?: MetricTone;
@@ -36,7 +40,7 @@ export const TONE_CLASSES: Record<MetricTone, string> = {
 };
 const TONES = TONE_CLASSES;
 
-export function MetricCard({ label, value, icon: Icon, hint, to, tone = "primary" }: MetricCardProps) {
+export function MetricCard({ label, value, icon: Icon, hint, info, to, tone = "primary" }: MetricCardProps) {
   const body = (
     <div
       className={cn(
@@ -52,8 +56,20 @@ export function MetricCard({ label, value, icon: Icon, hint, to, tone = "primary
           <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
             {label}
           </div>
-          <div className="mt-1 text-[26px] font-semibold leading-tight tracking-tight text-foreground tabular-nums">
+          <div className="mt-1 text-[26px] font-semibold leading-tight tracking-tight text-foreground tabular-nums flex items-center gap-1.5">
             {value}
+            {info && (
+              <TooltipProvider delayDuration={100}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button type="button" aria-label="More information" className="text-muted-foreground hover:text-foreground" onClick={(e) => e.preventDefault()}>
+                      <Info className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs text-xs font-normal">{info}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
           {hint && <div className="mt-1 text-xs text-muted-foreground line-clamp-2">{hint}</div>}
         </div>

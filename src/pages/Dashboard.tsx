@@ -153,7 +153,8 @@ export default function Dashboard() {
           icon={Grape}
           tone="primary"
           value={loading ? "…" : summary.totalVines > 0 ? fmt(summary.totalVines) : "—"}
-          hint={summary.vineFromAll ? "Uses manual vine counts where set; otherwise calculated from row length and vine spacing." : "Partial — some blocks missing data"}
+          info="Uses manual vine counts where set; otherwise calculated from row length and vine spacing."
+          hint={summary.vineFromAll ? undefined : "Partial — some blocks missing data"}
         />
         <MetricCard
           label="Tractors"
