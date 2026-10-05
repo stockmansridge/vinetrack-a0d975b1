@@ -231,18 +231,6 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
         </div>
       </div>
 
-      {canEdit && effectiveTab === "templates" && (
-        <Alert>
-          <Info className="h-4 w-4" />
-          <AlertTitle>Before importing a program</AlertTitle>
-          <AlertDescription>
-            For the smoothest import, set up your vineyard data first. Add your chemicals,
-            spray equipment and tractors before downloading the spreadsheet. The spreadsheet
-            uses these existing records as reference lists so imported Program Steps can match
-            correctly.
-          </AlertDescription>
-        </Alert>
-      )}
 
       {importOpen && selectedVineyardId && (
         <SprayProgramImportDialog
