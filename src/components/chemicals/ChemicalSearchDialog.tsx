@@ -93,7 +93,7 @@ function AddButton({ revisionId, vineyardId, vineyardName, canEdit, onAdded }: {
 function StatusBadge({ status }: { status: unknown }) {
   return isPendingStatus(status)
     ? <Badge variant="outline" className="border-warning/60 bg-warning/10">{PENDING_REVIEW_LABEL}</Badge>
-    : <Badge className="border-transparent bg-success/15 text-success">{CATALOGUE_LABEL}</Badge>;
+    : <VineTrackCatalogueBadge />;
 }
 
 /** Compact product view — no admin review content. */
