@@ -7,10 +7,14 @@ import {
   servicedTotals,
   useFertigationProgramSteps,
   useUpsertFertigation,
+  requestedFertigationStepId,
+  resolveFertigationPreselection,
+  FERTIGATION_STEP_UNAVAILABLE,
 } from "@/lib/fertigation";
 import {
   FertigationCard,
   FertigationEditor,
+  stepOptionLabel,
   NO_FERTIGATION,
   useFertigationDraft,
 } from "@/components/irrigation/FertigationSection";
@@ -87,10 +91,31 @@ export default function IrrigationRecordPage() {
 
   // Fertigation (System Admin development gate). Non-admins see the page
   // exactly as before: no queries, no card, no extra writes.
-  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
+  const { isAdmin: isSystemAdmin, loading: adminLoading } = useIsSystemAdmin() as { isAdmin: boolean; loading?: boolean };
   const [searchParams] = useSearchParams();
   const fertSteps = useFertigationProgramSteps(selectedVineyardId, isSystemAdmin);
-  const fert = useFertigationDraft(fertSteps.data ?? [], searchParams.get("fertigationStep"));
+  // Direct visits start on "No fertigation"; a route step is applied only once validated.
+  const fert = useFertigationDraft(fertSteps.data ?? [], null);
+  const requestedStepId = requestedFertigationStepId(searchParams);
+  const preselection = resolveFertigationPreselection({
+    requestedId: requestedStepId,
+    isSystemAdmin,
+    adminLoading: !!adminLoading,
+    vineyardId: selectedVineyardId ?? null,
+    steps: fertSteps.data,
+    stepsLoading: fertSteps.isLoading,
+    stepsError: fertSteps.error,
+  });
+  const appliedPreselectRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (preselection.status !== "valid") return;
+    const key = `${selectedVineyardId}:${preselection.step.id}`;
+    if (appliedPreselectRef.current === key) return;
+    appliedPreselectRef.current = key;
+    fert.setStepId(preselection.step.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preselection.status, preselection.status === "valid" ? preselection.step.id : null, selectedVineyardId]);
+  const preselectedStep = preselection.status === "valid" && fert.stepId === preselection.step.id ? preselection.step : null;
   const upsertFert = useUpsertFertigation();
   const fertigationOn = isSystemAdmin && fert.stepId !== NO_FERTIGATION && !!fert.step;
   /** Set once the irrigation session is saved, so a Fertigation retry never re-records it. */
@@ -590,8 +615,19 @@ export default function IrrigationRecordPage() {
             </CardContent>
           </Card>
 
+          {requestedStepId && preselection.status === "invalid" && (
+            <div role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+              {FERTIGATION_STEP_UNAVAILABLE}
+            </div>
+          )}
           {isSystemAdmin && (
             <FertigationCard>
+              {preselectedStep && (
+                <div className="mb-3 rounded-md border border-primary/40 bg-primary/5 px-3 py-2" data-testid="fertigation-applying">
+                  <div className="text-xs font-semibold text-muted-foreground">Fertigation</div>
+                  <div className="text-sm font-medium">{stepOptionLabel(preselectedStep)}</div>
+                </div>
+              )}
               <FertigationEditor
                 steps={fertSteps.data ?? []}
                 stepId={fert.stepId}

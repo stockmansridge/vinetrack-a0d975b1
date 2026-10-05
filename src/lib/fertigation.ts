@@ -462,3 +462,64 @@ export function activeBySession(apps: FertigationApplication[] | null | undefine
   for (const a of apps ?? []) if (a.status === "active") m.set(a.irrigation_session_id, a);
   return m;
 }
+
+// ---------------------------------------------------------------------------
+// Program Step → Apply via Irrigation (route preselection)
+// ---------------------------------------------------------------------------
+
+/** Search parameter carrying the Fertigation Program Step UUID to Record Irrigation. */
+export const FERTIGATION_STEP_PARAM = "fertigationProgramStepId";
+/** Older Round 1 parameter name, still accepted on read. */
+const LEGACY_FERTIGATION_STEP_PARAM = "fertigationStep";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Record Irrigation URL for a Fertigation Program Step — only its UUID, never the payload. */
+export function applyViaIrrigationPath(stepId: string): string {
+  return `/irrigation/record?${FERTIGATION_STEP_PARAM}=${encodeURIComponent(stepId)}`;
+}
+
+export function requestedFertigationStepId(params: URLSearchParams): string | null {
+  const v = params.get(FERTIGATION_STEP_PARAM) ?? params.get(LEGACY_FERTIGATION_STEP_PARAM);
+  return v && v.trim() ? v.trim() : null;
+}
+
+export type FertigationPreselection =
+  | { status: "none" }
+  | { status: "pending" }
+  | { status: "valid"; step: SprayJob }
+  | { status: "invalid" };
+
+/**
+ * Never trusts the route parameter alone: the step must be in the selected
+ * vineyard's active Fertigation Program Step list, and the user must be a
+ * System Admin. Anything else is rejected without preselecting.
+ */
+export function resolveFertigationPreselection(args: {
+  requestedId: string | null;
+  isSystemAdmin: boolean;
+  adminLoading: boolean;
+  vineyardId: string | null;
+  steps: SprayJob[] | undefined;
+  stepsLoading: boolean;
+  stepsError?: unknown;
+}): FertigationPreselection {
+  const { requestedId, isSystemAdmin, adminLoading, vineyardId, steps, stepsLoading, stepsError } = args;
+  if (!requestedId) return { status: "none" };
+  if (adminLoading) return { status: "pending" };
+  if (!isSystemAdmin || !vineyardId || !UUID_RE.test(requestedId)) return { status: "invalid" };
+  if (stepsError) return { status: "invalid" };
+  if (stepsLoading || !steps) return { status: "pending" };
+  const step = steps.find((s) => s.id === requestedId);
+  if (
+    !step ||
+    step.vineyard_id !== vineyardId ||
+    step.deleted_at ||
+    !isFertigationProgramStep(step)
+  ) {
+    return { status: "invalid" };
+  }
+  return { status: "valid", step };
+}
+
+export const FERTIGATION_STEP_UNAVAILABLE = "That Fertigation Program Step is no longer available.";
