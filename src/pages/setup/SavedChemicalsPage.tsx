@@ -372,7 +372,7 @@ export default function SavedChemicalsPage() {
       case "rate": return <SortableTableHead active={chemSortDir("rate")} onSort={() => chemToggle("rate")}><DraggableHeaderCell columnId="rate" onDropColumn={moveChemColumn}>Default rate</DraggableHeaderCell></SortableTableHead>;
       case "manufacturer": return <SortableTableHead active={chemSortDir("manufacturer")} onSort={() => chemToggle("manufacturer")}><DraggableHeaderCell columnId="manufacturer" onDropColumn={moveChemColumn}>Manufacturer</DraggableHeaderCell></SortableTableHead>;
       case "label": return <TableHead className="w-20"><DraggableHeaderCell columnId="label" onDropColumn={moveChemColumn}>Label</DraggableHeaderCell></TableHead>;
-      case "cost": return <SortableTableHead active={chemSortDir("cost")} onSort={() => chemToggle("cost")}><DraggableHeaderCell columnId="cost" onDropColumn={moveChemColumn}>Cost / unit</DraggableHeaderCell></SortableTableHead>;
+      case "cost": return null;
     }
   };
 
