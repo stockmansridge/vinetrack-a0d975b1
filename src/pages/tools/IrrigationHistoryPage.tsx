@@ -11,6 +11,9 @@ import {
 } from "@/lib/irrigationTimes";
 
 import { Link } from "react-router-dom";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import { activeBySession, useFertigationApplications, type FertigationApplication } from "@/lib/fertigation";
+import { SessionFertigationDialog, SessionFertigationSummary } from "@/components/irrigation/FertigationSection";
 import { useVineyard } from "@/context/VineyardContext";
 import { useVintage } from "@/lib/useVintage";
 import { PageHead } from "@/components/PageHead";
@@ -352,6 +355,10 @@ export default function IrrigationHistoryPage() {
   const [page, setPage] = useState(0);
   const [editing, setEditing] = useState<IrrigationSession | null>(null);
   const [reversing, setReversing] = useState<IrrigationSession | null>(null);
+  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
+  const fertApps = useFertigationApplications(selectedVineyardId, { includeReversed: true }, isSystemAdmin);
+  const fertBySession = useMemo(() => activeBySession(fertApps.data), [fertApps.data]);
+  const [fertFor, setFertFor] = useState<{ session: IrrigationSession; app: FertigationApplication | null } | null>(null);
 
   const pageSize = 25;
   const filters = useMemo(
@@ -484,6 +491,9 @@ export default function IrrigationHistoryPage() {
                     </span>
                     {s.status === "reversed" && <Badge variant="outline">Reversed</Badge>}
                     {s.status === "corrected" && <Badge variant="secondary">Corrected</Badge>}
+                    {isSystemAdmin && fertBySession.has(s.id) && (
+                      <Badge variant="outline" className="text-xs">Fertigation</Badge>
+                    )}
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
                     {s.started_at && (
@@ -497,6 +507,15 @@ export default function IrrigationHistoryPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge className="tabular-nums">{formatLitres(s.total_volume_litres)}</Badge>
+                  {isSystemAdmin && s.status !== "reversed" && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setFertFor({ session: s, app: fertBySession.get(s.id) ?? null })}
+                    >
+                      {fertBySession.has(s.id) ? "View / Edit Fertigation" : "Add Fertigation"}
+                    </Button>
+                  )}
                   {s.status !== "reversed" && !capsLoading && (
                     <>
                       {capabilities.can_edit_irrigation && !isImported(s) && (
@@ -542,6 +561,10 @@ export default function IrrigationHistoryPage() {
 
               {s.notes && <p className="mt-2 text-sm text-muted-foreground">{s.notes}</p>}
 
+              {isSystemAdmin && fertBySession.get(s.id) && (
+                <SessionFertigationSummary app={fertBySession.get(s.id)!} />
+              )}
+
             </CardContent>
           </Card>
         ))}
@@ -563,6 +586,15 @@ export default function IrrigationHistoryPage() {
             Next
           </Button>
         </div>
+      )}
+
+      {fertFor && selectedVineyardId && (
+        <SessionFertigationDialog
+          vineyardId={selectedVineyardId}
+          session={fertFor.session}
+          existing={fertFor.app}
+          onClose={() => setFertFor(null)}
+        />
       )}
 
       {editing && (
