@@ -125,6 +125,53 @@ const EMPTY: SavedChemicalInput = {
   restrictions: "", notes: "", label_url: "", product_url: "",
 };
 
+function normTarget(s: string) {
+  return s.toLowerCase().replace(/\([^)]*\)/g, " ").replace(/[^a-z0-9]+/g, " ").trim().replace(/s\b/g, "");
+}
+function similarity(a: string, b: string) {
+  if (a === b) return 1;
+  const m = a.length, n = b.length;
+  if (!m || !n) return 0;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return 1 - prev[n] / Math.max(m, n);
+}
+/** Clusters targets that are at least 80% the same; label = most common spelling. */
+function groupSimilarTargets(labels: string[]) {
+  const clusters: { key: string; counts: Map<string, number> }[] = [];
+  const byNorm = new Map<string, string>();
+  for (const label of labels) {
+    const n = normTarget(label) || label.toLowerCase();
+    let cl = clusters.find((c) => similarity(c.key, n) >= 0.8);
+    if (!cl) { cl = { key: n, counts: new Map() }; clusters.push(cl); }
+    cl.counts.set(label, (cl.counts.get(label) ?? 0) + 1);
+    byNorm.set(n, cl.key);
+  }
+  const keyOf = (t: string) => {
+    const n = normTarget(t.trim()) || t.trim().toLowerCase();
+    return byNorm.get(n) ?? clusters.find((c) => similarity(c.key, n) >= 0.8)?.key ?? n;
+  };
+  const options = clusters.map((c) => {
+    const label = [...c.counts].sort((a, b) => b[1] - a[1] || a[0].length - b[0].length)[0][0];
+    return { key: c.key, label };
+  }).sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  return { options, keyOf };
+}
+
+function ProductPageLink({ c, rev }: { c: any; rev?: any }) {
+  const href = productLinkOf(c, rev ?? null);
+  if (!href) return null;
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground hover:text-primary hover:underline" title="Manufacturer/product page — not the official label">
+      <Globe className="h-3 w-3" />Product page
+    </a>
+  );
+}
+
 export default function SavedChemicalsPage() {
   const { selectedVineyardId, currentRole, currentCountry, memberships } = useVineyard();
   // Add Chemical → the single customer Chemical Search. Manual entry opens the
@@ -203,16 +250,17 @@ export default function SavedChemicalsPage() {
   }, [chemicals]);
 
   const [usedForFilter, setUsedForFilter] = useState<string>(ANY);
-  const usedForOptions = useMemo(() => {
-    const map = new Map<string, string>();
+  // Groups near-identical targets (≥80% similar, e.g. "Downy mildew" / "Downy Mildew (Plasmopara)").
+  const usedForGrouping = useMemo(() => {
+    const all: string[] = [];
     for (const c of chemicals) for (const t of usedFor(c)) {
       const label = String(t ?? "").trim();
-      if (label && !map.has(label.toLowerCase())) map.set(label.toLowerCase(), label);
+      if (label) all.push(label);
     }
-    return Array.from(map, ([key, label]) => ({ key, label }))
-      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+    return groupSimilarTargets(all);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chemicals, revDisplay]);
+  const usedForOptions = usedForGrouping.options;
 
   const normaliseAI = (v: unknown) =>
     String(v ?? "").trim().replace(/\s+/g, " ").toLowerCase();
@@ -251,7 +299,7 @@ export default function SavedChemicalsPage() {
     }
     if (use !== ANY) list = list.filter((c) => c.use === use);
     if (usedForFilter !== ANY) {
-      list = list.filter((c) => usedFor(c).some((t: string) => String(t).trim().toLowerCase() === usedForFilter));
+      list = list.filter((c) => usedFor(c).some((t: string) => usedForGrouping.keyOf(String(t)) === usedForFilter));
     }
     if (activeIngredient !== ANY) {
       list = list.filter((c) => normaliseAI(c.active_ingredient) === activeIngredient);
@@ -395,6 +443,7 @@ export default function SavedChemicalsPage() {
     switch (id) {
       case "name": return (
         <TableCell key="name">
+          <div className="flex flex-col items-start gap-0.5">
           {canEdit ? (
             <button type="button" onClick={() => setEditing(c)} title="Edit chemical"
               className="text-left font-medium leading-tight text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm">
@@ -403,11 +452,8 @@ export default function SavedChemicalsPage() {
           ) : (
             <div className="font-medium leading-tight">{fmt(c.name)}</div>
           )}
-          {productLinkOf(c, revOf(c)) && (
-            <a href={productLinkOf(c, revOf(c))} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline" title="Manufacturer/product page — not the official label">
-              <Globe className="h-3 w-3" />Product page
-            </a>
-          )}
+          <ProductPageLink c={c} rev={revOf(c)} />
+          </div>
         </TableCell>
       );
       case "active_ingredient": return <TableCell key="active_ingredient">{fmt(c.active_ingredient)}</TableCell>;
@@ -425,11 +471,6 @@ export default function SavedChemicalsPage() {
                 <FileText className="h-3 w-3" />Label
               </a>
             ) : (<span className="text-muted-foreground italic">No label found</span>)}
-            {c.product_url && /^https?:\/\//i.test(c.product_url) && (
-              <a href={c.product_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary hover:underline" title={`Manufacturer/product page — not the official label: ${c.product_url}`}>
-                <Globe className="h-3 w-3" />Product page
-              </a>
-            )}
           </div>
         </TableCell>
       );
@@ -709,7 +750,7 @@ export default function SavedChemicalsPage() {
                 )}
                 {sortedArchived.map((c) => (
                   <TableRow key={c.id}>
-                    <TableCell className="font-medium">{fmt(c.name)}</TableCell>
+                    <TableCell className="font-medium"><div className="flex flex-col items-start gap-0.5">{fmt(c.name)}<ProductPageLink c={c} rev={revOf(c)} /></div></TableCell>
                     <TableCell>{fmt(displayProductCategory(c))}</TableCell>
                     <TableCell>{fmt(c.active_ingredient)}</TableCell>
                     <TableCell>{fmt(c.manufacturer)}</TableCell>
