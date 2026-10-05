@@ -318,6 +318,7 @@ export default function TripReportsPage() {
           tripId: t.id,
           formatters,
           pathPoints: t.path_points,
+          canSeeCosts,
         });
         if (!res.ok) {
           toast({

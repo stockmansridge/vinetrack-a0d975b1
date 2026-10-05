@@ -916,6 +916,7 @@ function TripSheet({
                       tripId: trip.id,
                       formatters,
                       pathPoints: trip.path_points,
+                      canSeeCosts,
                     });
                     if (!res.ok) {
                       toast({

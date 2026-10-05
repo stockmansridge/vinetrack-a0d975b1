@@ -197,6 +197,7 @@ export default function SprayReportsPage() {
           tripId: selectedRecord.trip_id,
           formatters,
           pathPoints: trip?.path_points,
+          canSeeCosts,
         });
         if (!res.ok) {
           toast({
