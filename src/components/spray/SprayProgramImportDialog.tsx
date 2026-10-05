@@ -106,8 +106,11 @@ export function SprayProgramImportDialog({
         </DialogHeader>
 
         {!rows && (
-          <div className="rounded-lg border bg-muted/40 p-3 text-sm">
-            <p className="font-medium">Before importing a program</p>
+          <div className="rounded-lg border-2 border-amber-500/60 border-l-8 bg-amber-500/10 p-4 text-sm shadow-sm">
+            <p className="flex items-center gap-2 font-semibold text-base text-amber-800 dark:text-amber-300">
+              <AlertTriangle className="h-5 w-5" />
+              Before importing a program
+            </p>
             <p className="text-muted-foreground mt-1">
               For the smoothest import, set up your vineyard data first. Add your chemicals,
               spray equipment and tractors before downloading the spreadsheet. The spreadsheet
