@@ -10,12 +10,33 @@
 //                  stored allocation vine counts stay authoritative.
 //   manual       = no blocks selected; the typed vine count is used directly.
 //
-// Persistence of vine_count_basis is blocked on a shared-schema field owned by
-// Rork; VINE_COUNT_BASIS_PERSISTED flips on once it exists.
+// vine_count_basis is persisted on fertiliser_records (SQL 265): actual |
+// assumed_full | manual, NULL for legacy records (no default, no backfill).
 import { deriveMetrics } from "./paddockGeometry";
 import { physicalVineCountOverride } from "./paddockRowVines";
 
-export const VINE_COUNT_BASIS_PERSISTED = false;
+export const VINE_COUNT_BASIS_PERSISTED = true;
+export type PersistedVineCountBasis = VineCountBasis | "manual";
+
+/**
+ * The vine_count_basis to write. `undefined` = omit the column so an edited
+ * record keeps its stored value (legacy NULL stays NULL). A snapshot never
+ * recalculates: edits preserve, duplicates inherit the source's stored basis.
+ */
+export function vineCountBasisForSave(args: {
+  mode: "perHectare" | "perVine";
+  selectedBlockCount: number;
+  basis: DialogVineBasis;
+  isEdit: boolean;
+  sourceBasis?: string | null;
+}): PersistedVineCountBasis | null | undefined {
+  if (args.mode !== "perVine") return undefined;
+  if (args.selectedBlockCount === 0) return "manual";
+  if (args.basis === "actual" || args.basis === "assumed_full") return args.basis;
+  if (args.isEdit) return undefined;
+  const s = args.sourceBasis;
+  return s === "actual" || s === "assumed_full" || s === "manual" ? s : null;
+}
 
 export type VineCountBasis = "actual" | "assumed_full";
 export type DialogVineBasis = VineCountBasis | "snapshot";
