@@ -1,6 +1,19 @@
 import { generateUuid } from "@/lib/uuid";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import {
+  buildFertigationPayload,
+  servicedTotals,
+  useFertigationProgramSteps,
+  useUpsertFertigation,
+} from "@/lib/fertigation";
+import {
+  FertigationCard,
+  FertigationEditor,
+  NO_FERTIGATION,
+  useFertigationDraft,
+} from "@/components/irrigation/FertigationSection";
 import { useVineyard } from "@/context/VineyardContext";
 import { PageHead } from "@/components/PageHead";
 import { PortalNotice } from "@/components/ui/PortalNotice";
@@ -71,6 +84,18 @@ export default function IrrigationRecordPage() {
   const record = useRecordSession(selectedVineyardId);
   const { capabilities } = useIrrigationCapabilities(selectedVineyardId);
   const canManageSetup = capabilities.can_manage_irrigation_setup;
+
+  // Fertigation (System Admin development gate). Non-admins see the page
+  // exactly as before: no queries, no card, no extra writes.
+  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
+  const [searchParams] = useSearchParams();
+  const fertSteps = useFertigationProgramSteps(selectedVineyardId, isSystemAdmin);
+  const fert = useFertigationDraft(fertSteps.data ?? [], searchParams.get("fertigationStep"));
+  const upsertFert = useUpsertFertigation();
+  const fertigationOn = isSystemAdmin && fert.stepId !== NO_FERTIGATION && !!fert.step;
+  /** Set once the irrigation session is saved, so a Fertigation retry never re-records it. */
+  const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
+  const [fertPending, setFertPending] = useState(false);
 
   const [valveId, setValveId] = useState("");
   const [sessionDate, setSessionDate] = useState(todayISO());
@@ -221,7 +246,43 @@ export default function IrrigationRecordPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedVineyardId, inputsReady, valveId, sessionDate, effectiveMinutes, startTime, endTime, method, flow, meterStart, meterFinish, totalVolume]);
 
+  const saveFertigation = async (sessionId: string, blocks: any[]) => {
+    if (!fertigationOn || !fert.step || !selectedVineyardId) return true;
+    try {
+      await upsertFert.mutateAsync(
+        buildFertigationPayload({
+          id: fert.appId,
+          vineyardId: selectedVineyardId,
+          sessionId,
+          step: fert.step,
+          products: fert.products,
+          totals: servicedTotals(blocks),
+          notes: fert.notes || null,
+        }),
+      );
+      setFertPending(false);
+      return true;
+    } catch (e) {
+      setFertPending(true);
+      toast({
+        title: "Irrigation recorded — Fertigation still needs to be saved",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
+  const retryFertigation = async () => {
+    if (!savedSessionId) return;
+    if (await saveFertigation(savedSessionId, preview?.blocks ?? [])) {
+      toast({ title: "Fertigation saved" });
+      navigate("/irrigation/history");
+    }
+  };
+
   const save = async () => {
+    if (savedSessionId) return retryFertigation();
     if (!preview || !valve) return;
     const body = payload();
     // Preview and save must agree on the duration — never silently retry.
@@ -242,6 +303,11 @@ export default function IrrigationRecordPage() {
         finished_at: bothTimes ? times.finishedAt : null,
         ...body,
       });
+      setSavedSessionId(saved.id);
+      // Step 3: Fertigation is written only after the authoritative session id
+      // exists. Its failure never un-records the irrigation.
+      const fertOk = await saveFertigation(saved.id, saved.blocks ?? preview.blocks);
+      if (!fertOk) return;
       toast({
         title: saved.duplicate ? "Session already recorded" : "Irrigation recorded",
         description: `${formatLitres(saved.total_volume_litres)} across ${saved.blocks.length} block(s).`,
@@ -523,6 +589,22 @@ export default function IrrigationRecordPage() {
               </Collapsible>
             </CardContent>
           </Card>
+
+          {isSystemAdmin && (
+            <FertigationCard>
+              <FertigationEditor
+                steps={fertSteps.data ?? []}
+                stepId={fert.stepId}
+                onStepId={fert.setStepId}
+                products={fert.products}
+                onProducts={fert.setProducts}
+                totals={servicedTotals(preview?.blocks)}
+                totalsReady={!!preview}
+                notes={fert.notes}
+                onNotes={fert.setNotes}
+              />
+            </FertigationCard>
+          )}
         </div>
 
         <Card className="h-fit">
@@ -632,9 +714,20 @@ export default function IrrigationRecordPage() {
                   />
                 )}
 
-                <Button size="lg" className="w-full" onClick={save} disabled={record.isPending}>
+                {fertPending && (
+                  <PortalNotice
+                    variant="warning"
+                    title="Irrigation recorded — Fertigation still needs to be saved"
+                    description="The irrigation session is saved. Retry to save the Fertigation details."
+                  />
+                )}
+                <Button size="lg" className="w-full" onClick={save} disabled={record.isPending || upsertFert.isPending}>
                   <Save className="mr-2 h-4 w-4" />
-                  {record.isPending ? "Saving…" : "Save Irrigation Record"}
+                  {record.isPending || upsertFert.isPending
+                    ? "Saving…"
+                    : savedSessionId
+                      ? "Retry saving Fertigation"
+                      : "Save Irrigation Record"}
                 </Button>
               </>
             )}
