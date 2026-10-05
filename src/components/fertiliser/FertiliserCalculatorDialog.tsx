@@ -180,6 +180,7 @@ export default function FertiliserCalculatorDialog({
 
   const [applicationDate, setApplicationDate] = useState<string>("");
   const [productId, setProductId] = useState<string | null>(null);
+  const [manualMode, setManualMode] = useState(false);
   const [productName, setProductName] = useState("");
   const [productSearch, setProductSearch] = useState("");
   const [showAllCategories, setShowAllCategories] = useState(false);
@@ -285,6 +286,7 @@ export default function FertiliserCalculatorDialog({
     const p = (productsQ.data ?? []).find((x) => x.id === id);
     if (!p) return;
     setProductId(p.id);
+    setManualMode(false);
     setProductName(p.name);
     setForm(p.product_form === "liquid" ? "liquid" : "solid");
     setPackSize(p.pack_size == null ? "" : String(p.pack_size));
@@ -293,6 +295,7 @@ export default function FertiliserCalculatorDialog({
   };
 
   const onManualEntry = () => {
+    setManualMode(true);
     setProductId(null);
     setProductName("");
     setPackSize("");
@@ -548,8 +551,8 @@ export default function FertiliserCalculatorDialog({
                   <Switch id="show-all" checked={showAllCategories} onCheckedChange={setShowAllCategories} />
                   <Label htmlFor="show-all" className="text-xs">Show all saved products</Label>
                 </div>
-                <Button type="button" size="sm" variant={isSavedProduct ? "outline" : "secondary"} onClick={onManualEntry}>
-                  Manual entry
+                <Button type="button" size="sm" variant={isSavedProduct ? "outline" : "secondary"} onClick={manualMode ? () => setManualMode(false) : onManualEntry}>
+                  {manualMode ? "Choose saved product" : "Manual entry"}
                 </Button>
               </div>
             </div>
@@ -558,7 +561,7 @@ export default function FertiliserCalculatorDialog({
                 No fertiliser-category products saved yet — showing all saved products.
               </div>
             )}
-            {isSavedProduct && (<>
+            {!manualMode && (<>
             <Input
               placeholder="Search saved products by name…"
               value={productSearch}
@@ -617,7 +620,7 @@ export default function FertiliserCalculatorDialog({
                   Snapshot from the saved product library. Use Manual entry for a product that isn't saved.
                 </div>
               </div>
-            ) : (
+            ) : manualMode ? (
               <div className="grid gap-2 sm:grid-cols-2">
                 <div>
                   <Label className="text-xs">Product name (manual entry)</Label>
@@ -634,7 +637,7 @@ export default function FertiliserCalculatorDialog({
                   </Select>
                 </div>
               </div>
-            )}
+            ) : null}
           </section>
 
           {/* Rate + date */}
@@ -690,8 +693,10 @@ export default function FertiliserCalculatorDialog({
             {blocks.length === 0 && <div className="text-sm text-muted-foreground">No blocks configured on this vineyard.</div>}
             <div className="divide-y">
               {blocks.map((b, i) => (
-                <div key={b.id} className="py-2 grid grid-cols-[auto_1fr_100px_100px_1fr] gap-2 items-center">
+                <div key={b.id} className="py-1 grid grid-cols-[auto_1fr_100px_100px_1fr] gap-2 items-center">
+                  <label className="flex items-center gap-3 cursor-pointer col-span-2 py-2 pl-1 rounded-md hover:bg-accent/40 min-w-0">
                   <Checkbox
+                    className="h-5 w-5"
                     checked={b.selected}
                     onCheckedChange={(v) => {
                       const next = [...blocks];
@@ -700,7 +705,8 @@ export default function FertiliserCalculatorDialog({
                     }}
                     aria-label={`Select ${b.name}`}
                   />
-                  <div className="text-sm truncate">{b.name}</div>
+                  <span className="text-sm truncate">{b.name}</span>
+                  </label>
                   <Input
                     disabled={!b.selected}
                     inputMode="decimal"
