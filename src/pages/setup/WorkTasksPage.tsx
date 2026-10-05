@@ -136,6 +136,8 @@ import type { RegionFormatters } from "@/lib/regionFormatters";
 import { useVintage } from "@/lib/useVintage";
 import { isUserVineyardMachine } from "@/lib/equipmentTaxonomy";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
+import { WorkTaskCompletionSection } from "@/components/work-tasks/WorkTaskCompletionSection";
+import { completionLabel, displayCompletedDate, isWorkTaskCompleted } from "@/lib/workTaskCompletion";
 
 
 
@@ -166,11 +168,8 @@ function paddockAreaHa(p: PaddockLite | undefined | null): number {
 const ANY = "__any__";
 const NONE = "__none__";
 
-// Aligned with iOS Task Log model: Task Log entries are historical records of
-// completed work. "planned" is intentionally omitted so new entries do not
-// trigger iOS overdue alerts. Scheduling statuses can be re-introduced once
-// iOS exposes a scheduled-task workflow.
-const STATUS_OPTIONS = ["completed", "in_progress", "on_hold", "cancelled"];
+// Visible completion state derives from work_tasks.is_finalized only.
+const STATUS_OPTIONS = [{ value: "todo", label: "To do" }, { value: "completed", label: "Completed" }];
 // Fallback/seed list shown when no synced rows exist. Kept in sync with iOS defaults.
 const DEFAULT_TASK_TYPES = [
   "Pruning",
@@ -208,7 +207,7 @@ const mkDateRangeLabel = (rf: RegionFormatters) => {
   const fd = mkFmtDate(rf);
   return (t: WorkTask) => {
     const s = t.start_date ?? t.date ?? null;
-    const e = t.end_date ?? null;
+    const e = isWorkTaskCompleted(t) ? displayCompletedDate(t) : (t.end_date ?? null);
     if (!s && !e) return "—";
     if (s && e && s !== e) return `${fd(s)} → ${fd(e)}`;
     return fd(s ?? e);
@@ -573,7 +572,7 @@ export default function WorkTasksPage() {
     if (paddockId !== ANY)
       list = list.filter((t) => (taskPaddockIds.get(t.id) ?? []).includes(paddockId));
     if (taskType !== ANY) list = list.filter((t) => t.task_type === taskType);
-    if (status !== ANY) list = list.filter((t) => (t.status ?? "") === status);
+    if (status !== ANY) list = list.filter((t) => (isWorkTaskCompleted(t) ? "completed" : "todo") === status);
     if (workerType !== ANY) {
       list = list.filter((t) => (totalsByTask.get(t.id)?.workerTypes ?? new Set()).has(workerType));
     }
@@ -582,7 +581,7 @@ export default function WorkTasksPage() {
     if (filter.trim()) {
       const f = filter.toLowerCase();
       list = list.filter((t) =>
-        [t.task_type, taskPaddockNames(t.id), t.notes, t.description, t.status, t.date]
+        [t.task_type, taskPaddockNames(t.id), t.notes, t.description, completionLabel(t), t.date]
           .some((v) => String(v ?? "").toLowerCase().includes(f)),
       );
     }
@@ -655,7 +654,7 @@ export default function WorkTasksPage() {
       date: (r: WorkTask) => effectiveStart(r),
       paddock: (r: WorkTask) => taskPaddockNames(r.id),
       task_type: (r: WorkTask) => r.task_type ?? "",
-      status: (r: WorkTask) => r.status ?? "",
+      status: (r: WorkTask) => completionLabel(r),
       area_ha: (r: WorkTask) => {
         const v = effectiveTaskAreaHa(r);
         return v == null ? null : v;
@@ -703,7 +702,7 @@ export default function WorkTasksPage() {
         effectiveEnd(t) ?? "",
         padNames,
         t.task_type ?? "",
-        t.status ?? "",
+        completionLabel(t),
         areaHa == null ? "" : areaHa.toFixed(4),
         tot?.labourHours?.toFixed(2) ?? "0",
       ];
@@ -773,7 +772,7 @@ export default function WorkTasksPage() {
             <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value={ANY}>Any</SelectItem>
-              {STATUS_OPTIONS.map((o) => (<SelectItem key={o} value={o}>{o}</SelectItem>))}
+              {STATUS_OPTIONS.map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}
             </SelectContent>
           </Select>
         </Filter>
@@ -900,7 +899,7 @@ export default function WorkTasksPage() {
                     {relIndicator}
                   </TableCell>
                 ),
-                status: <TableCell>{t.status ? <Badge variant="outline">{t.status}</Badge> : "—"}</TableCell>,
+                status: <TableCell><Badge variant={isWorkTaskCompleted(t) ? "default" : "outline"}>{completionLabel(t)}</Badge></TableCell>,
                 area_ha: <TableCell className="text-right">{(() => { const v = effectiveTaskAreaHa(t); return v == null ? "—" : rf.area(v); })()}</TableCell>,
                 hours: <TableCell className="text-right">{num(tot?.labourHours ?? 0)}</TableCell>,
                 cost: (
@@ -1109,14 +1108,12 @@ function WorkTaskDrawer({
         task_type: taskType.trim() || null,
         status: status || null,
         start_date: startDate || null,
-        end_date: endDate || null,
         date: startDate || task?.date || null,
         // Preserve existing area_ha when no paddocks are selected on edit,
         // so legacy iPhone-created rows aren't accidentally cleared.
         area_ha: selectedPaddocks.length ? totalAreaHa : (task?.area_ha ?? null),
         description,
         notes,
-        is_finalized: isFinalized,
         user_id: userId,
         current_sync_version: task?.sync_version ?? 0,
       };
@@ -1138,7 +1135,9 @@ function WorkTaskDrawer({
     },
     onSuccess: (saved) => {
       setSavedTaskId(saved.id);
-      toast({ title: isNew ? "Task log created" : "Task log updated" });
+      toast(isNew
+        ? { title: "Work Task saved", description: "You can now add Labour, Machine Work and Materials below." }
+        : { title: "Task log updated" });
       onSaved(saved);
       if (!isNew) onOpenChange(false);
     },
@@ -1330,7 +1329,7 @@ function WorkTaskDrawer({
                     onCreated={onSaved}
                   />
                 </Field>
-                <Field label="Date">
+                <Field label="Work Date">
                   <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                 </Field>
                 <Field label={`Area ${areaUnit} (auto)`}>
@@ -1348,21 +1347,30 @@ function WorkTaskDrawer({
               <Field label="Notes">
                 <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
               </Field>
-              {/* Status and Finalized intentionally hidden: iOS Task Log treats
-                  entries as historical records of completed work. Exposing
-                  scheduling fields here causes drift with iOS and can trigger
-                  overdue alerts. Existing values are preserved on save. */}
             </Section>
 
+            {isNew && !savedTaskId && (
+              <div className="rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-xs text-primary">
+                Save this Work Task first. You can then add Labour, Machine Work and Materials.
+              </div>
+            )}
             {isNew && savedTaskId && (
               <div className="rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-xs text-primary">
-                Task created. Add labour and machine resources below before closing.
+                Work Task saved. You can now add Labour, Machine Work and Materials below.
               </div>
+            )}
+            {!isNew && task && (
+              <WorkTaskCompletionSection task={task} userId={userId} onSaved={onSaved} fmtDate={fmtDate} />
             )}
             {savedTaskId && !isPieceRateTask && visibleLines.length === 0 && displayedMachineLines.length === 0 && (
               <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
                 No labour or machine resources have been added to this task.
               </div>
+            )}
+            {savedTaskId && (
+              <p className="text-xs text-muted-foreground -mb-2">
+                Add the people/labour used for this task, including worker type, number of people and hours worked.
+              </p>
             )}
             <LabourLinesSection
               taskId={savedTaskId}
@@ -1572,9 +1580,11 @@ function WorkTaskDrawer({
           </div>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
-            <Button onClick={() => saveTask.mutate()} disabled={saveTask.isPending || deleteTask.isPending}>
-              {saveTask.isPending ? "Saving…" : isNew ? "Create Task Log" : "Save changes"}
-            </Button>
+            {!(isNew && savedTaskId) && (
+              <Button onClick={() => saveTask.mutate()} disabled={saveTask.isPending || deleteTask.isPending}>
+                {saveTask.isPending ? "Saving…" : isNew ? "Save & add resources" : "Save changes"}
+              </Button>
+            )}
           </div>
         </SheetFooter>
       </SheetContent>
