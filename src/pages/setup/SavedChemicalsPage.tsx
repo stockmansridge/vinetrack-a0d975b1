@@ -91,12 +91,14 @@ import { Link } from "react-router-dom";
 // still persisted and still used by filters/search.
 type ChemColId = "name" | "active_ingredient" | "groups" | "used_for" | "verification" | "use" | "rate" | "manufacturer" | "label" | "cost";
 const CHEM_DEFAULT_COLUMNS: ChemColId[] = [
-  "name", "active_ingredient", "groups", "used_for", "use", "manufacturer", "cost",
+  "name", "active_ingredient", "groups", "used_for", "use", "manufacturer",
 ];
 // Retired from the main list view only — the underlying data is untouched and
 // still shown in the editor / Chemical intelligence panel. The label is now the
 // pinned thumbnail column; the product page link sits under the name.
-const RETIRED_CHEM_COLUMNS = new Set(["group", "verification", "rate", "label"]);
+// "cost" retired: the legacy savedChemical.purchase price is stale. Chemical
+// Inventory owns cost; restoring this needs a batch inventory summary (no N+1).
+const RETIRED_CHEM_COLUMNS = new Set(["group", "verification", "rate", "label", "cost"]);
 
 const httpOk = (v: unknown): v is string => typeof v === "string" && /^https?:\/\//i.test(v);
 
@@ -111,12 +113,6 @@ const fmtMoney = (v?: number | null, currency = "AUD") => {
   }
 };
 
-function purchaseCostPerUnit(purchase: any): number | null {
-  const raw = purchase?.costPerBaseUnit ?? purchase?.cost_per_base_unit
-    ?? purchase?.costPerUnit ?? purchase?.cost_per_unit;
-  const value = Number(raw);
-  return Number.isFinite(value) && value >= 0 ? value : null;
-}
 
 function displayBaseUnit(unit?: string | null): string {
   const base = normaliseUnit(unit);
@@ -265,7 +261,7 @@ export default function SavedChemicalsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chemicals, filter, group, use, activeIngredient, manufacturer, revDisplay]);
 
-  type ChemSortKey = "name" | "active_ingredient" | "use" | "rate" | "manufacturer" | "cost";
+  type ChemSortKey = "name" | "active_ingredient" | "use" | "rate" | "manufacturer";
   const { sorted: sortedRows, getSortDirection: chemSortDir, toggleSort: chemToggle } = useSortableTable<typeof rows[number], ChemSortKey>(rows, {
     accessors: {
       name: (c) => c.name ?? "",
@@ -274,7 +270,6 @@ export default function SavedChemicalsPage() {
       // Read precedence: the confirmed default_rates selection only.
       rate: (c) => defaultRateSortValue(c),
       manufacturer: (c) => normaliseManufacturerName(c.manufacturer) || (c.manufacturer ?? ""),
-      cost: (c) => purchaseCostPerUnit(c.purchase),
     },
     initial: { key: "name", direction: "asc" },
   });
@@ -377,7 +372,7 @@ export default function SavedChemicalsPage() {
       case "rate": return <SortableTableHead active={chemSortDir("rate")} onSort={() => chemToggle("rate")}><DraggableHeaderCell columnId="rate" onDropColumn={moveChemColumn}>Default rate</DraggableHeaderCell></SortableTableHead>;
       case "manufacturer": return <SortableTableHead active={chemSortDir("manufacturer")} onSort={() => chemToggle("manufacturer")}><DraggableHeaderCell columnId="manufacturer" onDropColumn={moveChemColumn}>Manufacturer</DraggableHeaderCell></SortableTableHead>;
       case "label": return <TableHead className="w-20"><DraggableHeaderCell columnId="label" onDropColumn={moveChemColumn}>Label</DraggableHeaderCell></TableHead>;
-      case "cost": return <SortableTableHead active={chemSortDir("cost")} onSort={() => chemToggle("cost")}><DraggableHeaderCell columnId="cost" onDropColumn={moveChemColumn}>Cost / unit</DraggableHeaderCell></SortableTableHead>;
+      case "cost": return null;
     }
   };
 
@@ -416,11 +411,7 @@ export default function SavedChemicalsPage() {
           </div>
         </TableCell>
       );
-      case "cost": {
-        const cost = purchaseCostPerUnit(c.purchase);
-        const currency = c.purchase?.currency ?? "AUD";
-        return <TableCell key="cost">{cost == null ? "—" : `${fmtMoney(cost, currency)} / ${displayBaseUnit(c.purchase?.unit ?? c.unit)}`}</TableCell>;
-      }
+      case "cost": return null;
     }
   };
 

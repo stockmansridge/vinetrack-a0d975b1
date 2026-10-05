@@ -140,7 +140,6 @@ import {
   PHYSICAL_FORM_LABEL,
   formFromInventoryUnit,
   inventoryUnitForForm,
-  packUnitForForm,
   parsePhysicalForm,
   type PhysicalForm,
 } from "@/lib/chemicalPhysicalForm";
@@ -162,6 +161,8 @@ import {
 } from "@/lib/chemicalIntelligenceWrite";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useCanSeeCosts } from "@/lib/permissions";
+import { omitLegacyPurchaseFields } from "@/lib/chemicalPurchaseAuthority";
+import { ChemicalInventorySummaryCard } from "@/components/chemicals/ChemicalInventorySummaryCard";
 import {
   inferRateBasis, composeUnit, chemUnitOnly, normaliseUnit,
   inferProductType, defaultUnitFor, unitsFor,
@@ -176,21 +177,6 @@ import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { formatDate } from "@/lib/dateFormat";
 
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
-const fmtMoney = (v?: number | null, currency = "AUD") => {
-  if (v == null || !Number.isFinite(Number(v))) return "—";
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(v));
-  } catch {
-    return `$${Number(v).toFixed(2)}`;
-  }
-};
-
-function purchaseCostPerUnit(purchase: any): number | null {
-  const raw = purchase?.costPerBaseUnit ?? purchase?.cost_per_base_unit
-    ?? purchase?.costPerUnit ?? purchase?.cost_per_unit;
-  const value = Number(raw);
-  return Number.isFinite(value) && value >= 0 ? value : null;
-}
 
 function displayBaseUnit(unit?: string | null): string {
   const base = normaliseUnit(unit);
@@ -237,6 +223,7 @@ export function ChemicalEditor({
 }) {
   const { toast } = useToast();
   const { currentCountry, memberships } = useVineyard();
+  const editorRole = (memberships.find((m) => m.vineyard_id === vineyardId) as any)?.role ?? null;
   const editorVineyardName =
     memberships.find((m) => m.vineyard_id === vineyardId)?.vineyard_name ?? null;
   // Vineyard Preferred Rate (canonical amount shape) — separate from default_rates.
@@ -248,12 +235,6 @@ export function ChemicalEditor({
 
   const [form, setForm] = useState<SavedChemicalInput>(EMPTY);
   const [rateStr, setRateStr] = useState("");
-  const [packSizeStr, setPackSizeStr] = useState("");
-  const [packPriceStr, setPackPriceStr] = useState("");
-  // PART 6 — pack unit is only an editable suggestion derived from the
-  // authoritative physical form. The legacy "Litres" default must never leak
-  // into a solid or unknown-form chemical.
-  const [packUnit, setPackUnit] = useState<string>("");
   // PART 5 — authoritative physical form. NEVER inferred from a concentration
   // unit, an application-rate unit, a rate basis or a spray-water volume.
   const [physicalForm, setPhysicalForm] = useState<PhysicalForm>("unknown");
@@ -268,8 +249,6 @@ export function ChemicalEditor({
    * existing saved chemical always starts unlocked.
    */
   const [selectionMode, setSelectionMode] = useState<ChemicalSelectionMode>("manual");
-  const [existingCost, setExistingCost] = useState<number | null>(null);
-  const [currency, setCurrency] = useState("AUD");
   const [whp, setWhp] = useState("");
   const [rei, setRei] = useState("");
   const [restNotes, setRestNotes] = useState("");
@@ -310,17 +289,6 @@ export function ChemicalEditor({
 
 
 
-  // Computed cost per base unit from pack size + pack price.
-  const computedCost = useMemo(() => {
-    const size = Number(packSizeStr);
-    const price = Number(packPriceStr);
-    if (!Number.isFinite(size) || !Number.isFinite(price)) return null;
-    if (size <= 0 || price < 0) return null;
-    return price / size;
-  }, [packSizeStr, packPriceStr]);
-
-  // Cost we'll actually save: prefer freshly computed, fall back to existing.
-  const effectiveCost = computedCost ?? existingCost;
 
   // Reset when opening. This performs setState, so it MUST be an effect —
   // never a useMemo side effect.
@@ -349,26 +317,8 @@ export function ChemicalEditor({
           notes: initial.notes ?? "",
           label_url: initial.label_url ?? "",
           product_url: (initial as any).product_url ?? "",
-          purchase: initial.purchase ?? null,
         });
         setRateStr(initial.rate_per_ha == null ? "" : String(initial.rate_per_ha));
-        setExistingCost(purchaseCostPerUnit(initial.purchase));
-        // Rehydrate the stored pack only when BOTH halves exist — a half pack
-        // would make the cost calculation refuse the save.
-        const packSize = initial.pack_size;
-        const packPrice = initial.price_per_pack;
-        const packPair =
-          Number.isFinite(Number(packSize)) && Number.isFinite(Number(packPrice)) &&
-          packSize != null && packPrice != null;
-        setPackSizeStr(packPair ? String(packSize) : "");
-        setPackPriceStr(packPair ? String(packPrice) : "");
-        // No legacy "Litres" fallback: an unknown-form product keeps it unset.
-        setPackUnit(
-          initial.pack_unit?.trim() ||
-            displayBaseUnit(initial.purchase?.unit ?? initial.unit) ||
-            "",
-        );
-        setCurrency(initial.purchase?.currency ?? "AUD");
         const p = parseRestrictions(initial.restrictions);
         setWhp(p.whpDays);
         setRei(p.reiHours);
@@ -417,17 +367,12 @@ export function ChemicalEditor({
 
         setForm({ ...EMPTY, name: initialName?.trim() ? initialName.trim() : "" });
         setRateStr("");
-        setExistingCost(null);
-        setPackSizeStr("");
-        setPackPriceStr("");
-        setPackUnit("");
         setPhysicalForm("unknown");
         // A new chemical in the editor is ALWAYS deliberate manual entry.
         // Product discovery belongs exclusively to Chemical Search.
         setSelectionMode("manual");
         setWhpLegalText("");
         setUnresolvedItems([]);
-        setCurrency("AUD");
         setWhp("");
         setRei("");
         setRestNotes("");
@@ -499,14 +444,8 @@ export function ChemicalEditor({
   const saveMut = useMutation({
     mutationFn: async () => {
       const rateNum = rateStr.trim() === "" ? null : Number(rateStr);
-      const costNum = effectiveCost;
       if (rateNum != null && Number.isNaN(rateNum)) {
         throw new Error("Rate per ha must be a number");
-      }
-      if (packSizeStr.trim() !== "" || packPriceStr.trim() !== "") {
-        if (computedCost == null) {
-          throw new Error("Enter both a pack size (> 0) and a pack price to calculate cost");
-        }
       }
       // Shared manual save contract (mobile `ChemicalSaveContract`). Enforced
       // in the mutation as well as the UI so no path can persist a manual
@@ -562,7 +501,7 @@ export function ChemicalEditor({
         rateDecisionChanged: rateLife.dirty || !!manualSelection,
       });
       const payload: SavedChemicalInput = {
-        ...form,
+        ...omitLegacyPurchaseFields(form),
         rate_per_ha: undefined,
         product_category: categoryKey,
         use: categoryKey ? productCategoryLabel(categoryKey) : (form.use ?? ""),
@@ -604,24 +543,7 @@ export function ChemicalEditor({
         // actually supplied them, so an unrelated edit never blanks a value
         // that iOS/Android populated.
         ...(physicalForm !== "unknown" ? { product_form: physicalForm } : {}),
-        ...(canSeeCosts && packSizeStr.trim() !== "" && packPriceStr.trim() !== ""
-          ? {
-              pack_size: Number(packSizeStr),
-              price_per_pack: Number(packPriceStr),
-              ...(packUnit ? { pack_unit: packUnit } : {}),
-            }
-          : {}),
-        purchase: canSeeCosts && costNum != null
-          ? {
-              ...(form.purchase ?? {}),
-              costPerBaseUnit: costNum,
-              cost_per_base_unit: costNum,
-              costPerUnit: costNum,
-              cost_per_unit: costNum,
-              currency,
-              unit: packUnit || displayBaseUnit(form.unit),
-            }
-          : null,
+        // Purchase/pricing is owned by Chemical Purchase / Inventory: never sent here.
       };
       if (!payload.name || !payload.name.trim()) throw new Error("Name is required");
       for (const key of ["label_url", "product_url"] as const) {
@@ -1036,7 +958,6 @@ export function ChemicalEditor({
                         setPhysicalForm(next);
                         const inventory = inventoryUnitForForm(next);
                         set("unit", inventory ? composeUnit(inventory, inferRateBasis(form.unit)) : "");
-                        setPackUnit(packUnitForForm(next) ?? "");
                       }}
                     >
                       <SelectTrigger><SelectValue placeholder={PHYSICAL_FORM_LABEL.unknown} /></SelectTrigger>
@@ -1393,81 +1314,7 @@ export function ChemicalEditor({
                 </Section>
               )}
 
-              {canSeeCosts && (
-                <Collapsible defaultOpen>
-
-                  <div className="rounded-md border border-border/60">
-                    <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 text-sm font-semibold">
-                      <span>Purchase &amp; pricing</span>
-                      <span className="text-[11px] font-normal text-muted-foreground">Optional</span>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="space-y-3 px-3 pb-3">
-                      {existingCost != null && computedCost == null && (
-                        <p className="text-[11px] text-muted-foreground">
-                          Saved: {fmtMoney(existingCost, currency)} / {packUnit}
-                        </p>
-                      )}
-                      <div className="grid grid-cols-3 gap-3">
-                        <Field label="Pack / container size">
-                          <Input
-                            type="number"
-                            inputMode="decimal"
-                            step="any"
-                            min="0"
-                            value={packSizeStr}
-                            onChange={(e) => setPackSizeStr(e.target.value)}
-                            placeholder="e.g. 20"
-                          />
-                        </Field>
-                        <Field label="Pack unit">
-                          <Select value={packUnit} onValueChange={setPackUnit}>
-                            <SelectTrigger><SelectValue placeholder="Not set" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Litres">Litres</SelectItem>
-                              <SelectItem value="mL">mL</SelectItem>
-                              <SelectItem value="Kg">Kg</SelectItem>
-                              <SelectItem value="g">g</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </Field>
-                        <Field label="Pack price">
-                          <Input
-                            type="number"
-                            inputMode="decimal"
-                            step="0.01"
-                            min="0"
-                            value={packPriceStr}
-                            onChange={(e) => setPackPriceStr(e.target.value)}
-                            placeholder="e.g. 180.00"
-                          />
-                        </Field>
-                      </div>
-                      <div className="grid grid-cols-[minmax(0,1fr),120px] gap-3 items-end">
-                        <Field label="Calculated cost per unit">
-                          <div className="vt-field flex w-full items-center px-3.5 py-2 text-sm bg-muted/40 text-muted-foreground">
-                            {computedCost != null
-                              ? `${fmtMoney(computedCost, currency)} / ${packUnit}`
-                              : existingCost != null
-                                ? `${fmtMoney(existingCost, currency)} / ${packUnit} (saved)`
-                                : "—"}
-                          </div>
-                        </Field>
-                        <Field label="Currency">
-                          <Select value={currency} onValueChange={setCurrency}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="AUD">AUD</SelectItem>
-                              <SelectItem value="NZD">NZD</SelectItem>
-                              <SelectItem value="USD">USD</SelectItem>
-                              <SelectItem value="EUR">EUR</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </Field>
-                      </div>
-                    </CollapsibleContent>
-                  </div>
-                </Collapsible>
-              )}
+              <ChemicalInventorySummaryCard savedChemicalId={initial?.id ?? null} role={editorRole} />
 
               <Section title="Notes">
                 <Textarea rows={3} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
