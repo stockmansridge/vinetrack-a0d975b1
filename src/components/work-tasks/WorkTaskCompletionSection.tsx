@@ -22,6 +22,7 @@ import {
   type WorkTask,
 } from "@/lib/workTasksQuery";
 import {
+  calendarDate,
   displayCompletedDate,
   isWorkTaskCompleted,
   todayLocal,
@@ -34,13 +35,15 @@ interface Props {
   userId: string | null | undefined;
   onSaved: (saved?: WorkTask) => void;
   fmtDate: (v?: string | null) => string;
+  /** Selected vineyard's configured timezone; browser time only if absent. */
+  timeZone?: string | null;
 }
 
-export function WorkTaskCompletionSection({ task, userId, onSaved, fmtDate }: Props) {
+export function WorkTaskCompletionSection({ task, userId, onSaved, fmtDate, timeZone }: Props) {
   const completed = isWorkTaskCompleted(task);
   const workDate = workDateOf(task);
-  const today = todayLocal();
-  const shownCompleted = displayCompletedDate(task);
+  const today = todayLocal(timeZone);
+  const shownCompleted = displayCompletedDate(task, timeZone);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pickDate, setPickDate] = useState(today);
   const [editDate, setEditDate] = useState(shownCompleted ?? "");
@@ -53,7 +56,7 @@ export function WorkTaskCompletionSection({ task, userId, onSaved, fmtDate }: Pr
     mutationFn: () => completeWorkTask(task, pickDate, uid),
     onSuccess: (saved) => {
       setDialogOpen(false);
-      setEditDate(saved.end_date ?? "");
+      setEditDate(calendarDate(saved.end_date) ?? "");
       toast({ title: "Work Task completed" });
       onSaved(saved);
     },
@@ -79,7 +82,7 @@ export function WorkTaskCompletionSection({ task, userId, onSaved, fmtDate }: Pr
 
   const pickError = validateCompletedDate(pickDate, workDate, today);
   const editError = editDate ? validateCompletedDate(editDate, workDate, today) : null;
-  const editDirty = !!editDate && editDate !== (task.end_date ?? shownCompleted ?? "");
+  const editDirty = !!editDate && editDate !== (shownCompleted ?? "");
   const busy = complete.isPending || reopen.isPending || changeDate.isPending;
 
   return (

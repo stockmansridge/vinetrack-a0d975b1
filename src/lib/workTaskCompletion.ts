@@ -79,9 +79,12 @@ export function validateCompletedDate(
   workDate: string | null,
   today: string,
 ): string | null {
-  if (!completedDate) return "Choose a Completed Date.";
-  if (workDate && completedDate < workDate) return "Completed Date cannot be before the Work Date.";
-  if (completedDate > today) return "Completed Date cannot be in the future.";
+  const c = calendarDate(completedDate);
+  const w = calendarDate(workDate);
+  const t = calendarDate(today) ?? today;
+  if (!c) return "Choose a Completed Date.";
+  if (w && c < w) return "Completed Date cannot be before the Work Date.";
+  if (c > t) return "Completed Date cannot be in the future.";
   return null;
 }
 
