@@ -3,6 +3,28 @@
 import { calculatePruningYield } from "@/lib/pruningYieldFormula";
 import type { PruningYieldSettings } from "@/lib/pruningYieldSettingsQuery";
 
+/**
+ * Effective Vines / ha for pruning Yield (iOS/Android/SQL 263 parity).
+ * A physical override (block or complete row total) supersedes the saved
+ * value as count ÷ area; otherwise the saved value (or, when unset, the
+ * block's count ÷ area) is used. The saved value is never modified.
+ */
+export function effectivePruningVinesPerHa(i: {
+  savedVinesPerHa: number | null | undefined;
+  physicalVineCount: number | null;
+  areaHa: number | null;
+  blockVineCount?: number | null;
+}): { vinesPerHa: number; source: "physical_override" | "saved" | "derived" | "none" } {
+  const area = i.areaHa != null && i.areaHa > 0 ? i.areaHa : null;
+  if (i.physicalVineCount != null && i.physicalVineCount > 0 && area) {
+    return { vinesPerHa: i.physicalVineCount / area, source: "physical_override" };
+  }
+  if (i.savedVinesPerHa != null && i.savedVinesPerHa > 0) return { vinesPerHa: i.savedVinesPerHa, source: "saved" };
+  if (i.blockVineCount && area) return { vinesPerHa: i.blockVineCount / area, source: "derived" };
+  return { vinesPerHa: 0, source: "none" };
+}
+import type { _X } from "@/lib/pruningYieldSettingsQuery";
+
 export interface BlockPrunedYieldTile {
   blockId: string;
   blockName: string;
@@ -12,7 +34,7 @@ export interface BlockPrunedYieldTile {
 }
 
 export function buildBlockPrunedYieldTiles(
-  blocks: { id: string; name?: string | null; areaHa?: number | null; vineCount?: number | null }[],
+  blocks: { id: string; name?: string | null; areaHa?: number | null; vineCount?: number | null; physicalVineCount?: number | null }[],
   settingsByBlock: Record<string, PruningYieldSettings>,
 ): BlockPrunedYieldTile[] {
   return blocks.map((b) => {
@@ -27,7 +49,13 @@ export function buildBlockPrunedYieldTiles(
       };
     }
     // vines_per_ha is nullable in the contract — derive from the block when unset.
-    const vinesPerHa =
+    const vinesPerHa = effectivePruningVinesPerHa({
+      savedVinesPerHa: s.vinesPerHa,
+      physicalVineCount: b.physicalVineCount ?? null,
+      areaHa: b.areaHa ?? null,
+      blockVineCount: b.vineCount ?? null,
+    }).vinesPerHa;
+    const _unused =
       s.vinesPerHa > 0
         ? s.vinesPerHa
         : b.vineCount && b.areaHa && b.areaHa > 0
