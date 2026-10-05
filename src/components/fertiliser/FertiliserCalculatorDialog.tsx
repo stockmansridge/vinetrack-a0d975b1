@@ -29,11 +29,14 @@ import {
 } from "@/components/ui/select";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import {
-  ALL_STATUSES,
   FERTILISER_CATEGORY_KEYS,
   PRODUCT_CATEGORY_LABEL,
-  STATUS_LABEL,
+  compareInventory,
   computeCalculation,
+  costPerHectare,
+  costPerVine,
+  packBreakdown,
+  seasonProductCost,
   defaultProductUnit,
   defaultRateUnit,
   type FertiliserCalculationMode,
@@ -44,8 +47,13 @@ import {
 import {
   fetchFertiliserAllocations,
   saveFertiliserRecord,
+  type FertiliserAllocation,
   type FertiliserRecord,
 } from "@/lib/fertiliserRecordsQuery";
+import { fetchInventorySummary } from "@/lib/chemicalInventory";
+import { fetchChemicalSeasonPrices, seasonPriceQueryKey } from "@/lib/chemicalSeasonPricing";
+import { fetchVineyardSeasonSettings, SEASON_DEFAULTS } from "@/lib/vineyardSeasonSettingsQuery";
+import { vintageForISO } from "@/lib/availableVintages";
 import {
   createLabourLine,
   createWorkTask,
@@ -68,6 +76,11 @@ interface Props {
   role: string | null;
   /** When provided, edit that existing record instead of creating one. */
   existing?: FertiliserRecord | null;
+  /**
+   * Duplicate source: pre-fills every value and block from this record but
+   * saves as a brand-new record with new record and allocation IDs.
+   */
+  duplicateFrom?: { record: FertiliserRecord; allocations: FertiliserAllocation[] } | null;
 }
 
 interface Product {
@@ -132,6 +145,7 @@ export default function FertiliserCalculatorDialog({
   paddocks,
   role,
   existing,
+  duplicateFrom,
 }: Props) {
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -149,14 +163,15 @@ export default function FertiliserCalculatorDialog({
   const [form, setForm] = useState<FertiliserForm>("solid");
   const [mode, setMode] = useState<FertiliserCalculationMode>("perHectare");
   const [applicationRate, setApplicationRate] = useState<string>("");
-  const [applicationRateUnit, setApplicationRateUnit] = useState<string>("kg/ha");
-  const [productUnit, setProductUnit] = useState<string>("kg");
+  const [manualArea, setManualArea] = useState<string>("");
+  const [manualVines, setManualVines] = useState<string>("");
   const [packSize, setPackSize] = useState<string>("");
   const [pricePerPack, setPricePerPack] = useState<string>("");
   const [labourCost, setLabourCost] = useState<string>("");
   const [machineryCost, setMachineryCost] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<FertiliserRecordStatus>("planned");
+  const [savingStatus, setSavingStatus] = useState<FertiliserRecordStatus>("planned");
   const [blocks, setBlocks] = useState<BlockState[]>([]);
 
   // Optional Work Task creation.
@@ -176,74 +191,71 @@ export default function FertiliserCalculatorDialog({
   // Reset / hydrate when the dialog opens.
   useEffect(() => {
     if (!open) return;
+    const src = existing ?? duplicateFrom?.record ?? null;
     if (existing) {
       setRecordId(existing.id);
-      setApplicationDate(existing.application_date);
-      setProductId(existing.product_id);
-      setProductName(existing.product_name);
-      setForm((existing.form as FertiliserForm) === "liquid" ? "liquid" : "solid");
-      setMode(
-        (existing.calculation_mode as FertiliserCalculationMode) === "perVine"
-          ? "perVine"
-          : "perHectare",
-      );
-      setApplicationRate(String(existing.application_rate ?? ""));
-      setApplicationRateUnit(existing.application_rate_unit || "kg/ha");
-      setProductUnit(existing.product_unit || "kg");
-      setPackSize(existing.pack_size == null ? "" : String(existing.pack_size));
-      setPricePerPack(""); // price_per_pack is not stored on the record; recomputed from product if selected
-      setLabourCost(existing.labour_cost == null ? "" : String(existing.labour_cost));
-      setMachineryCost(existing.machinery_cost == null ? "" : String(existing.machinery_cost));
-      setNotes(existing.notes ?? "");
-      const s = existing.record_status as FertiliserRecordStatus;
-      setStatus(ALL_STATUSES.includes(s) ? s : "planned");
-      setCreateTask(false);
     } else {
       const next = tryGenerateUuid();
       setIdError(next.error);
       setRecordId(next.id ?? "");
+    }
+    if (src) {
+      setApplicationDate(src.application_date);
+      setProductId(src.product_id);
+      setProductName(src.product_name);
+      setForm((src.form as FertiliserForm) === "liquid" ? "liquid" : "solid");
+      setMode((src.calculation_mode as FertiliserCalculationMode) === "perVine" ? "perVine" : "perHectare");
+      setApplicationRate(String(src.application_rate ?? ""));
+      setPackSize(src.pack_size == null ? "" : String(src.pack_size));
+      setPricePerPack(""); // price_per_pack is not stored on the record
+      setLabourCost(src.labour_cost == null ? "" : String(src.labour_cost));
+      setMachineryCost(src.machinery_cost == null ? "" : String(src.machinery_cost));
+      setNotes(src.notes ?? "");
+      setManualArea(src.total_area_ha ? String(src.total_area_ha) : "");
+      setManualVines(src.total_vines ? String(src.total_vines) : "");
+      const s = existing?.record_status as FertiliserRecordStatus;
+      setStatus(existing && s ? s : "planned");
+    } else {
       setApplicationDate(new Date().toISOString().slice(0, 10));
       setProductId(null);
       setProductName("");
       setForm("solid");
       setMode("perHectare");
       setApplicationRate("");
-      setApplicationRateUnit(defaultRateUnit("perHectare", "solid"));
-      setProductUnit(defaultProductUnit("solid"));
       setPackSize("");
       setPricePerPack("");
       setLabourCost("");
       setMachineryCost("");
       setNotes("");
+      setManualArea("");
+      setManualVines("");
       setStatus("planned");
-      setCreateTask(false);
     }
+    setCreateTask(false);
     setPendingTaskId(null);
     setPendingLabourLineId(null);
     setProductSearch("");
-  }, [open, existing]);
+  }, [open, existing, duplicateFrom]);
 
-  // Hydrate block selection from existing allocations once they load.
+  // Hydrate block selection from existing (or duplicate-source) allocations.
+  // Duplicates always get NEW allocation IDs so source child rows are never touched.
+  const sourceAllocations = existing ? allocationsQ.data : duplicateFrom?.allocations;
   useEffect(() => {
     if (!open) return;
-    const existingByPaddock = new Map(
-      (allocationsQ.data ?? []).map((a) => [a.paddock_id, a]),
-    );
+    const byPaddock = new Map((sourceAllocations ?? []).map((a) => [a.paddock_id, a]));
     setBlocks(
       paddocks.map((p) => {
-        const alloc = existingByPaddock.get(p.id);
+        const alloc = byPaddock.get(p.id);
         return {
           ...p,
           selected: alloc != null,
-          allocationId: alloc?.id ?? generateUuid(),
-          // If reloading, preserve saved area/vine values so historical
-          // snapshots don't shift.
+          allocationId: existing && alloc ? alloc.id : generateUuid(),
           areaHa: alloc ? Number(alloc.area_ha) : p.areaHa,
           vineCount: alloc ? Number(alloc.vine_count) : p.vineCount,
         };
       }),
     );
-  }, [open, paddocks, allocationsQ.data]);
+  }, [open, paddocks, sourceAllocations, existing]);
 
   // When the user picks a product, snapshot product-related defaults.
   const onSelectProduct = (id: string) => {
@@ -251,26 +263,50 @@ export default function FertiliserCalculatorDialog({
     if (!p) return;
     setProductId(p.id);
     setProductName(p.name);
-    const nextForm: FertiliserForm =
-      p.product_form === "liquid" ? "liquid" : "solid";
-    setForm(nextForm);
-    setApplicationRateUnit(defaultRateUnit(mode, nextForm));
-    setProductUnit(defaultProductUnit(nextForm));
+    setForm(p.product_form === "liquid" ? "liquid" : "solid");
     setPackSize(p.pack_size == null ? "" : String(p.pack_size));
-    setPricePerPack(p.price_per_pack == null ? "" : String(p.price_per_pack));
+    // Legacy saved_chemicals.price_per_pack is never a cost authority.
+    setPricePerPack("");
   };
 
-  // Update units when mode changes.
-  useEffect(() => {
-    setApplicationRateUnit((cur) => {
-      const def = defaultRateUnit(mode, form);
-      // Only auto-swap when the user hasn't customised past the defaults.
-      const defaults = ["kg/ha", "L/ha", "g/vine", "mL/vine"];
-      return defaults.includes(cur) ? def : cur;
-    });
-  }, [mode, form]);
+  const onManualEntry = () => {
+    setProductId(null);
+    setProductName("");
+    setPackSize("");
+    setPricePerPack("");
+  };
+
+  // Units are authoritative: derived from form + mode, never typed.
+  const applicationRateUnit = defaultRateUnit(mode, form);
+  const productUnit = defaultProductUnit(form);
+  const selectedProduct = (productsQ.data ?? []).find((p) => p.id === productId) ?? null;
+  const isSavedProduct = !!productId;
 
   const selectedBlocks = useMemo(() => blocks.filter((b) => b.selected), [blocks]);
+
+  // Saved-product cost: SQL 264 season purchase price (Owner/Manager only).
+  const seasonQ = useQuery({
+    queryKey: ["season-settings", vineyardId],
+    enabled: !!vineyardId && showCosts && isSavedProduct,
+    queryFn: () => fetchVineyardSeasonSettings(vineyardId),
+  });
+  const season = seasonQ.data ?? SEASON_DEFAULTS;
+  const vintage = vintageForISO(applicationDate, season.season_start_month, season.season_start_day);
+  const priceQ = useQuery({
+    queryKey: seasonPriceQueryKey(vineyardId, vintage ?? 0, null),
+    enabled: !!vineyardId && showCosts && isSavedProduct && vintage != null && !seasonQ.isLoading,
+    staleTime: 5 * 60 * 1000,
+    queryFn: () => fetchChemicalSeasonPrices(vineyardId, vintage!),
+  });
+  const seasonRow = productId ? priceQ.data?.get(productId) ?? null : null;
+
+  // Inventory: Chemical Inventory summary RPC (never saved_chemicals.inventory_quantity).
+  const inventoryQ = useQuery({
+    queryKey: ["fertiliser", "inventory", productId],
+    enabled: !!productId,
+    retry: false,
+    queryFn: () => fetchInventorySummary(productId!),
+  });
 
   const calc = useMemo(
     () =>
@@ -287,8 +323,32 @@ export default function FertiliserCalculatorDialog({
           areaHa: b.areaHa,
           vineCount: b.vineCount,
         })),
+        manual: { areaHa: numOr(manualArea), vineCount: numOr(manualVines) },
+        ...(isSavedProduct
+          ? {
+              productCostOverride: seasonProductCost(
+                seasonRow,
+                (() => {
+                  const r = numOr(applicationRate);
+                  if (selectedBlocks.length) {
+                    return selectedBlocks.reduce(
+                      (s, b) => s + (mode === "perHectare" ? r * b.areaHa : (r * b.vineCount) / 1000),
+                      0,
+                    );
+                  }
+                  return mode === "perHectare" ? r * numOr(manualArea) : (r * numOr(manualVines)) / 1000;
+                })(),
+                productUnit,
+              ),
+            }
+          : {}),
       }),
     [
+      manualArea,
+      manualVines,
+      isSavedProduct,
+      seasonRow,
+      productUnit,
       mode,
       applicationRate,
       packSize,
@@ -299,29 +359,34 @@ export default function FertiliserCalculatorDialog({
     ],
   );
 
+  const hasFertiliserProducts = useMemo(
+    () => (productsQ.data ?? []).some((p) => p.is_active !== false && isFertiliserProduct(p)),
+    [productsQ.data],
+  );
   const filteredProducts = useMemo(() => {
     const list = productsQ.data ?? [];
     const q = productSearch.trim().toLowerCase();
     return list
       .filter((p) => p.is_active !== false)
-      .filter((p) => {
-        if (showAllCategories) return true;
-        return (
-          !p.product_category ||
-          FERTILISER_CATEGORY_KEYS.includes(p.product_category as ProductCategoryKey)
-        );
-      })
+      .filter((p) => (showAllCategories || !hasFertiliserProducts ? true : isFertiliserProduct(p)))
       .filter((p) => (q ? (p.name ?? "").toLowerCase().includes(q) : true));
-  }, [productsQ.data, productSearch, showAllCategories]);
+  }, [productsQ.data, productSearch, showAllCategories, hasFertiliserProducts]);
 
+  const packs = packBreakdown(calc.totalProductRequired, packSize === "" ? null : numOr(packSize));
+  const labourAndMachinery = numOr(labourCost) + numOr(machineryCost);
+  const inventory = inventoryQ.data
+    ? compareInventory(inventoryQ.data.quantity, inventoryQ.data.unit, calc.totalProductRequired, productUnit)
+    : null;
+
+  const hasQuantity = selectedBlocks.length > 0 || (mode === "perHectare" ? numOr(manualArea) > 0 : numOr(manualVines) > 0);
   const canSubmit =
     productName.trim().length > 0 &&
-    selectedBlocks.length > 0 &&
+    hasQuantity &&
     numOr(applicationRate) > 0;
 
   const saveMut = useMutation({
-    mutationFn: async () => {
-      const iso = new Date().toISOString();
+    mutationFn: async (recordStatus: FertiliserRecordStatus) => {
+      setSavingStatus(recordStatus);
       const savedRecordId = recordId;
       const savePayload = {
         id: savedRecordId,
@@ -330,15 +395,15 @@ export default function FertiliserCalculatorDialog({
         product_name: productName.trim(),
         form,
         calculation_mode: mode,
-        record_status: status,
+        record_status: recordStatus,
         application_date: applicationDate,
         block_names: selectedBlocks.map((b) => b.name),
         total_area_ha: calc.totalAreaHa,
         total_vines: calc.totalVines,
         application_rate: numOr(applicationRate),
-        application_rate_unit: applicationRateUnit || defaultRateUnit(mode, form),
+        application_rate_unit: applicationRateUnit,
         total_product_required: calc.totalProductRequired,
-        product_unit: productUnit || defaultProductUnit(form),
+        product_unit: productUnit,
         pack_size: packSize === "" ? null : numOr(packSize),
         pack_count: calc.packCount,
         estimated_product_cost: calc.estimatedProductCost,
@@ -373,7 +438,7 @@ export default function FertiliserCalculatorDialog({
           paddock_id: primary.id,
           paddock_name: primary.name,
           task_type: taskType || "Fertilising",
-          status: status === "completed" ? "completed" : "planned",
+          status: recordStatus === "completed" ? "completed" : "planned",
           description: productName.trim(),
           notes: notes,
           start_date: applicationDate,
@@ -384,7 +449,7 @@ export default function FertiliserCalculatorDialog({
             numOr(workerCount) > 0 && numOr(hoursPerWorker) > 0
               ? numOr(workerCount) * numOr(hoursPerWorker)
               : null,
-          is_finalized: status === "completed",
+          is_finalized: recordStatus === "completed",
           user_id: user?.id ?? null,
         });
         // Multi-block link table.
@@ -418,8 +483,8 @@ export default function FertiliserCalculatorDialog({
 
       return record;
     },
-    onSuccess: () => {
-      toast({ title: "Fertiliser record saved" });
+    onSuccess: (_r, recordStatus) => {
+      toast({ title: recordStatus === "completed" ? "Fertiliser application recorded as completed" : "Fertiliser record saved" });
       qc.invalidateQueries({ queryKey: ["fertiliser", "records", vineyardId] });
       qc.invalidateQueries({ queryKey: ["fertiliser", "allocations"] });
       onOpenChange(false);
