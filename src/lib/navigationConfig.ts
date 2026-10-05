@@ -237,7 +237,7 @@ export const ACTIVITIES: NavActivity[] = [
   },
   {
     id: "spraying",
-    label: "Spraying",
+    label: "Spray Program",
     group: "Work",
     icon: Layers,
     views: [
