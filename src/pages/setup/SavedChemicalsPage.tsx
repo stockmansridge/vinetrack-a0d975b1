@@ -162,8 +162,8 @@ function groupSimilarTargets(labels: string[]) {
   return { options, keyOf };
 }
 
-function ProductPageLink({ c }: { c: any }) {
-  const href = productLinkOf(c, null) ;
+function ProductPageLink({ c, rev }: { c: any; rev?: any }) {
+  const href = productLinkOf(c, rev ?? null);
   if (!href) return null;
   return (
     <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground hover:text-primary hover:underline" title="Manufacturer/product page — not the official label">
@@ -452,7 +452,7 @@ export default function SavedChemicalsPage() {
           ) : (
             <div className="font-medium leading-tight">{fmt(c.name)}</div>
           )}
-          <ProductPageLink c={c} />
+          <ProductPageLink c={c} rev={revOf(c)} />
           </div>
         </TableCell>
       );
@@ -750,7 +750,7 @@ export default function SavedChemicalsPage() {
                 )}
                 {sortedArchived.map((c) => (
                   <TableRow key={c.id}>
-                    <TableCell className="font-medium"><div className="flex flex-col items-start gap-0.5">{fmt(c.name)}<ProductPageLink c={c} /></div></TableCell>
+                    <TableCell className="font-medium"><div className="flex flex-col items-start gap-0.5">{fmt(c.name)}<ProductPageLink c={c} rev={revOf(c)} /></div></TableCell>
                     <TableCell>{fmt(displayProductCategory(c))}</TableCell>
                     <TableCell>{fmt(c.active_ingredient)}</TableCell>
                     <TableCell>{fmt(c.manufacturer)}</TableCell>
