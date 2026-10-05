@@ -54,12 +54,13 @@ export const APPLICATION_MODE_LABEL: Record<ApplicationMode, string> = {
  * persistence because it still distinguishes Foliar from Spreader for product
  * and UI semantics (and for Resistance Check context).
  */
-export type OperationType = "foliar" | "spreader" | "banded";
-export const OPERATION_TYPES: OperationType[] = ["foliar", "spreader", "banded"];
+export type OperationType = "foliar" | "spreader" | "banded" | "fertigation";
+export const OPERATION_TYPES: OperationType[] = ["foliar", "spreader", "banded", "fertigation"];
 export const OPERATION_TYPE_LABEL: Record<OperationType, string> = {
   foliar: "Foliar Spray",
   spreader: "Spreader",
   banded: "Banded Spray",
+  fertigation: "Fertigation",
 };
 
 const OPERATION_TYPE_ALIAS: Record<string, OperationType> = {
@@ -71,6 +72,7 @@ const OPERATION_TYPE_ALIAS: Record<string, OperationType> = {
   spreader: "spreader",
   "spreader application": "spreader",
   fertiliser: "spreader",
+  fertigation: "fertigation",
 };
 
 export function normaliseOperationType(value: unknown): OperationType | null {
@@ -84,6 +86,10 @@ export const OPERATION_TYPE_TO_MODE: Record<OperationType, ApplicationMode> = {
   foliar: "whole_block",
   spreader: "whole_block",
   banded: "banded",
+  // Storage compatibility only. Fertigation Program Steps do not use spray
+  // geometry/carrier maths; the linked irrigation session owns actual water
+  // and block allocation.
+  fertigation: "whole_block",
 };
 
 export function normaliseApplicationMode(value: unknown): ApplicationMode | null {
