@@ -18,6 +18,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import {
+  areaLabel, areaToCanonical, areaToDisplay, costPerAreaLabel, costPerAreaToDisplay,
+  inputValue, quantityLabel, quantityToDisplay, rateLabel, rateToCanonical, rateToDisplay,
+} from "@/lib/fertiliserUnits";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -113,9 +118,6 @@ function npk(p: Pick<Product, "nitrogen_percent" | "phosphorus_percent" | "potas
   return ` · N-P-K ${p.nitrogen_percent ?? 0}-${p.phosphorus_percent ?? 0}-${p.potassium_percent ?? 0} (${p.analysis_basis || "elemental"})`;
 }
 
-function fmtMoney(v: number | null, dp = 2): string {
-  return v == null ? "—" : `$${v.toFixed(dp)}`;
-}
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -176,6 +178,8 @@ export default function FertiliserCalculatorDialog({
   const { user } = useAuth();
   const showCosts = canSeeCosts(role);
   const productsQ = useProducts(vineyardId);
+  const region = useRegionFormatters();
+  const money = (v: number | null | undefined, dp = 2) => (v == null ? "—" : region.currency(v, dp));
   const allocationsQ = useExistingAllocations(existing?.id);
 
   const [applicationDate, setApplicationDate] = useState<string>("");
@@ -230,13 +234,17 @@ export default function FertiliserCalculatorDialog({
       setProductName(src.product_name);
       setForm((src.form as FertiliserForm) === "liquid" ? "liquid" : "solid");
       setMode((src.calculation_mode as FertiliserCalculationMode) === "perVine" ? "perVine" : "perHectare");
-      setApplicationRate(String(src.application_rate ?? ""));
+      {
+        const srcForm: FertiliserForm = (src.form as FertiliserForm) === "liquid" ? "liquid" : "solid";
+        const srcMode: FertiliserCalculationMode = (src.calculation_mode as FertiliserCalculationMode) === "perVine" ? "perVine" : "perHectare";
+        setApplicationRate(src.application_rate == null ? "" : inputValue(rateToDisplay(Number(src.application_rate), srcMode, srcForm, region), 4));
+      }
       setPackSize(src.pack_size == null ? "" : String(src.pack_size));
       setPricePerPack(""); // price_per_pack is not stored on the record
       setLabourCost(src.labour_cost == null ? "" : String(src.labour_cost));
       setMachineryCost(src.machinery_cost == null ? "" : String(src.machinery_cost));
       setNotes(src.notes ?? "");
-      setManualArea(src.total_area_ha ? String(src.total_area_ha) : "");
+      setManualArea(src.total_area_ha ? inputValue(areaToDisplay(Number(src.total_area_ha), region)) : "");
       setManualVines(src.total_vines ? String(src.total_vines) : "");
       const s = existing?.record_status as FertiliserRecordStatus;
       setStatus(existing && s ? s : "planned");
@@ -307,6 +315,12 @@ export default function FertiliserCalculatorDialog({
   // Units are authoritative: derived from form + mode, never typed.
   const applicationRateUnit = defaultRateUnit(mode, form);
   const productUnit = defaultProductUnit(form);
+  // Inputs are in the vineyard's display units; everything below works canonically.
+  const rateCanon = rateToCanonical(numOr(applicationRate), mode, form, region);
+  const manualAreaHa = areaToCanonical(numOr(manualArea), region);
+  const displayRateUnit = rateLabel(mode, form, region);
+  const displayQtyUnit = quantityLabel(form, region);
+  const qty = (v: number) => `${Number(quantityToDisplay(v, form, region).toFixed(3)).toLocaleString()} ${displayQtyUnit}`;
   const selectedProduct = (productsQ.data ?? []).find((p) => p.id === productId) ?? null;
   const isSavedProduct = !!productId;
 
@@ -341,7 +355,7 @@ export default function FertiliserCalculatorDialog({
     () =>
       computeCalculation({
         mode,
-        applicationRate: numOr(applicationRate),
+        applicationRate: rateCanon,
         packSize: packSize === "" ? null : numOr(packSize, 0),
         pricePerPack: pricePerPack === "" ? null : numOr(pricePerPack, 0),
         labourCost: labourCost === "" ? 0 : numOr(labourCost, 0),
@@ -352,20 +366,20 @@ export default function FertiliserCalculatorDialog({
           areaHa: b.areaHa,
           vineCount: b.vineCount,
         })),
-        manual: { areaHa: numOr(manualArea), vineCount: numOr(manualVines) },
+        manual: { areaHa: manualAreaHa, vineCount: numOr(manualVines) },
         ...(isSavedProduct
           ? {
               productCostOverride: seasonProductCost(
                 seasonRow,
                 (() => {
-                  const r = numOr(applicationRate);
+                  const r = rateCanon;
                   if (selectedBlocks.length) {
                     return selectedBlocks.reduce(
                       (s, b) => s + (mode === "perHectare" ? r * b.areaHa : (r * b.vineCount) / 1000),
                       0,
                     );
                   }
-                  return mode === "perHectare" ? r * numOr(manualArea) : (r * numOr(manualVines)) / 1000;
+                  return mode === "perHectare" ? r * manualAreaHa : (r * numOr(manualVines)) / 1000;
                 })(),
                 productUnit,
               ),
@@ -373,6 +387,8 @@ export default function FertiliserCalculatorDialog({
           : {}),
       }),
     [
+      rateCanon,
+      manualAreaHa,
       manualArea,
       manualVines,
       isSavedProduct,
@@ -407,11 +423,11 @@ export default function FertiliserCalculatorDialog({
     ? compareInventory(inventoryQ.data.quantity, inventoryQ.data.unit, calc.totalProductRequired, productUnit)
     : null;
 
-  const hasQuantity = selectedBlocks.length > 0 || (mode === "perHectare" ? numOr(manualArea) > 0 : numOr(manualVines) > 0);
+  const hasQuantity = selectedBlocks.length > 0 || (mode === "perHectare" ? manualAreaHa > 0 : numOr(manualVines) > 0);
   const canSubmit =
     productName.trim().length > 0 &&
     hasQuantity &&
-    numOr(applicationRate) > 0;
+    rateCanon > 0;
 
   const saveMut = useMutation({
     mutationFn: async (recordStatus: FertiliserRecordStatus) => {
@@ -429,7 +445,7 @@ export default function FertiliserCalculatorDialog({
         block_names: selectedBlocks.map((b) => b.name),
         total_area_ha: calc.totalAreaHa,
         total_vines: calc.totalVines,
-        application_rate: numOr(applicationRate),
+        application_rate: rateCanon,
         application_rate_unit: applicationRateUnit,
         total_product_required: calc.totalProductRequired,
         product_unit: productUnit,
@@ -665,10 +681,10 @@ export default function FertiliserCalculatorDialog({
               </div>
             )}
             <div className="sm:col-span-2">
-              <Label className="text-xs">Application rate ({applicationRateUnit})</Label>
+              <Label className="text-xs">Application rate ({displayRateUnit})</Label>
               <div className="flex gap-2 items-center">
                 <Input inputMode="decimal" value={applicationRate} onChange={(e) => setApplicationRate(e.target.value)} placeholder="e.g. 50" />
-                <span className="text-sm text-muted-foreground w-20" aria-label="Rate unit">{applicationRateUnit}</span>
+                <span className="text-sm text-muted-foreground w-20" aria-label="Rate unit">{displayRateUnit}</span>
               </div>
             </div>
             <div>
@@ -712,13 +728,13 @@ export default function FertiliserCalculatorDialog({
                   <Input
                     disabled={!b.selected}
                     inputMode="decimal"
-                    value={String(b.areaHa)}
+                    value={inputValue(areaToDisplay(b.areaHa, region))}
                     onChange={(e) => {
                       const next = [...blocks];
-                      next[i] = { ...b, areaHa: numOr(e.target.value) };
+                      next[i] = { ...b, areaHa: areaToCanonical(numOr(e.target.value), region) };
                       setBlocks(next);
                     }}
-                    aria-label={`${b.name} area ha`}
+                    aria-label={`${b.name} area ${areaLabel(region)}`}
                   />
                   <Input
                     disabled={!b.selected}
@@ -733,9 +749,9 @@ export default function FertiliserCalculatorDialog({
                   />
                   {b.selected ? (
                     <div className="text-xs text-muted-foreground tabular-nums text-right">
-                      {calc.allocations.find((a) => a.paddockId === b.id)?.productRequired.toLocaleString()} {productUnit}
+                      {qty(calc.allocations.find((a) => a.paddockId === b.id)?.productRequired ?? 0)}
                       {showCosts && calc.allocations.find((a) => a.paddockId === b.id)?.allocatedCost != null && (
-                        <span className="ml-2">· ${calc.allocations.find((a) => a.paddockId === b.id)!.allocatedCost!.toFixed(2)}</span>
+                        <span className="ml-2">· {money(calc.allocations.find((a) => a.paddockId === b.id)!.allocatedCost)}</span>
                       )}
                     </div>
                   ) : (
@@ -751,8 +767,8 @@ export default function FertiliserCalculatorDialog({
                 </div>
                 {mode === "perHectare" ? (
                   <div>
-                    <Label className="text-xs">Treated area (ha)</Label>
-                    <Input inputMode="decimal" value={manualArea} onChange={(e) => setManualArea(e.target.value)} aria-label="Treated area ha" />
+                    <Label className="text-xs">Treated area ({areaLabel(region)})</Label>
+                    <Input inputMode="decimal" value={manualArea} onChange={(e) => setManualArea(e.target.value)} aria-label={`Treated area ${areaLabel(region)}`} />
                   </div>
                 ) : (
                   <div>
@@ -768,9 +784,9 @@ export default function FertiliserCalculatorDialog({
           <section className="rounded-lg border-2 border-border bg-card shadow-sm p-4 space-y-3" aria-label="Calculation results">
             <Label className="text-sm font-semibold">Product requirement</Label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-              <Stat label="Total area" value={`${calc.totalAreaHa.toFixed(2)} ha`} />
+              <Stat label="Total area" value={region.area(calc.totalAreaHa, 2)} />
               <Stat label="Total vines" value={calc.totalVines.toLocaleString()} />
-              <Stat label="Total required" value={`${calc.totalProductRequired.toLocaleString()} ${productUnit}`} />
+              <Stat label="Total required" value={qty(calc.totalProductRequired)} />
               <Stat label="Packs required" value={packs ? packs.packsRequired.toFixed(2) : "—"} />
               <Stat label="Full packs" value={packs ? String(packs.fullPacks) : "—"} />
               <Stat
@@ -820,12 +836,18 @@ export default function FertiliserCalculatorDialog({
                   </div>
                   <Stat
                     label="Product cost"
-                    value={calc.estimatedProductCost == null ? "Unavailable" : `$${calc.estimatedProductCost.toFixed(2)}`}
+                    value={calc.estimatedProductCost == null ? "Unavailable" : money(calc.estimatedProductCost)}
                   />
-                  <Stat label="Labour & machinery" value={`$${labourAndMachinery.toFixed(2)}`} />
-                  <Stat label="Total job cost" value={calc.totalJobCost == null ? "—" : `$${calc.totalJobCost.toFixed(2)}`} />
-                  <Stat label="Cost per hectare" value={fmtMoney(costPerHectare(calc.totalJobCost, calc.totalAreaHa))} />
-                  <Stat label="Cost per vine" value={fmtMoney(costPerVine(calc.totalJobCost, calc.totalVines), 4)} />
+                  <Stat label="Labour & machinery" value={money(labourAndMachinery)} />
+                  <Stat label="Total job cost" value={calc.totalJobCost == null ? "—" : money(calc.totalJobCost)} />
+                  <Stat
+                    label={costPerAreaLabel(region)}
+                    value={(() => {
+                      const perHa = costPerHectare(calc.totalJobCost, calc.totalAreaHa);
+                      return perHa == null ? "—" : `${money(costPerAreaToDisplay(perHa, region))}/${areaLabel(region)}`;
+                    })()}
+                  />
+                  <Stat label="Cost per vine" value={money(costPerVine(calc.totalJobCost, calc.totalVines), 4)} />
                 </div>
                 {isSavedProduct && calc.estimatedProductCost == null && (
                   <div className="text-xs text-muted-foreground">
