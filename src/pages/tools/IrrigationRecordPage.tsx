@@ -14,6 +14,7 @@ import {
 import {
   FertigationCard,
   FertigationEditor,
+  stepOptionLabel,
   NO_FERTIGATION,
   useFertigationDraft,
 } from "@/components/irrigation/FertigationSection";

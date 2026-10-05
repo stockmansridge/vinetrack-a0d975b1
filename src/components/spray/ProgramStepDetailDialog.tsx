@@ -106,7 +106,7 @@ export function ProgramStepDetailDialog({
         <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-5 p-5">
             {isFertigation && (
-              <Section title="Fertigation products &amp; planned rates">
+              <Section title="Products &amp; rates">
                 <ul className="space-y-0.5 text-sm">
                   {fertigationLinesFromJob(job).map((l, i) => (
                     <li key={i}>
@@ -115,6 +115,16 @@ export function ProgramStepDetailDialog({
                     </li>
                   ))}
                 </ul>
+              </Section>
+            )}
+            {isFertigation && (
+              <Section title="Application">
+                <dl className="grid grid-cols-[9rem_1fr] gap-y-1 text-sm">
+                  <dt className="text-muted-foreground">Method</dt>
+                  <dd>Fertigation</dd>
+                  <dt className="text-muted-foreground">Growth stage</dt>
+                  <dd>{stage ? `${stage}${stageDesc ? ` — ${stageDesc}` : ""}` : "Not set"}</dd>
+                </dl>
               </Section>
             )}
             {fertigationVisible && (
