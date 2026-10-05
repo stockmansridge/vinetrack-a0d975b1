@@ -21,13 +21,7 @@ import {
   type TripCostAllocation,
 } from "@/lib/tripCostAllocationsQuery";
 import { usePruningActivity } from "@/lib/pruningActivityQuery";
-import { fetchSprayRecordsForVineyard, type SprayRecord } from "@/lib/sprayRecordsQuery";
 import { useChemicalAllocationOverlay } from "@/lib/useChemicalAllocationOverlay";
-import {
-  overlayAllocationsWithChemicalCost,
-  resolveTripChemicalCost,
-  type ChemicalCostResult,
-} from "@/lib/chemicalCostResolver";
 import {
   buildUnifiedCostDataset,
   type UnifiedCostRow,
