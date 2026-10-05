@@ -41,6 +41,7 @@ export interface WorkTask {
   is_archived?: boolean | null;
   is_finalized?: boolean | null;
   finalized_at?: string | null;
+  finalized_by?: string | null;
   /** SQL 119: authoritative production/costing vintage for this task,
    *  resolved server-side from the vineyard's season settings. All linked
    *  cost lines (labour, machinery, trips) report under this value —
@@ -282,11 +283,12 @@ export async function updateWorkTask(input: UpsertWorkTaskInput): Promise<WorkTa
     description: input.description ?? "",
     notes: input.notes ?? "",
     start_date: input.start_date ?? null,
-    end_date: input.end_date ?? null,
     date: fallbackDate,
     area_ha: input.area_ha ?? null,
     duration_hours: input.duration_hours ?? 0,
-    is_finalized: input.is_finalized ?? false,
+    // Completion fields (is_finalized / end_date / finalized_at / finalized_by)
+    // are written ONLY by the explicit completion functions below, so an
+    // ordinary edit never clears or overwrites a completion.
     client_updated_at: nowIso(),
     sync_version: nextVersion,
     updated_by: input.user_id ?? null,
@@ -300,6 +302,41 @@ export async function updateWorkTask(input: UpsertWorkTaskInput): Promise<WorkTa
     .single();
   if (error) throw error;
   return data as WorkTask;
+}
+
+async function writeCompletion(
+  task: Pick<WorkTask, "id" | "sync_version">,
+  fields: Record<string, unknown>,
+  userId: string | null,
+): Promise<WorkTask> {
+  const { data, error } = await supabase
+    .from("work_tasks")
+    .update({
+      ...fields,
+      client_updated_at: nowIso(),
+      sync_version: (Number(task.sync_version) || 0) + 1,
+      updated_by: userId,
+    } as any)
+    .eq("id", task.id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as WorkTask;
+}
+
+/** Complete: one write; finalized_at is the real press time, not the Completed Date. */
+export function completeWorkTask(task: Pick<WorkTask, "id" | "sync_version">, completedDate: string, userId: string | null) {
+  return writeCompletion(task, completePayload(completedDate, userId, nowIso()), userId);
+}
+
+/** Reopen: clears completion only; Work Date, resources and costing untouched. */
+export function reopenWorkTask(task: Pick<WorkTask, "id" | "sync_version">, userId: string | null) {
+  return writeCompletion(task, reopenPayload(), userId);
+}
+
+/** Correct the Completed Date of a completed task; audit fields preserved. */
+export function setWorkTaskCompletedDate(task: Pick<WorkTask, "id" | "sync_version">, completedDate: string, userId: string | null) {
+  return writeCompletion(task, completedDatePayload(completedDate), userId);
 }
 
 export interface UpsertLabourLineInput {
