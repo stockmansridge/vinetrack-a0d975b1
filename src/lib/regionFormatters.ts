@@ -8,9 +8,9 @@
 import { AU_DEFAULTS, type RegionSettings } from "./vineyardRegionSettingsQuery";
 
 // --- conversions ---
-const L_PER_US_GAL = 3.785411784;
+export const L_PER_US_GAL = 3.785411784;
 const KM_PER_MI = 1.609344;
-const HA_PER_AC = 0.40468564224;
+export const HA_PER_AC = 0.40468564224;
 
 function n(v: unknown): number | null {
   if (v == null || v === "") return null;

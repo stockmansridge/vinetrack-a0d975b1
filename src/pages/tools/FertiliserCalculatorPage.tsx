@@ -33,6 +33,8 @@ import {
 } from "@/lib/fertiliserRecordsQuery";
 import FertiliserCalculatorDialog, { paddocksToOptions } from "@/components/fertiliser/FertiliserCalculatorDialog";
 import { formatDate } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import { quantityLabel, quantityToDisplay, rateLabel, rateToDisplay } from "@/lib/fertiliserUnits";
 
 /** Fertiliser Calculator action matrix (selected-vineyard role). */
 export function fertiliserPermissions(role: string | null | undefined) {
@@ -123,6 +125,7 @@ function toCsv(records: FertiliserRecord[]): string {
 
 export default function FertiliserCalculatorPage() {
   const { selectedVineyardId, memberships, currentRole } = useVineyard();
+  const region = useRegionFormatters();
   const vineyard = memberships.find((m) => m.vineyard_id === selectedVineyardId);
   const qc = useQueryClient();
   const showCosts = canSeeCosts(currentRole);
@@ -315,14 +318,21 @@ export default function FertiliserCalculatorPage() {
                         </div>
                       </td>
                       <td className="py-2 pr-3 text-right tabular-nums whitespace-nowrap">
-                        {r.application_rate} {r.application_rate_unit}
+                        {(() => {
+                          const f = r.form === "liquid" ? "liquid" : "solid";
+                          const m = r.calculation_mode === "perVine" ? "perVine" : "perHectare";
+                          return `${Number(rateToDisplay(Number(r.application_rate), m, f, region).toFixed(3)).toLocaleString()} ${rateLabel(m, f, region)}`;
+                        })()}
                       </td>
                       <td className="py-2 pr-3 text-right tabular-nums whitespace-nowrap">
-                        {r.total_product_required} {r.product_unit}
+                        {(() => {
+                          const f = r.form === "liquid" ? "liquid" : "solid";
+                          return `${Number(quantityToDisplay(Number(r.total_product_required), f, region).toFixed(3)).toLocaleString()} ${quantityLabel(f, region)}`;
+                        })()}
                       </td>
                       {showCosts && (
                         <td className="py-2 pr-3 text-right tabular-nums whitespace-nowrap">
-                          {r.total_job_cost == null ? "—" : `$${Number(r.total_job_cost).toFixed(2)}`}
+                          {r.total_job_cost == null ? "—" : region.currency(Number(r.total_job_cost))}
                         </td>
                       )}
                       <td className="py-2 pr-3">{statusBadge(r.record_status)}</td>
