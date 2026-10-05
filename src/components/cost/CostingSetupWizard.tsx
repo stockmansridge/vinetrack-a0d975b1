@@ -28,12 +28,39 @@ interface SetupCounts {
   tripsTotal: number;
   fuelPurchases: number;
   savedChemicals: number;
-  savedChemicalsWithPurchase: number;
+  /** Chemical Purchase ledger rows (chemical_inventory_purchases); null = could not read. */
+  chemicalPurchases: number | null;
   savedInputs: number;
   savedInputsWithCost: number;
   paddocks: number;
   paddocksWithPolygon: number;
   yieldRecords: number;
+}
+
+/** Head-only count of Chemical Purchase ledger rows for the vineyard. */
+export async function fetchChemicalPurchaseCount(vineyardId: string, client: any = supabase): Promise<number | null> {
+  const base = () =>
+    client.from("chemical_inventory_purchases").select("*", { count: "exact", head: true }).eq("vineyard_id", vineyardId);
+  let res = await base().is("deleted_at", null);
+  if (res.error) res = await base();
+  if (res.error) return null;
+  return res.count ?? 0;
+}
+
+export const CHEMICAL_SETUP_COPY = {
+  none: "No saved chemicals yet.",
+  noPurchases: "No chemical purchases recorded. Record purchases so seasonal spray costs can be calculated.",
+  ready:
+    "Chemical Purchase history is available. VineTrack checks seasonal price availability per product and vintage; unresolved products are shown in Cost Report warnings.",
+  unreadable: "Chemical Purchase history could not be checked.",
+} as const;
+
+/** Chemical costing readiness from the Chemical Purchase ledger only. */
+export function chemicalSetupState(savedChemicals: number, chemicalPurchases: number | null) {
+  if (savedChemicals === 0) return { state: "empty" as const, detail: CHEMICAL_SETUP_COPY.none };
+  if (chemicalPurchases == null) return { state: "warn" as const, detail: CHEMICAL_SETUP_COPY.unreadable };
+  if (chemicalPurchases === 0) return { state: "warn" as const, detail: CHEMICAL_SETUP_COPY.noPurchases };
+  return { state: "ok" as const, detail: CHEMICAL_SETUP_COPY.ready };
 }
 
 async function fetchSetupCounts(vineyardId: string): Promise<SetupCounts> {
@@ -43,7 +70,7 @@ async function fetchSetupCounts(vineyardId: string): Promise<SetupCounts> {
   const [
     opCat, opCatWithRate, memberRows,
     tractors, tractorsLph, trips, tripsTractor,
-    fuel, chems, inputs, inputsCost, paddocks, yieldR,
+    fuel, chems, chemPurchases, inputs, inputsCost, paddocks, yieldR,
   ] = await Promise.all([
     eq("worker_types"),
     eq("worker_types").not("cost_per_hour", "is", null),
@@ -56,11 +83,9 @@ async function fetchSetupCounts(vineyardId: string): Promise<SetupCounts> {
     eq("trips").not("tractor_id", "is", null),
     eq("fuel_purchases"),
     eq("saved_chemicals"),
-    // Best-effort: rows whose purchase jsonb is not null. Resolved client-side
-    // because jsonb null filters can be surprising; we just take total count
-    // and resolve "has purchase" via a small select.
-    supabase.from("saved_chemicals").select("id, purchase", { count: "exact" })
-      .eq("vineyard_id", vineyardId).is("deleted_at", null).limit(1000),
+    // Chemical costing is configured through the Chemical Purchase ledger
+    // (SQL 264 authority) — never the legacy saved_chemicals.purchase JSON.
+    fetchChemicalPurchaseCount(vineyardId),
     eq("saved_inputs"),
     eq("saved_inputs").not("cost_per_unit", "is", null),
     supabase.from("paddocks").select("id, polygon_points", { count: "exact" })
@@ -91,14 +116,6 @@ async function fetchSetupCounts(vineyardId: string): Promise<SetupCounts> {
   });
   const activeWorkers = Array.from(activeByUser.values());
 
-  const chemsRows = (chems.data ?? []) as { purchase: any }[];
-  const chemsWithPurchase = chemsRows.filter((r) => {
-    const p = r.purchase;
-    if (!p) return false;
-    if (Array.isArray(p)) return p.length > 0;
-    if (typeof p === "object") return Object.keys(p).length > 0;
-    return false;
-  }).length;
   const paddockRows = (paddocks.data ?? []) as { polygon_points: any }[];
   const paddocksWithPolygon = paddockRows.filter((r) => {
     const pp = r.polygon_points;
@@ -117,8 +134,8 @@ async function fetchSetupCounts(vineyardId: string): Promise<SetupCounts> {
     tripsTotal: trips.count ?? 0,
     tripsWithTractor: tripsTractor.count ?? 0,
     fuelPurchases: fuel.count ?? 0,
-    savedChemicals: chems.count ?? chemsRows.length,
-    savedChemicalsWithPurchase: chemsWithPurchase,
+    savedChemicals: chems.count ?? 0,
+    chemicalPurchases: chemPurchases,
     savedInputs: inputs.count ?? 0,
     savedInputsWithCost: inputsCost.count ?? 0,
     paddocks: paddocks.count ?? paddockRows.length,
@@ -191,13 +208,9 @@ function buildRows(c: SetupCounts, rf: RegionFormatters): CheckRow[] {
     {
       key: "chemical",
       title: "Chemical costing",
-      state: c.savedChemicals === 0 ? "empty"
-        : c.savedChemicalsWithPurchase === c.savedChemicals ? "ok" : "warn",
-      detail: c.savedChemicals === 0
-        ? "No saved chemicals yet."
-        : `${c.savedChemicalsWithPurchase} of ${c.savedChemicals} saved chemicals have purchase / cost info.`,
-      href: "/setup/chemicals",
-      linkLabel: "Saved chemicals",
+      ...chemicalSetupState(c.savedChemicals, c.chemicalPurchases),
+      href: "/setup/chemicals/purchases",
+      linkLabel: "Chemical Purchase",
     },
     {
       key: "inputs",
