@@ -202,6 +202,18 @@ export default function SavedChemicalsPage() {
     return Array.from(s).sort();
   }, [chemicals]);
 
+  const [usedForFilter, setUsedForFilter] = useState<string>(ANY);
+  const usedForOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of chemicals) for (const t of usedFor(c)) {
+      const label = String(t ?? "").trim();
+      if (label && !map.has(label.toLowerCase())) map.set(label.toLowerCase(), label);
+    }
+    return Array.from(map, ([key, label]) => ({ key, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chemicals, revDisplay]);
+
   const normaliseAI = (v: unknown) =>
     String(v ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
@@ -238,6 +250,9 @@ export default function SavedChemicalsPage() {
       list = list.filter((c) => normaliseChemicalGroup(c.chemical_group) === group);
     }
     if (use !== ANY) list = list.filter((c) => c.use === use);
+    if (usedForFilter !== ANY) {
+      list = list.filter((c) => usedFor(c).some((t: string) => String(t).trim().toLowerCase() === usedForFilter));
+    }
     if (activeIngredient !== ANY) {
       list = list.filter((c) => normaliseAI(c.active_ingredient) === activeIngredient);
     }
@@ -463,6 +478,16 @@ export default function SavedChemicalsPage() {
                 <SelectContent>
                   <SelectItem value={ANY}>Any use</SelectItem>
                   {uses.map((o) => (<SelectItem key={o} value={o}>{o}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">Used for</div>
+              <Select value={usedForFilter} onValueChange={setUsedForFilter}>
+                <SelectTrigger className="w-48" aria-label="Used for"><SelectValue placeholder="Any" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ANY}>Any target</SelectItem>
+                  {usedForOptions.map((o) => (<SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>
