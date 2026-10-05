@@ -153,6 +153,7 @@ export function toSprayJobInput(args: {
 
   const mode = app.mode ?? (app.operationType ? OPERATION_TYPE_TO_MODE[app.operationType] : null);
   const headTarget = persistedHeadTarget(app.operationType, app.headTarget);
+  const isFertigation = app.operationType === "fertigation";
 
   const isManual = app.carrier.basis === "manual";
   const banded = mode === "banded";
@@ -180,17 +181,17 @@ export function toSprayJobInput(args: {
     status: isTemplate ? "draft" : app.status ?? "draft",
     operation_type: app.operationType ? OPERATION_TYPE_LABEL[app.operationType] : null,
     application_mode: mode,
-    target: legacyTargetText(app, args.targetLabels),
-    targets: app.targets ? [...app.targets] : null,
+    target: isFertigation ? null : legacyTargetText(app, args.targetLabels),
+    targets: isFertigation ? null : app.targets ? [...app.targets] : null,
     spray_head_target: headTarget,
     growth_stage_code: app.growthStageCode ?? null,
-    tractor_id: app.tractorId ?? null,
-    equipment_id: app.equipmentId ?? null,
+    tractor_id: isFertigation ? null : app.tractorId ?? null,
+    equipment_id: isFertigation ? null : app.equipmentId ?? null,
     operator_user_id: isTemplate ? null : app.operatorUserId ?? null,
     notes: app.notes ?? null,
     chemical_lines: app.products.map(toChemicalLine),
 
-    carrier_volume_basis: app.carrier.basis,
+    carrier_volume_basis: isFertigation ? null : app.carrier.basis,
     spray_rate_per_ha: round(litresPerHectare, 2),
     applied_litres_per_100m: noCanopy ? null : round(pos(app.carrier.appliedLitresPer100m), 3),
     dilute_litres_per_100m: noCanopy ? null : round(pos(app.carrier.diluteLitresPer100m), 3),
@@ -212,9 +213,11 @@ export function toSprayJobInput(args: {
     ground_application_target: banded ? app.groundApplicationTarget ?? null : null,
     carrier_area_basis:
       banded && app.carrier.basis === "l_per_ha" ? app.carrier.carrierAreaBasis ?? null : null,
-    row_spacing_metres: isTemplate
-      ? pos(app.geometryOverride.rowSpacingMetres)
-      : pos(app.geometryOverride.rowSpacingMetres) ?? pos(geometry.rowSpacingMetres),
+    row_spacing_metres: isFertigation
+      ? null
+      : isTemplate
+        ? pos(app.geometryOverride.rowSpacingMetres)
+        : pos(app.geometryOverride.rowSpacingMetres) ?? pos(geometry.rowSpacingMetres),
 
     gross_area_ha: isTemplate ? null : round(geometry.grossAreaHa, 4),
     treated_area_ha: isTemplate ? null : round(geometry.treatedAreaHa, 4),
