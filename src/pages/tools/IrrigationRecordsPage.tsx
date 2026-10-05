@@ -66,7 +66,7 @@ export default function IrrigationRecordsPage() {
         noindex
       />
 
-      <header className="flex flex-wrap items-start justify-between gap-3">
+      <header className="flex flex-col items-start gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">Irrigation Records</h1>

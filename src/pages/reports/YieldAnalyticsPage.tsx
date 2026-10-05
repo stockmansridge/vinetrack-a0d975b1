@@ -772,7 +772,7 @@ export default function YieldAnalyticsPage() {
         path="/reports/yield"
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-col items-start gap-2">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold">
             <BarChart3 className="h-6 w-6 text-primary" /> Yield Analytics

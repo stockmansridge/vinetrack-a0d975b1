@@ -89,7 +89,7 @@ export default function ListPage({ table, title, description, columns, basePath,
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end justify-between">
+      <div className="flex flex-col items-start">
         <div>
           <h1 className="text-2xl font-semibold">{title}</h1>
           {description && <p className="text-sm text-muted-foreground">{description}</p>}

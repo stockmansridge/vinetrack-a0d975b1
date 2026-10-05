@@ -261,7 +261,7 @@ export default function Team() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col items-start gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Team</h1>
           <p className="text-sm text-muted-foreground">

@@ -279,7 +279,7 @@ export default function ManualSprayEntryPage() {
         description="Record a completed spray application with actual water and chemical amounts."
       />
 
-      <div className="flex items-start justify-between gap-3 flex-wrap">
+      <div className="flex flex-col items-start gap-3">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-semibold">{isEdit ? "Edit manual spray" : "Add manual spray"}</h1>

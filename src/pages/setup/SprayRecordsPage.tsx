@@ -180,7 +180,7 @@ export default function SprayRecordsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end justify-between gap-3 flex-wrap">
+      <div className="flex flex-col items-start gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Spray records</h1>
           <p className="text-sm text-muted-foreground">

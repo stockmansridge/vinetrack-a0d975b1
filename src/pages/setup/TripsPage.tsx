@@ -335,7 +335,7 @@ export default function TripsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-col items-start gap-4">
         <div className="min-w-0 space-y-1.5">
           <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Trips</h1>
           <p className="text-sm text-muted-foreground">

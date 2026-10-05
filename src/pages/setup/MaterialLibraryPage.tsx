@@ -186,7 +186,7 @@ export default function MaterialLibraryPage() {
 
   return (
     <div className="space-y-4 p-4 md:p-6" data-testid="material-library">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-col items-start gap-2">
         <div>
           <h1 className="text-xl font-semibold">Material Library</h1>
           <p className="text-sm text-muted-foreground">

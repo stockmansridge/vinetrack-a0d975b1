@@ -274,7 +274,7 @@ export default function TractorFuelLogsPage({ embedded = false }: { embedded?: b
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
+      <div className="flex flex-col items-start gap-3">
         <div>
           {!embedded && <h1 className="text-2xl font-semibold">Machine Fuel Logs</h1>}
           <p className="text-sm text-muted-foreground max-w-2xl">

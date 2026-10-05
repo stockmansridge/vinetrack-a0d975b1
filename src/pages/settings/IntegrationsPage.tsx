@@ -49,7 +49,7 @@ export default function IntegrationsPage() {
 
   return (
     <div className="space-y-6 p-4 md:p-8">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <div className="flex flex-col items-start gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Integrations &amp; API</h1>
           <p className="max-w-2xl text-sm text-muted-foreground">

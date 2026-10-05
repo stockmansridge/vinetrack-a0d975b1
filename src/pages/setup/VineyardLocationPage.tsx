@@ -142,7 +142,7 @@ export default function VineyardLocationPage() {
 
   return (
     <div className="space-y-6 max-w-2xl">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col items-start gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Vineyard Location</h1>
           <p className="text-sm text-muted-foreground">

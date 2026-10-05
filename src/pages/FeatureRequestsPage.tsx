@@ -155,7 +155,7 @@ export default function FeatureRequestsPage() {
         path="/feature-requests"
       />
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-col items-start gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Feature Requests</h1>
           <p className="text-sm text-muted-foreground">

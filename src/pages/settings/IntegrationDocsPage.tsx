@@ -201,7 +201,7 @@ export default function IntegrationDocsPage() {
             Integrations &amp; API
           </Link>
         </Button>
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="flex flex-col items-start gap-3">
           <div className="space-y-1">
             <h1 className="text-2xl font-semibold tracking-tight">
               VineTrack developer platform

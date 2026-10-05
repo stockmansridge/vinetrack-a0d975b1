@@ -425,7 +425,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
   return (
     <div className="p-6 space-y-4 max-w-5xl mx-auto">
       <BackLink />
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex flex-col items-start gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{paddock.name ?? "Block"}</h1>
           <p className="text-sm text-muted-foreground">
