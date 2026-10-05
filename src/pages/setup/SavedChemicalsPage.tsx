@@ -674,7 +674,6 @@ export default function SavedChemicalsPage() {
                     <TableCell className="text-right">
                       {v3EntryBadge(c) && (v3EntryBadge(c)!.tone === "approved" ? <VineTrackCatalogueBadge size="xs" className="mr-1" /> :
                         <Badge variant="outline" className="mr-1 px-1.5 py-0 text-[10px] font-medium border-warning/60 bg-warning/10">{v3EntryBadge(c)!.label}</Badge>)}
-                      )}
                       {inventoryPilot && (
                         <Button size="sm" variant="ghost" onClick={() => setInventoryRow(c)} title="Inventory">
                           <Package className="h-3.5 w-3.5" />

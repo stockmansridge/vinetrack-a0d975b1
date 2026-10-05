@@ -1,10 +1,10 @@
 // Chemical Search — the single customer-facing way to find and add a new
-import { VineTrackCatalogueBadge } from "@/components/chemicals/VineTrackCatalogueBadge";
 // chemical. Reuses the catalogue/discovery contracts proven in the System
 // Admin Catalogue Review (search_chemical_v3_catalogue,
 // start_chemical_v3_discovery_v2 + chemical-lookup-v3, chemical_v3_add_to_vineyard).
 // It contains NO admin review tools and NO opening-stock fields, and never
 // calls the older product lookup function or any V1/V2 search.
+import { VineTrackCatalogueBadge } from "@/components/chemicals/VineTrackCatalogueBadge";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Camera, ExternalLink, Search, Sparkles } from "lucide-react";
