@@ -1,4 +1,3 @@
-import { generateUuid } from "@/lib/uuid";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -27,11 +26,24 @@ import { FlaskConical, Plus, Trash2, Copy, Pencil, Download } from "lucide-react
 import { ALL_STATUSES, STATUS_LABEL, type FertiliserRecordStatus } from "@/lib/fertiliserCalc";
 import {
   fetchFertiliserRecords,
+  fetchFertiliserAllocations,
   softDeleteFertiliserRecord,
+  type FertiliserAllocation,
   type FertiliserRecord,
 } from "@/lib/fertiliserRecordsQuery";
 import FertiliserCalculatorDialog, { paddocksToOptions } from "@/components/fertiliser/FertiliserCalculatorDialog";
 import { formatDate } from "@/lib/dateFormat";
+
+/** Fertiliser Calculator action matrix (selected-vineyard role). */
+export function fertiliserPermissions(role: string | null | undefined) {
+  const r = role ?? "";
+  return {
+    canWrite: ["owner", "manager", "supervisor", "operator"].includes(r),
+    canDelete: ["owner", "manager", "supervisor"].includes(r),
+    canSeeCosts: canSeeCosts(r),
+    canManageProducts: ["owner", "manager"].includes(r),
+  };
+}
 
 function usePaddocks(vineyardId: string | null) {
   return useQuery({
@@ -120,6 +132,7 @@ export default function FertiliserCalculatorPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<FertiliserRecord | null>(null);
+  const [duplicating, setDuplicating] = useState<{ record: FertiliserRecord; allocations: FertiliserAllocation[] } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<FertiliserRecord | null>(null);
   const [statusFilter, setStatusFilter] = useState<FertiliserRecordStatus | "all">("all");
   const [search, setSearch] = useState("");
@@ -155,20 +168,17 @@ export default function FertiliserCalculatorPage() {
       }),
   });
 
-  const onDuplicate = (r: FertiliserRecord) => {
-    // Clone as a fresh Draft. The dialog generates a new id + new
-    // allocation ids because `existing` is null.
-    const clone: FertiliserRecord = {
-      ...r,
-      id: generateUuid(),
-      record_status: "draft",
-      sync_version: 0,
-      created_at: "",
-      updated_at: "",
-    };
-    // We pass it as `existing` so the form pre-fills — but with the new id.
-    setEditing(clone);
-    setDialogOpen(true);
+  // Duplicate: load the SOURCE allocations first (by the source id), then open
+  // a new-record dialog. The dialog generates new record + allocation IDs.
+  const onDuplicate = async (r: FertiliserRecord) => {
+    try {
+      const allocations = await fetchFertiliserAllocations(r.id);
+      setEditing(null);
+      setDuplicating({ record: r, allocations });
+      setDialogOpen(true);
+    } catch (err: any) {
+      toast({ title: "Could not duplicate", description: String(err?.message ?? err ?? ""), variant: "destructive" });
+    }
   };
 
   const onExportCsv = () => {
@@ -184,8 +194,8 @@ export default function FertiliserCalculatorPage() {
     URL.revokeObjectURL(url);
   };
 
-  const canWrite =
-    !!currentRole && ["owner", "manager", "supervisor", "operator"].includes(currentRole);
+  const perms = fertiliserPermissions(currentRole);
+  const canWrite = perms.canWrite;
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
@@ -210,9 +220,11 @@ export default function FertiliserCalculatorPage() {
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button asChild variant="outline" size="sm">
-            <Link to="/setup/chemicals">Manage saved products</Link>
-          </Button>
+          {perms.canManageProducts && (
+            <Button asChild variant="outline" size="sm">
+              <Link to="/setup/chemicals">Manage saved products</Link>
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={onExportCsv} disabled={filteredRecords.length === 0}>
             <Download className="h-4 w-4 mr-1" /> CSV
           </Button>
@@ -221,9 +233,9 @@ export default function FertiliserCalculatorPage() {
               size="sm"
               onClick={() => {
                 setEditing(null);
+                setDuplicating(null);
                 setDialogOpen(true);
               }}
-              disabled={paddockOptions.length === 0}
             >
               <Plus className="h-4 w-4 mr-1" /> New calculation
             </Button>
@@ -330,21 +342,22 @@ export default function FertiliserCalculatorPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          title="Duplicate as Draft"
+                          title="Duplicate"
                           disabled={!canWrite}
                           onClick={() => onDuplicate(r)}
                         >
                           <Copy className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title="Delete"
-                          disabled={!canWrite}
-                          onClick={() => setConfirmDelete(r)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {perms.canDelete && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Delete"
+                            onClick={() => setConfirmDelete(r)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -360,12 +373,16 @@ export default function FertiliserCalculatorPage() {
           open={dialogOpen}
           onOpenChange={(v) => {
             setDialogOpen(v);
-            if (!v) setEditing(null);
+            if (!v) {
+              setEditing(null);
+              setDuplicating(null);
+            }
           }}
           vineyardId={selectedVineyardId}
           paddocks={paddockOptions}
           role={currentRole}
           existing={editing}
+          duplicateFrom={duplicating}
         />
       )}
 
