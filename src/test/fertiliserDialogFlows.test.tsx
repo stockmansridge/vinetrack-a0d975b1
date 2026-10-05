@@ -49,6 +49,7 @@ vi.mock("@/lib/fertiliserRecordsQuery", () => ({
   softDeleteFertiliserRecord: vi.fn(),
 }));
 
+vi.mock("@/components/PageHead", () => ({ PageHead: () => null }));
 import FertiliserCalculatorPage from "@/pages/tools/FertiliserCalculatorPage";
 
 const SOURCE = {
