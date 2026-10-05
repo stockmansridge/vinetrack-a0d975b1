@@ -22,8 +22,7 @@ import {
 } from "@/lib/tripCostAllocationsQuery";
 import { usePruningActivity } from "@/lib/pruningActivityQuery";
 import { fetchSprayRecordsForVineyard, type SprayRecord } from "@/lib/sprayRecordsQuery";
-import { useChemicalSeasonPrices } from "@/lib/chemicalSeasonPricing";
-import { fetchTankActualsForTrips, tankActualsQueryKey } from "@/lib/sprayTankActualsQuery";
+import { useChemicalAllocationOverlay } from "@/lib/useChemicalAllocationOverlay";
 import {
   overlayAllocationsWithChemicalCost,
   resolveTripChemicalCost,
@@ -201,58 +200,13 @@ export default function CostReportsPage() {
   // per trip (complete Tank Actuals, else planned quantities) and distributed
   // across that trip's allocations by area before ANY aggregation, so every
   // tab, card, CSV and PDF reads the same overlaid dataset.
-  const { data: overlaySpray, isLoading: sprayLoading } = useQuery({
-    queryKey: ["cost-spray", selectedVineyardId],
-    enabled: !!selectedVineyardId && canSeeCosts,
-    queryFn: () => fetchSprayRecordsForVineyard(selectedVineyardId!),
-  });
-  const sprayByTrip = useMemo(() => {
-    const m = new Map<string, SprayRecord[]>();
-    for (const r of overlaySpray?.records ?? []) {
-      if (!r.trip_id) continue;
-      const l = m.get(r.trip_id) ?? [];
-      l.push(r);
-      m.set(r.trip_id, l);
-    }
-    return m;
-  }, [overlaySpray]);
-  const overlayTripIds = useMemo(
-    () => Array.from(new Set(tripRows.map((r) => r.trip_id).filter((id): id is string => !!id && sprayByTrip.has(id)))),
-    [tripRows, sprayByTrip],
+  // Vintage per trip = allocation season_year (canonical); vineyard-local
+  // fallback only when no allocation vintage exists.
+  const { rows: overlaidTripRows, isLoading: overlayLoading } = useChemicalAllocationOverlay(
+    selectedVineyardId,
+    tripRows,
+    { enabled: canSeeCosts },
   );
-  const overlayVintages = useMemo(
-    () =>
-      Array.from(new Set(
-        tripRows
-          .filter((r) => r.trip_id && sprayByTrip.has(r.trip_id) && r.season_year != null)
-          .map((r) => r.season_year as number),
-      )),
-    [tripRows, sprayByTrip],
-  );
-  const seasonPrices = useChemicalSeasonPrices(selectedVineyardId, overlayVintages, { asOf: null });
-  const { data: tankActuals, isLoading: actualsLoading } = useQuery({
-    queryKey: tankActualsQueryKey(selectedVineyardId, overlayTripIds),
-    enabled: !!selectedVineyardId && canSeeCosts && overlayTripIds.length > 0,
-    queryFn: () => fetchTankActualsForTrips(overlayTripIds),
-  });
-  const overlayLoading = sprayLoading || seasonPrices.isLoading || (overlayTripIds.length > 0 && actualsLoading);
-  const overlaidTripRows = useMemo(() => {
-    // Never show stored chemical values while the overlay is still loading.
-    if (overlayLoading) return [];
-    const perTrip = new Map<string, ChemicalCostResult>();
-    for (const tripId of overlayTripIds) {
-      const vintage = tripRows.find((r) => r.trip_id === tripId && r.season_year != null)?.season_year ?? null;
-      perTrip.set(
-        tripId,
-        resolveTripChemicalCost({
-          sprayRecords: sprayByTrip.get(tripId) ?? [],
-          tankActualRows: tankActuals?.byTrip.get(tripId) ?? [],
-          prices: vintage != null ? seasonPrices.byVintage.get(vintage) ?? null : null,
-        }),
-      );
-    }
-    return overlayAllocationsWithChemicalCost(tripRows, perTrip);
-  }, [overlayLoading, tripRows, overlayTripIds, sprayByTrip, tankActuals, seasonPrices.byVintage]);
 
   // Pruning activity labour is an operational cost recorded outside field
   // trips. It is included through its reconciled per-block allocations.
