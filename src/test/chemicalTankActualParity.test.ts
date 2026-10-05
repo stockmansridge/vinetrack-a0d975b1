@@ -12,7 +12,7 @@ import {
 import type { ChemicalSeasonPriceRow, SeasonPriceMap } from "@/lib/chemicalSeasonPricing";
 import { resolveTripVintage, vineyardLocalVintage, vintageByTripFromAllocations } from "@/lib/chemicalCostVintage";
 import { chemicalSetupState, CHEMICAL_SETUP_COPY } from "@/components/cost/CostingSetupWizard";
-import { rollupWorkTaskCost } from "@/lib/workTaskCostRollup";
+import { buildWorkTaskCostRollup } from "@/lib/workTaskCostRollup";
 import type { TripCostAllocation } from "@/lib/tripCostAllocationsQuery";
 import { readFileSync } from "node:fs";
 
@@ -198,7 +198,7 @@ describe("Work Task linked-trip overlay", () => {
     expect(src).toContain("useChemicalAllocationOverlay(");
     expect(src).toContain("allocOverlay.rows.forEach");
     expect(src).not.toMatch(/\(allocQ\.data \?\? \[\]\)\.forEach/);
-    void rollupWorkTaskCost;
+    void buildWorkTaskCostRollup;
   });
 });
 
