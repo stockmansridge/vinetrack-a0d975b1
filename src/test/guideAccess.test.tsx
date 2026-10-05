@@ -77,10 +77,16 @@ describe("Stage 5B — guide actions never bypass permissions", () => {
   });
 
   it("keeps System Admin-only nav tools out of customer guide actions", () => {
-    expect(canOpenGuideRoute("/tools/fertiliser-calculator", owner)).toBe(false);
     expect(canOpenGuideRoute("/tools/satellite-mapping", manager)).toBe(false);
-    expect(canOpenGuideRoute("/tools/fertiliser-calculator", admin)).toBe(true);
-    expect(guideActionDecision("/tools/fertiliser-calculator", operator).show).toBe(false);
+    expect(canOpenGuideRoute("/tools/satellite-mapping", admin)).toBe(true);
+  });
+
+  it("opens the Fertiliser Calculator guide for every vineyard role without System Admin", () => {
+    for (const v of [owner, manager, supervisor, operator]) {
+      expect(v.isSystemAdmin).toBe(false);
+      expect(canOpenGuideRoute("/tools/fertiliser-calculator", v)).toBe(true);
+      expect(guideActionDecision("/tools/fertiliser-calculator", v).show).toBe(true);
+    }
   });
 
   it("offers read-only wording instead of an impossible setup action", () => {
