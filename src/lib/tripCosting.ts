@@ -372,6 +372,7 @@ export function computeTripCost(inp: TripCostInputs): TripCostBreakdown {
   // Chemicals — SQL 264 seasonal purchase price × actual/planned quantity.
   const linked = inp.sprayRecords.filter((r) => r.trip_id === inp.trip.id);
   const chem = resolveTripChemicalCost({
+    trip: inp.trip,
     sprayRecords: linked,
     tankActualRows: inp.chemicalPricing?.tankActualRows ?? [],
     prices: inp.chemicalPricing?.prices ?? null,

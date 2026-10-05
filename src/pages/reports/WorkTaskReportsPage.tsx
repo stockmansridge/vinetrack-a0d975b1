@@ -49,6 +49,9 @@ import {
   fetchTripCostAllocationsForVineyard,
   type TripCostAllocation,
 } from "@/lib/tripCostAllocationsQuery";
+import { useChemicalAllocationOverlay } from "@/lib/useChemicalAllocationOverlay";
+
+const EMPTY_ALLOCS: TripCostAllocation[] = [];
 import { useCanSeeCosts } from "@/lib/permissions";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { useVintage } from "@/lib/useVintage";
@@ -345,6 +348,11 @@ export default function WorkTaskReportsPage() {
     queryFn: () => fetchTripCostAllocationsForVineyard(selectedVineyardId!),
     enabled: enabled && canSeeCosts,
   });
+  // Same SQL 264 seasonal chemical overlay as Cost Reports: linked-trip total =
+  // stored total − stored chemical + seasonal chemical. Stored rows untouched.
+  const allocOverlay = useChemicalAllocationOverlay(selectedVineyardId, allocQ.data ?? EMPTY_ALLOCS, {
+    enabled: enabled && canSeeCosts,
+  });
 
   // Equipment lookups for resolveMachineLineEquipmentName() — used in
   // expanded row details to display human-readable equipment names.
@@ -440,14 +448,14 @@ export default function WorkTaskReportsPage() {
 
   const allocByTripId = useMemo(() => {
     const m = new Map<string, TripCostAllocation[]>();
-    (allocQ.data ?? []).forEach((a) => {
+    allocOverlay.rows.forEach((a) => {
       if (!a.trip_id) return;
       const arr = m.get(a.trip_id) ?? [];
       arr.push(a);
       m.set(a.trip_id, arr);
     });
     return m;
-  }, [allocQ.data]);
+  }, [allocOverlay.rows]);
 
   const rows = useMemo<TaskRow[]>(() => {
     const tasks = tasksQ.data?.tasks ?? [];
@@ -1644,7 +1652,7 @@ export default function WorkTaskReportsPage() {
 
   const loading =
     tasksQ.isLoading || labourQ.isLoading || machineQ.isLoading ||
-    wtPaddocksQ.isLoading || tripsQ.isLoading || (canSeeCosts && allocQ.isLoading);
+    wtPaddocksQ.isLoading || tripsQ.isLoading || (canSeeCosts && (allocQ.isLoading || allocOverlay.isLoading));
 
   return (
     <div className="p-6 space-y-4 w-full">

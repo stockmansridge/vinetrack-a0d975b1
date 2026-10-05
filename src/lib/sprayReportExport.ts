@@ -49,8 +49,8 @@ export async function resolveSprayReportCostOverlay(
       }
     }
   }
-  const { planned, actual } = tanksFromSprayReportPayload(payload, legacy);
-  const sel = selectChemicalUsage(planned, actual);
+  const { planned, actual, identity } = tanksFromSprayReportPayload(payload, legacy);
+  const sel = selectChemicalUsage(planned, actual, identity);
   const res = resolveChemicalCost(sel.lines, prices, sel.lines.length ? sel.quantityBasis : null);
   return overlaySprayReportCost(payload.cost as Record<string, unknown>, res);
 }

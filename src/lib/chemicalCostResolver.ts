@@ -211,6 +211,8 @@ export function resolveChemicalCost(
 }
 
 /* ------------------------------------------------------ Tank Actuals */
+//
+// Exact parity with iOS/Android `areSprayTankActualsComplete` (Rork contract).
 
 export interface PlannedTankLine {
   plannedChemicalId: string | null;
@@ -224,6 +226,8 @@ export interface PlannedTankLine {
 export interface PlannedTank { tankNumber: number; lines: PlannedTankLine[] }
 
 export interface ActualTankLine {
+  /** Actual chemical line id (must be unique within the tank). */
+  id: string | null;
   plannedChemicalId: string | null;
   savedChemicalId: string | null;
   replacesPlannedChemicalId: string | null;
@@ -233,7 +237,25 @@ export interface ActualTankLine {
   /** Base units (mL / g). Null = not recorded. */
   actualAmountBase: number | null;
 }
-export interface ActualTank { tankNumber: number; recorded: boolean; lines: ActualTankLine[] }
+export interface ActualTank {
+  tankNumber: number;
+  recorded: boolean;
+  vineyardId: string | null;
+  sprayRecordId: string | null;
+  tripId: string | null;
+  tankSessionId: string | null;
+  waterL: number | null;
+  lines: ActualTankLine[];
+}
+
+/** The identity every Tank Actual row must match for one spray record. */
+export interface TankActualIdentity {
+  vineyardId: string | null;
+  sprayRecordId: string | null;
+  tripId: string | null;
+  /** tank number → exact tank-session ids recorded on the trip for that tank. */
+  sessionsByTank: ReadonlyMap<number, ReadonlySet<string>>;
+}
 
 const str = (v: unknown): string | null => (v == null || v === "" ? null : String(v));
 const numv = (v: unknown): number | null => {
@@ -241,75 +263,143 @@ const numv = (v: unknown): number | null => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
+const finiteNonNeg = (v: number | null | undefined): boolean =>
+  v != null && Number.isFinite(v) && v >= 0;
 
-/**
- * Tank Actuals are complete when every planned tank has a recorded actual and
- * every planned product in it has a recorded actual quantity (a typed zero
- * counts) or was replaced by a substitution. A plan-less (manual) record is
- * complete when at least one tank actual is recorded.
- */
-export function tankActualsComplete(planned: PlannedTank[], actual: ActualTank[]): boolean {
-  const recorded = actual.filter((t) => t.recorded);
-  if (recorded.length === 0) return false;
-  if (planned.length === 0) return true;
-  for (const pt of planned) {
-    const at = recorded.find((t) => t.tankNumber === pt.tankNumber);
-    if (!at) return false;
-    for (const pl of pt.lines) {
-      const covered = at.lines.some((al) => {
-        if (pl.plannedChemicalId) {
-          return (
-            (al.plannedChemicalId === pl.plannedChemicalId && al.actualAmountBase != null) ||
-            al.replacesPlannedChemicalId === pl.plannedChemicalId
-          );
-        }
-        // No planned id: only an exact Saved Chemical identity can cover it.
-        return (
-          !!pl.savedChemicalId &&
-          al.usageKind === "planned" &&
-          al.savedChemicalId === pl.savedChemicalId &&
-          al.actualAmountBase != null
-        );
-      });
-      if (!covered) return false;
+/** tank number → session ids from `trips.tank_sessions` (any stored envelope). */
+export function sessionsByTankFromTrip(tankSessions: unknown): Map<number, Set<string>> {
+  const out = new Map<number, Set<string>>();
+  if (!Array.isArray(tankSessions)) return out;
+  for (const s of tankSessions as any[]) {
+    const n = numv(s?.tankNumber ?? s?.tank_number);
+    const id = str(s?.id ?? s?.tankSessionId ?? s?.tank_session_id);
+    if (n == null || !id) continue;
+    const set = out.get(n) ?? new Set<string>();
+    set.add(id);
+    out.set(n, set);
+  }
+  return out;
+}
+
+/** Association derived from the identity fields; null = invalid association. */
+function associationOf(
+  l: ActualTankLine,
+  plannedIds: ReadonlySet<string>,
+): { kind: UsageKind; plannedId: string | null } | null {
+  if (l.plannedChemicalId != null) {
+    if (l.replacesPlannedChemicalId != null || !plannedIds.has(l.plannedChemicalId)) return null;
+    return { kind: "planned", plannedId: l.plannedChemicalId };
+  }
+  if (l.replacesPlannedChemicalId != null) {
+    if (!plannedIds.has(l.replacesPlannedChemicalId)) return null;
+    return { kind: "substitution", plannedId: l.replacesPlannedChemicalId };
+  }
+  return { kind: "additional", plannedId: null };
+}
+
+function rowMatchesIdentity(row: ActualTank, id: TankActualIdentity): boolean {
+  if (row.vineyardId !== id.vineyardId) return false;
+  if (row.sprayRecordId !== id.sprayRecordId) return false;
+  if (row.tripId !== id.tripId) return false;
+  const sessions = id.sessionsByTank.get(row.tankNumber);
+  return !!row.tankSessionId && !!sessions && sessions.has(row.tankSessionId);
+}
+
+function plannedTankComplete(pt: PlannedTank, at: ActualTank): boolean {
+  if (!finiteNonNeg(at.waterL)) return false;
+  const plannedIds = new Set<string>();
+  for (const pl of pt.lines) {
+    if (!pl.plannedChemicalId || plannedIds.has(pl.plannedChemicalId)) return false;
+    plannedIds.add(pl.plannedChemicalId);
+  }
+  const actualIds = new Set<string>();
+  const direct = new Map<string, ActualTankLine[]>();
+  const subs = new Map<string, ActualTankLine[]>();
+  for (const l of at.lines) {
+    if (!l.id || actualIds.has(l.id)) return false;
+    actualIds.add(l.id);
+    if (!finiteNonNeg(l.actualAmountBase)) return false;
+    const a = associationOf(l, plannedIds);
+    if (!a) return false;
+    if (a.plannedId == null) continue;
+    const m = a.kind === "planned" ? direct : subs;
+    m.set(a.plannedId, [...(m.get(a.plannedId) ?? []), l]);
+  }
+  for (const pid of plannedIds) {
+    const d = direct.get(pid) ?? [];
+    const s = subs.get(pid) ?? [];
+    if (s.length === 0) {
+      if (d.length !== 1) return false;
+    } else if (s.length === 1) {
+      if (d.length > 1) return false;
+      if (d.length === 1 && d[0].actualAmountBase !== 0) return false;
+    } else {
+      return false;
     }
   }
   return true;
+}
+
+/**
+ * Resolve the matched actual per planned tank, or null when the Tank Actual
+ * set is not complete (mobile `areSprayTankActualsComplete`).
+ */
+export function matchCompleteTankActuals(
+  planned: PlannedTank[],
+  actual: ActualTank[],
+  identity: TankActualIdentity,
+): Array<{ planned: PlannedTank; actual: ActualTank }> | null {
+  if (planned.length === 0) return null;
+  const plannedNumbers = new Set(planned.map((p) => p.tankNumber));
+  if (plannedNumbers.size !== planned.length) return null;
+  const rows = actual.filter((t) => t.recorded);
+  // Any row for an unexpected tank/session makes the set incomplete.
+  for (const r of rows) {
+    if (!plannedNumbers.has(r.tankNumber) || !rowMatchesIdentity(r, identity)) return null;
+  }
+  const out: Array<{ planned: PlannedTank; actual: ActualTank }> = [];
+  for (const pt of planned) {
+    const matches = rows.filter((r) => r.tankNumber === pt.tankNumber);
+    if (matches.length !== 1) return null;
+    if (!plannedTankComplete(pt, matches[0])) return null;
+    out.push({ planned: pt, actual: matches[0] });
+  }
+  return out;
+}
+
+export function tankActualsComplete(
+  planned: PlannedTank[],
+  actual: ActualTank[],
+  identity: TankActualIdentity,
+): boolean {
+  return matchCompleteTankActuals(planned, actual, identity) != null;
 }
 
 /** Pick actual vs planned quantities. Actuals are never clamped to the plan. */
 export function selectChemicalUsage(
   planned: PlannedTank[],
   actual: ActualTank[],
+  identity: TankActualIdentity,
 ): { quantityBasis: ChemicalQuantityBasis; lines: ChemicalUsageLine[] } {
-  if (tankActualsComplete(planned, actual)) {
+  const matched = matchCompleteTankActuals(planned, actual, identity);
+  if (matched) {
     const lines: ChemicalUsageLine[] = [];
-    for (const at of actual) {
-      if (!at.recorded) continue;
-      const pt = planned.find((p) => p.tankNumber === at.tankNumber);
+    for (const { planned: pt, actual: at } of matched) {
+      const plannedIds = new Set(pt.lines.map((l) => l.plannedChemicalId!));
       for (const al of at.lines) {
-        if (al.actualAmountBase == null) continue;
+        const a = associationOf(al, plannedIds)!;
         // Legacy snapshot only for the SAME planned product (never inherited
         // by a substitute or an additional product).
-        const pl =
-          al.usageKind === "planned" && pt
-            ? pt.lines.find(
-                (l) =>
-                  (al.plannedChemicalId && l.plannedChemicalId === al.plannedChemicalId) ||
-                  (!l.plannedChemicalId && l.savedChemicalId && l.savedChemicalId === al.savedChemicalId),
-              )
-            : undefined;
+        const pl = a.kind === "planned" ? pt.lines.find((l) => l.plannedChemicalId === a.plannedId) : undefined;
         lines.push({
           savedChemicalId: al.savedChemicalId,
           name: al.name,
           amount: al.actualAmountBase,
           unit: al.unit,
           amountIsBase: true,
-          usageKind: al.usageKind,
+          usageKind: a.kind,
           legacyCostPerUnit:
-            pl && pl.savedChemicalId && pl.savedChemicalId === al.savedChemicalId
-              ? pl.legacyCostPerUnit
-              : null,
+            pl && pl.savedChemicalId && pl.savedChemicalId === al.savedChemicalId ? pl.legacyCostPerUnit : null,
         });
       }
     }
@@ -381,6 +471,7 @@ function usageKindOf(v: unknown, l: any): UsageKind {
 
 function actualLineFromRaw(l: any): ActualTankLine {
   return {
+    id: str(l?.id),
     plannedChemicalId: str(l?.plannedChemicalId ?? l?.planned_chemical_id),
     savedChemicalId: str(l?.savedChemicalId ?? l?.saved_chemical_id),
     replacesPlannedChemicalId: str(l?.replacesPlannedChemicalId ?? l?.replaces_planned_chemical_id),
@@ -396,26 +487,42 @@ export function actualTanksFromRows(rows: ReadonlyArray<any>): ActualTank[] {
   return (rows ?? [])
     .filter((r) => r && !r.deleted_at)
     .map((r) => {
-      const raw = r.chemicals ?? r.actual_chemicals ?? r.chemical_lines ?? [];
+      const raw = r.chemicals ?? [];
       const list = Array.isArray(raw) ? raw : [];
       return {
-        tankNumber: numv(r.tank_number ?? r.tankNumber) ?? 0,
+        tankNumber: numv(r.tank_number) ?? 0,
         recorded: true,
+        vineyardId: str(r.vineyard_id),
+        sprayRecordId: str(r.spray_record_id),
+        tripId: str(r.trip_id),
+        tankSessionId: str(r.tank_session_id),
+        waterL: numv(r.water_volume_l),
         lines: list.map(actualLineFromRaw),
       };
     });
 }
 
-/** Planned + actual tanks from the canonical Spray Report payload. */
+/**
+ * Planned + actual tanks from the canonical Spray Report payload. The RPC has
+ * already scoped rows to this record/trip, so identity mirrors the payload and
+ * the session check uses the payload's recorded tank sessions.
+ */
 export function tanksFromSprayReportPayload(
-  payload: Pick<SprayReportPayloadV1, "tanks">,
+  payload: Pick<SprayReportPayloadV1, "tanks" | "tankSessions">,
   legacyByPlannedId: Map<string, number> = new Map(),
-): { planned: PlannedTank[]; actual: ActualTank[] } {
+): { planned: PlannedTank[]; actual: ActualTank[]; identity: TankActualIdentity } {
   const planned: PlannedTank[] = [];
   const actual: ActualTank[] = [];
+  const sessionsByTank = new Map<number, Set<string>>();
+  for (const s of payload.tankSessions ?? []) {
+    if (!s.tankSessionId) continue;
+    const set = sessionsByTank.get(s.tankNumber) ?? new Set<string>();
+    set.add(s.tankSessionId);
+    sessionsByTank.set(s.tankNumber, set);
+  }
   for (const t of payload.tanks ?? []) {
     const plannedLines = t.chemicals.filter(
-      (c) => (c.usageKind ?? (c.plannedChemicalId ? "planned" : "additional")) === "planned" && c.plannedAmountBase != null,
+      (c) => !!c.plannedChemicalId && !c.replacesPlannedChemicalId && c.plannedAmountBase != null,
     );
     if (plannedLines.length || t.plannedWaterLitres != null) {
       planned.push({
@@ -432,28 +539,41 @@ export function tanksFromSprayReportPayload(
       });
     }
     const recorded = (t.actualVersion ?? 0) > 0 || !!t.actualId;
+    if (!recorded) continue;
+    const sessions = sessionsByTank.get(t.tankNumber);
     actual.push({
       tankNumber: t.tankNumber,
       recorded,
-      lines: t.chemicals.map((c) => ({
-        plannedChemicalId: c.plannedChemicalId ?? null,
-        savedChemicalId: c.savedChemicalId ?? null,
-        replacesPlannedChemicalId: c.replacesPlannedChemicalId ?? null,
-        usageKind: c.usageKind ?? (c.plannedChemicalId ? "planned" : c.replacesPlannedChemicalId ? "substitution" : "additional"),
-        name: c.name,
-        unit: c.unit,
-        actualAmountBase: c.actualAmountBase,
-      })),
+      vineyardId: null,
+      sprayRecordId: null,
+      tripId: null,
+      // Single unambiguous payload session only.
+      tankSessionId: sessions && sessions.size === 1 ? Array.from(sessions)[0] : null,
+      waterL: t.actualWaterLitres,
+      lines: t.chemicals
+        .filter((c) => c.actualAmountBase != null || !!c.actualChemicalId)
+        .map((c) => ({
+          id: c.actualChemicalId ?? null,
+          plannedChemicalId: c.plannedChemicalId ?? null,
+          savedChemicalId: c.savedChemicalId ?? null,
+          replacesPlannedChemicalId: c.replacesPlannedChemicalId ?? null,
+          usageKind: c.usageKind ?? (c.plannedChemicalId ? "planned" : c.replacesPlannedChemicalId ? "substitution" : "additional"),
+          name: c.name,
+          unit: c.unit,
+          actualAmountBase: c.actualAmountBase,
+        })),
     });
   }
-  return { planned, actual };
+  return { planned, actual, identity: { vineyardId: null, sprayRecordId: null, tripId: null, sessionsByTank } };
 }
 
 /* --------------------------------------------------------- trip level */
 
 export interface TripChemicalInputs {
+  /** The trip: its id, vineyard and recorded tank sessions (session identity). */
+  trip?: { id: string; vineyard_id?: string | null; tank_sessions?: unknown } | null;
   /** Spray records linked to this trip. */
-  sprayRecords: ReadonlyArray<{ id?: string; trip_id?: string | null; tanks?: unknown }>;
+  sprayRecords: ReadonlyArray<{ id?: string; trip_id?: string | null; vineyard_id?: string | null; tanks?: unknown }>;
   /** spray_tank_actuals rows for this trip (any records). */
   tankActualRows?: ReadonlyArray<any>;
   prices: SeasonPriceMap | null;
@@ -464,14 +584,23 @@ export function resolveTripChemicalCost(inp: TripChemicalInputs): ChemicalCostRe
   const allLines: ChemicalUsageLine[] = [];
   let anyPlanned = false;
   let anyActual = false;
-  const recCount = inp.sprayRecords.length;
+  const sessionsByTank = sessionsByTankFromTrip(inp.trip?.tank_sessions);
+  const otherRecordIds = new Set(inp.sprayRecords.map((r) => r.id).filter(Boolean) as string[]);
   for (const rec of inp.sprayRecords) {
     const planned = plannedTanksFromSprayRecord(rec.tanks);
+    // Rows for another linked record belong to that record. Every other row
+    // (including unattributed ones) is validated — never silently ignored.
     const rows = (inp.tankActualRows ?? []).filter((r) => {
-      const sid = r?.spray_record_id ?? r?.sprayRecordId;
-      return recCount <= 1 || !sid || sid === rec.id;
+      const sid = str(r?.spray_record_id);
+      return !(sid && sid !== rec.id && otherRecordIds.has(sid));
     });
-    const sel = selectChemicalUsage(planned, actualTanksFromRows(rows));
+    const identity: TankActualIdentity = {
+      vineyardId: str(rec.vineyard_id ?? inp.trip?.vineyard_id),
+      sprayRecordId: str(rec.id),
+      tripId: str(inp.trip?.id ?? rec.trip_id),
+      sessionsByTank,
+    };
+    const sel = selectChemicalUsage(planned, actualTanksFromRows(rows), identity);
     if (sel.lines.length) {
       if (sel.quantityBasis === "actual") anyActual = true;
       else anyPlanned = true;
