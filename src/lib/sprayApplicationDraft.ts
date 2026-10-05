@@ -295,6 +295,8 @@ export function applyTemplate(
   app: SprayApplication,
   template: SprayApplication,
 ): SprayApplication {
+  // Fertigation Program Steps are applied via irrigation, never as a spray.
+  if (template.operationType === "fertigation" && !app.isTemplate) return app;
   return {
     ...app,
     name: app.name || template.name,

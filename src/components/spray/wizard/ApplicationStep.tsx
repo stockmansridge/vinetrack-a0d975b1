@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { applyOperationType, applyTemplate, hydrateDraft } from "@/lib/sprayApplicationDraft";
 import { chemicalLinesSummary, fetchSprayJobs } from "@/lib/sprayJobsQuery";
 import { SelectTile } from "./controls";
+import { isFertigationOperationType } from "@/lib/fertigation";
 import type { StepProps } from "./types";
 
 const STATUS_OPTIONS = ["draft", "scheduled", "in_progress", "completed", "cancelled"];
@@ -182,8 +183,10 @@ function TemplatePicker({
   });
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return templates;
-    return templates.filter((t) =>
+    // A Fertigation Program Step never becomes a Planned Spray.
+    const sprayable = templates.filter((t) => !isFertigationOperationType(t.operation_type));
+    if (!q) return sprayable;
+    return sprayable.filter((t) =>
       [t.name, t.target, t.operation_type, chemicalLinesSummary(t.chemical_lines)]
         .filter(Boolean).join(" ").toLowerCase().includes(q),
     );

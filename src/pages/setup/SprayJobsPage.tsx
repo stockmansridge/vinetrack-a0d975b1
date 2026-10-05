@@ -1,3 +1,6 @@
+import { useNavigate } from "react-router-dom";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import { isFertigationOperationType, isFertigationProgramStep } from "@/lib/fertigation";
 import { ManualSprayEntryButton } from "@/components/spray/ManualSprayEntryButton";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -186,7 +189,14 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
     }
   };
 
+  const navigate = useNavigate();
   const startPlanFromStep = (step: SprayJob) => {
+    if (isFertigationProgramStep(step)) {
+      // Fertigation is applied through irrigation — never a Planned Spray.
+      setDetailStep(null);
+      navigate(`/irrigation/record?fertigationStep=${encodeURIComponent(step.id)}`);
+      return;
+    }
     setPickerOpen(false);
     setDetailStep(null);
     setPlanningFrom(step);
@@ -275,6 +285,7 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
           equipmentName={detailStep.equipment_id ? lookups.maps.equipment.get(detailStep.equipment_id) ?? null : null}
           tractorName={detailStep.tractor_id ? lookups.maps.tractors.get(detailStep.tractor_id) ?? null : null}
           onPlanSpray={() => startPlanFromStep(detailStep)}
+          onApplyViaIrrigation={() => startPlanFromStep(detailStep)}
           onEdit={() => {
             const job = detailStep;
             setDetailStep(null);
@@ -357,7 +368,8 @@ function JobsTable({
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  const { data, isLoading, error } = useQuery({
+  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
+  const { data: rawData, isLoading, error } = useQuery({
     queryKey: ["spray_jobs", selectedVineyardId, mode],
     enabled: !!selectedVineyardId,
     queryFn: () =>
@@ -366,6 +378,12 @@ function JobsTable({
         archived: mode === "archived",
       }),
   });
+  // Development gate (defence in depth — RLS is the authority): only System
+  // Admins ever see Fertigation Program Steps.
+  const data = useMemo(
+    () => (rawData ?? []).filter((j) => isSystemAdmin || !isFertigationOperationType(j.operation_type)),
+    [rawData, isSystemAdmin],
+  );
 
   const lookupMaps: JobLookups = {
     paddockNameById: maps.paddocks,
@@ -776,7 +794,7 @@ function JobsTable({
                           <Save className="h-3.5 w-3.5" />
                         </Button>
                       )}
-                      {mode === "templates" && onPlanSpray && (
+                      {mode === "templates" && onPlanSpray && !isFertigationOperationType(j.operation_type) && (
                         <Button size="sm" variant="ghost" onClick={() => onPlanSpray(j)} title="Plan Spray">
                           <FileText className="h-3.5 w-3.5" />
                         </Button>
@@ -1241,8 +1259,9 @@ function StartFromTemplatePicker({
   const [search, setSearch] = useState("");
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return templates;
-    return templates.filter((t) => {
+    const sprayable = templates.filter((t) => !isFertigationOperationType(t.operation_type));
+    if (!q) return sprayable;
+    return sprayable.filter((t) => {
       const hay = [t.name, t.target, t.operation_type, chemicalLinesSummary(t.chemical_lines)]
         .filter(Boolean).join(" ").toLowerCase();
       return hay.includes(q);

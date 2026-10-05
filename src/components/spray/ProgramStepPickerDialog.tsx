@@ -9,6 +9,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fetchSprayJobs, type SprayJob } from "@/lib/sprayJobsQuery";
+import { isFertigationOperationType } from "@/lib/fertigation";
 import {
   chemicalLineRateText, growthStageDescription, growthStageOrder,
   programLines, programSearchHaystack,
@@ -31,7 +32,9 @@ export function ProgramStepPickerDialog({
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const list = q ? steps.filter((s) => programSearchHaystack(s).includes(q)) : steps;
+    // Fertigation steps are applied via irrigation, never planned as a spray.
+    const sprayable = steps.filter((s) => !isFertigationOperationType(s.operation_type));
+    const list = q ? sprayable.filter((s) => programSearchHaystack(s).includes(q)) : sprayable;
     return [...list].sort(
       (a, b) =>
         (growthStageOrder(a.growth_stage_code) ?? 999) - (growthStageOrder(b.growth_stage_code) ?? 999),
