@@ -53,6 +53,12 @@ import {
   formatTimeRange,
   resolveSessionTimes,
 } from "@/lib/irrigationTimes";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import {
+  programStepProducts,
+  useFertigationProgramSteps,
+  useUpsertIrrigationFertigation,
+} from "@/lib/fertigationQuery";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const num = (v: string) => (v.trim() === "" ? null : Number(v));
@@ -71,6 +77,9 @@ export default function IrrigationRecordPage() {
   const record = useRecordSession(selectedVineyardId);
   const { capabilities } = useIrrigationCapabilities(selectedVineyardId);
   const canManageSetup = capabilities.can_manage_irrigation_setup;
+  const { isAdmin } = useIsSystemAdmin();
+  const fertigationSteps = useFertigationProgramSteps(selectedVineyardId, isAdmin);
+  const fertigation = useUpsertIrrigationFertigation(selectedVineyardId);
 
   const [valveId, setValveId] = useState("");
   const [sessionDate, setSessionDate] = useState(todayISO());
@@ -84,16 +93,23 @@ export default function IrrigationRecordPage() {
   const [totalVolume, setTotalVolume] = useState("");
   const [notes, setNotes] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [fertigationProgramStepId, setFertigationProgramStepId] = useState("");
+  const [fertigationActuals, setFertigationActuals] = useState<Record<number, string>>({});
 
   const [preview, setPreview] = useState<IrrigationPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
 
-  // The client generates the session id up front so retries are idempotent.
+  // The client generates ids up front so retries are idempotent. The
+  // fertigation id is independent: an irrigation retry may return the existing
+  // session, then safely retry the linked fertigation write.
   const sessionIdRef = useRef<string>(generateUuid());
+  const fertigationApplicationIdRef = useRef<string>(generateUuid());
 
   const validation = useValveValidation(selectedVineyardId, valveId || null);
   const valve = valves.data?.find((v) => v.id === valveId) ?? null;
+  const selectedFertigationStep =
+    fertigationSteps.data?.find((step) => step.id === fertigationProgramStepId) ?? null;
 
   // SQL 131: the backend resolves the flow rate. The portal never derives one.
   const v = validation.data;
@@ -242,8 +258,30 @@ export default function IrrigationRecordPage() {
         finished_at: bothTimes ? times.finishedAt : null,
         ...body,
       });
+      if (selectedFertigationStep) {
+        try {
+          await fertigation.mutateAsync({
+            id: fertigationApplicationIdRef.current,
+            irrigation_session_id: saved.id,
+            program_step_id: selectedFertigationStep.id,
+            notes: null,
+            products: programStepProducts(selectedFertigationStep, fertigationActuals),
+          });
+        } catch (fertigationError) {
+          toast({
+            title: "Irrigation recorded; fertigation needs attention",
+            description:
+              (fertigationError as Error).message +
+              " The irrigation session is safe. Retry Save to attach the fertigation record.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
       toast({
-        title: saved.duplicate ? "Session already recorded" : "Irrigation recorded",
+        title: selectedFertigationStep
+          ? "Irrigation and fertigation recorded"
+          : saved.duplicate ? "Session already recorded" : "Irrigation recorded",
         description: `${formatLitres(saved.total_volume_litres)} across ${saved.blocks.length} block(s).`,
       });
       navigate("/irrigation/history");
@@ -352,6 +390,86 @@ export default function IrrigationRecordPage() {
               </div>
             </CardContent>
           </Card>
+
+          {isAdmin && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Fertigation</CardTitle>
+                <CardDescription>
+                  Development preview — System Admin only. Link this irrigation cycle to a Fertigation Program Step.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label>Program Step</Label>
+                  <Select
+                    value={fertigationProgramStepId || "__none__"}
+                    onValueChange={(value) => {
+                      setFertigationProgramStepId(value === "__none__" ? "" : value);
+                      setFertigationActuals({});
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="No fertigation" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">No fertigation</SelectItem>
+                      {(fertigationSteps.data ?? []).map((step) => (
+                        <SelectItem key={step.id} value={step.id}>
+                          {step.growth_stage_code ? `${step.growth_stage_code} · ` : ""}
+                          {step.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {fertigationSteps.isError && (
+                    <p className="mt-1 text-xs text-destructive">
+                      Could not load Fertigation Program Steps.
+                    </p>
+                  )}
+                </div>
+
+                {selectedFertigationStep && (
+                  <div className="space-y-3">
+                    <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+                      The Program Step supplies the planned products and rates. This irrigation record supplies the actual valve, water, duration and block allocation.
+                    </div>
+                    {(selectedFertigationStep.chemical_lines ?? [])
+                      .filter((line) => String(line.name ?? "").trim())
+                      .map((line, index) => (
+                        <div key={`${selectedFertigationStep.id}-${index}`} className="grid gap-2 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
+                          <div>
+                            <div className="text-sm font-medium">{line.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {line.rate != null
+                                ? `Planned rate: ${line.rate} ${line.unit ?? ""}`
+                                : "Planned rate not set"}
+                            </div>
+                          </div>
+                          <div>
+                            <Label htmlFor={`fertigation-actual-${index}`} className="text-xs">
+                              Actual used {line.unit ? `(${line.unit})` : ""}
+                            </Label>
+                            <Input
+                              id={`fertigation-actual-${index}`}
+                              inputMode="decimal"
+                              placeholder="Optional"
+                              value={fertigationActuals[index] ?? ""}
+                              onChange={(e) =>
+                                setFertigationActuals((current) => ({
+                                  ...current,
+                                  [index]: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>
@@ -632,9 +750,9 @@ export default function IrrigationRecordPage() {
                   />
                 )}
 
-                <Button size="lg" className="w-full" onClick={save} disabled={record.isPending}>
+                <Button size="lg" className="w-full" onClick={save} disabled={record.isPending || fertigation.isPending}>
                   <Save className="mr-2 h-4 w-4" />
-                  {record.isPending ? "Saving…" : "Save Irrigation Record"}
+                  {record.isPending || fertigation.isPending ? "Saving…" : "Save Irrigation Record"}
                 </Button>
               </>
             )}
