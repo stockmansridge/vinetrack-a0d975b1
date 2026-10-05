@@ -131,11 +131,16 @@ export async function addV3ToVineyard(a: AddToVineyardArgs): Promise<{ reused: b
 }
 
 /** Badge for a vineyard chemical that came from V3. */
-export function v3EntryBadge(row: Row | null | undefined): { label: string; tone: "pending" | "approved" } | null {
+export function v3EntryBadge(row: Row | null | undefined, rev?: Row | null): { label: string; tone: "pending" | "approved" } | null {
   const src = first(row, "entry_source");
   if (src === "chemical_v3_candidate") {
     // Genuine new searches link to a V3 revision; older V1/V2/Master copies don't.
-    const hasRevision = !!first(row, "chemical_v3_revision_id");
+    let hasRevision = !!first(row, "chemical_v3_revision_id");
+    // When the linked revision is known, only a revision still awaiting review counts as pending.
+    if (hasRevision && rev !== undefined) {
+      const st = String(rev?.review_status ?? rev?.status ?? rev?.revision_status ?? "").toLowerCase();
+      hasRevision = st === "pending_review" || st === "needs_attention";
+    }
     return { label: hasRevision ? "Pending review" : "Out of date", tone: "pending" };
   }
   if (src === "chemical_v3_catalogue") return { label: "VineTrack catalogue", tone: "approved" };
