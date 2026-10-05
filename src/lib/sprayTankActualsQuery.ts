@@ -38,3 +38,33 @@ export async function fetchTankActualsForTrips(
 export function tankActualsQueryKey(vineyardId: string | null | undefined, tripIds: ReadonlyArray<string>) {
   return ["spray-tank-actuals-batch", vineyardId ?? null, Array.from(new Set(tripIds)).sort().join(",")] as const;
 }
+
+export interface TripSessionInfo {
+  id: string;
+  vineyard_id: string | null;
+  tank_sessions: unknown;
+  start_time: string | null;
+  created_at: string | null;
+}
+
+/** Trip identity + recorded tank sessions for Tank Actual session validation. */
+export async function fetchTripSessionsForTrips(
+  tripIds: ReadonlyArray<string>,
+  client: any = supabase,
+): Promise<Map<string, TripSessionInfo>> {
+  const ids = Array.from(new Set(tripIds.filter(Boolean))).sort();
+  const out = new Map<string, TripSessionInfo>();
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk = ids.slice(i, i + CHUNK);
+    const { data, error } = await client
+      .from("trips")
+      .select("id, vineyard_id, tank_sessions, start_time, created_at")
+      .in("id", chunk);
+    if (error) {
+      console.warn("[trips] tank session read failed:", error.message);
+      return new Map();
+    }
+    for (const r of (data ?? []) as any[]) if (r?.id) out.set(r.id, r as TripSessionInfo);
+  }
+  return out;
+}
