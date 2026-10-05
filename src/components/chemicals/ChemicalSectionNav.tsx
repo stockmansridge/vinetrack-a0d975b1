@@ -31,14 +31,18 @@ export function ChemicalSectionNav({ active: current, onAddChemical }: { active:
     </Link>
   );
   return (
-    <div className="w-full self-stretch rounded-lg border bg-card p-3 shadow-sm" data-testid="chemical-section">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Chemical tools</span>
+    <div className="w-full self-stretch">
+      {/* Fixed-height action row above the menu so the menu never shifts between pages. */}
+      <div className="mb-2 flex h-9 items-center justify-end">
         {canAdd && onAddChemical && (
           <Button type="button" size="sm" onClick={onAddChemical} data-testid="chemical-nav-add">
             <Plus className="mr-1 h-4 w-4" />Add Chemical
           </Button>
         )}
+      </div>
+    <div className="w-full rounded-lg border bg-card p-3 shadow-sm" data-testid="chemical-section">
+      <div className="mb-2 flex items-center">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Chemical tools</span>
       </div>
       <nav aria-label="Chemical tools" data-testid="chemical-section-nav" className="vt-scroll -mx-1 overflow-x-auto px-1">
         <div className="flex min-w-max gap-1 rounded-md border bg-muted p-1 sm:min-w-0">
@@ -47,6 +51,7 @@ export function ChemicalSectionNav({ active: current, onAddChemical }: { active:
           {canBuy && item("purchases", "/setup/chemicals/purchases", "Chemical Purchase", ShoppingCart, "chemical-purchase-link")}
         </div>
       </nav>
+    </div>
     </div>
   );
 }
