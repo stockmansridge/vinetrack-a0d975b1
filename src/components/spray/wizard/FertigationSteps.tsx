@@ -5,7 +5,12 @@
 // any saved product may be chosen deliberately. Each line needs an explicit
 // Fertigation rate basis and unit; nothing is translated from spray bases.
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useVineyard } from "@/context/VineyardContext";
+import { useCanSeeCosts } from "@/lib/permissions";
+import { ChemicalEditor } from "@/components/chemicals/ChemicalEditorSheet";
+import { ChemicalSearchDialog } from "@/components/chemicals/ChemicalSearchDialog";
+import { fetchSavedChemicalsForVineyard, type SavedChemical } from "@/lib/savedChemicalsQuery";
 import { Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { Button } from "@/components/ui/button";
@@ -73,12 +78,72 @@ function blankLine(): SprayProductLine {
 export function FertigationProductsStep({ app, update, canEdit, vineyardId }: StepProps) {
   const products = useSavedProducts(vineyardId);
   const [showAll, setShowAll] = useState(false);
+  const qc = useQueryClient();
+  const canSeeCosts = useCanSeeCosts();
+  const { memberships, currentCountry } = useVineyard();
+  const vineyardName = memberships.find((m) => m.vineyard_id === vineyardId)?.vineyard_name ?? null;
+  // Row the operator last worked on; a new chemical binds there (or appends).
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  // `null` = closed. index null = append a new line on save.
+  const [creating, setCreating] = useState<{ index: number | null; name: string | null } | null>(null);
+  const [manual, setManual] = useState(false);
 
+  const selectedIds = useMemo(
+    () => new Set(app.products.map((l) => l.savedChemicalId).filter(Boolean) as string[]),
+    [app.products],
+  );
   const options = useMemo(() => {
     const list = products.data ?? [];
     const priority = list.filter((p) => isFertigationPriorityCategory(p.product_category ?? p.use));
-    return showAll || priority.length === 0 ? list : priority;
-  }, [products.data, showAll]);
+    if (showAll || priority.length === 0) return list;
+    // Keep already-selected products visible even when the filter would hide them.
+    return list.filter((p) => priority.includes(p) || selectedIds.has(p.id));
+  }, [products.data, showAll, selectedIds]);
+
+  // Binds a newly-created Saved Chemical by id. Never sets a Fertigation
+  // rate basis/unit — the operator must still choose them explicitly.
+  const onChemicalSaved = (saved: Pick<SavedChemical, "id" | "name"> & Record<string, any>) => {
+    const target = creating?.index ?? null;
+    const identity = {
+      savedChemicalId: saved.id,
+      productName: saved.name ?? null,
+      productCategory: saved.product_category ?? null,
+      productForm: saved.product_form ?? null,
+    };
+    update((a) => {
+      if (target != null && target < a.products.length) {
+        return { ...a, products: a.products.map((l, j) => (j === target ? { ...l, ...identity } : l)) };
+      }
+      return { ...a, products: [...a.products, { ...blankLine(), ...identity }] };
+    });
+    qc.setQueryData<SavedProduct[]>(["fertigation", "saved-products", vineyardId], (prev) => {
+      const list = prev ?? [];
+      if (list.some((p) => p.id === saved.id)) return list;
+      return [...list, {
+        id: saved.id,
+        name: saved.name ?? null,
+        product_category: saved.product_category ?? null,
+        product_form: saved.product_form ?? null,
+        use: saved.use ?? null,
+      }].sort((x, y) => (x.name ?? "").localeCompare(y.name ?? ""));
+    });
+    qc.invalidateQueries({ queryKey: ["fertigation", "saved-products", vineyardId] });
+    qc.invalidateQueries({ queryKey: ["saved-chemicals"] });
+    setCreating(null);
+    setManual(false);
+  };
+  const onSearchAdded = async ({ savedChemicalId }: { savedChemicalId: string | null }) => {
+    if (!savedChemicalId || !vineyardId) return;
+    const res = await fetchSavedChemicalsForVineyard(vineyardId);
+    const row = res.chemicals.find((c) => c.id === savedChemicalId);
+    if (row) onChemicalSaved(row as any);
+  };
+  const openAddChemical = () => {
+    const idx = activeIndex != null && activeIndex < app.products.length ? activeIndex : null;
+    // Only bind into the working row when it has no product yet.
+    const target = idx != null && !app.products[idx].savedChemicalId ? idx : null;
+    setCreating({ index: target, name: null });
+  };
 
   const setLine = (i: number, patch: Partial<SprayProductLine>) =>
     update((a) => ({ ...a, products: a.products.map((l, j) => (j === i ? { ...l, ...patch } : l)) }));
@@ -92,15 +157,28 @@ export function FertigationProductsStep({ app, update, canEdit, vineyardId }: St
           blocks, water and valve.
         </p>
       </div>
-      <label className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Switch checked={showAll} onCheckedChange={setShowAll} aria-label="Show all saved products" />
-        Show all saved products
-      </label>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Switch checked={showAll} onCheckedChange={setShowAll} aria-label="Show all saved products" />
+          Show all saved products
+        </label>
+        {canEdit && (
+          <Button type="button" size="sm" variant="outline" onClick={openAddChemical}>
+            <Plus className="mr-1 h-3.5 w-3.5" /> Add Chemical
+          </Button>
+        )}
+      </div>
 
       {app.products.map((l, i) => {
         const basis = l.fertigationRateBasis ?? null;
         return (
-          <div key={i} className="space-y-3 rounded-md border p-3" data-testid="fertigation-line">
+          <div
+            key={i}
+            className="space-y-3 rounded-md border p-3"
+            data-testid="fertigation-line"
+            onFocusCapture={() => setActiveIndex(i)}
+            onPointerDownCapture={() => setActiveIndex(i)}
+          >
             <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
               <div className="space-y-1">
                 <Label>Product</Label>
@@ -223,6 +301,31 @@ export function FertigationProductsStep({ app, update, canEdit, vineyardId }: St
       >
         <Plus className="mr-1 h-4 w-4" /> Add product
       </Button>
+
+      {/* Add Chemical → the shared Chemical Search / Add Chemical workflow,
+          nested so the Program Step draft is never saved or discarded. */}
+      <ChemicalSearchDialog
+        open={!!creating && !manual}
+        onOpenChange={(o) => { if (!o) setCreating(null); }}
+        vineyardId={vineyardId}
+        vineyardName={vineyardName}
+        country={currentCountry}
+        canEdit={canEdit}
+        initialQuery={creating?.name ?? null}
+        onAdded={onSearchAdded}
+        onManual={(name) => { setCreating((c) => ({ index: c?.index ?? null, name: name ?? c?.name ?? null })); setManual(true); }}
+      />
+      <ChemicalEditor
+        manualOnly
+        open={!!creating && manual}
+        onOpenChange={(o) => { if (!o) { setCreating(null); setManual(false); } }}
+        initial={null}
+        initialName={creating?.name ?? null}
+        vineyardId={vineyardId}
+        existingLibrary={(products.data ?? []).map((p) => ({ id: p.id, name: p.name ?? "", active_ingredient: "" }))}
+        canSeeCosts={canSeeCosts}
+        onSaved={onChemicalSaved}
+      />
     </div>
   );
 }
