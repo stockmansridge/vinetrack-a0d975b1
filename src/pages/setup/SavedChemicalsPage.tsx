@@ -83,6 +83,7 @@ import { ChemicalSectionNav, ADD_CHEMICAL_PARAM } from "@/components/chemicals/C
 import { useSearchParams } from "react-router-dom";
 import { ChemicalInventoryPanel } from "@/components/chemicals/ChemicalInventoryPanel";
 import { canManageChemicalInventory, v3EntryBadge } from "@/lib/chemicalInventory";
+import { VineTrackCatalogueBadge } from "@/components/chemicals/VineTrackCatalogueBadge";
 import { ChemicalLabelThumb, UsedForCell } from "@/components/chemicals/ChemicalListCells";
 import { useV3RevisionDisplay, v3RevisionIdOf, usedForOf, productLinkOf } from "@/lib/chemicalV3Display";
 import { Link } from "react-router-dom";
@@ -671,9 +672,8 @@ export default function SavedChemicalsPage() {
                       <React.Fragment key={id}>{renderChemCell(id, c)}</React.Fragment>
                     ))}
                     <TableCell className="text-right">
-                      {v3EntryBadge(c) && (
-                        <Badge variant="outline" className={cn("mr-1 px-1.5 py-0 text-[10px] font-medium", v3EntryBadge(c)!.tone === "pending" ? "border-warning/60 bg-warning/10" : "border-primary/30 bg-primary/5 text-primary")}>{v3EntryBadge(c)!.label}</Badge>
-                      )}
+                      {v3EntryBadge(c) && (v3EntryBadge(c)!.tone === "approved" ? <VineTrackCatalogueBadge size="xs" className="mr-1" /> :
+                        <Badge variant="outline" className="mr-1 px-1.5 py-0 text-[10px] font-medium border-warning/60 bg-warning/10">{v3EntryBadge(c)!.label}</Badge>)}
                       {inventoryPilot && (
                         <Button size="sm" variant="ghost" onClick={() => setInventoryRow(c)} title="Inventory">
                           <Package className="h-3.5 w-3.5" />

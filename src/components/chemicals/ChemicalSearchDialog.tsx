@@ -4,6 +4,7 @@
 // start_chemical_v3_discovery_v2 + chemical-lookup-v3, chemical_v3_add_to_vineyard).
 // It contains NO admin review tools and NO opening-stock fields, and never
 // calls the older product lookup function or any V1/V2 search.
+import { VineTrackCatalogueBadge } from "@/components/chemicals/VineTrackCatalogueBadge";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Camera, ExternalLink, Search, Sparkles } from "lucide-react";
@@ -93,7 +94,7 @@ function AddButton({ revisionId, vineyardId, vineyardName, canEdit, onAdded }: {
 function StatusBadge({ status }: { status: unknown }) {
   return isPendingStatus(status)
     ? <Badge variant="outline" className="border-warning/60 bg-warning/10">{PENDING_REVIEW_LABEL}</Badge>
-    : <Badge className="border-transparent bg-success/15 text-success">{CATALOGUE_LABEL}</Badge>;
+    : <VineTrackCatalogueBadge />;
 }
 
 /** Compact product view — no admin review content. */
