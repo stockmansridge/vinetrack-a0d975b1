@@ -308,7 +308,7 @@ export default function FertiliserCalculatorDialog({
         };
       }),
     );
-  }, [open, paddocks, sourceAllocations, existing]);
+  }, [open, paddocks, sourceAllocations, existing, duplicateFrom]);
 
   // When the user picks a product, snapshot product-related defaults.
   const onSelectProduct = (id: string) => {
@@ -475,6 +475,10 @@ export default function FertiliserCalculatorDialog({
         calculation_mode: mode,
         record_status: recordStatus,
         application_date: effectiveDate,
+        // Blocked on the shared vine_count_basis field (Rork); off until it exists.
+        ...(VINE_COUNT_BASIS_PERSISTED && mode === "perVine"
+          ? { vine_count_basis: selectedBlocks.length === 0 ? "manual" : vineBasis === "snapshot" ? undefined : vineBasis }
+          : {}),
         block_names: selectedBlocks.map((b) => b.name),
         total_area_ha: calc.totalAreaHa,
         total_vines: calc.totalVines,
@@ -741,6 +745,37 @@ export default function FertiliserCalculatorDialog({
           {/* Blocks */}
           <section className="rounded-lg border-2 border-border bg-card shadow-sm p-4 space-y-2">
             <Label className="text-sm font-semibold">Blocks (optional)</Label>
+            {mode === "perVine" && checkedBlocks.length > 0 && (
+              <div className="rounded-md border bg-muted/40 p-3 space-y-2" role="radiogroup" aria-label="Vine count basis">
+                <div className="text-sm font-semibold">Vine count basis</div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {([
+                    ["actual", "Actual vine count", "Use the physical/manual vine counts recorded for each block."],
+                    ["assumed_full", "Assumed full vine count", "Calculate the theoretical vine count from planted row length and vine spacing, ignoring missing-vine/manual-count overrides."],
+                  ] as const).map(([v, label, help]) => (
+                    <button
+                      key={v}
+                      type="button"
+                      role="radio"
+                      aria-checked={vineBasis === v}
+                      onClick={() => setVineBasis(v)}
+                      className={`text-left rounded-md border-2 p-2 ${vineBasis === v ? "border-primary bg-primary/10" : "border-border bg-card hover:bg-accent/40"}`}
+                    >
+                      <div className="text-sm font-medium">{label}</div>
+                      <div className="text-xs text-muted-foreground">{help}</div>
+                    </button>
+                  ))}
+                </div>
+                {vineBasis === "snapshot" && (
+                  <div className="text-xs text-muted-foreground">
+                    Showing the vine counts stored on this record. Choose a basis to recalculate from current block settings.
+                  </div>
+                )}
+                {vineResolution.issues.map((m) => (
+                  <div key={m} role="alert" className="text-xs text-destructive">{m}</div>
+                ))}
+              </div>
+            )}
             {blocks.length === 0 && <div className="text-sm text-muted-foreground">No blocks configured on this vineyard.</div>}
             <div className="divide-y">
               {blocks.map((b, i) => (
@@ -769,17 +804,26 @@ export default function FertiliserCalculatorDialog({
                     }}
                     aria-label={`${b.name} area ${areaLabel(region)}`}
                   />
-                  <Input
-                    disabled={!b.selected}
-                    inputMode="numeric"
-                    value={String(b.vineCount)}
-                    onChange={(e) => {
-                      const next = [...blocks];
-                      next[i] = { ...b, vineCount: Math.round(numOr(e.target.value)) };
-                      setBlocks(next);
-                    }}
-                    aria-label={`${b.name} vine count`}
-                  />
+                  {mode === "perVine" && b.selected ? (
+                    <div className="text-xs tabular-nums" aria-label={`${b.name} vine count`}>
+                      <div className="font-medium">
+                        {(selectedBlocks.find((x) => x.id === b.id)?.vineCount ?? 0).toLocaleString()} vines
+                      </div>
+                      <div className="text-muted-foreground">{vineSourceById.get(b.id)}</div>
+                    </div>
+                  ) : (
+                    <Input
+                      disabled={!b.selected}
+                      inputMode="numeric"
+                      value={String(b.vineCount)}
+                      onChange={(e) => {
+                        const next = [...blocks];
+                        next[i] = { ...b, vineCount: Math.round(numOr(e.target.value)) };
+                        setBlocks(next);
+                      }}
+                      aria-label={`${b.name} vine count`}
+                    />
+                  )}
                   {b.selected ? (
                     <div className="text-xs text-muted-foreground tabular-nums text-right">
                       {qty(calc.allocations.find((a) => a.paddockId === b.id)?.productRequired ?? 0)}
@@ -984,6 +1028,11 @@ export function paddocksToOptions(rows: any[]): PaddockOption[] {
       name: p.name ?? "Block",
       areaHa: Number(m.areaHa.toFixed(3)),
       vineCount: m.vineCount ?? 0,
+      ...(() => {
+        const a = actualVineCount(p);
+        const f = assumedFullVineCount(p);
+        return { ...a, assumedFullVineCount: f.count, assumedFullReason: f.reason };
+      })(),
     };
   });
 }
