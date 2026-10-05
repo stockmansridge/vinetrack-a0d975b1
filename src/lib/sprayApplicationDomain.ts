@@ -54,12 +54,19 @@ export const APPLICATION_MODE_LABEL: Record<ApplicationMode, string> = {
  * persistence because it still distinguishes Foliar from Spreader for product
  * and UI semantics (and for Resistance Check context).
  */
-export type OperationType = "foliar" | "spreader" | "banded";
+export type OperationType = "foliar" | "spreader" | "banded" | "fertigation";
+/** Spray operation types offered to every vineyard user. */
 export const OPERATION_TYPES: OperationType[] = ["foliar", "spreader", "banded"];
+/**
+ * Fertigation (Round 1, System Admin development gate). Program Steps only —
+ * never a Planned Spray, never a Spray Trip. Stored as "Fertigation".
+ */
+export const FERTIGATION_OPERATION: OperationType = "fertigation";
 export const OPERATION_TYPE_LABEL: Record<OperationType, string> = {
   foliar: "Foliar Spray",
   spreader: "Spreader",
   banded: "Banded Spray",
+  fertigation: "Fertigation",
 };
 
 const OPERATION_TYPE_ALIAS: Record<string, OperationType> = {
@@ -71,6 +78,7 @@ const OPERATION_TYPE_ALIAS: Record<string, OperationType> = {
   spreader: "spreader",
   "spreader application": "spreader",
   fertiliser: "spreader",
+  fertigation: "fertigation",
 };
 
 export function normaliseOperationType(value: unknown): OperationType | null {
@@ -80,10 +88,12 @@ export function normaliseOperationType(value: unknown): OperationType | null {
 }
 
 /** Confirmed mapping: Foliar → whole_block, Spreader → whole_block, Banded → banded. */
-export const OPERATION_TYPE_TO_MODE: Record<OperationType, ApplicationMode> = {
+export const OPERATION_TYPE_TO_MODE: Record<OperationType, ApplicationMode | null> = {
   foliar: "whole_block",
   spreader: "whole_block",
   banded: "banded",
+  // Fertigation is applied through irrigation — no spray application mode.
+  fertigation: null,
 };
 
 export function normaliseApplicationMode(value: unknown): ApplicationMode | null {
@@ -360,6 +370,12 @@ export interface SprayProductLine {
   notes?: string | null;
   /** UI-only provenance of the current rate; never persisted. */
   rateSource?: "vineyard_preferred" | null;
+  /** Fertigation Program Steps only: explicit rate basis + unit. */
+  fertigationRateBasis?: "per_hectare" | "per_vine" | "per_irrigation_cycle" | null;
+  fertigationRateUnit?: string | null;
+  /** Fertigation snapshot context (Saved Chemical category/form). */
+  productCategory?: string | null;
+  productForm?: string | null;
 }
 
 /* ---------------------------------------------------------- application */
@@ -559,7 +575,7 @@ export function fromLegacySprayJob(
   app.mode =
     normaliseApplicationMode(job.application_mode) ??
     (app.operationType ? OPERATION_TYPE_TO_MODE[app.operationType] : null);
-  if (!app.mode && (job.operation_type || job.application_mode)) {
+  if (!app.mode && app.operationType !== "fertigation" && (job.operation_type || job.application_mode)) {
     notes.push(
       `Unrecognised application mode "${job.application_mode ?? job.operation_type}" — left unset.`,
     );
@@ -727,6 +743,16 @@ export function fromLegacySprayJob(
       legacyChemicalGroup: (line as any).chemical_group ?? null,
       costPerUnit: num(line.costPerUnit),
       notes: line.notes ?? null,
+      ...(app.operationType === "fertigation"
+        ? {
+            fertigationRateBasis: (["per_hectare", "per_vine", "per_irrigation_cycle"] as const).find(
+              (b) => b === (line as any).fertigation_rate_basis,
+            ) ?? null,
+            fertigationRateUnit: (line as any).fertigation_rate_unit ?? null,
+            productCategory: (line as any).product_category ?? null,
+            productForm: (line as any).product_form ?? null,
+          }
+        : {}),
     } satisfies SprayProductLine;
   });
 

@@ -52,7 +52,46 @@ export function hydrateDraft(args: {
  *  - spreader applications carry no liquid carrier.
  * Blocks, products, notes and dates are never discarded.
  */
+/**
+ * Switching to Fertigation clears EVERY spray-only fact so nothing hidden can
+ * stay active on the step. Product identities and rates are kept, but each
+ * product's Fertigation rate basis must be chosen explicitly — an old spray
+ * basis such as /100 L is never translated into an irrigation basis.
+ */
+export function toFertigationDraft(app: SprayApplication): SprayApplication {
+  const wasFertigation = app.operationType === "fertigation";
+  return {
+    ...app,
+    operationType: "fertigation",
+    mode: null,
+    isTemplate: true,
+    plannedDate: null,
+    targets: null,
+    legacyTargetText: null,
+    otherTargetNote: null,
+    headTarget: null,
+    groundApplicationTarget: null,
+    tractorId: null,
+    equipmentId: null,
+    operatorUserId: null,
+    blockIds: [],
+    geometryOverride: {},
+    totalTreatedBandWidthMetres: null,
+    carrier: { basis: null },
+    tankCapacityLitres: null,
+    equipmentConfirmed: false,
+    planProvenance: null,
+    products: app.products.map((p) => ({
+      ...p,
+      rateBasis: null,
+      fertigationRateBasis: wasFertigation ? p.fertigationRateBasis ?? null : null,
+      fertigationRateUnit: wasFertigation ? p.fertigationRateUnit ?? null : null,
+    })),
+  };
+}
+
 export function applyOperationType(app: SprayApplication, op: OperationType | null): SprayApplication {
+  if (op === "fertigation") return toFertigationDraft(app);
   const mode = op ? OPERATION_TYPE_TO_MODE[op] : null;
   const wasBanded = app.mode === "banded";
   const next: SprayApplication = {
