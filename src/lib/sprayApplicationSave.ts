@@ -128,6 +128,72 @@ export function toChemicalLine(line: SprayProductLine): SprayJobChemicalLine {
 }
 
 
+/**
+ * Fertigation product line. The Saved Chemical UUID is identity; the explicit
+ * Fertigation basis + unit live in their own keys so no spray basis
+ * (per_hectare / per_100_litres) is ever implied for an irrigation product.
+ */
+export function toFertigationChemicalLine(line: SprayProductLine): SprayJobChemicalLine {
+  return {
+    chemical_id: line.savedChemicalId ?? null,
+    savedChemicalId: line.savedChemicalId ?? null,
+    name: line.productName ?? null,
+    rate: line.rate ?? null,
+    unit: null,
+    product_rate_basis: null,
+    rate_basis: null,
+    costPerUnit: line.costPerUnit ?? null,
+    notes: line.notes ?? null,
+    fertigation_rate_basis: line.fertigationRateBasis ?? null,
+    fertigation_rate_unit: line.fertigationRateUnit ?? null,
+    product_category: line.productCategory ?? null,
+    product_form: line.productForm ?? null,
+  } as SprayJobChemicalLine;
+}
+
+/**
+ * Fertigation Program Step payload: every spray-only column is written as
+ * NULL so a step switched from Foliar/Banded/Spreader keeps nothing hidden.
+ */
+export function toFertigationJobInput(app: SprayApplication): SprayJobInput {
+  return {
+    vineyard_id: app.vineyardId ?? "",
+    name: app.name ?? null,
+    is_template: true,
+    planned_date: null,
+    status: "draft",
+    operation_type: OPERATION_TYPE_LABEL.fertigation,
+    application_mode: null,
+    target: null,
+    targets: null,
+    spray_head_target: null,
+    growth_stage_code: app.growthStageCode ?? null,
+    tractor_id: null,
+    equipment_id: null,
+    operator_user_id: null,
+    notes: app.notes ?? null,
+    chemical_lines: app.products.map(toFertigationChemicalLine),
+    carrier_volume_basis: null,
+    spray_rate_per_ha: null,
+    applied_litres_per_100m: null,
+    dilute_litres_per_100m: null,
+    concentration_factor: null,
+    vsp_canopy_size: null,
+    vsp_canopy_density: null,
+    water_volume: null,
+    band_width_total_metres: null,
+    ground_application_target: null,
+    carrier_area_basis: null,
+    row_spacing_metres: null,
+    gross_area_ha: null,
+    treated_area_ha: null,
+    canonical_row_length_metres: null,
+    geometry_source: null,
+    geometry_quality: null,
+    ...provenanceWritePayload(null),
+  } as SprayJobInput;
+}
+
 export interface SaveMapping {
   input: SprayJobInput;
   paddockIds: string[];
@@ -147,6 +213,9 @@ export function toSprayJobInput(args: {
   targetLabels?: Map<string, string> | null;
 }): SaveMapping {
   const app = args.application;
+  if (app.operationType === "fertigation") {
+    return { input: toFertigationJobInput(app), paddockIds: [] };
+  }
   const geometry: ApplicationGeometry = args.geometry;
   const carrier: CarrierResult = args.calculation.carrier;
   const isTemplate = app.isTemplate;
