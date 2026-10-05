@@ -83,6 +83,7 @@ import { ChemicalSectionNav, ADD_CHEMICAL_PARAM } from "@/components/chemicals/C
 import { useSearchParams } from "react-router-dom";
 import { ChemicalInventoryPanel } from "@/components/chemicals/ChemicalInventoryPanel";
 import { canManageChemicalInventory, v3EntryBadge } from "@/lib/chemicalInventory";
+import { VineTrackCatalogueBadge } from "@/components/chemicals/VineTrackCatalogueBadge";
 import { ChemicalLabelThumb, UsedForCell } from "@/components/chemicals/ChemicalListCells";
 import { useV3RevisionDisplay, v3RevisionIdOf, usedForOf, productLinkOf } from "@/lib/chemicalV3Display";
 import { Link } from "react-router-dom";

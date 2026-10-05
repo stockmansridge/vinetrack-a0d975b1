@@ -1,4 +1,5 @@
 // Chemical Search — the single customer-facing way to find and add a new
+import { VineTrackCatalogueBadge } from "@/components/chemicals/VineTrackCatalogueBadge";
 // chemical. Reuses the catalogue/discovery contracts proven in the System
 // Admin Catalogue Review (search_chemical_v3_catalogue,
 // start_chemical_v3_discovery_v2 + chemical-lookup-v3, chemical_v3_add_to_vineyard).
