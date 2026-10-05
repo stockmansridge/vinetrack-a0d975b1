@@ -125,6 +125,53 @@ const EMPTY: SavedChemicalInput = {
   restrictions: "", notes: "", label_url: "", product_url: "",
 };
 
+function normTarget(s: string) {
+  return s.toLowerCase().replace(/\([^)]*\)/g, " ").replace(/[^a-z0-9]+/g, " ").trim().replace(/s\b/g, "");
+}
+function similarity(a: string, b: string) {
+  if (a === b) return 1;
+  const m = a.length, n = b.length;
+  if (!m || !n) return 0;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return 1 - prev[n] / Math.max(m, n);
+}
+/** Clusters targets that are at least 80% the same; label = most common spelling. */
+function groupSimilarTargets(labels: string[]) {
+  const clusters: { key: string; counts: Map<string, number> }[] = [];
+  const byNorm = new Map<string, string>();
+  for (const label of labels) {
+    const n = normTarget(label) || label.toLowerCase();
+    let cl = clusters.find((c) => similarity(c.key, n) >= 0.8);
+    if (!cl) { cl = { key: n, counts: new Map() }; clusters.push(cl); }
+    cl.counts.set(label, (cl.counts.get(label) ?? 0) + 1);
+    byNorm.set(n, cl.key);
+  }
+  const keyOf = (t: string) => {
+    const n = normTarget(t.trim()) || t.trim().toLowerCase();
+    return byNorm.get(n) ?? clusters.find((c) => similarity(c.key, n) >= 0.8)?.key ?? n;
+  };
+  const options = clusters.map((c) => {
+    const label = [...c.counts].sort((a, b) => b[1] - a[1] || a[0].length - b[0].length)[0][0];
+    return { key: c.key, label };
+  }).sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  return { options, keyOf };
+}
+
+function ProductPageLink({ c }: { c: any }) {
+  const href = productLinkOf(c, null) ;
+  if (!href) return null;
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground hover:text-primary hover:underline" title="Manufacturer/product page — not the official label">
+      <Globe className="h-3 w-3" />Product page
+    </a>
+  );
+}
+
 export default function SavedChemicalsPage() {
   const { selectedVineyardId, currentRole, currentCountry, memberships } = useVineyard();
   // Add Chemical → the single customer Chemical Search. Manual entry opens the
@@ -252,7 +299,7 @@ export default function SavedChemicalsPage() {
     }
     if (use !== ANY) list = list.filter((c) => c.use === use);
     if (usedForFilter !== ANY) {
-      list = list.filter((c) => usedFor(c).some((t: string) => String(t).trim().toLowerCase() === usedForFilter));
+      list = list.filter((c) => usedFor(c).some((t: string) => usedForGrouping.keyOf(String(t)) === usedForFilter));
     }
     if (activeIngredient !== ANY) {
       list = list.filter((c) => normaliseAI(c.active_ingredient) === activeIngredient);
