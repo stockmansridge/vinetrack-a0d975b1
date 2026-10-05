@@ -63,7 +63,7 @@ export function applyOperationType(app: SprayApplication, op: OperationType | nu
     groundApplicationTarget: mode === "banded" ? app.groundApplicationTarget : null,
     totalTreatedBandWidthMetres: mode === "banded" ? app.totalTreatedBandWidthMetres : null,
   };
-  if (op === "spreader") {
+  if (op === "spreader" || op === "fertigation") {
     next.carrier = { basis: null };
   } else if (mode === "banded") {
     // Banded is a direct ground application: no canopy state may survive.
