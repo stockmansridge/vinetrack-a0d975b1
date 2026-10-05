@@ -235,7 +235,10 @@ export default function CostReportsPage() {
     enabled: !!selectedVineyardId && canSeeCosts && overlayTripIds.length > 0,
     queryFn: () => fetchTankActualsForTrips(overlayTripIds),
   });
+  const overlayLoading = sprayLoading || seasonPrices.isLoading || (overlayTripIds.length > 0 && actualsLoading);
   const overlaidTripRows = useMemo(() => {
+    // Never show stored chemical values while the overlay is still loading.
+    if (overlayLoading) return [];
     const perTrip = new Map<string, ChemicalCostResult>();
     for (const tripId of overlayTripIds) {
       const vintage = tripRows.find((r) => r.trip_id === tripId && r.season_year != null)?.season_year ?? null;
@@ -249,8 +252,7 @@ export default function CostReportsPage() {
       );
     }
     return overlayAllocationsWithChemicalCost(tripRows, perTrip);
-  }, [tripRows, overlayTripIds, sprayByTrip, tankActuals, seasonPrices.byVintage]);
-  const overlayLoading = sprayLoading || seasonPrices.isLoading || (overlayTripIds.length > 0 && actualsLoading);
+  }, [overlayLoading, tripRows, overlayTripIds, sprayByTrip, tankActuals, seasonPrices.byVintage]);
 
   // Pruning activity labour is an operational cost recorded outside field
   // trips. It is included through its reconciled per-block allocations.
@@ -1203,10 +1205,10 @@ export default function CostReportsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading && (
+                {(isLoading || overlayLoading) && (
                   <TableRow><TableCell colSpan={visibleCostOrder.length} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
                 )}
-                {!isLoading && filteredSorted.length === 0 && (
+                {!isLoading && !overlayLoading && filteredSorted.length === 0 && (
                   <TableRow><TableCell colSpan={visibleCostOrder.length} className="text-center text-muted-foreground py-8">
                     No cost allocations match these filters.
                   </TableCell></TableRow>
