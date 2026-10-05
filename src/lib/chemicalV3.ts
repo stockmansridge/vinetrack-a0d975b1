@@ -144,14 +144,26 @@ export async function fetchV3Revision(revisionId: string): Promise<Row | null> {
   return (data as Row) ?? null;
 }
 
+// Set once the requester RPC proves unusable (missing / stale schema), so the
+// queue's polling doesn't repeat a failing request every minute.
+let requestersUnavailable = false;
+const PERMANENT_RPC_ERRORS = new Set(["42703", "42883", "42P01", "PGRST202", "42501"]);
+/** Test hook. */
+export function __resetRequesterProbe() { requestersUnavailable = false; }
+
 export async function v3ReviewQueue(): Promise<Row[]> {
   const { data, error } = await sb.rpc(V3_RPC.queue);
   if (error) throw error;
   const rows = (data ?? []) as Row[];
+  if (requestersUnavailable || rows.length === 0) return rows;
   // Optional "Added by" details (sql/260). Missing service → rows unchanged.
   try {
     const { data: who, error: werr } = await sb.rpc("chemical_v3_admin_review_queue_requesters");
-    if (werr || !Array.isArray(who)) return rows;
+    if (werr) {
+      if (PERMANENT_RPC_ERRORS.has(String((werr as any).code ?? ""))) requestersUnavailable = true;
+      return rows;
+    }
+    if (!Array.isArray(who)) return rows;
     const byRev = new Map<string, Row>(who.map((w: Row) => [String(w.revision_id), w]));
     return rows.map((r) => {
       const w = byRev.get(String(r.revision_id ?? r.id));
@@ -160,6 +172,7 @@ export async function v3ReviewQueue(): Promise<Row[]> {
         ...r,
         requested_by_name: r.requested_by_name ?? w.requested_by_name ?? null,
         requested_by_email: r.requested_by_email ?? w.requested_by_email ?? null,
+        // Only real provenance — never the currently selected vineyard.
         vineyard_name: r.vineyard_name ?? w.vineyard_name ?? null,
       };
     });
