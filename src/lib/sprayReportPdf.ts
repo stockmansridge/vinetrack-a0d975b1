@@ -119,6 +119,12 @@ export interface SprayReportPdfContext {
   branding?: SprayReportBranding;
   /** Correction history; defaults to whatever the canonical payload carries. */
   amendments?: SprayAmendment[];
+  /**
+   * Owner/Manager financial exports only: display-only cost with the SQL 264
+   * seasonal chemical cost applied (overlaySprayReportCost). The canonical
+   * payload is never mutated. Ignored when the payload carries no cost.
+   */
+  costOverlay?: Record<string, unknown> | null;
 }
 
 /** Space reserved at the top of every page so tables never reach the logo. */
@@ -442,7 +448,8 @@ export function buildSprayReportPdf(
   // Cost is optional and only returned by the backend to owners and managers.
   if (payload.cost && typeof payload.cost === "object") {
     section("Estimated trip cost", 140);
-    const body = Object.entries(payload.cost).map(([k, v]) => {
+    const costView = ctx.costOverlay ?? payload.cost;
+    const body = Object.entries(costView).map(([k, v]) => {
       if (v == null) return [costFieldLabel(k), NR];
       if (typeof v !== "number") return [costFieldLabel(k), String(v)];
       switch (costValueKind(k)) {
