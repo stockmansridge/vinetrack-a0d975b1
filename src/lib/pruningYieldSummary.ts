@@ -23,7 +23,6 @@ export function effectivePruningVinesPerHa(i: {
   if (i.blockVineCount && area) return { vinesPerHa: i.blockVineCount / area, source: "derived" };
   return { vinesPerHa: 0, source: "none" };
 }
-import type { _X } from "@/lib/pruningYieldSettingsQuery";
 
 export interface BlockPrunedYieldTile {
   blockId: string;
@@ -48,19 +47,13 @@ export function buildBlockPrunedYieldTiles(
         totalTonnes: null,
       };
     }
-    // vines_per_ha is nullable in the contract — derive from the block when unset.
+    // Physical override → saved vines_per_ha → block count ÷ area (when unset).
     const vinesPerHa = effectivePruningVinesPerHa({
       savedVinesPerHa: s.vinesPerHa,
       physicalVineCount: b.physicalVineCount ?? null,
       areaHa: b.areaHa ?? null,
       blockVineCount: b.vineCount ?? null,
     }).vinesPerHa;
-    const _unused =
-      s.vinesPerHa > 0
-        ? s.vinesPerHa
-        : b.vineCount && b.areaHa && b.areaHa > 0
-          ? b.vineCount / b.areaHa
-          : 0;
     const r = calculatePruningYield({
       method: s.pruneMethod,
       bunchesPerBud: s.bunchesPerBud,

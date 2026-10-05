@@ -27,6 +27,7 @@ import {
   updatePaddock,
   type LinkedCounts,
 } from "@/lib/paddockMutations";
+import { SEASON_YIELD_OVERVIEW_KEY } from "@/lib/seasonYieldQuery";
 import {
   deriveMetrics,
   parsePolygonPoints,
@@ -130,6 +131,11 @@ export default function PaddockDetailPage() {
         qc.invalidateQueries({ queryKey: ["detail", "paddocks", id] });
         qc.invalidateQueries({ queryKey: ["list", "paddocks"] });
         qc.invalidateQueries({ queryKey: ["paddocks"] });
+        // Vine-count-driven summaries and Yield (block override, rows, row
+        // overrides, spacing, geometry). Refetch once — no polling.
+        for (const k of ["dashboard-paddocks", "paddocks-list", "block-detail", "yield", "pruning-yield-settings", SEASON_YIELD_OVERVIEW_KEY]) {
+          qc.invalidateQueries({ queryKey: [k] });
+        }
         refetch();
       }}
       onDeleted={() => navigate("/setup/paddocks")}
