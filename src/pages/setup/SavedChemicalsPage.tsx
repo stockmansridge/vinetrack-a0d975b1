@@ -380,7 +380,14 @@ export default function SavedChemicalsPage() {
     switch (id) {
       case "name": return (
         <TableCell key="name">
-          <div className="font-medium leading-tight">{fmt(c.name)}</div>
+          {canEdit ? (
+            <button type="button" onClick={() => setEditing(c)} title="Edit chemical"
+              className="text-left font-medium leading-tight text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm">
+              {fmt(c.name)}
+            </button>
+          ) : (
+            <div className="font-medium leading-tight">{fmt(c.name)}</div>
+          )}
           {productLinkOf(c, revOf(c)) && (
             <a href={productLinkOf(c, revOf(c))} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline" title="Manufacturer/product page — not the official label">
               <Globe className="h-3 w-3" />Product page
