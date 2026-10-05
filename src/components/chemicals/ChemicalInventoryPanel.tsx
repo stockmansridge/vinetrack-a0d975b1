@@ -2,6 +2,7 @@
 // role: Owner/Manager everything; Supervisor purchase + history; Operator read-only.
 // Costs only for canViewChemicalInventoryCosts. Every action goes through the inventory RPCs and the
 // panel reloads the database summary afterwards — nothing is calculated here.
+import { invalidateChemicalSeasonPrices } from "@/lib/chemicalSeasonPricing";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -154,7 +155,7 @@ export type InventoryChemicalContext = { product_form?: string | null; inventory
 export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { savedChemicalId: string; savedChemical?: InventoryChemicalContext }) {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const { currentRole } = useVineyard();
+  const { currentRole, selectedVineyardId } = useVineyard();
   const canManage = canManageChemicalInventory(currentRole);
   const canBuy = canRecordChemicalPurchase(currentRole);
   const canCost = canViewChemicalInventoryCosts(currentRole);
@@ -189,6 +190,8 @@ export function ChemicalInventoryPanel({ savedChemicalId, savedChemical }: { sav
     }
     void qc.invalidateQueries({ queryKey: ["chem-inventory-history", savedChemicalId] });
     void qc.invalidateQueries({ queryKey: ["saved_chemicals"] });
+    // Purchases / opening stock feed SQL 264 seasonal prices.
+    if (kind === "purchase" || kind === "stock") void invalidateChemicalSeasonPrices(qc, selectedVineyardId);
   };
   const mut = useMutation({
     mutationFn: async (kind: "purchase" | "stock" | "finish" | "settings") => {
