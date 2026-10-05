@@ -178,9 +178,7 @@ export default function FertiliserCalculatorDialog({
   const productsQ = useProducts(vineyardId);
   const allocationsQ = useExistingAllocations(existing?.id);
 
-  const [applicationDate, setApplicationDate] = useState<string>(() =>
-    new Date().toISOString().slice(0, 10),
-  );
+  const [applicationDate, setApplicationDate] = useState<string>("");
   const [productId, setProductId] = useState<string | null>(null);
   const [productName, setProductName] = useState("");
   const [productSearch, setProductSearch] = useState("");
@@ -241,7 +239,7 @@ export default function FertiliserCalculatorDialog({
       const s = existing?.record_status as FertiliserRecordStatus;
       setStatus(existing && s ? s : "planned");
     } else {
-      setApplicationDate(new Date().toISOString().slice(0, 10));
+      setApplicationDate("");
       setProductId(null);
       setProductName("");
       setForm("solid");
@@ -316,7 +314,8 @@ export default function FertiliserCalculatorDialog({
     queryFn: () => fetchVineyardSeasonSettings(vineyardId),
   });
   const season = seasonQ.data ?? SEASON_DEFAULTS;
-  const vintage = vintageForISO(applicationDate, season.season_start_month, season.season_start_day);
+  const effectiveDate = applicationDate || new Date().toISOString().slice(0, 10);
+  const vintage = vintageForISO(effectiveDate, season.season_start_month, season.season_start_day);
   const priceQ = useQuery({
     queryKey: seasonPriceQueryKey(vineyardId, vintage ?? 0, null),
     enabled: !!vineyardId && showCosts && isSavedProduct && vintage != null && !seasonQ.isLoading,
@@ -421,7 +420,7 @@ export default function FertiliserCalculatorDialog({
         form,
         calculation_mode: mode,
         record_status: recordStatus,
-        application_date: applicationDate,
+        application_date: effectiveDate,
         block_names: selectedBlocks.map((b) => b.name),
         total_area_ha: calc.totalAreaHa,
         total_vines: calc.totalVines,
@@ -466,9 +465,9 @@ export default function FertiliserCalculatorDialog({
           status: recordStatus === "completed" ? "completed" : "planned",
           description: productName.trim(),
           notes: notes,
-          start_date: applicationDate,
-          end_date: applicationDate,
-          date: applicationDate,
+          start_date: effectiveDate,
+          end_date: effectiveDate,
+          date: effectiveDate,
           area_ha: calc.totalAreaHa,
           duration_hours:
             numOr(workerCount) > 0 && numOr(hoursPerWorker) > 0
@@ -497,7 +496,7 @@ export default function FertiliserCalculatorDialog({
             id: lineId,
             work_task_id: taskId,
             vineyard_id: vineyardId,
-            work_date: applicationDate,
+            work_date: effectiveDate,
             worker_count: numOr(workerCount),
             hours_per_worker: numOr(hoursPerWorker),
             hourly_rate: hourlyRate === "" ? null : numOr(hourlyRate),
@@ -541,7 +540,7 @@ export default function FertiliserCalculatorDialog({
 
         <div className="grid gap-4">
           {/* Product picker */}
-          <section className="rounded-lg border p-3 space-y-2">
+          <section className="rounded-lg border-2 border-border bg-card shadow-sm p-4 space-y-2">
             <div className="flex items-center gap-2 flex-wrap justify-between">
               <Label className="text-sm font-semibold">Product</Label>
               <div className="flex items-center gap-3">
@@ -559,6 +558,7 @@ export default function FertiliserCalculatorDialog({
                 No fertiliser-category products saved yet — showing all saved products.
               </div>
             )}
+            {isSavedProduct && (<>
             <Input
               placeholder="Search saved products by name…"
               value={productSearch}
@@ -597,6 +597,7 @@ export default function FertiliserCalculatorDialog({
                 );
               })}
             </div>
+            </>)}
             {isSavedProduct ? (
               <div className="rounded-md bg-muted/50 p-3 text-sm space-y-1" aria-label="Selected saved product">
                 <div className="font-medium">{productName}</div>
@@ -637,7 +638,7 @@ export default function FertiliserCalculatorDialog({
           </section>
 
           {/* Rate + date */}
-          <section className="rounded-lg border p-3 grid gap-3 sm:grid-cols-4">
+          <section className="rounded-lg border-2 border-border bg-card shadow-sm p-4 grid gap-3 sm:grid-cols-4">
             <div className="sm:col-span-2">
               <Label className="text-xs">Calculation mode</Label>
               <Select value={mode} onValueChange={(v) => setMode(v as FertiliserCalculationMode)}>
@@ -649,7 +650,7 @@ export default function FertiliserCalculatorDialog({
               </Select>
             </div>
             <div>
-              <Label className="text-xs">Application date</Label>
+              <Label className="text-xs">Application date <span className="text-muted-foreground font-normal">(optional)</span></Label>
               <Input type="date" value={applicationDate} onChange={(e) => setApplicationDate(e.target.value)} />
             </div>
             {existing && (
@@ -684,7 +685,7 @@ export default function FertiliserCalculatorDialog({
           </section>
 
           {/* Blocks */}
-          <section className="rounded-lg border p-3 space-y-2">
+          <section className="rounded-lg border-2 border-border bg-card shadow-sm p-4 space-y-2">
             <Label className="text-sm font-semibold">Blocks (optional)</Label>
             {blocks.length === 0 && <div className="text-sm text-muted-foreground">No blocks configured on this vineyard.</div>}
             <div className="divide-y">
@@ -756,7 +757,7 @@ export default function FertiliserCalculatorDialog({
           </section>
 
           {/* Results */}
-          <section className="rounded-lg border p-3 space-y-3" aria-label="Calculation results">
+          <section className="rounded-lg border-2 border-border bg-card shadow-sm p-4 space-y-3" aria-label="Calculation results">
             <Label className="text-sm font-semibold">Product requirement</Label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
               <Stat label="Total area" value={`${calc.totalAreaHa.toFixed(2)} ha`} />
@@ -828,7 +829,7 @@ export default function FertiliserCalculatorDialog({
           </section>
 
           {/* Work Task */}
-          <section className="rounded-lg border p-3 space-y-2">
+          <section className="rounded-lg border-2 border-border bg-card shadow-sm p-4 space-y-2">
             <div className="flex items-center gap-2 justify-between">
               <Label className="text-sm font-semibold">Create linked Work Task</Label>
               <Switch checked={createTask} onCheckedChange={setCreateTask} />
