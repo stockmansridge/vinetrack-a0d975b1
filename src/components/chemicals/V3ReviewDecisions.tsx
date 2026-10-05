@@ -216,10 +216,6 @@ export const V3ReviewDecisions = forwardRef<HTMLElement, {
             onChoose={() => setChooser({ issueId: String(i.issue_id) })} />
         ))}
       </div>
-      <LabelUrlEditor revisionId={revisionId} current={labelUrl ?? null} onSaved={reload} />
-      {!issues.some((i) => issueActions(i)[0].kind === "chooser") && (
-        <Button size="sm" variant="outline" onClick={() => setChooser({ issueId: null })}>Choose front label</Button>
-      )}
       <FrontLabelChooser revisionId={revisionId} issueId={chooser?.issueId ?? null} open={!!chooser}
         onClose={() => setChooser(null)} onSaved={reload} />
     </section>
