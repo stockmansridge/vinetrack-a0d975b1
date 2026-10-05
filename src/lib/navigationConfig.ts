@@ -347,18 +347,18 @@ export const ACTIVITIES: NavActivity[] = [
     icon: Droplet,
     views: [
       {
-        id: "irrigation.advisor",
-        label: "Advisor",
-        path: "/tools/irrigation",
-        keywords: ["irrigation advisor", "water", "soil", "calculator"],
-      },
-      {
         id: "irrigation.records",
         label: "Records & History",
         path: "/irrigation",
         family: ["/irrigation/history", "/irrigation/record", "/irrigation/import"],
         visible: irrigationRecords,
         keywords: ["irrigation records", "irrigation history", "watering"],
+      },
+      {
+        id: "irrigation.advisor",
+        label: "Advisor",
+        path: "/tools/irrigation",
+        keywords: ["irrigation advisor", "water", "soil", "calculator"],
       },
       {
         id: "irrigation.reports",
