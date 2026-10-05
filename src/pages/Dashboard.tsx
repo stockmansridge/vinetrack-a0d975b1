@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { deriveMetrics } from "@/lib/paddockGeometry";
+import { summaryVineCount } from "@/lib/paddockRowVines";
 import { useMemo } from "react";
 import VineyardOverviewMap from "@/components/dashboard/VineyardOverviewMap";
 import VintageOverviewSection from "@/components/dashboard/VintageOverviewSection";
@@ -90,7 +91,8 @@ export default function Dashboard() {
       if (m.areaHa > 0) mapped += 1;
       totalAreaHa += m.areaHa;
       totalRows += m.rowCount;
-      if (m.vineCount != null) totalVines += m.vineCount;
+      const vines = summaryVineCount(p, m.vineCount);
+      if (vines != null) totalVines += vines;
       else vineFromAll = false;
     }
     return {
@@ -151,7 +153,7 @@ export default function Dashboard() {
           icon={Grape}
           tone="primary"
           value={loading ? "…" : summary.totalVines > 0 ? fmt(summary.totalVines) : "—"}
-          hint={summary.vineFromAll ? "Derived from row length / vine spacing" : "Partial — some blocks missing data"}
+          hint={summary.vineFromAll ? "Uses manual vine counts where set; otherwise calculated from row length and vine spacing." : "Partial — some blocks missing data"}
         />
         <MetricCard
           label="Tractors"

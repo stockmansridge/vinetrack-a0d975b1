@@ -18,6 +18,7 @@ import {
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchOne } from "@/lib/queries";
 import { deriveMetrics, parsePolygonPoints, parseRows } from "@/lib/paddockGeometry";
+import { summaryVineCount } from "@/lib/paddockRowVines";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { fetchGrowthStageRecords } from "@/lib/growthStageRecordsQuery";
@@ -354,7 +355,7 @@ export default function BlockDetailPage() {
             <Field
               label="Vines"
               value={
-                metrics?.vineCount != null ? fmt(metrics.vineCount) : "—"
+                metrics && summaryVineCount(paddock, metrics.vineCount) != null ? fmt(summaryVineCount(paddock, metrics.vineCount)) : "—"
               }
             />
             <Field
