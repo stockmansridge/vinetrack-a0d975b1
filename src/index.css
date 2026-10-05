@@ -281,3 +281,8 @@
     padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
   }
 }
+
+/* System Admin-only pages: orange page heading so they're easy to identify. */
+.system-admin-page h1 {
+  color: hsl(var(--warning));
+}

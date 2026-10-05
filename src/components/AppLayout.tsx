@@ -233,7 +233,9 @@ export default function AppLayout() {
               <VineyardAccessGate>
                 <ActivityNavigation />
                 <PageErrorBoundary resetKey={location.pathname}>
-                  <Outlet />
+                  <div className={location.pathname.startsWith("/admin") ? "system-admin-page" : undefined}>
+                    <Outlet />
+                  </div>
                 </PageErrorBoundary>
               </VineyardAccessGate>
             </div>

@@ -9,5 +9,5 @@ export function RequireSystemAdmin() {
   const { isAdmin, loading } = useIsSystemAdmin();
   if (loading) return <div className="p-8 text-muted-foreground">Loading…</div>;
   if (!isAdmin) return <NotFound />;
-  return <Outlet />;
+  return <div className="system-admin-page"><Outlet /></div>;
 }
