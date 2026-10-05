@@ -5,6 +5,7 @@
 // source of truth for permissions.
 import { supabase } from "@/integrations/ios-supabase/client";
 import type { CostingMethod } from "@/lib/pieceRateCosting";
+import { completePayload, reopenPayload, completedDatePayload } from "@/lib/workTaskCompletion";
 
 /**
  * SQL 188 costing columns. Only emitted when the caller explicitly supplies a
