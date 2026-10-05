@@ -226,6 +226,7 @@ export default function FertiliserCalculatorDialog({
     if (src) {
       setApplicationDate(src.application_date);
       setProductId(src.product_id);
+      setManualMode(!src.product_id);
       setProductName(src.product_name);
       setForm((src.form as FertiliserForm) === "liquid" ? "liquid" : "solid");
       setMode((src.calculation_mode as FertiliserCalculationMode) === "perVine" ? "perVine" : "perHectare");
@@ -241,6 +242,7 @@ export default function FertiliserCalculatorDialog({
       setStatus(existing && s ? s : "planned");
     } else {
       setApplicationDate("");
+      setManualMode(false);
       setProductId(null);
       setProductName("");
       setForm("solid");
