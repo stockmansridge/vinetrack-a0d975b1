@@ -1,7 +1,7 @@
 // Chemical Search — the single customer-facing way to find and add a new
 // chemical. Reuses the catalogue/discovery contracts proven in the System
 // Admin Catalogue Review (search_chemical_v3_catalogue,
-// start_chemical_v3_discovery + chemical-lookup-v3, chemical_v3_add_to_vineyard).
+// start_chemical_v3_discovery_v2 + chemical-lookup-v3, chemical_v3_add_to_vineyard).
 // It contains NO admin review tools and NO opening-stock fields, and never
 // calls the older product lookup function or any V1/V2 search.
 import { useEffect, useState } from "react";
@@ -234,13 +234,13 @@ export function ChemicalSearchDialog(props: ChemicalSearchDialogProps) {
       if (res.reused) setNotice(REUSED_DISCOVERY);
     } catch (e) { setError(customerError(e, "discovery")); }
   };
-  const find = useMutation({ mutationFn: () => begin({ query: searched, countryCode, inputKind: "text", photoPath: null }) });
+  const find = useMutation({ mutationFn: () => begin({ query: searched, countryCode, inputKind: "text", photoPath: null, vineyardId: vineyardId ?? null }) });
   const photoFind = useMutation({
     mutationFn: async () => {
       if (!user || !photo) return;
       try {
         const path = await uploadV3SearchPhoto(user.id, photo);
-        await begin({ query: null, countryCode, inputKind: "photo", photoPath: path });
+        await begin({ query: null, countryCode, inputKind: "photo", photoPath: path, vineyardId: vineyardId ?? null });
       } catch (e) { setError(customerError(e, "discovery")); }
     },
   });

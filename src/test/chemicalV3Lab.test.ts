@@ -34,23 +34,23 @@ describe("Chemical Lookup V3 Lab", () => {
     expect(calls.rpc).toEqual([["search_chemical_v3_catalogue", { p_query: "Weedmaster DUO", p_country_code: "AU", p_limit: 20 }]]);
   });
   it("discovery uses the V3 start RPC then the V3 backend", async () => {
-    rpcReply.start_chemical_v3_discovery = { data: [{ job_id: "j1", reused: false, status: "queued" }], error: null };
-    const r = await v3.startV3Discovery({ query: "X", countryCode: null, inputKind: "text", photoPath: null });
-    expect(calls.rpc[0]).toEqual(["start_chemical_v3_discovery", { p_query: "X", p_country_code: null, p_input_kind: "text", p_photo_path: null }]);
+    rpcReply.start_chemical_v3_discovery_v2 = { data: [{ job_id: "j1", reused: false, status: "queued" }], error: null };
+    const r = await v3.startV3Discovery({ query: "X", countryCode: null, inputKind: "text", photoPath: null, vineyardId: "v1" });
+    expect(calls.rpc[0]).toEqual(["start_chemical_v3_discovery_v2", { p_query: "X", p_country_code: null, p_input_kind: "text", p_photo_path: null, p_vineyard_id: "v1" }]);
     expect(calls.fn[0]).toEqual(["chemical-lookup-v3", { body: { action: "start", job_id: "j1" } }]);
     expect(r.backendMissing).toBe(false);
   });
   it("reused job does not start the backend again", async () => {
-    rpcReply.start_chemical_v3_discovery = { data: { job_id: "j1", reused: true, status: "running" }, error: null };
-    const r = await v3.startV3Discovery({ query: "X", countryCode: "AU", inputKind: "text", photoPath: null });
+    rpcReply.start_chemical_v3_discovery_v2 = { data: { job_id: "j1", reused: true, status: "running" }, error: null };
+    const r = await v3.startV3Discovery({ query: "X", countryCode: "AU", inputKind: "text", photoPath: null, vineyardId: "v1" });
     expect(r.reused).toBe(true);
     expect(calls.fn).toHaveLength(0);
     expect(v3.V3_REUSED_MESSAGE).toMatch(/already started/);
   });
   it("missing backend is reported, job not failed", async () => {
-    rpcReply.start_chemical_v3_discovery = { data: { job_id: "j1", reused: false }, error: null };
+    rpcReply.start_chemical_v3_discovery_v2 = { data: { job_id: "j1", reused: false }, error: null };
     fnReply = { error: { message: "not found", context: { status: 404 } } };
-    const r = await v3.startV3Discovery({ query: "X", countryCode: "AU", inputKind: "text", photoPath: null });
+    const r = await v3.startV3Discovery({ query: "X", countryCode: "AU", inputKind: "text", photoPath: null, vineyardId: "v1" });
     expect(r.backendMissing).toBe(true);
     expect(calls.rpc.map((c) => c[0])).not.toContain("finish_refresh_job");
   });
@@ -87,9 +87,9 @@ describe("Chemical Lookup V3 Lab", () => {
     expect(v3.photoInputPath("u1", "a.PNG", "abc")).toBe("search-inputs/u1/abc.png");
     const path = await v3.uploadV3SearchPhoto("u1", new File(["x"], "p.jpg", { type: "image/jpeg" }));
     expect(path.startsWith("search-inputs/u1/")).toBe(true);
-    rpcReply.start_chemical_v3_discovery = { data: { job_id: "j2", reused: false }, error: null };
-    await v3.startV3Discovery({ query: null, countryCode: "AU", inputKind: "photo", photoPath: path });
-    expect(calls.rpc.at(-1)).toEqual(["start_chemical_v3_discovery", { p_query: null, p_country_code: "AU", p_input_kind: "photo", p_photo_path: path }]);
+    rpcReply.start_chemical_v3_discovery_v2 = { data: { job_id: "j2", reused: false }, error: null };
+    await v3.startV3Discovery({ query: null, countryCode: "AU", inputKind: "photo", photoPath: path, vineyardId: "v1" });
+    expect(calls.rpc.at(-1)).toEqual(["start_chemical_v3_discovery_v2", { p_query: null, p_country_code: "AU", p_input_kind: "photo", p_photo_path: path, p_vineyard_id: "v1" }]);
   });
   it("rates stay split by basis", () => {
     const s = v3.splitRates([{ basis: "per_ha", rate_text: "1 L" }, { basis: "per 100 L", rate_text: "100 mL" }]);

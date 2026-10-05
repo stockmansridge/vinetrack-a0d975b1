@@ -1,0 +1,29 @@
+-- 261_chemical_v3_discovery_vineyard_provenance.sql
+--
+-- DOCUMENTATION ONLY — matches the live production contract.
+-- This RPC is ALREADY DEPLOYED on the live VineTrack database (owned by Rork).
+-- Do NOT execute this file against production. It exists so repository source
+-- does not drift from what is live.
+--
+-- Contract:
+--   public.start_chemical_v3_discovery_v2(
+--     p_query        text,
+--     p_country_code text,
+--     p_input_kind   text,   -- 'text' | 'photo'
+--     p_photo_path   text,
+--     p_vineyard_id  uuid    -- selected vineyard at start time; NULL allowed
+--   ) RETURNS TABLE (job_id uuid, reused boolean, status text)
+--
+-- Behaviour (as live):
+--   * Same dedupe / reuse semantics as the legacy start_chemical_v3_discovery().
+--   * Records the requesting user against the job in
+--     public.chemical_v3_job_requests, keyed by (job_id, user_id). On a reused
+--     job the user's FIRST recorded vineyard for that job is preserved.
+--   * Historical requests without a vineyard remain NULL and are not backfilled.
+--
+-- The legacy public.start_chemical_v3_discovery(text, text, text, text) is
+-- intentionally left unchanged by this file.
+--
+-- Portal usage: src/lib/chemicalV3.ts startV3Discovery() always calls the V2
+-- RPC with p_vineyard_id and never falls back to V1. Clients never UPDATE
+-- chemical_v3_job_requests.vineyard_id directly.
