@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from "vitest";
 
 const insertSpy = vi.fn(async (_row: any) => ({ error: null }));
-vi.mock("@/integrations/supabase/client", () => ({
+vi.mock("@/integrations/ios-supabase/client", () => ({
   supabase: {
     auth: { getUser: async () => ({ data: { user: { id: "u1" } } }) },
     from: () => ({ insert: insertSpy }),
