@@ -17,6 +17,8 @@ import {
 import { toast } from "@/hooks/use-toast";
 import {
   completeWorkTask,
+  fetchWorkTaskById,
+  WorkTaskCompletionConflictError,
   reopenWorkTask,
   setWorkTaskCompletedDate,
   type WorkTask,
@@ -49,8 +51,15 @@ export function WorkTaskCompletionSection({ task, userId, onSaved, fmtDate, time
   const [editDate, setEditDate] = useState(shownCompleted ?? "");
   const uid = userId ?? null;
 
-  const fail = (e: any) =>
+  const fail = async (e: any) => {
     toast({ title: "Save failed", description: String(e?.message ?? e), variant: "destructive" });
+    if (e instanceof WorkTaskCompletionConflictError) {
+      // Adopt the newer row from the other device instead of overwriting it.
+      const fresh = await fetchWorkTaskById(task.id).catch(() => null);
+      setDialogOpen(false);
+      onSaved(fresh ?? undefined);
+    }
+  };
 
   const complete = useMutation({
     mutationFn: () => completeWorkTask(task, pickDate, uid),
