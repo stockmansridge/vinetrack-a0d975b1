@@ -97,7 +97,7 @@ export default function ChemicalInventoryPage() {
   return (
     <div className="space-y-5">
       <div className="min-h-14 space-y-1">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold"><Package className="h-6 w-6 text-primary" />Chemical Inventory</h1>
+        <h1 className="text-2xl font-semibold">Chemical Inventory</h1>
         <p className="text-sm text-muted-foreground">Track chemical stock, purchases and low-stock levels for this vineyard.</p>
       </div>
       <ChemicalSectionNav active="inventory" />
