@@ -20,21 +20,31 @@ describe("shared Chemicals nav", () => {
     expect(read("src/pages/setup/ChemicalPurchasePage.tsx")).toContain('<ChemicalSectionNav active="purchases"');
     expect(read("src/App.tsx")).toContain('path="/setup/chemicals/purchases"');
   });
-  it("4, 6, 7. order and links", () => {
+  it("4, 6, 7. order and links (destinations only, strong active state)", () => {
     render(<MemoryRouter><ChemicalSectionNav active="inventory" onAddChemical={() => {}} /></MemoryRouter>);
+    expect(screen.getByText("Chemical tools")).toBeTruthy();
     const nav = screen.getByTestId("chemical-section-nav");
     const labels = Array.from(nav.querySelectorAll("a,button")).map((e) => e.textContent);
     expect(labels).toEqual([...CHEMICAL_NAV_ITEMS]);
-    expect(screen.getByText("Chemical Inventory").closest("a")!.getAttribute("href")).toBe("/setup/chemicals/inventory");
-    expect(screen.getByText("Chemical Inventory").closest("a")!.getAttribute("aria-current")).toBe("page");
+    expect(nav.textContent).not.toContain("Add Chemical");
+    const inv = screen.getByText("Chemical Inventory").closest("a")!;
+    expect(inv.getAttribute("href")).toBe("/setup/chemicals/inventory");
+    expect(inv.getAttribute("aria-current")).toBe("page");
+    expect(inv.className).toContain("bg-primary");
+    expect(inv.className).toContain("text-primary-foreground");
     expect(screen.getByText("Chemical Purchase").closest("a")!.getAttribute("href")).toBe("/setup/chemicals/purchases");
   });
-  it("5. Add Chemical opens the existing Chemical Search", () => {
+  it("5. Add Chemical action still opens the existing Chemical Search, outside the nav", () => {
     const add = vi.fn();
     render(<MemoryRouter><ChemicalSectionNav active="chemicals" onAddChemical={add} /></MemoryRouter>);
     fireEvent.click(screen.getByText("Add Chemical"));
     expect(add).toHaveBeenCalled();
     expect(read("src/pages/setup/SavedChemicalsPage.tsx")).toContain("onAddChemical={() => setSearchOpen(true)}");
+    expect(read("src/pages/setup/SavedChemicalsPage.tsx")).toContain("ADD_CHEMICAL_PARAM");
+  });
+  it("5b. no Add Chemical on pages without the action", () => {
+    render(<MemoryRouter><ChemicalSectionNav active="purchases" /></MemoryRouter>);
+    expect(screen.queryByText("Add Chemical")).toBeNull();
   });
   it("8. no duplicate header buttons", () => {
     const page = read("src/pages/setup/SavedChemicalsPage.tsx");
