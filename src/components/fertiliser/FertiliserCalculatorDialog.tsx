@@ -34,6 +34,10 @@ import {
 } from "@/components/ui/select";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import {
+  actualVineCount, assumedFullVineCount, resolveVineBasis, VINE_COUNT_BASIS_PERSISTED,
+  type ActualVineSource, type AssumedFullUnavailable, type DialogVineBasis,
+} from "@/lib/fertiliserVineBasis";
+import {
   isFertiliserProduct,
   PRODUCT_CATEGORY_LABEL,
   compareInventory,
@@ -71,6 +75,10 @@ interface PaddockOption {
   name: string;
   areaHa: number;
   vineCount: number;
+  actualVineCount: number | null;
+  actualVineCountSource: ActualVineSource;
+  assumedFullVineCount: number | null;
+  assumedFullReason: AssumedFullUnavailable | null;
 }
 
 interface Props {
@@ -201,6 +209,8 @@ export default function FertiliserCalculatorDialog({
   const [status, setStatus] = useState<FertiliserRecordStatus>("planned");
   const [savingStatus, setSavingStatus] = useState<FertiliserRecordStatus>("planned");
   const [blocks, setBlocks] = useState<BlockState[]>([]);
+  const [vineBasis, setVineBasis] = useState<DialogVineBasis>("actual");
+  const [snapshotIds, setSnapshotIds] = useState<Set<string>>(new Set());
 
   // Optional Work Task creation.
   const [createTask, setCreateTask] = useState(false);
@@ -277,6 +287,15 @@ export default function FertiliserCalculatorDialog({
   useEffect(() => {
     if (!open) return;
     const byPaddock = new Map((sourceAllocations ?? []).map((a) => [a.paddock_id, a]));
+    // Stored records keep their snapshot vine counts until a basis is chosen.
+    const src: any = existing ?? duplicateFrom?.record ?? null;
+    const storedBasis = src?.vine_count_basis;
+    setSnapshotIds(new Set(byPaddock.keys()));
+    setVineBasis(
+      storedBasis === "actual" || storedBasis === "assumed_full"
+        ? (byPaddock.size ? "snapshot" : storedBasis)
+        : byPaddock.size ? "snapshot" : "actual",
+    );
     setBlocks(
       paddocks.map((p) => {
         const alloc = byPaddock.get(p.id);
@@ -324,7 +343,20 @@ export default function FertiliserCalculatorDialog({
   const selectedProduct = (productsQ.data ?? []).find((p) => p.id === productId) ?? null;
   const isSavedProduct = !!productId;
 
-  const selectedBlocks = useMemo(() => blocks.filter((b) => b.selected), [blocks]);
+  const checkedBlocks = useMemo(() => blocks.filter((b) => b.selected), [blocks]);
+  const vineResolution = useMemo(
+    () => resolveVineBasis(checkedBlocks, mode, vineBasis, snapshotIds),
+    [checkedBlocks, mode, vineBasis, snapshotIds],
+  );
+  // Blocks as they drive the calculation (Per Vine counts come from the basis).
+  const selectedBlocks = useMemo(
+    () => vineResolution.blocks.map((r) => ({ ...r.block, vineCount: r.vineCount })),
+    [vineResolution],
+  );
+  const vineSourceById = useMemo(
+    () => new Map(vineResolution.blocks.map((r) => [r.block.id, r.sourceLabel])),
+    [vineResolution],
+  );
 
   // Saved-product cost: SQL 264 season purchase price (Owner/Manager only).
   const seasonQ = useQuery({
@@ -427,7 +459,8 @@ export default function FertiliserCalculatorDialog({
   const canSubmit =
     productName.trim().length > 0 &&
     hasQuantity &&
-    rateCanon > 0;
+    rateCanon > 0 &&
+    vineResolution.issues.length === 0;
 
   const saveMut = useMutation({
     mutationFn: async (recordStatus: FertiliserRecordStatus) => {
