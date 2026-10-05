@@ -327,14 +327,6 @@ export function ChemicalIntelligenceDetail({ chem }: { chem: ChemicalIntelligenc
           <Field label="Default rate" value={dash(chem.commercial.preferredRatePerHa)} />
           <Field label="Unit" value={dash(chem.commercial.unit)} />
           <Field label="Pack size" value={dash(chem.commercial.packSize)} />
-          <Field
-            label="Cost / unit"
-            value={
-              chem.commercial.costPerUnit == null
-                ? "—"
-                : `${chem.commercial.currency} ${chem.commercial.costPerUnit}`
-            }
-          />
           <Field label="Supplier" value={dash(chem.commercial.supplier)} />
           <Field label="Notes" value={dash(chem.commercial.notes)} />
         </div>
