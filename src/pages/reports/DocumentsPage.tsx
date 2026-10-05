@@ -1,6 +1,7 @@
 // Documents / Exports Library — central launcher for portal-generated
 // reports. Designed so a future Supabase Storage-backed document table can
 // be merged into the same `LibraryItem[]` list with minimal changes.
+import { useCanSeeCosts } from "@/lib/permissions";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
@@ -114,6 +115,7 @@ export default function DocumentsPage() {
 
   const { data: vineyardLogoUrl } = useVineyardLogo();
   const formatters = useRegionFormatters();
+  const canSeeCostsForExport = useCanSeeCosts();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | ReportType>("all");
   const [sourceFilter, setSourceFilter] = useState<"all" | SourceKind>("all");
@@ -190,6 +192,7 @@ export default function DocumentsPage() {
               tripId: t.id,
               formatters,
               pathPoints: t.path_points,
+              canSeeCosts: canSeeCostsForExport,
             });
             if (!res.ok) throw new Error(res.error ?? SPRAY_RECORD_UNAVAILABLE_MESSAGE);
             return;

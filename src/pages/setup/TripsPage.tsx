@@ -76,7 +76,8 @@ import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuer
 import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
 import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
 import { fetchSprayRecordsForVineyard } from "@/lib/sprayRecordsQuery";
-import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
+import { useTripChemicalCosting } from "@/lib/useTripChemicalCosting";
+import { formatTripChemicalCost } from "@/lib/chemicalCostResolver";
 import { fetchSavedInputsForVineyard } from "@/lib/savedInputsQuery";
 import { fetchYieldReportsForVineyard } from "@/lib/yieldReportsQuery";
 import { computeTripCost, fmtCurrency, fmtHa, fmtHours, fmtTonnes, type TractorLite } from "@/lib/tripCosting";
@@ -745,11 +746,8 @@ function TripSheet({
     enabled: costEnabled,
     queryFn: () => fetchList<TractorLite>("tractors", vineyardId!),
   });
-  const { data: costSavedChemicals } = useQuery({
-    queryKey: ["cost-saved-chemicals", vineyardId],
-    enabled: costEnabled,
-    queryFn: () => fetchSavedChemicalsForVineyard(vineyardId!),
-  });
+  const chemCostTrips = useMemo(() => (trip && costEnabled ? [trip] : []), [trip, costEnabled]);
+  const chemCosting = useTripChemicalCosting(vineyardId, chemCostTrips, costSpray?.records ?? []);
   const { data: costSavedInputs } = useQuery({
     queryKey: ["cost-saved-inputs", vineyardId],
     enabled: costEnabled,
@@ -832,12 +830,12 @@ function TripSheet({
       members: costMembers ?? [],
       fuelPurchases: costFuel ?? [],
       sprayRecords: costSpray?.records ?? [],
-      savedChemicals: costSavedChemicals?.chemicals ?? [],
+      chemicalPricing: chemCosting.contextFor(trip),
       savedInputs: costSavedInputs?.inputs ?? [],
       paddocks: costPaddocks ?? [],
       historicalYields: costYields?.historical ?? [],
     });
-  }, [trip, canSeeCosts, costTractors, costCategories, costMembers, costFuel, costSpray, costSavedChemicals, costSavedInputs, costPaddocks, costYields]);
+  }, [trip, canSeeCosts, costTractors, costCategories, costMembers, costFuel, costSpray, chemCosting, costSavedInputs, costPaddocks, costYields]);
 
   // Resolve block names from paddock_ids jsonb (if present) or scalar paddock_id
   const blockNames: string[] = (() => {
@@ -918,6 +916,7 @@ function TripSheet({
                       tripId: trip.id,
                       formatters,
                       pathPoints: trip.path_points,
+                      canSeeCosts,
                     });
                     if (!res.ok) {
                       toast({
@@ -1129,7 +1128,7 @@ function TripSheet({
                 )}
                 <Field
                   label={`Chemicals${cost.chemicals.lineCount ? ` (${cost.chemicals.lineCount} line${cost.chemicals.lineCount === 1 ? "" : "s"})` : ""}`}
-                  value={cost.chemicals.cost != null ? fmtCurrency(cost.chemicals.cost) : "—"}
+                  value={formatTripChemicalCost(cost.chemicals, fmtCurrency)}
                 />
                 {cost.inputs.lineCount > 0 && (
                   <Field

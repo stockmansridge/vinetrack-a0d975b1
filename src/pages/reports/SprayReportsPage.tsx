@@ -40,7 +40,7 @@ import { fetchTripsForVineyard } from "@/lib/tripsQuery";
 import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuery";
 import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
 import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
-import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
+import { useTripChemicalCosting } from "@/lib/useTripChemicalCosting";
 import { fetchSavedInputsForVineyard } from "@/lib/savedInputsQuery";
 import { fetchYieldReportsForVineyard } from "@/lib/yieldReportsQuery";
 import { useVintageFilter } from "@/hooks/useVintageFilter";
@@ -145,11 +145,11 @@ export default function SprayReportsPage() {
     enabled: costEnabled,
     queryFn: () => fetchFuelPurchasesForVineyard(selectedVineyardId!),
   });
-  const { data: costSavedChemicals } = useQuery({
-    queryKey: ["spray-cost-saved-chemicals", selectedVineyardId],
-    enabled: costEnabled,
-    queryFn: () => fetchSavedChemicalsForVineyard(selectedVineyardId!),
-  });
+  const chemCostTrips = useMemo(() => {
+    const t = selectedRecord?.trip_id ? (costTrips?.trips ?? []).find((x) => x.id === selectedRecord.trip_id) : null;
+    return t ? [t] : [];
+  }, [selectedRecord?.trip_id, costTrips]);
+  const chemCosting = useTripChemicalCosting(costEnabled ? selectedVineyardId : null, chemCostTrips, recordsResult?.records ?? []);
   const { data: costSavedInputs } = useQuery({
     queryKey: ["spray-cost-saved-inputs", selectedVineyardId],
     enabled: costEnabled,
@@ -197,6 +197,7 @@ export default function SprayReportsPage() {
           tripId: selectedRecord.trip_id,
           formatters,
           pathPoints: trip?.path_points,
+          canSeeCosts,
         });
         if (!res.ok) {
           toast({
@@ -223,7 +224,7 @@ export default function SprayReportsPage() {
             members: costMembers ?? [],
             fuelPurchases: costFuel ?? [],
             sprayRecords: recordsResult?.records ?? [],
-            savedChemicals: costSavedChemicals?.chemicals ?? [],
+            chemicalPricing: chemCosting.contextFor(trip),
             savedInputs: costSavedInputs?.inputs ?? [],
             paddocks: (paddocks ?? []) as any,
             historicalYields: costYields?.historical ?? [],

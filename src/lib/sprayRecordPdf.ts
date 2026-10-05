@@ -1,3 +1,4 @@
+import { formatTripChemicalCost } from "@/lib/chemicalCostResolver";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { SprayRecord } from "./sprayRecordsQuery";
@@ -244,7 +245,7 @@ export function exportSprayRecordPdf(
       ["Active hours", c.activeHours != null ? `${c.activeHours.toFixed(2)} h` : NR],
       [labourLabel, labourValue],
       ["Fuel", fuelValue],
-      [chemLabel, c.chemicals.cost != null ? fmt.currency(c.chemicals.cost) : NR],
+      [chemLabel, formatTripChemicalCost(c.chemicals, (n) => fmt.currency(n), NR)],
     ];
     if (c.inputs.lineCount > 0) {
       body.push([

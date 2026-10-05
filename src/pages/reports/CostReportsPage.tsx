@@ -21,6 +21,14 @@ import {
   type TripCostAllocation,
 } from "@/lib/tripCostAllocationsQuery";
 import { usePruningActivity } from "@/lib/pruningActivityQuery";
+import { fetchSprayRecordsForVineyard, type SprayRecord } from "@/lib/sprayRecordsQuery";
+import { useChemicalSeasonPrices } from "@/lib/chemicalSeasonPricing";
+import { fetchTankActualsForTrips, tankActualsQueryKey } from "@/lib/sprayTankActualsQuery";
+import {
+  overlayAllocationsWithChemicalCost,
+  resolveTripChemicalCost,
+  type ChemicalCostResult,
+} from "@/lib/chemicalCostResolver";
 import {
   buildUnifiedCostDataset,
   type UnifiedCostRow,
@@ -188,6 +196,64 @@ export default function CostReportsPage() {
     enabled: !!selectedVineyardId && canSeeCosts,
   });
 
+  // ---- Reporting-time chemical overlay (SQL 264, p_as_of = null) ----------
+  // Stored allocation rows are never rewritten. Chemical cost is resolved once
+  // per trip (complete Tank Actuals, else planned quantities) and distributed
+  // across that trip's allocations by area before ANY aggregation, so every
+  // tab, card, CSV and PDF reads the same overlaid dataset.
+  const { data: overlaySpray, isLoading: sprayLoading } = useQuery({
+    queryKey: ["cost-spray", selectedVineyardId],
+    enabled: !!selectedVineyardId && canSeeCosts,
+    queryFn: () => fetchSprayRecordsForVineyard(selectedVineyardId!),
+  });
+  const sprayByTrip = useMemo(() => {
+    const m = new Map<string, SprayRecord[]>();
+    for (const r of overlaySpray?.records ?? []) {
+      if (!r.trip_id) continue;
+      const l = m.get(r.trip_id) ?? [];
+      l.push(r);
+      m.set(r.trip_id, l);
+    }
+    return m;
+  }, [overlaySpray]);
+  const overlayTripIds = useMemo(
+    () => Array.from(new Set(tripRows.map((r) => r.trip_id).filter((id): id is string => !!id && sprayByTrip.has(id)))),
+    [tripRows, sprayByTrip],
+  );
+  const overlayVintages = useMemo(
+    () =>
+      Array.from(new Set(
+        tripRows
+          .filter((r) => r.trip_id && sprayByTrip.has(r.trip_id) && r.season_year != null)
+          .map((r) => r.season_year as number),
+      )),
+    [tripRows, sprayByTrip],
+  );
+  const seasonPrices = useChemicalSeasonPrices(selectedVineyardId, overlayVintages, { asOf: null });
+  const { data: tankActuals, isLoading: actualsLoading } = useQuery({
+    queryKey: tankActualsQueryKey(selectedVineyardId, overlayTripIds),
+    enabled: !!selectedVineyardId && canSeeCosts && overlayTripIds.length > 0,
+    queryFn: () => fetchTankActualsForTrips(overlayTripIds),
+  });
+  const overlayLoading = sprayLoading || seasonPrices.isLoading || (overlayTripIds.length > 0 && actualsLoading);
+  const overlaidTripRows = useMemo(() => {
+    // Never show stored chemical values while the overlay is still loading.
+    if (overlayLoading) return [];
+    const perTrip = new Map<string, ChemicalCostResult>();
+    for (const tripId of overlayTripIds) {
+      const vintage = tripRows.find((r) => r.trip_id === tripId && r.season_year != null)?.season_year ?? null;
+      perTrip.set(
+        tripId,
+        resolveTripChemicalCost({
+          sprayRecords: sprayByTrip.get(tripId) ?? [],
+          tankActualRows: tankActuals?.byTrip.get(tripId) ?? [],
+          prices: vintage != null ? seasonPrices.byVintage.get(vintage) ?? null : null,
+        }),
+      );
+    }
+    return overlayAllocationsWithChemicalCost(tripRows, perTrip);
+  }, [overlayLoading, tripRows, overlayTripIds, sprayByTrip, tankActuals, seasonPrices.byVintage]);
+
   // Pruning activity labour is an operational cost recorded outside field
   // trips. It is included through its reconciled per-block allocations.
   const { data: pruningRows = [] } = usePruningActivity(
@@ -198,10 +264,10 @@ export default function CostReportsPage() {
     () =>
       buildUnifiedCostDataset({
         vineyardId: selectedVineyardId ?? "",
-        tripAllocations: tripRows,
+        tripAllocations: overlaidTripRows,
         pruningRows,
       }),
-    [selectedVineyardId, tripRows, pruningRows],
+    [selectedVineyardId, overlaidTripRows, pruningRows],
   );
 
   // Adapter: the tab/aggregation pipeline below consumes the allocation shape.
@@ -1139,10 +1205,10 @@ export default function CostReportsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading && (
+                {(isLoading || overlayLoading) && (
                   <TableRow><TableCell colSpan={visibleCostOrder.length} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
                 )}
-                {!isLoading && filteredSorted.length === 0 && (
+                {!isLoading && !overlayLoading && filteredSorted.length === 0 && (
                   <TableRow><TableCell colSpan={visibleCostOrder.length} className="text-center text-muted-foreground py-8">
                     No cost allocations match these filters.
                   </TableCell></TableRow>

@@ -2,6 +2,7 @@
 // Owner/Manager/Supervisor (canRecordChemicalPurchase on the selected vineyard role). Writes go through
 // chemical_inventory_record_purchase_v2 with container count/size/unit; the
 // backend calculates the stored quantity and unit cost.
+import { invalidateChemicalSeasonPrices } from "@/lib/chemicalSeasonPricing";
 import { useEffect, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
@@ -81,7 +82,11 @@ export default function ChemicalPurchasePage() {
       const h = await fetchPurchaseHistory(chemId).catch(() => undefined);
       if (h) qc.setQueryData(["chem-inventory-history", chemId], h);
     },
-    onSuccess: () => { toast({ title: "Purchase recorded" }); setErr(null); pick(chemId); },
+    onSuccess: () => {
+      toast({ title: "Purchase recorded" }); setErr(null); pick(chemId);
+      // SQL 264 seasonal prices changed: refresh planning, Cost Reports and exports.
+      void invalidateChemicalSeasonPrices(qc, selectedVineyardId);
+    },
     onError: (e: any) => setErr(e?.message ?? "The backend refused this change."),
   });
 

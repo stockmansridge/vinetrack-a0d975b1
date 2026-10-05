@@ -1,3 +1,4 @@
+import { useCanSeeCosts } from "@/lib/permissions";
 import { ManualSprayEntryButton } from "@/components/spray/ManualSprayEntryButton";
 import { readRecordChemistry } from "@/lib/sprayRecordChemistry";
 import { useMemo, useState } from "react";
@@ -342,6 +343,7 @@ function SprayRecordSheet({
   const { toast } = useToast();
   const navigate = useNavigate();
   const canManageManual = useCanEnterManualSpray();
+  const canSeeCostsForExport = useCanSeeCosts();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const resolvedTractor = record ? resolveSprayTractorName(record, lookups) : null;
   const resolvedEquipment = record ? resolveSprayEquipmentName(record, lookups) : null;
@@ -392,6 +394,7 @@ function SprayRecordSheet({
                     const res = await downloadSprayReport({
                       tripId: record.trip_id,
                       formatters,
+                      canSeeCosts: canSeeCostsForExport,
                     });
                     if (!res.ok) {
                       toast({

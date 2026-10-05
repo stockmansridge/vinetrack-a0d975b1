@@ -74,7 +74,9 @@ export function bindChemicalToLine(
     productName: chem?.name ?? null,
     unit: chem?.commercial.unit ?? null,
     intelligence: chem,
-    costPerUnit: chem?.commercial.costPerUnit ?? null,
+    // Saved Chemical editor pricing is never stamped onto a new spray line:
+    // chemical cost comes from SQL 264 seasonal purchase pricing.
+    costPerUnit: null,
   });
   return {
     ...fresh,

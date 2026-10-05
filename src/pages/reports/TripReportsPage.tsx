@@ -33,7 +33,7 @@ import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuer
 import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
 import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
 import { fetchSprayRecordsForVineyard } from "@/lib/sprayRecordsQuery";
-import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
+import { useTripChemicalCosting } from "@/lib/useTripChemicalCosting";
 import { fetchSavedInputsForVineyard } from "@/lib/savedInputsQuery";
 import { fetchYieldReportsForVineyard } from "@/lib/yieldReportsQuery";
 import { fetchAllVineyardMachines, resolveMachineForRecord, type VineyardMachine } from "@/lib/vineyardMachinesQuery";
@@ -220,11 +220,7 @@ export default function TripReportsPage() {
       tripMachinesById,
       tripTractorsById,
     );
-  const { data: costSavedChemicals } = useQuery({
-    queryKey: ["cost-saved-chemicals", selectedVineyardId],
-    enabled: costEnabled,
-    queryFn: () => fetchSavedChemicalsForVineyard(selectedVineyardId!),
-  });
+  const chemCosting = useTripChemicalCosting(costEnabled ? selectedVineyardId : null, costEnabled ? trips : [], costSpray?.records ?? []);
   const { data: costSavedInputs } = useQuery({
     queryKey: ["cost-saved-inputs", selectedVineyardId],
     enabled: costEnabled,
@@ -246,7 +242,7 @@ export default function TripReportsPage() {
       members: costMembers ?? [],
       fuelPurchases: costFuel ?? [],
       sprayRecords: costSpray?.records ?? [],
-      savedChemicals: costSavedChemicals?.chemicals ?? [],
+      chemicalPricing: chemCosting.contextFor(t),
       savedInputs: costSavedInputs?.inputs ?? [],
       paddocks,
       historicalYields: costYields?.historical ?? [],
@@ -322,6 +318,7 @@ export default function TripReportsPage() {
           tripId: t.id,
           formatters,
           pathPoints: t.path_points,
+          canSeeCosts,
         });
         if (!res.ok) {
           toast({

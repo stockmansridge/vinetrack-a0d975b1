@@ -17,13 +17,13 @@
 //     2) vineyard_members.worker_type_id (for trips.operator_user_id)
 //   fuel = active_hours * tractor.fuel_usage_l_per_hour * weighted_cost_per_litre
 //   weighted_cost_per_litre = sum(total_cost) / sum(volume_litres)
-//   chemicals = sum over linked spray_records.tanks[*].costPerUnit * amount
+//   chemicals = SQL 264 seasonal weighted purchase price × quantity
+//               (complete Tank Actuals, else planned) — chemicalCostResolver.ts
 //
 // Missing data is collected as warnings instead of throwing.
 import type { Trip } from "@/lib/tripsQuery";
 import type { OperatorCategory } from "@/lib/operatorCategoriesQuery";
 import type { FuelPurchase } from "@/lib/fuelPurchasesQuery";
-import { normaliseTanks } from "./sprayRecordChemistry";
 import type { SprayRecord } from "@/lib/sprayRecordsQuery";
 import type { VineyardMemberRow } from "@/lib/teamMembersQuery";
 import type { SavedChemical } from "@/lib/savedChemicalsQuery";
@@ -31,25 +31,23 @@ import type { SavedInput } from "@/lib/savedInputsQuery";
 import type { HistoricalYieldRecord } from "@/lib/yieldReportsQuery";
 import { parsePolygonPoints, polygonAreaHectares } from "@/lib/paddockGeometry";
 
-/** Subset of saved_chemicals used for cost fallback resolution. */
+/**
+ * @deprecated Compatibility type only. Saved Chemical editor pricing is NOT a
+ * chemical cost source; SQL 264 seasonal purchase pricing is the authority.
+ */
 export type SavedChemicalLite = Pick<SavedChemical, "id" | "name" | "purchase">;
 
 /** Subset of saved_inputs used for cost fallback resolution. */
 export type SavedInputLite = Pick<SavedInput, "id" | "name" | "cost_per_unit">;
 
 import { computeFuelEstimate } from "@/lib/fuelEstimate";
-
-/** Pull a cost-per-base-unit out of saved_chemicals.purchase JSON. */
-export function savedChemicalCostPerUnit(c: SavedChemicalLite | null | undefined): number | null {
-  const p: any = c?.purchase;
-  if (!p) return null;
-  const candidates = [p.costPerBaseUnit, p.cost_per_base_unit, p.costPerUnit, p.cost_per_unit];
-  for (const v of candidates) {
-    const n = Number(v);
-    if (isFinite(n) && n > 0) return n;
-  }
-  return null;
-}
+import type { SeasonPriceMap } from "@/lib/chemicalSeasonPricing";
+import {
+  resolveTripChemicalCost,
+  type ChemicalCostStatus,
+  type ChemicalPricingBasis,
+  type ChemicalQuantityBasis,
+} from "@/lib/chemicalCostResolver";
 
 export interface TractorLite {
   id: string;
@@ -80,7 +78,18 @@ export interface TripCostBreakdown {
     rateMissing: boolean;
     warnings: string[];
   };
-  chemicals: { cost: number | null; lineCount: number; missingCostLines: number };
+  chemicals: {
+    /** Defensible SQL 264 chemical cost (partial allowed); null when unavailable. */
+    cost: number | null;
+    lineCount: number;
+    missingCostLines: number;
+    resolvedLines: number;
+    status: ChemicalCostStatus;
+    quantityBasis: ChemicalQuantityBasis | null;
+    pricingBases: ChemicalPricingBasis[];
+    currency: string | null;
+    warnings: string[];
+  };
   inputs: { cost: number | null; lineCount: number; missingCostLines: number };
   total: number | null;
   /** Treated hectares resolved from linked paddock polygons. null when unavailable. */
@@ -128,74 +137,6 @@ export function weightedFuelCostPerLitre(fuel: FuelPurchase[]): number | null {
     }
   }
   return totalLitres > 0 ? totalCost / totalLitres : null;
-}
-
-function chemicalCostFromTanks(
-  tanks: any,
-  savedChemicals: SavedChemicalLite[] = [],
-): { cost: number; lines: number; missing: number } {
-  if (!tanks) return { cost: 0, lines: 0, missing: 0 };
-  // tanks may be an array of tanks, each with `chemicals` / `chemicalLines`,
-  // OR a flat array of chemical lines, OR a single tank object.
-  // P10 — `tanks` may also arrive as the `{ tanks: [...] }` envelope; treating
-  // that envelope as a single tank silently costed the record at zero.
-  const arr = normaliseTanks(tanks);
-  let cost = 0;
-  let lines = 0;
-  let missing = 0;
-  const byId = new Map(savedChemicals.map((c) => [c.id, c] as const));
-  const byName = new Map(
-    savedChemicals
-      .filter((c) => c.name)
-      .map((c) => [String(c.name).trim().toLowerCase(), c] as const),
-  );
-  const resolveCpu = (line: any): number | null => {
-    // 1) Snapshot on the line itself (incl. zero treated as genuine 0).
-    const raw = line?.costPerUnit ?? line?.cost_per_unit;
-    if (raw != null && raw !== "") {
-      const n = Number(raw);
-      if (isFinite(n) && n >= 0) return n;
-    }
-    // 2) savedChemicalId lookup.
-    const sid = line?.savedChemicalId ?? line?.saved_chemical_id ?? line?.chemical_id;
-    if (sid) {
-      const cpu = savedChemicalCostPerUnit(byId.get(String(sid)));
-      if (cpu != null) return cpu;
-    }
-    // 3) Case-insensitive name match fallback.
-    const nm = (line?.name ?? line?.chemical_name ?? "").toString().trim().toLowerCase();
-    if (nm) {
-      const cpu = savedChemicalCostPerUnit(byName.get(nm));
-      if (cpu != null) return cpu;
-    }
-    return null;
-  };
-  const visitLine = (line: any) => {
-    lines++;
-    const cpu = resolveCpu(line);
-    const amount = Number(
-      line?.amount ?? line?.totalAmount ?? line?.total_amount ?? line?.quantity ?? line?.qty,
-    );
-    if (cpu != null && isFinite(amount) && amount > 0) {
-      cost += cpu * amount;
-    } else {
-      missing++;
-    }
-  };
-  for (const item of arr) {
-    if (!item) continue;
-    const innerLines = item.chemicals ?? item.chemicalLines ?? item.chemical_lines;
-    if (Array.isArray(innerLines)) {
-      innerLines.forEach(visitLine);
-    } else if (
-      item.costPerUnit != null || item.cost_per_unit != null ||
-      item.savedChemicalId != null || item.saved_chemical_id != null ||
-      item.chemical_id != null || item.name != null
-    ) {
-      visitLine(item);
-    }
-  }
-  return { cost, lines, missing };
 }
 
 /**
@@ -270,8 +211,13 @@ export interface TripCostInputs {
   members: Pick<VineyardMemberRow, "user_id" | "worker_type_id">[];
   fuelPurchases: FuelPurchase[];
   sprayRecords: Pick<SprayRecord, "trip_id" | "tanks">[];
-  /** Optional saved-chemical library for cost fallback resolution. */
+  /** @deprecated Ignored — Saved Chemical pricing is never a cost source. */
   savedChemicals?: SavedChemicalLite[];
+  /**
+   * SQL 264 final prices for the trip's vintage (null = not loaded / no
+   * permission → chemical cost unavailable), plus the trip's Tank Actual rows.
+   */
+  chemicalPricing?: { prices: SeasonPriceMap | null; tankActualRows?: any[] } | null;
   /** Optional saved-input library for seed/fertiliser cost resolution. */
   savedInputs?: SavedInputLite[];
   /** Vineyard paddocks (id + polygon_points) for treated-area resolution. */
@@ -423,21 +369,15 @@ export function computeTripCost(inp: TripCostInputs): TripCostBreakdown {
   const fuelCost = fuelEst.cost;
   for (const w of fuelEst.warnings) warnings.push(w);
 
-  // Chemicals — sum across spray_records linked by trip_id.
-  let chemCost = 0;
-  let chemLines = 0;
-  let chemMissing = 0;
+  // Chemicals — SQL 264 seasonal purchase price × actual/planned quantity.
   const linked = inp.sprayRecords.filter((r) => r.trip_id === inp.trip.id);
-  for (const rec of linked) {
-    const r = chemicalCostFromTanks(rec.tanks, inp.savedChemicals ?? []);
-    chemCost += r.cost;
-    chemLines += r.lines;
-    chemMissing += r.missing;
-  }
-  const chemCostFinal = chemLines === 0 || chemMissing > 0 ? null : chemCost;
-  if (chemMissing > 0) {
-    warnings.push("Some chemicals are missing a cost per unit.");
-  }
+  const chem = resolveTripChemicalCost({
+    sprayRecords: linked,
+    tankActualRows: inp.chemicalPricing?.tankActualRows ?? [],
+    prices: inp.chemicalPricing?.prices ?? null,
+  });
+  const chemCostFinal = chem.status === "no_chemicals" ? null : chem.cost;
+  for (const w of chem.warnings) warnings.push(w);
 
   // Seed / inputs — parsed from trip.seeding_details.
   const inputAgg = inputCostFromSeedingDetails(inp.trip.seeding_details, inp.savedInputs ?? []);
@@ -490,7 +430,17 @@ export function computeTripCost(inp: TripCostInputs): TripCostBreakdown {
       rateMissing: fuelEst.rateMissing,
       warnings: fuelEst.warnings,
     },
-    chemicals: { cost: chemCostFinal, lineCount: chemLines, missingCostLines: chemMissing },
+    chemicals: {
+      cost: chemCostFinal,
+      lineCount: chem.lineCount,
+      missingCostLines: chem.incompleteLines,
+      resolvedLines: chem.resolvedLines,
+      status: chem.status,
+      quantityBasis: chem.quantityBasis,
+      pricingBases: chem.pricingBases,
+      currency: chem.currency,
+      warnings: chem.warnings,
+    },
     inputs: { cost: inputCostFinal, lineCount: inputAgg.lines, missingCostLines: inputAgg.missing },
     total,
     treatedAreaHa,
