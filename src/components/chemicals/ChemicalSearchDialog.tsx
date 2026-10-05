@@ -301,8 +301,9 @@ export function ChemicalSearchDialog(props: ChemicalSearchDialogProps) {
                       <Sparkles className="mr-1.5 h-4 w-4" aria-hidden="true" />Let{" "}
                       <span className="mx-1 font-extrabold" style={{ fontFamily: "'Montserrat', sans-serif", letterSpacing: "-0.015em" }}>
                         <span style={{ color: "#1A1A1A" }}>Vine</span><span style={{ color: "#FFFFFF" }}>Track</span>
+                        <span style={{ color: "#1A1A1A" }}> AI</span>
                       </span>
-                      AI find it for you
+                      find it for you
                     </Button>
                   </div>
                 )}
