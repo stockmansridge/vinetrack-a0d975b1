@@ -29,11 +29,14 @@ import {
 } from "@/components/ui/select";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import {
-  ALL_STATUSES,
-  FERTILISER_CATEGORY_KEYS,
+  isFertiliserProduct,
   PRODUCT_CATEGORY_LABEL,
-  STATUS_LABEL,
+  compareInventory,
   computeCalculation,
+  costPerHectare,
+  costPerVine,
+  packBreakdown,
+  seasonProductCost,
   defaultProductUnit,
   defaultRateUnit,
   type FertiliserCalculationMode,
@@ -44,8 +47,13 @@ import {
 import {
   fetchFertiliserAllocations,
   saveFertiliserRecord,
+  type FertiliserAllocation,
   type FertiliserRecord,
 } from "@/lib/fertiliserRecordsQuery";
+import { fetchInventorySummary } from "@/lib/chemicalInventory";
+import { fetchChemicalSeasonPrices, seasonPriceQueryKey } from "@/lib/chemicalSeasonPricing";
+import { fetchVineyardSeasonSettings, SEASON_DEFAULTS } from "@/lib/vineyardSeasonSettingsQuery";
+import { vintageForISO } from "@/lib/availableVintages";
 import {
   createLabourLine,
   createWorkTask,
@@ -68,6 +76,11 @@ interface Props {
   role: string | null;
   /** When provided, edit that existing record instead of creating one. */
   existing?: FertiliserRecord | null;
+  /**
+   * Duplicate source: pre-fills every value and block from this record but
+   * saves as a brand-new record with new record and allocation IDs.
+   */
+  duplicateFrom?: { record: FertiliserRecord; allocations: FertiliserAllocation[] } | null;
 }
 
 interface Product {
@@ -86,6 +99,31 @@ interface Product {
   organic_certified: boolean;
   is_active: boolean;
   application_notes: string;
+}
+
+const STATUS_TEXT: Record<string, string> = {
+  draft: "Draft",
+  planned: "Planned",
+  completed: "Completed",
+  cancelled: "Cancelled",
+};
+
+function npk(p: Pick<Product, "nitrogen_percent" | "phosphorus_percent" | "potassium_percent" | "analysis_basis">): string {
+  if (p.nitrogen_percent == null && p.phosphorus_percent == null && p.potassium_percent == null) return "";
+  return ` · N-P-K ${p.nitrogen_percent ?? 0}-${p.phosphorus_percent ?? 0}-${p.potassium_percent ?? 0} (${p.analysis_basis || "elemental"})`;
+}
+
+function fmtMoney(v: number | null, dp = 2): string {
+  return v == null ? "—" : `$${v.toFixed(dp)}`;
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="font-semibold tabular-nums">{value}</div>
+    </div>
+  );
 }
 
 function numOr(v: any, fallback = 0): number {
@@ -132,6 +170,7 @@ export default function FertiliserCalculatorDialog({
   paddocks,
   role,
   existing,
+  duplicateFrom,
 }: Props) {
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -149,14 +188,15 @@ export default function FertiliserCalculatorDialog({
   const [form, setForm] = useState<FertiliserForm>("solid");
   const [mode, setMode] = useState<FertiliserCalculationMode>("perHectare");
   const [applicationRate, setApplicationRate] = useState<string>("");
-  const [applicationRateUnit, setApplicationRateUnit] = useState<string>("kg/ha");
-  const [productUnit, setProductUnit] = useState<string>("kg");
+  const [manualArea, setManualArea] = useState<string>("");
+  const [manualVines, setManualVines] = useState<string>("");
   const [packSize, setPackSize] = useState<string>("");
   const [pricePerPack, setPricePerPack] = useState<string>("");
   const [labourCost, setLabourCost] = useState<string>("");
   const [machineryCost, setMachineryCost] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<FertiliserRecordStatus>("planned");
+  const [savingStatus, setSavingStatus] = useState<FertiliserRecordStatus>("planned");
   const [blocks, setBlocks] = useState<BlockState[]>([]);
 
   // Optional Work Task creation.
@@ -176,74 +216,71 @@ export default function FertiliserCalculatorDialog({
   // Reset / hydrate when the dialog opens.
   useEffect(() => {
     if (!open) return;
+    const src = existing ?? duplicateFrom?.record ?? null;
     if (existing) {
       setRecordId(existing.id);
-      setApplicationDate(existing.application_date);
-      setProductId(existing.product_id);
-      setProductName(existing.product_name);
-      setForm((existing.form as FertiliserForm) === "liquid" ? "liquid" : "solid");
-      setMode(
-        (existing.calculation_mode as FertiliserCalculationMode) === "perVine"
-          ? "perVine"
-          : "perHectare",
-      );
-      setApplicationRate(String(existing.application_rate ?? ""));
-      setApplicationRateUnit(existing.application_rate_unit || "kg/ha");
-      setProductUnit(existing.product_unit || "kg");
-      setPackSize(existing.pack_size == null ? "" : String(existing.pack_size));
-      setPricePerPack(""); // price_per_pack is not stored on the record; recomputed from product if selected
-      setLabourCost(existing.labour_cost == null ? "" : String(existing.labour_cost));
-      setMachineryCost(existing.machinery_cost == null ? "" : String(existing.machinery_cost));
-      setNotes(existing.notes ?? "");
-      const s = existing.record_status as FertiliserRecordStatus;
-      setStatus(ALL_STATUSES.includes(s) ? s : "planned");
-      setCreateTask(false);
     } else {
       const next = tryGenerateUuid();
       setIdError(next.error);
       setRecordId(next.id ?? "");
+    }
+    if (src) {
+      setApplicationDate(src.application_date);
+      setProductId(src.product_id);
+      setProductName(src.product_name);
+      setForm((src.form as FertiliserForm) === "liquid" ? "liquid" : "solid");
+      setMode((src.calculation_mode as FertiliserCalculationMode) === "perVine" ? "perVine" : "perHectare");
+      setApplicationRate(String(src.application_rate ?? ""));
+      setPackSize(src.pack_size == null ? "" : String(src.pack_size));
+      setPricePerPack(""); // price_per_pack is not stored on the record
+      setLabourCost(src.labour_cost == null ? "" : String(src.labour_cost));
+      setMachineryCost(src.machinery_cost == null ? "" : String(src.machinery_cost));
+      setNotes(src.notes ?? "");
+      setManualArea(src.total_area_ha ? String(src.total_area_ha) : "");
+      setManualVines(src.total_vines ? String(src.total_vines) : "");
+      const s = existing?.record_status as FertiliserRecordStatus;
+      setStatus(existing && s ? s : "planned");
+    } else {
       setApplicationDate(new Date().toISOString().slice(0, 10));
       setProductId(null);
       setProductName("");
       setForm("solid");
       setMode("perHectare");
       setApplicationRate("");
-      setApplicationRateUnit(defaultRateUnit("perHectare", "solid"));
-      setProductUnit(defaultProductUnit("solid"));
       setPackSize("");
       setPricePerPack("");
       setLabourCost("");
       setMachineryCost("");
       setNotes("");
+      setManualArea("");
+      setManualVines("");
       setStatus("planned");
-      setCreateTask(false);
     }
+    setCreateTask(false);
     setPendingTaskId(null);
     setPendingLabourLineId(null);
     setProductSearch("");
-  }, [open, existing]);
+  }, [open, existing, duplicateFrom]);
 
-  // Hydrate block selection from existing allocations once they load.
+  // Hydrate block selection from existing (or duplicate-source) allocations.
+  // Duplicates always get NEW allocation IDs so source child rows are never touched.
+  const sourceAllocations = existing ? allocationsQ.data : duplicateFrom?.allocations;
   useEffect(() => {
     if (!open) return;
-    const existingByPaddock = new Map(
-      (allocationsQ.data ?? []).map((a) => [a.paddock_id, a]),
-    );
+    const byPaddock = new Map((sourceAllocations ?? []).map((a) => [a.paddock_id, a]));
     setBlocks(
       paddocks.map((p) => {
-        const alloc = existingByPaddock.get(p.id);
+        const alloc = byPaddock.get(p.id);
         return {
           ...p,
           selected: alloc != null,
-          allocationId: alloc?.id ?? generateUuid(),
-          // If reloading, preserve saved area/vine values so historical
-          // snapshots don't shift.
+          allocationId: existing && alloc ? alloc.id : generateUuid(),
           areaHa: alloc ? Number(alloc.area_ha) : p.areaHa,
           vineCount: alloc ? Number(alloc.vine_count) : p.vineCount,
         };
       }),
     );
-  }, [open, paddocks, allocationsQ.data]);
+  }, [open, paddocks, sourceAllocations, existing]);
 
   // When the user picks a product, snapshot product-related defaults.
   const onSelectProduct = (id: string) => {
@@ -251,26 +288,50 @@ export default function FertiliserCalculatorDialog({
     if (!p) return;
     setProductId(p.id);
     setProductName(p.name);
-    const nextForm: FertiliserForm =
-      p.product_form === "liquid" ? "liquid" : "solid";
-    setForm(nextForm);
-    setApplicationRateUnit(defaultRateUnit(mode, nextForm));
-    setProductUnit(defaultProductUnit(nextForm));
+    setForm(p.product_form === "liquid" ? "liquid" : "solid");
     setPackSize(p.pack_size == null ? "" : String(p.pack_size));
-    setPricePerPack(p.price_per_pack == null ? "" : String(p.price_per_pack));
+    // Legacy saved_chemicals.price_per_pack is never a cost authority.
+    setPricePerPack("");
   };
 
-  // Update units when mode changes.
-  useEffect(() => {
-    setApplicationRateUnit((cur) => {
-      const def = defaultRateUnit(mode, form);
-      // Only auto-swap when the user hasn't customised past the defaults.
-      const defaults = ["kg/ha", "L/ha", "g/vine", "mL/vine"];
-      return defaults.includes(cur) ? def : cur;
-    });
-  }, [mode, form]);
+  const onManualEntry = () => {
+    setProductId(null);
+    setProductName("");
+    setPackSize("");
+    setPricePerPack("");
+  };
+
+  // Units are authoritative: derived from form + mode, never typed.
+  const applicationRateUnit = defaultRateUnit(mode, form);
+  const productUnit = defaultProductUnit(form);
+  const selectedProduct = (productsQ.data ?? []).find((p) => p.id === productId) ?? null;
+  const isSavedProduct = !!productId;
 
   const selectedBlocks = useMemo(() => blocks.filter((b) => b.selected), [blocks]);
+
+  // Saved-product cost: SQL 264 season purchase price (Owner/Manager only).
+  const seasonQ = useQuery({
+    queryKey: ["season-settings", vineyardId],
+    enabled: !!vineyardId && showCosts && isSavedProduct,
+    queryFn: () => fetchVineyardSeasonSettings(vineyardId),
+  });
+  const season = seasonQ.data ?? SEASON_DEFAULTS;
+  const vintage = vintageForISO(applicationDate, season.season_start_month, season.season_start_day);
+  const priceQ = useQuery({
+    queryKey: seasonPriceQueryKey(vineyardId, vintage ?? 0, null),
+    enabled: !!vineyardId && showCosts && isSavedProduct && vintage != null && !seasonQ.isLoading,
+    staleTime: 5 * 60 * 1000,
+    queryFn: () => fetchChemicalSeasonPrices(vineyardId, vintage!),
+  });
+  const seasonRow = productId ? priceQ.data?.get(productId) ?? null : null;
+
+  // Inventory: Chemical Inventory summary RPC (never saved_chemicals.inventory_quantity).
+  const inventoryQ = useQuery({
+    queryKey: ["fertiliser", "inventory", productId],
+    enabled: !!productId,
+    retry: false,
+    queryFn: () => fetchInventorySummary(productId!),
+  });
 
   const calc = useMemo(
     () =>
@@ -287,8 +348,32 @@ export default function FertiliserCalculatorDialog({
           areaHa: b.areaHa,
           vineCount: b.vineCount,
         })),
+        manual: { areaHa: numOr(manualArea), vineCount: numOr(manualVines) },
+        ...(isSavedProduct
+          ? {
+              productCostOverride: seasonProductCost(
+                seasonRow,
+                (() => {
+                  const r = numOr(applicationRate);
+                  if (selectedBlocks.length) {
+                    return selectedBlocks.reduce(
+                      (s, b) => s + (mode === "perHectare" ? r * b.areaHa : (r * b.vineCount) / 1000),
+                      0,
+                    );
+                  }
+                  return mode === "perHectare" ? r * numOr(manualArea) : (r * numOr(manualVines)) / 1000;
+                })(),
+                productUnit,
+              ),
+            }
+          : {}),
       }),
     [
+      manualArea,
+      manualVines,
+      isSavedProduct,
+      seasonRow,
+      productUnit,
       mode,
       applicationRate,
       packSize,
@@ -299,29 +384,34 @@ export default function FertiliserCalculatorDialog({
     ],
   );
 
+  const hasFertiliserProducts = useMemo(
+    () => (productsQ.data ?? []).some((p) => p.is_active !== false && isFertiliserProduct(p)),
+    [productsQ.data],
+  );
   const filteredProducts = useMemo(() => {
     const list = productsQ.data ?? [];
     const q = productSearch.trim().toLowerCase();
     return list
       .filter((p) => p.is_active !== false)
-      .filter((p) => {
-        if (showAllCategories) return true;
-        return (
-          !p.product_category ||
-          FERTILISER_CATEGORY_KEYS.includes(p.product_category as ProductCategoryKey)
-        );
-      })
+      .filter((p) => (showAllCategories || !hasFertiliserProducts ? true : isFertiliserProduct(p)))
       .filter((p) => (q ? (p.name ?? "").toLowerCase().includes(q) : true));
-  }, [productsQ.data, productSearch, showAllCategories]);
+  }, [productsQ.data, productSearch, showAllCategories, hasFertiliserProducts]);
 
+  const packs = packBreakdown(calc.totalProductRequired, packSize === "" ? null : numOr(packSize));
+  const labourAndMachinery = numOr(labourCost) + numOr(machineryCost);
+  const inventory = inventoryQ.data
+    ? compareInventory(inventoryQ.data.quantity, inventoryQ.data.unit, calc.totalProductRequired, productUnit)
+    : null;
+
+  const hasQuantity = selectedBlocks.length > 0 || (mode === "perHectare" ? numOr(manualArea) > 0 : numOr(manualVines) > 0);
   const canSubmit =
     productName.trim().length > 0 &&
-    selectedBlocks.length > 0 &&
+    hasQuantity &&
     numOr(applicationRate) > 0;
 
   const saveMut = useMutation({
-    mutationFn: async () => {
-      const iso = new Date().toISOString();
+    mutationFn: async (recordStatus: FertiliserRecordStatus) => {
+      setSavingStatus(recordStatus);
       const savedRecordId = recordId;
       const savePayload = {
         id: savedRecordId,
@@ -330,15 +420,15 @@ export default function FertiliserCalculatorDialog({
         product_name: productName.trim(),
         form,
         calculation_mode: mode,
-        record_status: status,
+        record_status: recordStatus,
         application_date: applicationDate,
         block_names: selectedBlocks.map((b) => b.name),
         total_area_ha: calc.totalAreaHa,
         total_vines: calc.totalVines,
         application_rate: numOr(applicationRate),
-        application_rate_unit: applicationRateUnit || defaultRateUnit(mode, form),
+        application_rate_unit: applicationRateUnit,
         total_product_required: calc.totalProductRequired,
-        product_unit: productUnit || defaultProductUnit(form),
+        product_unit: productUnit,
         pack_size: packSize === "" ? null : numOr(packSize),
         pack_count: calc.packCount,
         estimated_product_cost: calc.estimatedProductCost,
@@ -373,7 +463,7 @@ export default function FertiliserCalculatorDialog({
           paddock_id: primary.id,
           paddock_name: primary.name,
           task_type: taskType || "Fertilising",
-          status: status === "completed" ? "completed" : "planned",
+          status: recordStatus === "completed" ? "completed" : "planned",
           description: productName.trim(),
           notes: notes,
           start_date: applicationDate,
@@ -384,7 +474,7 @@ export default function FertiliserCalculatorDialog({
             numOr(workerCount) > 0 && numOr(hoursPerWorker) > 0
               ? numOr(workerCount) * numOr(hoursPerWorker)
               : null,
-          is_finalized: status === "completed",
+          is_finalized: recordStatus === "completed",
           user_id: user?.id ?? null,
         });
         // Multi-block link table.
@@ -418,8 +508,8 @@ export default function FertiliserCalculatorDialog({
 
       return record;
     },
-    onSuccess: () => {
-      toast({ title: "Fertiliser record saved" });
+    onSuccess: (_r, recordStatus) => {
+      toast({ title: recordStatus === "completed" ? "Fertiliser application recorded as completed" : "Fertiliser record saved" });
       qc.invalidateQueries({ queryKey: ["fertiliser", "records", vineyardId] });
       qc.invalidateQueries({ queryKey: ["fertiliser", "allocations"] });
       onOpenChange(false);
@@ -443,9 +533,9 @@ export default function FertiliserCalculatorDialog({
           </div>
         )}
         <DialogHeader>
-          <DialogTitle>{existing ? "Edit Fertiliser Record" : "New Fertiliser Calculation"}</DialogTitle>
+          <DialogTitle>{existing ? "Edit Fertiliser Record" : duplicateFrom ? "Duplicate Fertiliser Record" : "New Fertiliser Calculation"}</DialogTitle>
           <DialogDescription>
-            Pick a product, choose a rate mode and select blocks. Product totals and per-block allocations calculate live.
+            Pick a saved product or use manual entry, choose a rate mode, then select blocks or enter the treated area or vine count.
           </DialogDescription>
         </DialogHeader>
 
@@ -454,29 +544,31 @@ export default function FertiliserCalculatorDialog({
           <section className="rounded-lg border p-3 space-y-2">
             <div className="flex items-center gap-2 flex-wrap justify-between">
               <Label className="text-sm font-semibold">Product</Label>
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="show-all"
-                  checked={showAllCategories}
-                  onCheckedChange={setShowAllCategories}
-                />
-                <Label htmlFor="show-all" className="text-xs">
-                  Show all saved products
-                </Label>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Switch id="show-all" checked={showAllCategories} onCheckedChange={setShowAllCategories} />
+                  <Label htmlFor="show-all" className="text-xs">Show all saved products</Label>
+                </div>
+                <Button type="button" size="sm" variant={isSavedProduct ? "outline" : "secondary"} onClick={onManualEntry}>
+                  Manual entry
+                </Button>
               </div>
             </div>
+            {!hasFertiliserProducts && !productsQ.isLoading && (productsQ.data ?? []).length > 0 && (
+              <div className="text-xs text-muted-foreground">
+                No fertiliser-category products saved yet — showing all saved products.
+              </div>
+            )}
             <Input
               placeholder="Search saved products by name…"
               value={productSearch}
               onChange={(e) => setProductSearch(e.target.value)}
             />
             <div className="max-h-40 overflow-y-auto rounded border divide-y">
-              {productsQ.isLoading && (
-                <div className="p-3 text-sm text-muted-foreground">Loading products…</div>
-              )}
+              {productsQ.isLoading && <div className="p-3 text-sm text-muted-foreground">Loading products…</div>}
               {!productsQ.isLoading && filteredProducts.length === 0 && (
                 <div className="p-3 text-sm text-muted-foreground">
-                  No products match. Toggle “Show all saved products” or add one in Saved Chemicals.
+                  No products match. Toggle “Show all saved products” or use Manual entry.
                 </div>
               )}
               {filteredProducts.map((p) => {
@@ -486,57 +578,62 @@ export default function FertiliserCalculatorDialog({
                     key={p.id}
                     type="button"
                     onClick={() => onSelectProduct(p.id)}
-                    className={`w-full text-left p-2 hover:bg-accent/40 ${
-                      isSel ? "bg-accent/60" : ""
-                    }`}
+                    className={`w-full text-left p-2 hover:bg-accent/40 ${isSel ? "bg-accent/60" : ""}`}
                   >
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium">{p.name}</span>
                       {p.product_category && (
                         <Badge variant="outline" className="text-xs">
-                          {PRODUCT_CATEGORY_LABEL[p.product_category as ProductCategoryKey] ??
-                            p.product_category}
+                          {PRODUCT_CATEGORY_LABEL[p.product_category as ProductCategoryKey] ?? p.product_category}
                         </Badge>
                       )}
-                      {p.organic_certified && (
-                        <Badge className="text-xs bg-emerald-600 hover:bg-emerald-600">Organic</Badge>
-                      )}
+                      {p.organic_certified && <Badge variant="secondary" className="text-xs">Organic</Badge>}
                     </div>
                     <div className="text-xs text-muted-foreground tabular-nums">
                       {p.pack_size ? `${p.pack_size} ${p.pack_unit || ""}` : "—"}
-                      {p.price_per_pack != null ? ` · $${p.price_per_pack}/pack` : ""}
-                      {p.nitrogen_percent != null ||
-                      p.phosphorus_percent != null ||
-                      p.potassium_percent != null
-                        ? ` · N-P-K ${p.nitrogen_percent ?? 0}-${p.phosphorus_percent ?? 0}-${p.potassium_percent ?? 0} (${p.analysis_basis || "elemental"})`
-                        : ""}
+                      {npk(p)}
                     </div>
                   </button>
                 );
               })}
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div>
-                <Label className="text-xs">Product name (snapshot)</Label>
-                <Input
-                  value={productName}
-                  onChange={(e) => setProductName(e.target.value)}
-                  placeholder="e.g. CalMag Plus"
-                />
+            {isSavedProduct ? (
+              <div className="rounded-md bg-muted/50 p-3 text-sm space-y-1" aria-label="Selected saved product">
+                <div className="font-medium">{productName}</div>
+                <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-1">
+                  <span>
+                    Category:{" "}
+                    {selectedProduct?.product_category
+                      ? PRODUCT_CATEGORY_LABEL[selectedProduct.product_category as ProductCategoryKey] ?? selectedProduct.product_category
+                      : "Uncategorised"}
+                  </span>
+                  <span>Form: {form === "liquid" ? "Liquid" : "Solid"}</span>
+                  {selectedProduct?.organic_certified && <span>Organic certified</span>}
+                  <span>Pack: {selectedProduct?.pack_size ? `${selectedProduct.pack_size} ${selectedProduct.pack_unit || productUnit}` : "not set"}</span>
+                  {selectedProduct && npk(selectedProduct) && <span>{npk(selectedProduct).replace(/^ · /, "")}</span>}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Snapshot from the saved product library. Use Manual entry for a product that isn't saved.
+                </div>
               </div>
-              <div>
-                <Label className="text-xs">Form</Label>
-                <Select value={form} onValueChange={(v) => setForm(v as FertiliserForm)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="solid">Solid</SelectItem>
-                    <SelectItem value="liquid">Liquid</SelectItem>
-                  </SelectContent>
-                </Select>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div>
+                  <Label className="text-xs">Product name (manual entry)</Label>
+                  <Input value={productName} onChange={(e) => setProductName(e.target.value)} placeholder="e.g. CalMag Plus" />
+                </div>
+                <div>
+                  <Label className="text-xs">Form</Label>
+                  <Select value={form} onValueChange={(v) => setForm(v as FertiliserForm)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="solid">Solid</SelectItem>
+                      <SelectItem value="liquid">Liquid</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            </div>
+            )}
           </section>
 
           {/* Rate + date */}
@@ -544,9 +641,7 @@ export default function FertiliserCalculatorDialog({
             <div className="sm:col-span-2">
               <Label className="text-xs">Calculation mode</Label>
               <Select value={mode} onValueChange={(v) => setMode(v as FertiliserCalculationMode)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="perHectare">Per hectare</SelectItem>
                   <SelectItem value="perVine">Per vine</SelectItem>
@@ -555,82 +650,43 @@ export default function FertiliserCalculatorDialog({
             </div>
             <div>
               <Label className="text-xs">Application date</Label>
-              <Input
-                type="date"
-                value={applicationDate}
-                onChange={(e) => setApplicationDate(e.target.value)}
-              />
+              <Input type="date" value={applicationDate} onChange={(e) => setApplicationDate(e.target.value)} />
             </div>
-            <div>
-              <Label className="text-xs">Status</Label>
-              <Select value={status} onValueChange={(v) => setStatus(v as FertiliserRecordStatus)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ALL_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {STATUS_LABEL[s]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {existing && (
+              <div>
+                <Label className="text-xs">Status</Label>
+                <div className="h-10 flex items-center text-sm">{STATUS_TEXT[status] ?? status}</div>
+              </div>
+            )}
             <div className="sm:col-span-2">
-              <Label className="text-xs">Application rate</Label>
-              <div className="flex gap-2">
-                <Input
-                  inputMode="decimal"
-                  value={applicationRate}
-                  onChange={(e) => setApplicationRate(e.target.value)}
-                  placeholder="e.g. 50"
-                />
-                <Input
-                  value={applicationRateUnit}
-                  onChange={(e) => setApplicationRateUnit(e.target.value)}
-                  className="w-28"
-                  placeholder={defaultRateUnit(mode, form)}
-                />
+              <Label className="text-xs">Application rate ({applicationRateUnit})</Label>
+              <div className="flex gap-2 items-center">
+                <Input inputMode="decimal" value={applicationRate} onChange={(e) => setApplicationRate(e.target.value)} placeholder="e.g. 50" />
+                <span className="text-sm text-muted-foreground w-20" aria-label="Rate unit">{applicationRateUnit}</span>
               </div>
             </div>
             <div>
-              <Label className="text-xs">Product unit</Label>
-              <Input
-                value={productUnit}
-                onChange={(e) => setProductUnit(e.target.value)}
-                placeholder={defaultProductUnit(form)}
-              />
-            </div>
-            <div>
-              <Label className="text-xs">Pack size ({productUnit || defaultProductUnit(form)})</Label>
+              <Label className="text-xs">Pack size ({productUnit})</Label>
               <Input
                 inputMode="decimal"
                 value={packSize}
                 onChange={(e) => setPackSize(e.target.value)}
                 placeholder="e.g. 25"
+                disabled={isSavedProduct}
               />
             </div>
-            {showCosts && (
+            {showCosts && !isSavedProduct && (
               <div>
                 <Label className="text-xs">Price per pack</Label>
-                <Input
-                  inputMode="decimal"
-                  value={pricePerPack}
-                  onChange={(e) => setPricePerPack(e.target.value)}
-                  placeholder="e.g. 120"
-                />
+                <Input inputMode="decimal" value={pricePerPack} onChange={(e) => setPricePerPack(e.target.value)} placeholder="e.g. 120" />
               </div>
             )}
           </section>
 
           {/* Blocks */}
           <section className="rounded-lg border p-3 space-y-2">
-            <Label className="text-sm font-semibold">Blocks</Label>
-            {blocks.length === 0 && (
-              <div className="text-sm text-muted-foreground">
-                No blocks configured on this vineyard.
-              </div>
-            )}
+            <Label className="text-sm font-semibold">Blocks (optional)</Label>
+            {blocks.length === 0 && <div className="text-sm text-muted-foreground">No blocks configured on this vineyard.</div>}
             <div className="divide-y">
               {blocks.map((b, i) => (
                 <div key={b.id} className="py-2 grid grid-cols-[auto_1fr_100px_100px_1fr] gap-2 items-center">
@@ -668,17 +724,9 @@ export default function FertiliserCalculatorDialog({
                   />
                   {b.selected ? (
                     <div className="text-xs text-muted-foreground tabular-nums text-right">
-                      {calc.allocations
-                        .find((a) => a.paddockId === b.id)
-                        ?.productRequired.toLocaleString()}{" "}
-                      {productUnit || defaultProductUnit(form)}
+                      {calc.allocations.find((a) => a.paddockId === b.id)?.productRequired.toLocaleString()} {productUnit}
                       {showCosts && calc.allocations.find((a) => a.paddockId === b.id)?.allocatedCost != null && (
-                        <span className="ml-2">
-                          · $
-                          {calc.allocations
-                            .find((a) => a.paddockId === b.id)!
-                            .allocatedCost!.toFixed(2)}
-                        </span>
+                        <span className="ml-2">· ${calc.allocations.find((a) => a.paddockId === b.id)!.allocatedCost!.toFixed(2)}</span>
                       )}
                     </div>
                   ) : (
@@ -687,66 +735,96 @@ export default function FertiliserCalculatorDialog({
                 </div>
               ))}
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm pt-2 border-t">
-              <div>
-                <div className="text-xs text-muted-foreground">Total area</div>
-                <div className="font-semibold tabular-nums">
-                  {calc.totalAreaHa.toFixed(2)} ha
+            {selectedBlocks.length === 0 && (
+              <div className="grid gap-2 sm:grid-cols-2 border-t pt-2">
+                <div className="sm:col-span-2 text-xs text-muted-foreground">
+                  No blocks selected — enter the treated {mode === "perHectare" ? "area" : "vine count"} to calculate. The record will be saved without block allocations.
                 </div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Total vines</div>
-                <div className="font-semibold tabular-nums">
-                  {calc.totalVines.toLocaleString()}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Total product</div>
-                <div className="font-semibold tabular-nums">
-                  {calc.totalProductRequired.toLocaleString()} {productUnit || defaultProductUnit(form)}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Packs required</div>
-                <div className="font-semibold tabular-nums">
-                  {calc.packCount == null ? "—" : calc.packCount.toFixed(2)}
-                </div>
-              </div>
-              {showCosts && (
-                <>
+                {mode === "perHectare" ? (
                   <div>
-                    <div className="text-xs text-muted-foreground">Product cost</div>
-                    <div className="font-semibold tabular-nums">
-                      {calc.estimatedProductCost == null ? "—" : `$${calc.estimatedProductCost.toFixed(2)}`}
-                    </div>
+                    <Label className="text-xs">Treated area (ha)</Label>
+                    <Input inputMode="decimal" value={manualArea} onChange={(e) => setManualArea(e.target.value)} aria-label="Treated area ha" />
                   </div>
+                ) : (
+                  <div>
+                    <Label className="text-xs">Vine count</Label>
+                    <Input inputMode="numeric" value={manualVines} onChange={(e) => setManualVines(e.target.value)} aria-label="Vine count" />
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* Results */}
+          <section className="rounded-lg border p-3 space-y-3" aria-label="Calculation results">
+            <Label className="text-sm font-semibold">Product requirement</Label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+              <Stat label="Total area" value={`${calc.totalAreaHa.toFixed(2)} ha`} />
+              <Stat label="Total vines" value={calc.totalVines.toLocaleString()} />
+              <Stat label="Total required" value={`${calc.totalProductRequired.toLocaleString()} ${productUnit}`} />
+              <Stat label="Packs required" value={packs ? packs.packsRequired.toFixed(2) : "—"} />
+              <Stat label="Full packs" value={packs ? String(packs.fullPacks) : "—"} />
+              <Stat
+                label="Partial pack"
+                value={packs ? `${packs.partialPack.toFixed(2)} pack / ${packs.partialPercent}%` : "—"}
+              />
+              <Stat label="Packs to open" value={packs ? String(packs.packsToOpen) : "—"} />
+            </div>
+
+            {isSavedProduct && (
+              <div className="border-t pt-3 space-y-1">
+                <Label className="text-sm font-semibold">Inventory</Label>
+                {inventoryQ.isLoading ? (
+                  <div className="text-xs text-muted-foreground">Loading Chemical Inventory…</div>
+                ) : inventory ? (
+                  <>
+                    <div className="grid grid-cols-3 gap-3 text-sm">
+                      <Stat label="Available" value={`${inventory.available.toLocaleString()} ${inventory.unit}`} />
+                      <Stat label="Required" value={`${inventory.required.toLocaleString()} ${inventory.unit}`} />
+                      <Stat label="After application" value={`${inventory.after.toLocaleString()} ${inventory.unit}`} />
+                    </div>
+                    {inventory.shortage && (
+                      <div role="alert" className="text-xs text-destructive">
+                        Not enough stock: short by {Math.abs(inventory.after).toLocaleString()} {inventory.unit}.
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-xs text-muted-foreground">
+                    No Chemical Inventory stock recorded for this product in {productUnit === "kg" ? "kg/g" : "L/mL"}.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {showCosts && (
+              <div className="border-t pt-3 space-y-2">
+                <Label className="text-sm font-semibold">Costs</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                   <div>
                     <div className="text-xs text-muted-foreground">Labour cost</div>
-                    <Input
-                      inputMode="decimal"
-                      value={labourCost}
-                      onChange={(e) => setLabourCost(e.target.value)}
-                      placeholder="0.00"
-                    />
+                    <Input inputMode="decimal" value={labourCost} onChange={(e) => setLabourCost(e.target.value)} placeholder="0.00" />
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground">Machinery cost</div>
-                    <Input
-                      inputMode="decimal"
-                      value={machineryCost}
-                      onChange={(e) => setMachineryCost(e.target.value)}
-                      placeholder="0.00"
-                    />
+                    <Input inputMode="decimal" value={machineryCost} onChange={(e) => setMachineryCost(e.target.value)} placeholder="0.00" />
                   </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground">Total job cost</div>
-                    <div className="font-semibold tabular-nums">
-                      {calc.totalJobCost == null ? "—" : `$${calc.totalJobCost.toFixed(2)}`}
-                    </div>
+                  <Stat
+                    label="Product cost"
+                    value={calc.estimatedProductCost == null ? "Unavailable" : `$${calc.estimatedProductCost.toFixed(2)}`}
+                  />
+                  <Stat label="Labour & machinery" value={`$${labourAndMachinery.toFixed(2)}`} />
+                  <Stat label="Total job cost" value={calc.totalJobCost == null ? "—" : `$${calc.totalJobCost.toFixed(2)}`} />
+                  <Stat label="Cost per hectare" value={fmtMoney(costPerHectare(calc.totalJobCost, calc.totalAreaHa))} />
+                  <Stat label="Cost per vine" value={fmtMoney(costPerVine(calc.totalJobCost, calc.totalVines), 4)} />
+                </div>
+                {isSavedProduct && calc.estimatedProductCost == null && (
+                  <div className="text-xs text-muted-foreground">
+                    Product cost comes from Chemical Purchase records for this season. No usable purchase price is recorded for this product.
                   </div>
-                </>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </section>
 
           {/* Work Task */}
@@ -788,7 +866,7 @@ export default function FertiliserCalculatorDialog({
                   </div>
                 )}
                 <div className="sm:col-span-4 text-xs text-muted-foreground">
-                  A labour line seeded from these fields will be created on the task. Fertiliser totals, blocks and notes are shared so nothing is entered twice.
+                  Optional. Creates a separate Work Task (with a labour line from these fields) using the same blocks, date and notes. The fertiliser record does not store a link to the task.
                 </div>
               </div>
             )}
@@ -800,13 +878,33 @@ export default function FertiliserCalculatorDialog({
           </section>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button disabled={!canSubmit || saveMut.isPending} onClick={() => saveMut.mutate()}>
-            {saveMut.isPending ? "Saving…" : existing ? "Save changes" : "Save"}
-          </Button>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          {existing ? (
+            <>
+              {existing.record_status === "planned" && (
+                <Button
+                  variant="secondary"
+                  disabled={!canSubmit || saveMut.isPending}
+                  onClick={() => saveMut.mutate("completed")}
+                >
+                  Mark Completed
+                </Button>
+              )}
+              <Button disabled={!canSubmit || saveMut.isPending} onClick={() => saveMut.mutate(status)}>
+                {saveMut.isPending ? "Saving…" : "Save changes"}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="secondary" disabled={!canSubmit || saveMut.isPending} onClick={() => saveMut.mutate("planned")}>
+                {saveMut.isPending && savingStatus === "planned" ? "Saving…" : "Save as Planned"}
+              </Button>
+              <Button disabled={!canSubmit || saveMut.isPending} onClick={() => saveMut.mutate("completed")}>
+                {saveMut.isPending && savingStatus === "completed" ? "Saving…" : "Record as Completed"}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

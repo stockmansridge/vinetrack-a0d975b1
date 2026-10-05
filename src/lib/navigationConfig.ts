@@ -276,6 +276,20 @@ export const ACTIVITIES: NavActivity[] = [
     crossLinks: [{ label: "Spray Equipment", path: "/setup/spray-equipment" }],
   },
   {
+    id: "fertiliser",
+    label: "Fertiliser",
+    group: "Work",
+    icon: Beaker,
+    views: [
+      {
+        id: "fertiliser.calculator",
+        label: "Calculator",
+        path: "/tools/fertiliser-calculator",
+        keywords: ["fertiliser calculator", "fertilizer", "nutrition", "npk", "fertigation"],
+      },
+    ],
+  },
+  {
     id: "pruning",
     label: "Pruning",
     group: "Work",
@@ -591,7 +605,6 @@ const SYSTEM_ADMIN_ITEM_LIST: SystemAdminItem[] = [
   { label: "Canopy Reference Images", path: "/admin/canopy-images", icon: Satellite },
   { label: "Guide Content", path: "/admin/guide-content", icon: BookOpen },
   { label: "Email Test", path: "/admin/email-diagnostics", icon: FolderOpen },
-  { label: "Fertiliser Calculator", path: "/tools/fertiliser-calculator", icon: Beaker },
   { label: "How VineTrack Works", path: "/dashboard/how-vinetrack-works", icon: BookOpen },
   { label: "Portal Field Reference", path: "/settings/data-coverage", icon: Database },
 ];
@@ -664,7 +677,6 @@ export const SYSTEM_ADMIN_GROUPS: SystemAdminGroup[] = [
       systemAdminItem("Portal Field Reference"),
     ],
   },
-  { label: "Tools", items: [systemAdminItem("Fertiliser Calculator")] },
 ];
 
 /** Flat compatibility export used by search and destination validation. */

@@ -63,6 +63,17 @@ export interface CalculationInput {
   /** Optional machinery cost (currency) — added to total_job_cost. */
   machineryCost?: number | null;
   allocations: AllocationInput[];
+  /**
+   * Used only when `allocations` is empty: manually entered treated area /
+   * vine count so a calculation works without selecting blocks (iOS parity).
+   */
+  manual?: { areaHa?: number | null; vineCount?: number | null } | null;
+  /**
+   * Authoritative product cost (e.g. SQL 264 seasonal purchase price for a
+   * saved product). When provided (number or null) it replaces the
+   * pack × price-per-pack estimate; null means "unavailable".
+   */
+  productCostOverride?: number | null;
 }
 
 const isNum = (v: unknown): v is number =>
@@ -93,7 +104,8 @@ export function computeCalculation(input: CalculationInput): CalculationResult {
     const vineCount = Math.max(0, isNum(a.vineCount) ? Math.round(a.vineCount) : 0);
     let productRequired = 0;
     if (mode === "perHectare") productRequired = rate * areaHa;
-    else if (mode === "perVine") productRequired = rate * vineCount;
+    // g/vine or mL/vine × vines ÷ 1000 → kg or L (iOS parity).
+    else if (mode === "perVine") productRequired = (rate * vineCount) / 1000;
     return {
       paddockId: a.paddockId,
       paddockName: a.paddockName,
@@ -105,9 +117,16 @@ export function computeCalculation(input: CalculationInput): CalculationResult {
     };
   });
 
-  const totalAreaHa = round3(rows.reduce((s, r) => s + r.areaHa, 0));
-  const totalVines = rows.reduce((s, r) => s + r.vineCount, 0);
-  const totalProductRequired = round3(rows.reduce((s, r) => s + r.productRequired, 0));
+  let totalAreaHa = round3(rows.reduce((s, r) => s + r.areaHa, 0));
+  let totalVines = rows.reduce((s, r) => s + r.vineCount, 0);
+  let totalProductRequired = round3(rows.reduce((s, r) => s + r.productRequired, 0));
+  if (rows.length === 0 && input.manual) {
+    totalAreaHa = round3(Math.max(0, isNum(input.manual.areaHa) ? input.manual.areaHa! : 0));
+    totalVines = Math.max(0, isNum(input.manual.vineCount) ? Math.round(input.manual.vineCount!) : 0);
+    totalProductRequired = round3(
+      mode === "perHectare" ? rate * totalAreaHa : (rate * totalVines) / 1000,
+    );
+  }
 
   // pack_count: total_product / pack_size. Only when pack_size > 0.
   const packSize = isNum(input.packSize) && input.packSize! > 0 ? input.packSize! : null;
@@ -117,7 +136,13 @@ export function computeCalculation(input: CalculationInput): CalculationResult {
   const pricePerPack =
     isNum(input.pricePerPack) && input.pricePerPack! >= 0 ? input.pricePerPack! : null;
   const estimatedProductCost =
-    packCount != null && pricePerPack != null ? round2(packCount * pricePerPack) : null;
+    input.productCostOverride !== undefined
+      ? input.productCostOverride == null
+        ? null
+        : round2(input.productCostOverride)
+      : packCount != null && pricePerPack != null
+        ? round2(packCount * pricePerPack)
+        : null;
 
   // Distribute product cost across blocks proportional to product required.
   // Falls back to area, then to equal shares, so tiny/zero-vine blocks still
@@ -163,6 +188,91 @@ export function computeCalculation(input: CalculationInput): CalculationResult {
     estimatedProductCost,
     totalJobCost: anyCost,
   };
+}
+
+/** Pack breakdown: full packs, partial pack and packs to open (iOS parity). */
+export interface PackBreakdown {
+  packsRequired: number;
+  fullPacks: number;
+  partialPack: number;
+  partialPercent: number;
+  packsToOpen: number;
+}
+
+export function packBreakdown(totalRequired: number, packSize: number | null | undefined): PackBreakdown | null {
+  if (!isNum(packSize) || packSize! <= 0 || !isNum(totalRequired) || totalRequired < 0) return null;
+  // Round first so float noise (2.4000000001) never opens an extra pack.
+  const packsRequired = round3(totalRequired / packSize!);
+  const fullPacks = Math.floor(packsRequired);
+  const partialPack = round3(packsRequired - fullPacks);
+  return {
+    packsRequired,
+    fullPacks,
+    partialPack,
+    partialPercent: Math.round(partialPack * 100),
+    packsToOpen: Math.ceil(packsRequired),
+  };
+}
+
+export function costPerHectare(totalJobCost: number | null, areaHa: number): number | null {
+  return totalJobCost != null && areaHa > 0 ? round2(totalJobCost / areaHa) : null;
+}
+
+export function costPerVine(totalJobCost: number | null, vines: number): number | null {
+  return totalJobCost != null && vines > 0 ? Math.round((totalJobCost / vines) * 10000) / 10000 : null;
+}
+
+const UNIT_BASE: Record<string, { dim: "mass" | "volume"; factor: number }> = {
+  kg: { dim: "mass", factor: 1000 }, g: { dim: "mass", factor: 1 },
+  l: { dim: "volume", factor: 1000 }, ml: { dim: "volume", factor: 1 },
+  litre: { dim: "volume", factor: 1000 }, litres: { dim: "volume", factor: 1000 },
+};
+
+/** Convert a quantity between kg/g or L/mL. Null when dimensions differ/unknown. */
+export function convertQuantity(value: number, from: string | null | undefined, to: string | null | undefined): number | null {
+  const f = UNIT_BASE[String(from ?? "").trim().toLowerCase()];
+  const t = UNIT_BASE[String(to ?? "").trim().toLowerCase()];
+  if (!f || !t || f.dim !== t.dim || !isNum(value)) return null;
+  return (value * f.factor) / t.factor;
+}
+
+export interface InventoryComparison {
+  /** Available stock expressed in the product unit (kg or L). */
+  available: number;
+  required: number;
+  after: number;
+  shortage: boolean;
+  unit: string;
+}
+
+/** Compare Chemical Inventory stock with product required, converting units. */
+export function compareInventory(
+  availableQty: number | null | undefined,
+  availableUnit: string | null | undefined,
+  required: number,
+  productUnit: string,
+): InventoryComparison | null {
+  if (!isNum(availableQty)) return null;
+  const available = convertQuantity(availableQty!, availableUnit, productUnit);
+  if (available == null) return null;
+  const after = round3(available - required);
+  return { available: round3(available), required: round3(required), after, shortage: after < 0, unit: productUnit };
+}
+
+/**
+ * Saved-product cost from a SQL 264 season price row. Null unless the basis
+ * is a usable weighted average in the same physical dimension.
+ */
+export function seasonProductCost(
+  row: { pricing_basis: string; weighted_cost_per_base_unit: number | null; base_unit: string | null } | null | undefined,
+  totalRequired: number,
+  productUnit: string,
+): number | null {
+  if (!row || row.pricing_basis !== "season_weighted_purchase_average") return null;
+  if (!isNum(row.weighted_cost_per_base_unit)) return null;
+  const qty = convertQuantity(totalRequired, productUnit, row.base_unit);
+  if (qty == null) return null;
+  return round2(qty * row.weighted_cost_per_base_unit!);
 }
 
 /** Default rate unit for the mode + form combination. */
@@ -255,3 +365,8 @@ export const PRODUCT_CATEGORY_LABEL: Record<ProductCategoryKey, string> = {
   soilAmendment: "Soil amendment",
   other: "Other",
 };
+
+/** iOS parity: only explicit fertiliser/nutrition categories; null is NOT fertiliser. */
+export function isFertiliserProduct(p: { product_category?: string | null }): boolean {
+  return !!p.product_category && FERTILISER_CATEGORY_KEYS.includes(p.product_category as ProductCategoryKey);
+}

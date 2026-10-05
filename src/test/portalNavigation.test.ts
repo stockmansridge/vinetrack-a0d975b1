@@ -55,6 +55,7 @@ describe("Portal navigation — destinations", () => {
       "Field Trips",
       "Work Tasks",
       "Spraying",
+      "Fertiliser",
       "Pruning",
       "Yield & Harvest",
       "Irrigation",
@@ -140,18 +141,29 @@ describe("Portal navigation — access", () => {
     expect(admin).toContain("/tools/satellite-mapping");
     expect(admin).toContain("/dashboard/how-vinetrack-works");
     expect(admin).toContain("/settings/data-coverage");
-    expect(admin).toContain("/tools/fertiliser-calculator");
+    expect(customer).toContain("/tools/fertiliser-calculator");
+  });
+
+  it("places Fertiliser under Work between Spraying and Pruning for all vineyard roles", () => {
+    const work = ACTIVITIES.filter((a) => a.group === "Work").map((a) => a.id);
+    expect(work.indexOf("fertiliser")).toBe(work.indexOf("spraying") + 1);
+    expect(work.indexOf("pruning")).toBe(work.indexOf("fertiliser") + 1);
+    const fert = ACTIVITIES.find((a) => a.id === "fertiliser")!;
+    for (const role of ["owner", "manager", "supervisor", "operator"]) {
+      expect(accessibleViews(fert, viewer({ role })).map((v) => v.path)).toEqual(["/tools/fertiliser-calculator"]);
+    }
+    expect(SYSTEM_ADMIN_ITEMS.some((i) => i.path === "/tools/fertiliser-calculator")).toBe(false);
   });
 });
 
 describe("Portal navigation — System Admin grouping", () => {
-  it("keeps all 31 destinations represented exactly once", () => {
+  it("keeps all 30 destinations represented exactly once", () => {
     const grouped = [
       SYSTEM_ADMIN_DASHBOARD,
       ...SYSTEM_ADMIN_GROUPS.flatMap((group) => group.items),
     ];
-    expect(grouped).toHaveLength(31);
-    expect(new Set(grouped.map((item) => item.path)).size).toBe(31);
+    expect(grouped).toHaveLength(30);
+    expect(new Set(grouped.map((item) => item.path)).size).toBe(30);
     expect(grouped.map((item) => item.path)).toEqual(SYSTEM_ADMIN_ITEMS.map((item) => item.path));
   });
 
