@@ -79,7 +79,7 @@ export default function IntegrationDetailPage() {
             Integrations &amp; API
           </Link>
         </Button>
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col items-start gap-3">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-2xl font-semibold tracking-tight">{client.name}</h1>

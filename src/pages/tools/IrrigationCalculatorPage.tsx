@@ -492,7 +492,7 @@ export default function IrrigationCalculatorPage() {
 
   return (
     <div className="space-y-6 w-full">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
+      <div className="flex flex-col items-start gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Irrigation Advisor</h1>
           <p className="text-sm text-muted-foreground mt-1">

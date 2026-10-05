@@ -27,7 +27,7 @@ export function AdminPageHeader({
 }) {
   const navigate = useNavigate();
   return (
-    <div className="flex items-start justify-between gap-3 mb-4">
+    <div className="flex flex-col items-start gap-3 mb-4">
       <div className="flex items-start gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate(back)}>
           <ArrowLeft className="h-4 w-4" />

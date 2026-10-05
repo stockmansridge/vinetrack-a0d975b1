@@ -214,7 +214,7 @@ export default function AccountBillingPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+      <header className="flex flex-col items-start gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Billing</h1>
           <p className="text-sm text-muted-foreground">

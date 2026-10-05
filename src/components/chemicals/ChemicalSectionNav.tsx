@@ -33,7 +33,7 @@ export function ChemicalSectionNav({ active: current, onAddChemical }: { active:
   return (
     <div className="w-full self-stretch">
       {/* Fixed-height action row above the menu so the menu never shifts between pages. */}
-      <div className="mb-2 flex h-9 items-center justify-end">
+      <div className="mb-2 flex h-9 items-center justify-start">
         {canAdd && onAddChemical && (
           <Button type="button" size="sm" onClick={onAddChemical} data-testid="chemical-nav-add">
             <Plus className="mr-1 h-4 w-4" />Add Chemical

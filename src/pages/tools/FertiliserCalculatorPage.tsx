@@ -195,7 +195,7 @@ export default function FertiliserCalculatorPage() {
         path="/tools/fertiliser-calculator"
       />
 
-      <div className="flex items-start justify-between gap-3 mb-6 flex-wrap">
+      <div className="flex flex-col items-start gap-3 mb-6">
         <div className="flex items-center gap-3">
           <div className="rounded-lg bg-primary/10 p-2 text-primary">
             <FlaskConical className="h-6 w-6" />

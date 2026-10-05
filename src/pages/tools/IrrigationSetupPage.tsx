@@ -1678,7 +1678,7 @@ export default function IrrigationSetupPage() {
         path="/irrigation/setup"
         noindex
       />
-      <header className="flex flex-wrap items-start justify-between gap-3">
+      <header className="flex flex-col items-start gap-3">
         <div>
           <Button asChild variant="ghost" size="sm" className="-ml-2 mb-1">
             <Link to="/irrigation">
