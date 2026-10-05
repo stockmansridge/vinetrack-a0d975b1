@@ -272,22 +272,14 @@ export const ACTIVITIES: NavActivity[] = [
         path: "/tools/resistance-planner",
         keywords: ["resistance", "frac", "powdery", "downy", "strategy"],
       },
-    ],
-    crossLinks: [{ label: "Spray Equipment", path: "/setup/spray-equipment" }],
-  },
-  {
-    id: "fertiliser",
-    label: "Fertiliser",
-    group: "Work",
-    icon: Beaker,
-    views: [
       {
-        id: "fertiliser.calculator",
-        label: "Calculator",
+        id: "spraying.fertiliser",
+        label: "Fertiliser",
         path: "/tools/fertiliser-calculator",
         keywords: ["fertiliser calculator", "fertilizer", "nutrition", "npk", "fertigation"],
       },
     ],
+    crossLinks: [{ label: "Spray Equipment", path: "/setup/spray-equipment" }],
   },
   {
     id: "pruning",

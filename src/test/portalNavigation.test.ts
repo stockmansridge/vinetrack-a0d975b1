@@ -55,7 +55,6 @@ describe("Portal navigation — destinations", () => {
       "Field Trips",
       "Work Tasks",
       "Spray Program",
-      "Fertiliser",
       "Pruning",
       "Yield & Harvest",
       "Irrigation",
@@ -144,16 +143,15 @@ describe("Portal navigation — access", () => {
     expect(customer).toContain("/tools/fertiliser-calculator");
   });
 
-  it("places Fertiliser under Work between Spraying and Pruning for all vineyard roles", () => {
-    const work = ACTIVITIES.filter((a) => a.group === "Work").map((a) => a.id);
-    expect(work.indexOf("fertiliser")).toBe(work.indexOf("spraying") + 1);
-    expect(work.indexOf("pruning")).toBe(work.indexOf("fertiliser") + 1);
-    const fert = ACTIVITIES.find((a) => a.id === "fertiliser")!;
+  it("places Fertiliser inside Spray Program for all vineyard roles", () => {
+    expect(ACTIVITIES.some((a) => a.id === "fertiliser")).toBe(false);
+    const spray = ACTIVITIES.find((a) => a.id === "spraying")!;
     for (const role of ["owner", "manager", "supervisor", "operator"]) {
-      expect(accessibleViews(fert, viewer({ role })).map((v) => v.path)).toEqual(["/tools/fertiliser-calculator"]);
+      expect(accessibleViews(spray, viewer({ role })).map((v) => v.path)).toContain("/tools/fertiliser-calculator");
     }
     expect(SYSTEM_ADMIN_ITEMS.some((i) => i.path === "/tools/fertiliser-calculator")).toBe(false);
   });
+
 });
 
 describe("Portal navigation — System Admin grouping", () => {
