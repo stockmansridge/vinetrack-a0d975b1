@@ -621,6 +621,8 @@ export default function IrrigationHistoryPage() {
                 if (!reversing) return;
                 try {
                   await reverse.mutateAsync(reversing.id);
+                  // The backend reverses any linked Fertigation application too.
+                  if (isSystemAdmin) fertApps.refetch();
                   toast({ title: "Session reversed" });
                 } catch (e) {
                   toast({
