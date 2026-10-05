@@ -282,8 +282,13 @@ export function SprayJobWizard({
   // carries blocks, and the resistance check needs a real block history, so
   // both steps are hidden. The wizard, draft and calculation engine are shared.
   const visibleSteps = STEPS.filter((s) => {
-    if (s.key === "carrier" && app.operationType === "spreader" && app.mode !== "banded") return false;
+    if (s.key === "carrier" && (app.operationType === "spreader" || app.operationType === "fertigation") && app.mode !== "banded") return false;
     if (app.isTemplate && (s.key === "blocks" || s.key === "resistance")) return false;
+    if (
+      app.isTemplate &&
+      app.operationType === "fertigation" &&
+      (s.key === "target" || s.key === "equipment" || s.key === "carrier" || s.key === "resistance")
+    ) return false;
     return true;
   }).map((s) => ({
     key: s.key as (typeof STEPS)[number]["key"],
