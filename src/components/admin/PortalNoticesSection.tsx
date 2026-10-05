@@ -126,9 +126,9 @@ export default function PortalNoticesSection() {
 
   return (
     <section className="space-y-4">
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex flex-col items-start gap-2">
         <div>
-          <h2 className="text-xl font-semibold">Portal notices</h2>
+          <h1 className="text-2xl font-semibold">Portal Notices</h1>
           <p className="text-sm text-muted-foreground">
             Announcements shown at the very top of the web portal only. Each person can
             close a notice once they've read it; editing a notice shows it again.
