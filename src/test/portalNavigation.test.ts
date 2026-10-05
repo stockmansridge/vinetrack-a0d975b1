@@ -55,6 +55,7 @@ describe("Portal navigation — destinations", () => {
       "Field Trips",
       "Work Tasks",
       "Spraying",
+      "Fertiliser",
       "Pruning",
       "Yield & Harvest",
       "Irrigation",
