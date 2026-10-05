@@ -17,11 +17,14 @@ import {
 import { toast } from "@/hooks/use-toast";
 import {
   completeWorkTask,
+  fetchWorkTaskById,
+  WorkTaskCompletionConflictError,
   reopenWorkTask,
   setWorkTaskCompletedDate,
   type WorkTask,
 } from "@/lib/workTasksQuery";
 import {
+  calendarDate,
   displayCompletedDate,
   isWorkTaskCompleted,
   todayLocal,
@@ -34,26 +37,35 @@ interface Props {
   userId: string | null | undefined;
   onSaved: (saved?: WorkTask) => void;
   fmtDate: (v?: string | null) => string;
+  /** Selected vineyard's configured timezone; browser time only if absent. */
+  timeZone?: string | null;
 }
 
-export function WorkTaskCompletionSection({ task, userId, onSaved, fmtDate }: Props) {
+export function WorkTaskCompletionSection({ task, userId, onSaved, fmtDate, timeZone }: Props) {
   const completed = isWorkTaskCompleted(task);
   const workDate = workDateOf(task);
-  const today = todayLocal();
-  const shownCompleted = displayCompletedDate(task);
+  const today = todayLocal(timeZone);
+  const shownCompleted = displayCompletedDate(task, timeZone);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pickDate, setPickDate] = useState(today);
   const [editDate, setEditDate] = useState(shownCompleted ?? "");
   const uid = userId ?? null;
 
-  const fail = (e: any) =>
+  const fail = async (e: any) => {
     toast({ title: "Save failed", description: String(e?.message ?? e), variant: "destructive" });
+    if (e instanceof WorkTaskCompletionConflictError) {
+      // Adopt the newer row from the other device instead of overwriting it.
+      const fresh = await fetchWorkTaskById(task.id).catch(() => null);
+      setDialogOpen(false);
+      onSaved(fresh ?? undefined);
+    }
+  };
 
   const complete = useMutation({
     mutationFn: () => completeWorkTask(task, pickDate, uid),
     onSuccess: (saved) => {
       setDialogOpen(false);
-      setEditDate(saved.end_date ?? "");
+      setEditDate(calendarDate(saved.end_date) ?? "");
       toast({ title: "Work Task completed" });
       onSaved(saved);
     },
@@ -79,7 +91,7 @@ export function WorkTaskCompletionSection({ task, userId, onSaved, fmtDate }: Pr
 
   const pickError = validateCompletedDate(pickDate, workDate, today);
   const editError = editDate ? validateCompletedDate(editDate, workDate, today) : null;
-  const editDirty = !!editDate && editDate !== (task.end_date ?? shownCompleted ?? "");
+  const editDirty = !!editDate && editDate !== (shownCompleted ?? "");
   const busy = complete.isPending || reopen.isPending || changeDate.isPending;
 
   return (

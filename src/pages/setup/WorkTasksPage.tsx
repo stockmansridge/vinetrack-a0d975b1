@@ -137,7 +137,8 @@ import { useVintage } from "@/lib/useVintage";
 import { isUserVineyardMachine } from "@/lib/equipmentTaxonomy";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 import { WorkTaskCompletionSection } from "@/components/work-tasks/WorkTaskCompletionSection";
-import { completionLabel, displayCompletedDate, isWorkTaskCompleted } from "@/lib/workTaskCompletion";
+import { calendarDate, completionLabel, displayCompletedDate, isWorkTaskCompleted } from "@/lib/workTaskCompletion";
+import { fetchVineyard } from "@/lib/vineyardSettingsQuery";
 
 
 
@@ -203,11 +204,12 @@ const mkFmtDate = (rf: RegionFormatters) => (v?: string | null) => {
 };
 const mkMoney = (rf: RegionFormatters) => (v: any) =>
   v == null || v === "" || Number.isNaN(Number(v)) ? "—" : rf.currency(Number(v));
-const mkDateRangeLabel = (rf: RegionFormatters) => {
+const mkDateRangeLabel = (rf: RegionFormatters, timeZone?: string | null) => {
   const fd = mkFmtDate(rf);
   return (t: WorkTask) => {
-    const s = t.start_date ?? t.date ?? null;
-    const e = isWorkTaskCompleted(t) ? displayCompletedDate(t) : (t.end_date ?? null);
+    // Business dates are compared as calendar days (YYYY-MM-DD).
+    const s = calendarDate(t.start_date ?? t.date ?? null);
+    const e = isWorkTaskCompleted(t) ? displayCompletedDate(t, timeZone) : calendarDate(t.end_date ?? null);
     if (!s && !e) return "—";
     if (s && e && s !== e) return `${fd(s)} → ${fd(e)}`;
     return fd(s ?? e);
@@ -228,7 +230,13 @@ export default function WorkTasksPage() {
   const rf = useRegionFormatters();
   const fmtDate = mkFmtDate(rf);
   const money = mkMoney(rf);
-  const dateRangeLabel = mkDateRangeLabel(rf);
+  const { data: vineyardRecord } = useQuery({
+    queryKey: ["vineyard-settings", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchVineyard(selectedVineyardId!),
+  });
+  const vineyardTimeZone = vineyardRecord?.timezone ?? null;
+  const dateRangeLabel = mkDateRangeLabel(rf, vineyardTimeZone);
   const areaUnit = rf.areaUnitLabel;
   const qc = useQueryClient();
 
@@ -955,7 +963,10 @@ export default function WorkTasksPage() {
         canSoftDelete={canSoftDelete}
         userId={user?.id ?? null}
         vineyardId={selectedVineyardId}
-        onSaved={() => {
+        vineyardTimeZone={vineyardTimeZone}
+        onSaved={(saved) => {
+          // The drawer is driven by `selected`; adopt the saved row immediately.
+          if (saved) setSelected((cur) => (cur && cur.id === saved.id ? saved : cur));
           qc.invalidateQueries({ queryKey: ["work_tasks"] });
           qc.invalidateQueries({ queryKey: ["work_task_labour_lines"] });
           qc.invalidateQueries({ queryKey: ["work_task_paddocks"] });
@@ -986,6 +997,7 @@ export default function WorkTasksPage() {
         canSoftDelete={canSoftDelete}
         userId={user?.id ?? null}
         vineyardId={selectedVineyardId}
+        vineyardTimeZone={vineyardTimeZone}
         onSaved={(saved) => {
           if (saved) setCreatedTask(saved);
           qc.invalidateQueries({ queryKey: ["work_tasks"] });
@@ -1032,11 +1044,12 @@ interface DrawerProps {
   canSoftDelete: boolean;
   userId: string | null;
   vineyardId: string | null;
+  vineyardTimeZone?: string | null;
   onSaved: (saved?: WorkTask) => void;
 }
 
 function WorkTaskDrawer({
-  task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, linkedTrips, allTrips, paddockNameById, machineLines, machineLookups, allocByTripId, canSeeCosts, canSoftDelete, userId, vineyardId, onSaved,
+  task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, linkedTrips, allTrips, paddockNameById, machineLines, machineLookups, allocByTripId, canSeeCosts, canSoftDelete, userId, vineyardId, vineyardTimeZone, onSaved,
 }: DrawerProps) {
   const isNew = !task;
   const [localLabourLines, setLocalLabourLines] = useState<WorkTaskLabourLine[]>([]);
@@ -1044,7 +1057,7 @@ function WorkTaskDrawer({
   const rf = useRegionFormatters();
   const fmtDate = mkFmtDate(rf);
   const money = mkMoney(rf);
-  const dateRangeLabel = mkDateRangeLabel(rf);
+  const dateRangeLabel = mkDateRangeLabel(rf, vineyardTimeZone);
   const areaUnit = rf.areaUnitLabel;
 
   // Initial selection: prefer join rows, fallback to legacy single paddock_id.
@@ -1058,12 +1071,13 @@ function WorkTaskDrawer({
   const [paddocksOpen, setPaddocksOpen] = useState(false);
   const [taskType, setTaskType] = useState<string>(task?.task_type ?? "");
   const [status, setStatus] = useState<string>(task?.status ?? "");
-  const [startDate, setStartDate] = useState<string>(task?.start_date ?? task?.date ?? "");
+  const [startDate, setStartDate] = useState<string>(calendarDate(task?.start_date ?? task?.date ?? null) ?? "");
   const [endDate, setEndDate] = useState<string>(task?.end_date ?? "");
   const [description, setDescription] = useState<string>(task?.description ?? "");
   const [notes, setNotes] = useState<string>(task?.notes ?? "");
   const [isFinalized, setIsFinalized] = useState<boolean>(!!task?.is_finalized);
   const [savedTaskId, setSavedTaskId] = useState<string | null>(task?.id ?? null);
+  const [justCreated, setJustCreated] = useState(false);
 
   useEffect(() => {
     setSavedTaskId(task?.id ?? null);
@@ -1117,7 +1131,10 @@ function WorkTaskDrawer({
         user_id: userId,
         current_sync_version: task?.sync_version ?? 0,
       };
-      const saved = isNew ? await createWorkTask(input) : await updateWorkTask(input);
+      // Never CREATE twice: once the first save returned an id, later saves update it.
+      const saved = isNew && !savedTaskId
+        ? await createWorkTask(input)
+        : await updateWorkTask({ ...input, id: task?.id ?? savedTaskId! });
 
       // Reconcile join table.
       await syncWorkTaskPaddocks({
@@ -1135,6 +1152,7 @@ function WorkTaskDrawer({
     },
     onSuccess: (saved) => {
       setSavedTaskId(saved.id);
+      if (isNew) setJustCreated(true);
       toast(isNew
         ? { title: "Work Task saved", description: "You can now add Labour, Machine Work and Materials below." }
         : { title: "Task log updated" });
@@ -1354,13 +1372,13 @@ function WorkTaskDrawer({
                 Save this Work Task first. You can then add Labour, Machine Work and Materials.
               </div>
             )}
-            {isNew && savedTaskId && (
+            {justCreated && (
               <div className="rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-xs text-primary">
                 Work Task saved. You can now add Labour, Machine Work and Materials below.
               </div>
             )}
             {!isNew && task && (
-              <WorkTaskCompletionSection task={task} userId={userId} onSaved={onSaved} fmtDate={fmtDate} />
+              <WorkTaskCompletionSection task={task} userId={userId} onSaved={onSaved} fmtDate={fmtDate} timeZone={vineyardTimeZone} />
             )}
             {savedTaskId && !isPieceRateTask && visibleLines.length === 0 && displayedMachineLines.length === 0 && (
               <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
@@ -1580,11 +1598,9 @@ function WorkTaskDrawer({
           </div>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
-            {!(isNew && savedTaskId) && (
-              <Button onClick={() => saveTask.mutate()} disabled={saveTask.isPending || deleteTask.isPending}>
-                {saveTask.isPending ? "Saving…" : isNew ? "Save & add resources" : "Save changes"}
-              </Button>
-            )}
+            <Button onClick={() => saveTask.mutate()} disabled={saveTask.isPending || deleteTask.isPending}>
+              {saveTask.isPending ? "Saving…" : isNew && !savedTaskId ? "Save & add resources" : "Save changes"}
+            </Button>
           </div>
         </SheetFooter>
       </SheetContent>

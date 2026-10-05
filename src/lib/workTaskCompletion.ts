@@ -20,8 +20,21 @@ export const completionState = (t: Pick<WorkTask, "is_finalized">): WorkTaskComp
 export const completionLabel = (t: Pick<WorkTask, "is_finalized">): string =>
   isWorkTaskCompleted(t) ? "Completed" : "To do";
 
+/**
+ * Business calendar date (YYYY-MM-DD) of a stored work date. These fields are
+ * vineyard calendar dates, so the leading date component is kept verbatim —
+ * never timezone-converted. Returns null for anything that isn't a date.
+ */
+export function calendarDate(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v).trim());
+  if (!m) return null;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3] ? `${m[1]}-${m[2]}-${m[3]}` : null;
+}
+
 export const workDateOf = (t: Pick<WorkTask, "start_date" | "date">): string | null =>
-  t.start_date ?? t.date ?? null;
+  calendarDate(t.start_date ?? t.date ?? null);
 
 /** Calendar date (YYYY-MM-DD) of an instant in the given time zone. */
 export function localDateOf(iso: string, timeZone?: string | null): string | null {
@@ -53,7 +66,9 @@ export function displayCompletedDate(
   timeZone?: string | null,
 ): string | null {
   if (!isWorkTaskCompleted(t)) return null;
-  if (t.end_date) return t.end_date;
+  const end = calendarDate(t.end_date);
+  if (end) return end;
+  // finalized_at is a real instant → vineyard-local calendar day.
   if (t.finalized_at) return localDateOf(t.finalized_at, timeZone);
   return null;
 }
@@ -64,9 +79,12 @@ export function validateCompletedDate(
   workDate: string | null,
   today: string,
 ): string | null {
-  if (!completedDate) return "Choose a Completed Date.";
-  if (workDate && completedDate < workDate) return "Completed Date cannot be before the Work Date.";
-  if (completedDate > today) return "Completed Date cannot be in the future.";
+  const c = calendarDate(completedDate);
+  const w = calendarDate(workDate);
+  const t = calendarDate(today) ?? today;
+  if (!c) return "Choose a Completed Date.";
+  if (w && c < w) return "Completed Date cannot be before the Work Date.";
+  if (c > t) return "Completed Date cannot be in the future.";
   return null;
 }
 

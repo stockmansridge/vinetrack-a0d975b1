@@ -305,39 +305,66 @@ export async function updateWorkTask(input: UpsertWorkTaskInput): Promise<WorkTa
   return data as WorkTask;
 }
 
+export class WorkTaskCompletionConflictError extends Error {
+  constructor(message = "This Work Task was changed on another device. It has been refreshed — please check it and try again.") {
+    super(message);
+    this.name = "WorkTaskCompletionConflictError";
+  }
+}
+
+/**
+ * Completion write with optimistic concurrency: reads the CURRENT row version,
+ * checks the row is still in the expected completion state, then writes
+ * version + 1 guarded by `.eq("sync_version", current)`. sync_version is never
+ * lowered; if another device changed the row in between, nothing is written
+ * and a conflict error is raised instead of overwriting the newer version.
+ */
 async function writeCompletion(
   task: Pick<WorkTask, "id" | "sync_version">,
   fields: Record<string, unknown>,
   userId: string | null,
+  expectFinalized: boolean,
 ): Promise<WorkTask> {
+  const { data: current, error: readErr } = await supabase
+    .from("work_tasks")
+    .select("id, sync_version, is_finalized")
+    .eq("id", task.id)
+    .single();
+  if (readErr) throw readErr;
+  if (!!(current as any)?.is_finalized !== expectFinalized) {
+    throw new WorkTaskCompletionConflictError();
+  }
+  const currentVersion = Number((current as any)?.sync_version) || 0;
   const { data, error } = await supabase
     .from("work_tasks")
     .update({
       ...fields,
       client_updated_at: nowIso(),
-      sync_version: (Number(task.sync_version) || 0) + 1,
+      sync_version: Math.max(currentVersion, Number(task.sync_version) || 0) + 1,
       updated_by: userId,
     } as any)
     .eq("id", task.id)
+    .eq("sync_version", currentVersion)
     .select("*")
-    .single();
+    .maybeSingle();
   if (error) throw error;
+  if (!data) throw new WorkTaskCompletionConflictError();
   return data as WorkTask;
 }
 
 /** Complete: one write; finalized_at is the real press time, not the Completed Date. */
 export function completeWorkTask(task: Pick<WorkTask, "id" | "sync_version">, completedDate: string, userId: string | null) {
-  return writeCompletion(task, completePayload(completedDate, userId, nowIso()), userId);
+  return writeCompletion(task, completePayload(completedDate, userId, nowIso()), userId, false);
 }
 
 /** Reopen: clears completion only; Work Date, resources and costing untouched. */
 export function reopenWorkTask(task: Pick<WorkTask, "id" | "sync_version">, userId: string | null) {
-  return writeCompletion(task, reopenPayload(), userId);
+  return writeCompletion(task, reopenPayload(), userId, true);
 }
 
 /** Correct the Completed Date of a completed task; audit fields preserved. */
 export function setWorkTaskCompletedDate(task: Pick<WorkTask, "id" | "sync_version">, completedDate: string, userId: string | null) {
-  return writeCompletion(task, completedDatePayload(completedDate), userId);
+  return writeCompletion(task, completedDatePayload(completedDate), userId, true);
 }
 
 export interface UpsertLabourLineInput {
