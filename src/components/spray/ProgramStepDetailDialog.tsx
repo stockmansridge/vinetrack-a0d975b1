@@ -5,7 +5,16 @@
 // verified identity, and never touches spray history.
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Archive, Pencil, Play } from "lucide-react";
+import { Archive, Droplets, Pencil, Play } from "lucide-react";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import {
+  fertigationLinesFromJob,
+  fertigationRateText,
+  isFertigationProgramStep,
+  useFertigationApplications,
+} from "@/lib/fertigation";
+import { formatDuration, formatLitres, formatNumber } from "@/lib/irrigationQuery";
+import { formatDate } from "@/lib/dateFormat";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -35,7 +44,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export function ProgramStepDetailDialog({
   open, onOpenChange, job, vineyardId, canEdit, equipmentName, tractorName,
-  onPlanSpray, onEdit, onArchive,
+  onPlanSpray, onApplyViaIrrigation, onEdit, onArchive,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -45,6 +54,8 @@ export function ProgramStepDetailDialog({
   equipmentName?: string | null;
   tractorName?: string | null;
   onPlanSpray: () => void;
+  /** Fertigation Program Steps only — opens Record Irrigation with this step. */
+  onApplyViaIrrigation?: () => void;
   onEdit: () => void;
   onArchive: () => void;
 }) {
@@ -65,6 +76,14 @@ export function ProgramStepDetailDialog({
     return m;
   }, [chemResult]);
 
+  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
+  const isFertigation = isFertigationProgramStep(job);
+  const fertigationVisible = isFertigation && isSystemAdmin;
+  const history = useFertigationApplications(
+    vineyardId,
+    { programStepId: job.id, includeReversed: true },
+    open && fertigationVisible,
+  );
   const lines = programLines(job);
   const stage = job.growth_stage_code ?? null;
   const stageDesc = growthStageDescription(stage);
@@ -86,6 +105,60 @@ export function ProgramStepDetailDialog({
 
         <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-5 p-5">
+            {isFertigation && (
+              <Section title="Fertigation products &amp; planned rates">
+                <ul className="space-y-0.5 text-sm">
+                  {fertigationLinesFromJob(job).map((l, i) => (
+                    <li key={i}>
+                      <span className="font-medium">{l.productName ?? "Unnamed product"}</span>
+                      <span className="text-muted-foreground"> — {fertigationRateText(l)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            )}
+            {fertigationVisible && (
+              <Section title="Application History">
+                {history.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+                {history.error && (
+                  <p className="text-sm text-destructive">Couldn't load applications: {(history.error as Error).message}</p>
+                )}
+                {history.data?.length === 0 && (
+                  <p className="text-sm text-muted-foreground">Not applied via irrigation yet.</p>
+                )}
+                <div className="space-y-2">
+                  {(history.data ?? []).map((a) => (
+                    <div key={a.id} className="rounded-md border p-3 text-sm" data-testid="fertigation-history-row">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">
+                          {a.session_date ? formatDate(a.session_date) : "Date unknown"}
+                          {a.system_name ? ` · ${a.system_name}` : ""}
+                          {a.valve_name ? ` · ${a.valve_name}` : ""}
+                        </span>
+                        {a.status === "reversed" && <Badge variant="outline">Reversed</Badge>}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {a.block_names?.length ? `${a.block_names.join(", ")} · ` : ""}
+                        {a.duration_minutes != null ? `${formatDuration(a.duration_minutes)} · ` : ""}
+                        {a.total_volume_litres != null ? formatLitres(a.total_volume_litres) : "Water unknown"}
+                      </div>
+                      <ul className="mt-1 text-xs">
+                        {a.products.map((p) => (
+                          <li key={p.id}>
+                            {p.product_name}:{" "}
+                            {p.actual_quantity != null
+                              ? `${formatNumber(p.actual_quantity, 2)} ${p.quantity_unit ?? ""} applied`
+                              : "actual not entered"}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            )}
+
+            {!isFertigation && (<>
             <Section title="Targets">
               {targets.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No targets recorded.</p>
@@ -114,6 +187,9 @@ export function ProgramStepDetailDialog({
               )}
             </Section>
 
+            </>)}
+
+            {!isFertigation && (
             <Section title="Application">
               <dl className="grid grid-cols-[9rem_1fr] gap-y-1 text-sm">
                 <dt className="text-muted-foreground">Method</dt>
@@ -126,6 +202,7 @@ export function ProgramStepDetailDialog({
                 <dd>{tractorName ?? "Not set"}</dd>
               </dl>
             </Section>
+            )}
 
             <Section title="Chemical information">
               {lines.length === 0 ? (
@@ -195,9 +272,17 @@ export function ProgramStepDetailDialog({
                 <Pencil className="mr-1 h-4 w-4" /> Edit Program Step
               </Button>
             )}
-            <Button size="sm" onClick={onPlanSpray} disabled={!canEdit}>
-              <Play className="mr-1 h-4 w-4" /> Plan Spray
-            </Button>
+            {isFertigation ? (
+              fertigationVisible && onApplyViaIrrigation ? (
+                <Button size="sm" onClick={onApplyViaIrrigation}>
+                  <Droplets className="mr-1 h-4 w-4" /> Apply via Irrigation
+                </Button>
+              ) : null
+            ) : (
+              <Button size="sm" onClick={onPlanSpray} disabled={!canEdit}>
+                <Play className="mr-1 h-4 w-4" /> Plan Spray
+              </Button>
+            )}
           </div>
         </DialogFooter>
       </DialogContent>
