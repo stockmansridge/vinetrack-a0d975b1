@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/select";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import {
-  actualVineCount, assumedFullVineCount, resolveVineBasis, VINE_COUNT_BASIS_PERSISTED,
+  actualVineCount, assumedFullVineCount, resolveVineBasis, VINE_COUNT_BASIS_PERSISTED, vineCountBasisForSave,
   type ActualVineSource, type AssumedFullUnavailable, type DialogVineBasis,
 } from "@/lib/fertiliserVineBasis";
 import {
@@ -475,10 +475,12 @@ export default function FertiliserCalculatorDialog({
         calculation_mode: mode,
         record_status: recordStatus,
         application_date: effectiveDate,
-        // Blocked on the shared vine_count_basis field (Rork); off until it exists.
-        ...(VINE_COUNT_BASIS_PERSISTED && mode === "perVine"
-          ? { vine_count_basis: selectedBlocks.length === 0 ? "manual" : vineBasis === "snapshot" ? undefined : vineBasis }
-          : {}),
+        vine_count_basis: VINE_COUNT_BASIS_PERSISTED
+          ? vineCountBasisForSave({
+              mode, selectedBlockCount: selectedBlocks.length, basis: vineBasis,
+              isEdit: !!existing, sourceBasis: duplicateFrom?.record?.vine_count_basis ?? null,
+            })
+          : undefined,
         block_names: selectedBlocks.map((b) => b.name),
         total_area_ha: calc.totalAreaHa,
         total_vines: calc.totalVines,

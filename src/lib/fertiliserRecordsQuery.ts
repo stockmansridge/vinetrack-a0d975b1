@@ -25,6 +25,8 @@ export interface FertiliserRecord {
   form: FertiliserForm | string;
   calculation_mode: FertiliserCalculationMode | string;
   record_status: FertiliserRecordStatus | string;
+  /** SQL 265 — actual | assumed_full | manual; NULL for legacy records. */
+  vine_count_basis?: "actual" | "assumed_full" | "manual" | null;
   application_date: string;
   block_names: string[];
   total_area_ha: number;
@@ -124,6 +126,8 @@ export interface SaveFertiliserRecordInput {
   total_job_cost: number | null;
   notes: string;
   allocations: SaveFertiliserAllocationInput[];
+  /** Omit (undefined) to leave the stored value untouched. */
+  vine_count_basis?: "actual" | "assumed_full" | "manual" | null;
   user_id: string | null;
   /** When known, forwarded so sync_version can be incremented on update. */
   current_sync_version?: number;
@@ -165,6 +169,7 @@ export async function saveFertiliserRecord(
     client_updated_at: iso,
     sync_version: (input.current_sync_version ?? 0) + 1,
   };
+  if (input.vine_count_basis !== undefined) recordPayload.vine_count_basis = input.vine_count_basis;
   // Only send created_by on the first write; on retries the row already exists.
   if ((input.current_sync_version ?? 0) === 0) {
     recordPayload.created_by = input.user_id ?? null;
