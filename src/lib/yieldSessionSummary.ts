@@ -167,6 +167,16 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
 
   const { map: weights, flat: flatWeight } = bunchWeightMap(p);
 
+  // Stored per-block vine counts on the session payload (snapshot), if any.
+  const snapshotVines = new Map<string, number>();
+  const readSnap = (o: any) => {
+    const id = pickFirst(o, ["paddockId", "paddock_id", "blockId", "block_id"]);
+    const v = num(pickFirst(o, ["totalVines", "total_vines", "vineCount", "vine_count"]));
+    if (typeof id === "string" && v != null && v > 0) snapshotVines.set(id.toLowerCase(), v);
+  };
+  for (const o of asArray(pickFirst(p, ["blockResults", "block_results"]))) readSnap(o);
+  for (const o of asArray(pickFirst(p, ["sampleSets", "sample_sets", "blocks", "blockSamples", "block_samples"]))) readSnap(o);
+
   // Grouped sites keyed by block id (or a synthetic key when unknown).
   const grouped = new Map<string, { name: string | null; variety: string | null; notes: string | null; sites: SessionSite[] }>();
   const ensure = (key: string, name?: string | null) => {
@@ -234,7 +244,11 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
     const weight = (blockId ? weights[blockId] : undefined) ?? flatWeight ?? DEFAULT_BUNCH_WEIGHT_KG;
     const bunchWeightIsDefault = !(blockId && weights[blockId] != null) && flatWeight == null;
 
-    const totalVines = info?.vineCount ?? null;
+    // A trip's own stored/snapshotted vine count wins (historical trips are
+    // never recalculated from today's block); otherwise the live
+    // authoritative block count.
+    const snap = blockId ? snapshotVines.get(blockId) : undefined;
+    const totalVines = snap ?? info?.vineCount ?? null;
     const damageFactor = blockId && opts.damageFactor ? opts.damageFactor(blockId) : 1;
 
     // The BASE estimate is always computed and kept — damage never mutates the
