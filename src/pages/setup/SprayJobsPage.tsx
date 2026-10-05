@@ -194,7 +194,7 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
     if (isFertigationProgramStep(step)) {
       // Fertigation is applied through irrigation — never a Planned Spray.
       setDetailStep(null);
-      navigate(`/irrigation/record?fertigationStep=${encodeURIComponent(step.id)}`);
+      navigate(applyViaIrrigationPath(step.id));
       return;
     }
     setPickerOpen(false);
@@ -285,7 +285,13 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
           equipmentName={detailStep.equipment_id ? lookups.maps.equipment.get(detailStep.equipment_id) ?? null : null}
           tractorName={detailStep.tractor_id ? lookups.maps.tractors.get(detailStep.tractor_id) ?? null : null}
           onPlanSpray={() => startPlanFromStep(detailStep)}
-          onApplyViaIrrigation={() => startPlanFromStep(detailStep)}
+          onApplyViaIrrigation={() => {
+            // Navigation only — the Program Step is reusable intent and is never mutated here.
+            if (!isFertigationProgramStep(detailStep)) return;
+            const id = detailStep.id;
+            setDetailStep(null);
+            navigate(applyViaIrrigationPath(id));
+          }}
           onEdit={() => {
             const job = detailStep;
             setDetailStep(null);
