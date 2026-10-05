@@ -563,7 +563,7 @@ export default function BillingPage({ customerPreview = false }: { customerPrevi
         </Alert>
       )}
       <header className="space-y-1">
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-col items-start gap-2">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Billing</h1>
             <p className="text-sm text-muted-foreground">

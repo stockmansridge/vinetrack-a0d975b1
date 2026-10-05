@@ -203,7 +203,7 @@ export default function FuelPurchasesPage({ embedded = false }: { embedded?: boo
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
+      <div className="flex flex-col items-start gap-3">
         {embedded ? (
           <p className="text-sm text-muted-foreground max-w-2xl">
             {canWrite
@@ -220,7 +220,7 @@ export default function FuelPurchasesPage({ embedded = false }: { embedded?: boo
             </p>
           </div>
         )}
-        <div className="flex gap-2 ml-auto">
+        <div className="flex gap-2">
           <Button variant="outline" onClick={exportCsv} disabled={!rows.length}>
             <Download className="h-4 w-4 mr-1" /> CSV
           </Button>
