@@ -634,13 +634,13 @@ export default function ChemicalV3LabPage() {
       setNotice(res.reused ? V3_REUSED_MESSAGE : res.backendMissing ? V3_BACKEND_MISSING : null);
     } catch (e: any) { setError(e?.message ?? "Could not start discovery."); }
   };
-  const find = useMutation({ mutationFn: () => begin({ query: searched, countryCode: country, inputKind: "text", photoPath: null }) });
+  const find = useMutation({ mutationFn: () => begin({ query: searched, countryCode: country, inputKind: "text", photoPath: null, vineyardId: selectedVineyardId ?? null }) });
   const photoSearch = useMutation({
     mutationFn: async () => {
       if (!user || !photo) return;
       try {
         const path = await uploadV3SearchPhoto(user.id, photo);
-        await begin({ query: null, countryCode: country, inputKind: "photo", photoPath: path });
+        await begin({ query: null, countryCode: country, inputKind: "photo", photoPath: path, vineyardId: selectedVineyardId ?? null });
       } catch (e: any) { setError(e?.message ?? "Upload failed."); }
     },
   });

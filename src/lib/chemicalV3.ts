@@ -12,7 +12,7 @@ export const V3_JOBS_TABLE = "chemical_v3_discovery_jobs";
 export const V3_REVISIONS_TABLE = "chemical_v3_product_revisions";
 export const V3_RPC = {
   search: "search_chemical_v3_catalogue",
-  start: "start_chemical_v3_discovery",
+  start: "start_chemical_v3_discovery_v2",
   queue: "chemical_v3_admin_review_queue",
   approve: "approve_chemical_v3_revision",
   reject: "reject_chemical_v3_revision",
@@ -94,12 +94,15 @@ export async function startV3Discovery(args: {
   countryCode: string | null;
   inputKind: "text" | "photo";
   photoPath: string | null;
+  /** Selected vineyard at the moment discovery starts; null only when none is selected. */
+  vineyardId: string | null;
 }): Promise<StartResult> {
   const { data, error } = await sb.rpc(V3_RPC.start, {
     p_query: args.query,
     p_country_code: args.countryCode,
     p_input_kind: args.inputKind,
     p_photo_path: args.photoPath,
+    p_vineyard_id: args.vineyardId ?? null,
   });
   if (error) throw error;
   const row = (Array.isArray(data) ? data[0] : data) as Row | null;
