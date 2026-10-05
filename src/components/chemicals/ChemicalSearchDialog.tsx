@@ -286,8 +286,9 @@ export function ChemicalSearchDialog(props: ChemicalSearchDialogProps) {
                       Can't find the product in the{" "}
                       <span className="font-extrabold" style={{ fontFamily: "'Montserrat', sans-serif", letterSpacing: "-0.015em" }}>
                         <span className="text-foreground">Vine</span><span style={{ color: "#85B830" }}>Track</span>
-                      </span>{" "}
-                      Catalogue?
+                        <span className="text-foreground"> Catalogue</span>
+                      </span>
+                      ?
                     </span>
                     <Button
                       size="sm"
@@ -350,10 +351,11 @@ export function ChemicalSearchDialog(props: ChemicalSearchDialogProps) {
 }
 
 function brandify(text: string) {
-  return text.split(/(VineTrack)/g).map((part, i) =>
-    part === "VineTrack" ? (
+  return text.split(/(VineTrack(?: AI| [Cc]atalogue)?)/g).map((part, i) =>
+    part.startsWith("VineTrack") ? (
       <span key={i} className="font-extrabold" style={{ fontFamily: "'Montserrat', sans-serif", letterSpacing: "-0.015em" }}>
         <span className="text-foreground">Vine</span><span style={{ color: "#85B830" }}>Track</span>
+        {part.length > 9 && <span className="text-foreground">{part.slice(9)}</span>}
       </span>
     ) : (
       part
