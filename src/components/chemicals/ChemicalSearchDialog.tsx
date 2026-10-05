@@ -307,8 +307,8 @@ export function ChemicalSearchDialog(props: ChemicalSearchDialogProps) {
                 )}
                 {!jobId && searched && search.isSuccess && results.length === 0 && (
                   <div className="space-y-3 rounded-lg border bg-muted/40 p-4" data-testid="chemical-search-miss">
-                    <p className="font-medium">{NOT_SEEN_BEFORE}</p>
-                    <p className="text-sm text-muted-foreground">{NOT_SEEN_BEFORE_DETAIL}</p>
+                    <p className="font-medium">{brandify(NOT_SEEN_BEFORE)}</p>
+                    <p className="text-sm text-muted-foreground">{brandify(NOT_SEEN_BEFORE_DETAIL)}</p>
                     <div className="flex flex-wrap gap-2">
                       <Button onClick={() => find.mutate()} disabled={find.isPending}>
                         <Sparkles className="mr-1.5 h-4 w-4" aria-hidden="true" />
@@ -346,5 +346,17 @@ export function ChemicalSearchDialog(props: ChemicalSearchDialogProps) {
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function brandify(text: string) {
+  return text.split(/(VineTrack)/g).map((part, i) =>
+    part === "VineTrack" ? (
+      <span key={i} className="font-extrabold" style={{ fontFamily: "'Montserrat', sans-serif", letterSpacing: "-0.015em" }}>
+        <span className="text-foreground">Vine</span><span style={{ color: "#85B830" }}>Track</span>
+      </span>
+    ) : (
+      part
+    ),
   );
 }
