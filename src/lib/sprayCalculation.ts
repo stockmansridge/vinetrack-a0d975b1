@@ -164,11 +164,14 @@ export function calculateCarrier(args: {
   let derivedRatesAreReferenceOnly = false;
 
   if (!basis) {
-    if (args.operationType === "spreader") {
+    if (args.operationType === "spreader" || args.operationType === "fertigation") {
       diagnostics.push({
-        code: "spreader_no_carrier",
+        code: args.operationType === "fertigation" ? "fertigation_no_spray_carrier" : "spreader_no_carrier",
         severity: "info",
-        message: "Spreader application — no carrier volume required.",
+        message:
+          args.operationType === "fertigation"
+            ? "Fertigation Program Step — water and block allocation come from the linked Irrigation Record."
+            : "Spreader application — no carrier volume required.",
       });
     } else {
       note("missing_carrier_basis", "error", "Spray volume basis is not set.");
