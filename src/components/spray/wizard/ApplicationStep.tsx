@@ -10,10 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
+  FERTIGATION_OPERATION,
   OPERATION_TYPES,
   OPERATION_TYPE_LABEL,
   type OperationType,
 } from "@/lib/sprayApplicationDomain";
+import { Badge } from "@/components/ui/badge";
 import { applyOperationType, applyTemplate, hydrateDraft } from "@/lib/sprayApplicationDraft";
 import { chemicalLinesSummary, fetchSprayJobs } from "@/lib/sprayJobsQuery";
 import { SelectTile } from "./controls";
@@ -25,9 +27,30 @@ const OPERATION_HELP: Record<OperationType, string> = {
   foliar: "Sprayed over the canopy — carrier volume and head target apply.",
   banded: "Sprayed as a band along the row — treated area is calculated from the band width.",
   spreader: "Solid product spread over the block — no liquid carrier.",
+  fertigation: "Applied through an irrigation cycle — the irrigation record supplies blocks, water and valve.",
 };
 
-export function ApplicationStep({ app, patch, update, canEdit, vineyardId, intelligenceById }: StepProps) {
+/**
+ * Fertigation is offered only to a System Admin on a Program Step. A step
+ * already stored as Fertigation always shows its own tile.
+ */
+export function offeredOperationTypes(args: {
+  isTemplate: boolean;
+  fertigationEnabled: boolean;
+  current: OperationType | null;
+}): OperationType[] {
+  const showFertigation =
+    (args.isTemplate && args.fertigationEnabled) || args.current === FERTIGATION_OPERATION;
+  return showFertigation ? [...OPERATION_TYPES, FERTIGATION_OPERATION] : [...OPERATION_TYPES];
+}
+
+export function ApplicationStep({ app, patch, update, canEdit, vineyardId, intelligenceById, fertigationEnabled = false }: StepProps) {
+  const ops = offeredOperationTypes({
+    isTemplate: app.isTemplate,
+    fertigationEnabled,
+    current: app.operationType,
+  });
+  const isFertigation = app.operationType === FERTIGATION_OPERATION;
   return (
     <div className="space-y-6">
       <section className="space-y-3">
@@ -75,7 +98,7 @@ export function ApplicationStep({ app, patch, update, canEdit, vineyardId, intel
           <div className="flex items-center gap-2 sm:col-span-2">
             <Checkbox
               id="spray-template"
-              disabled={!canEdit}
+              disabled={!canEdit || isFertigation}
               checked={app.isTemplate}
               onCheckedChange={(c) => patch({ isTemplate: !!c })}
             />
@@ -101,18 +124,29 @@ export function ApplicationStep({ app, patch, update, canEdit, vineyardId, intel
         <h3 className="text-sm font-semibold">Application type</h3>
         {/* Same shared selector as Canopy & Spray Volume — one selection
             language across the whole wizard. */}
-        <div role="radiogroup" aria-label="Application type" className="grid gap-3 sm:grid-cols-3">
-          {OPERATION_TYPES.map((op) => (
+        <div
+          role="radiogroup"
+          aria-label="Application type"
+          className={ops.length > 3 ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-4" : "grid gap-3 sm:grid-cols-3"}
+        >
+          {ops.map((op) => (
             <SelectTile
               key={op}
               selected={app.operationType === op}
-              disabled={!canEdit}
+              disabled={!canEdit || (op === FERTIGATION_OPERATION && !fertigationEnabled)}
               onSelect={() => update((a) => applyOperationType(a, op))}
               title={OPERATION_TYPE_LABEL[op]}
               hint={OPERATION_HELP[op]}
             />
           ))}
         </div>
+        {isFertigation && (
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Badge variant="outline">System Admin · in development</Badge>
+            Spray target, blocks, equipment, canopy, water and resistance check don't apply and
+            have been cleared.
+          </p>
+        )}
         {app.operationType === "banded" && (
           <p className="text-xs text-muted-foreground">
             Head target does not apply to banded applications and has been cleared.

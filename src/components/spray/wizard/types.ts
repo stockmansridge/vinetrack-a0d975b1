@@ -27,4 +27,6 @@ export interface StepProps {
   intelligenceById: Map<string, ChemicalIntelligence>;
   vineyardId: string;
   canEdit: boolean;
+  /** System Admin development gate for Fertigation (Program Steps only). */
+  fertigationEnabled?: boolean;
 }

@@ -45,6 +45,9 @@ import { ResistanceStep } from "./ResistanceStep";
 import { ResistanceAcknowledgement } from "./ResistanceAcknowledgement";
 import { useResistanceAssessment } from "@/hooks/useResistanceAssessment";
 import { ReviewStep } from "./ReviewStep";
+import { FertigationProductsStep, FertigationReviewStep } from "./FertigationSteps";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import { fertigationGateReasons } from "@/lib/fertigation";
 import type { StepProps, WizardLookups } from "./types";
 
 const STEPS = [
@@ -204,15 +207,23 @@ export function SprayJobWizard({
     [app, geometry],
   );
 
-  const gate = useMemo(
-    () => evaluateSaveGate({ application: app, calculation: calc }),
-    [app, calc],
-  );
+  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
+  const isFertigation = app.operationType === "fertigation";
+
+  const gate = useMemo(() => {
+    if (app.operationType === "fertigation") {
+      // Fertigation never needs equipment, carrier or a resistance check.
+      const reasons = fertigationGateReasons({ name: app.name, isTemplate: app.isTemplate, products: app.products });
+      if (!isSystemAdmin) reasons.unshift("Fertigation is in development and limited to System Admins.");
+      return { fatal: [], warnings: [], info: [], canSave: reasons.length === 0, blockingReasons: reasons };
+    }
+    return evaluateSaveGate({ application: app, calculation: calc });
+  }, [app, calc, isSystemAdmin]);
 
   // The verdict is recomputed here from CURRENT history and the ruleset in
   // force; it is never read back from the saved job.
   const resistance = useResistanceAssessment({
-    enabled: open && hydrated && !app.isTemplate,
+    enabled: open && hydrated && !app.isTemplate && app.operationType !== "fertigation",
     vineyardId,
     application: app,
     intelligenceById,
@@ -222,7 +233,8 @@ export function SprayJobWizard({
   useEffect(() => {
     setResistanceAck(false);
   }, [resistance.overallStatus]);
-  const resistanceBlocksSave = resistance.requiresAcknowledgement && !resistanceAck;
+  const resistanceBlocksSave =
+    app.operationType !== "fertigation" && resistance.requiresAcknowledgement && !resistanceAck;
 
   // Custom target wording is shared vineyard vocabulary (SQL 204); the legacy
   // free-text `target` column keeps the operator's exact wording.
@@ -276,12 +288,14 @@ export function SprayJobWizard({
     intelligenceById,
     vineyardId,
     canEdit,
+    fertigationEnabled: isSystemAdmin,
   };
 
   // A Program Step (`is_template = true`) is reusable configuration: it never
   // carries blocks, and the resistance check needs a real block history, so
   // both steps are hidden. The wizard, draft and calculation engine are shared.
   const visibleSteps = STEPS.filter((s) => {
+    if (isFertigation) return ["application", "growth", "products", "review"].includes(s.key);
     if (s.key === "carrier" && app.operationType === "spreader" && app.mode !== "banded") return false;
     if (app.isTemplate && (s.key === "blocks" || s.key === "resistance")) return false;
     return true;
@@ -299,9 +313,11 @@ export function SprayJobWizard({
       case "growth": return <GrowthStageStep {...stepProps} />;
       case "equipment": return <EquipmentStep {...stepProps} />;
       case "carrier": return <CarrierStep {...stepProps} />;
-      case "products": return <ProductsStep {...stepProps} />;
+      case "products":
+        return isFertigation ? <FertigationProductsStep {...stepProps} /> : <ProductsStep {...stepProps} />;
       case "resistance": return <ResistanceStep {...stepProps} />;
       case "review":
+        if (isFertigation) return <FertigationReviewStep {...stepProps} />;
         return (
           <ReviewStep
             {...stepProps}
