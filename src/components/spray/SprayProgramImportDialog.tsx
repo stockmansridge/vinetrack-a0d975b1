@@ -106,6 +106,17 @@ export function SprayProgramImportDialog({
         </DialogHeader>
 
         {!rows && (
+          <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+            <p className="font-medium">Before importing a program</p>
+            <p className="text-muted-foreground mt-1">
+              For the smoothest import, set up your vineyard data first. Add your chemicals,
+              spray equipment and tractors before downloading the spreadsheet. The spreadsheet
+              uses these existing records as reference lists so imported Program Steps can match
+              correctly.
+            </p>
+          </div>
+        )}
+        {!rows && (
           <div className="flex flex-col items-center justify-center gap-3 py-10 border-2 border-dashed rounded-lg">
             <Upload className="h-8 w-8 text-muted-foreground" />
             <input
