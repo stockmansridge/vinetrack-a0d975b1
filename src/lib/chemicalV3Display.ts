@@ -11,8 +11,7 @@ import { V3_REVISIONS_TABLE, textList } from "@/lib/chemicalV3";
 
 const sb = supabase as any;
 
-export const V3_DISPLAY_COLUMNS =
-  "id, front_label_image_path, manufacturer_label_url, manufacturer_product_url, vineyard_uses";
+export const V3_DISPLAY_COLUMNS = "*";
 
 export interface V3RevisionDisplay {
   id: string;
@@ -20,6 +19,8 @@ export interface V3RevisionDisplay {
   manufacturer_label_url: string | null;
   manufacturer_product_url: string | null;
   vineyard_uses: any;
+  review_status?: string | null;
+  status?: string | null;
 }
 
 export function v3RevisionIdOf(row: any): string | null {
