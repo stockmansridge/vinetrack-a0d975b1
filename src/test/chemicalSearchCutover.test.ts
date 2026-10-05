@@ -53,6 +53,7 @@ describe("Chemical Search production cutover", () => {
   });
   it("saved-chemical badges contain no V3", () => {
     expect(v3EntryBadge({ entry_source: "chemical_v3_candidate" })?.label).toBe("Out of date");
+    expect(v3EntryBadge({ entry_source: "chemical_v3_candidate", chemical_v3_revision_id: "r1" })?.label).toBe("Pending review");
     expect(v3EntryBadge({ entry_source: "chemical_v3_catalogue" })?.label).toBe("VineTrack catalogue");
   });
   it("inventory follows Owner/Manager on the Chemicals page", () => {
