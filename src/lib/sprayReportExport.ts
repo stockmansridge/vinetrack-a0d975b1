@@ -30,7 +30,7 @@ export async function resolveSprayReportCostOverlay(
 ): Promise<Record<string, unknown> | null> {
   if (!payload.cost) return null;
   const vineyardId = payload.identity.vineyardId;
-  const start = payload.identity.startUtc ?? null;
+  const start = payload.trip?.startUtc ?? null;
   if (!vineyardId || !start) return null;
   const season = await fetchVineyardSeasonSettings(vineyardId);
   const vintage = vintageForDate(new Date(start), season.season_start_month, season.season_start_day);
