@@ -35,10 +35,9 @@ export const SETUP_MANAGE_ROLES: Role[] = ["owner", "manager"];
 /**
  * Portal routes that exist but are intentionally System Admin-only in
  * navigation (no route-level role matrix entry yet). The guide must not become
- * a shortcut to them — see the Stage 5B report, Fertiliser Calculator item.
+ * a shortcut to them. (Fertiliser Calculator is a customer Work tool.)
  */
 export const SYSTEM_ADMIN_ONLY_ROUTES = new Set<string>([
-  "/tools/fertiliser-calculator",
   "/tools/satellite-mapping",
 ]);
 
