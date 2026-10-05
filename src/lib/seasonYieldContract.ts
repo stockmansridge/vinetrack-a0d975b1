@@ -359,3 +359,23 @@ export function splitBlockEstimateToGroups(
 
   return groups.map(() => blockTonnes / groups.length);
 }
+
+// SQL 263: server-returned source_inputs.vine_count_basis. The Portal only
+// labels it — the canonical seasonal estimate is never recreated here.
+const SEASON_VINE_COUNT_BASIS_LABELS: Record<string, string> = {
+  block_vine_count_override: "Block manual vine count",
+  vine_count_override: "Block manual vine count",
+  block_override: "Block manual vine count",
+  row_effective_vine_count: "Row vine counts (manual where set, calculated otherwise)",
+  vines_per_ha_x_area: "Saved Vines / ha × block area",
+  pruning_density_x_area: "Saved Vines / ha × block area",
+  vines_per_ha: "Saved Vines / ha × block area",
+};
+
+export function seasonVineCountBasisLabel(basis: unknown): string | null {
+  if (typeof basis !== "string" || !basis.trim()) return null;
+  return (
+    SEASON_VINE_COUNT_BASIS_LABELS[basis] ??
+    basis.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())
+  );
+}

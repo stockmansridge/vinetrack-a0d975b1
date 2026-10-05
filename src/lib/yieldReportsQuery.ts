@@ -22,6 +22,7 @@
 //   relationship is `vineyard_id`.
 import { supabase } from "@/integrations/ios-supabase/client";
 import { deriveMetrics } from "@/lib/paddockGeometry";
+import { authoritativeVineCount, physicalVineCountOverride } from "@/lib/paddockRowVines";
 import type { SessionBlockInfo } from "@/lib/yieldSessionSummary";
 
 
@@ -112,7 +113,27 @@ export async function fetchYieldReportsForVineyard(
 // `variety_allocations` jsonb (docs/supabase-schema.md §3.8).
 // ---------------------------------------------------------------------------
 
-export type YieldBlockInfo = SessionBlockInfo & { varietyAllocations: any };
+export type YieldBlockInfo = SessionBlockInfo & {
+  varietyAllocations: any;
+  /** Active physical override (block or COMPLETE row total), else null. */
+  physicalVineCount: number | null;
+  vineCountSource: "block_override" | "row_effective" | "fallback";
+};
+
+/** Pure mapper: authoritative vine count (same as Block Overview). */
+export function toYieldBlockInfo(p: any): YieldBlockInfo {
+  const m = deriveMetrics(p);
+  const auth = authoritativeVineCount(p, m.vineCount);
+  return {
+    id: p.id as string,
+    name: (p.name as string) ?? null,
+    areaHa: m.areaHa > 0 ? m.areaHa : null,
+    vineCount: auth.count,
+    physicalVineCount: physicalVineCountOverride(p)?.count ?? null,
+    vineCountSource: auth.source,
+    varietyAllocations: p.variety_allocations ?? null,
+  };
+}
 
 export async function fetchYieldBlocks(vineyardId: string): Promise<YieldBlockInfo[]> {
   const { data, error } = await supabase
@@ -124,16 +145,7 @@ export async function fetchYieldBlocks(vineyardId: string): Promise<YieldBlockIn
     .is("deleted_at", null)
     .order("name", { ascending: true });
   if (error) throw error;
-  return (data ?? []).map((p: any) => {
-    const m = deriveMetrics(p);
-    return {
-      id: p.id as string,
-      name: (p.name as string) ?? null,
-      areaHa: m.areaHa > 0 ? m.areaHa : null,
-      vineCount: m.vineCount,
-      varietyAllocations: p.variety_allocations ?? null,
-    } satisfies YieldBlockInfo;
-  });
+  return (data ?? []).map(toYieldBlockInfo);
 }
 
 

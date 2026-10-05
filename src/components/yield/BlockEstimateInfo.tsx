@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
+  seasonVineCountBasisLabel,
   setupWarningLabel,
   type SeasonYieldBlockEstimate,
 } from "@/lib/seasonYieldContract";
@@ -50,6 +51,11 @@ export default function BlockEstimateInfo({
         ? num(inputs[f.key], f.digits ?? 2)
         : String(inputs[f.key]),
   }));
+  const basisLabel = seasonVineCountBasisLabel(inputs.vine_count_basis);
+  if (basisLabel) {
+    const at = rows.findIndex((r) => r.label === "Vines");
+    rows.splice(at >= 0 ? at + 1 : 0, 0, { label: "Vine count from", value: basisLabel });
+  }
 
   return (
     <Popover>

@@ -25,7 +25,7 @@ import {
   savePruningYieldSettings,
   type PruningYieldSettings,
 } from "@/lib/pruningYieldSettingsQuery";
-import { buildBlockPrunedYieldTiles } from "@/lib/pruningYieldSummary";
+import { buildBlockPrunedYieldTiles, effectivePruningVinesPerHa } from "@/lib/pruningYieldSummary";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { useVintage } from "@/lib/useVintage";
 import {
@@ -128,6 +128,20 @@ export default function YieldCalculatorPage() {
 
   const set = (k: keyof FormState, v: string) => setS((prev) => ({ ...prev, [k]: v }));
 
+  // A physical vine override (block or complete row total) supersedes the
+  // saved Vines / ha as count ÷ area. The saved value stays in the form and is
+  // what gets saved, so it becomes active again when the override goes away.
+  const density = useMemo(
+    () =>
+      effectivePruningVinesPerHa({
+        savedVinesPerHa: parse(s.vinesPerHa),
+        physicalVineCount: block?.physicalVineCount ?? null,
+        areaHa: block?.areaHa ?? null,
+      }),
+    [s.vinesPerHa, block],
+  );
+  const physicalDensityActive = density.source === "physical_override";
+
   const result = useMemo(
     () =>
       calculatePruningYield({
@@ -137,11 +151,11 @@ export default function YieldCalculatorPage() {
         spursPerVine: parse(s.spursPerVine),
         budsPerCane: parse(s.budsPerCane),
         canesPerVine: parse(s.canesPerVine),
-        vinesPerHa: parse(s.vinesPerHa),
+        vinesPerHa: physicalDensityActive ? density.vinesPerHa : parse(s.vinesPerHa),
         bunchWeightGrams: parse(s.bunchWeight),
         areaHectares: block?.areaHa ?? null,
       }),
-    [s, block],
+    [s, block, physicalDensityActive, density.vinesPerHa],
   );
 
   const perArea = (tPerHa: number) =>
@@ -371,9 +385,24 @@ export default function YieldCalculatorPage() {
                   <Field label="Canes / vine" value={s.canesPerVine} onChange={(v) => set("canesPerVine", v)} />
                 </>
               )}
-              <Field label="Vines / ha" value={s.vinesPerHa} onChange={(v) => set("vinesPerHa", v)} />
+              {physicalDensityActive ? (
+                <div className="space-y-1.5" data-testid="vines-per-ha-physical">
+                  <Label>Vines / ha</Label>
+                  <Input value={fmt(density.vinesPerHa, 0)} disabled readOnly />
+                </div>
+              ) : (
+                <Field label="Vines / ha" value={s.vinesPerHa} onChange={(v) => set("vinesPerHa", v)} />
+              )}
               <Field label="Bunch weight (g)" value={s.bunchWeight} onChange={(v) => set("bunchWeight", v)} />
             </div>
+
+            {physicalDensityActive && (
+              <p className="text-xs text-muted-foreground">
+                Derived from the block&apos;s manual vine count. Your saved Vines / Ha
+                {s.vinesPerHa ? ` (${fmt(parse(s.vinesPerHa), 0)})` : ""} is retained and will become
+                active again if manual vine counts are removed.
+              </p>
+            )}
 
             <div className="flex flex-wrap items-center gap-2">
               <Button

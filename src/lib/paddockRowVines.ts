@@ -32,7 +32,7 @@
 //   the raw JSON object and return a shallow copy with only the one key
 //   changed.
 
-import { parseRows, rowLengthMeters, readRowLengthOverrides, type PaddockRow } from "./paddockGeometry";
+import { parseRows, rowLengthMeters, type PaddockRow } from "./paddockGeometry";
 
 /** The raw, untouched JSON object exactly as stored in paddocks.rows. */
 export type RawPaddockRow = Record<string, any>;
@@ -169,29 +169,128 @@ export function mergeGeneratedGeometry(
   });
 }
 
+// ---------------------------------------------------------------------------
+// AUTHORITATIVE PHYSICAL VINE COUNT — iOS / Android / SQL 263 parity.
+//
+//   1. valid positive paddocks.vine_count_override
+//   2. else, when at least one valid rows[].vineCountOverride exists, the
+//      COMPLETE row-effective total (manual where set, calculated otherwise) —
+//      only if EVERY row resolves to a count. A partial total is rejected.
+//   3. else the caller's non-row fallback (calculated block count for
+//      summaries / Bunch Count; saved vines_per_ha × area for Pruning Yield).
+//
+// Automatic per-row counts use the mobile/SQL physical row contract:
+//   round_half_away_from_zero(startPoint→endPoint length ÷ vine_spacing)
+//   with equirectangular metres: 111,320 m per degree latitude and
+//   longitude scaled by cos(polygon centroid latitude).
+// row_length_overrides are deliberately NOT used here (mobile/SQL do not).
+// Never written back to storage.
+// ---------------------------------------------------------------------------
+
+const M_PER_DEG_LAT = 111320;
+
+const roundHalfAwayFromZero = (n: number) => Math.sign(n) * Math.round(Math.abs(n));
+
+function pointOf(p: any): { lat: number; lng: number } | null {
+  if (!p || typeof p !== "object") return null;
+  const lat = p.latitude ?? p.lat;
+  const lng = p.longitude ?? p.lng;
+  return isFiniteNum(lat) && isFiniteNum(lng) ? { lat, lng } : null;
+}
+
+/** Mean latitude of the block polygon (SQL 263 centroid), or null. */
+export function polygonCentroidLatitude(polygonRaw: any): number | null {
+  let arr: any = polygonRaw;
+  if (typeof arr === "string") {
+    try { arr = JSON.parse(arr); } catch { return null; }
+  }
+  if (!Array.isArray(arr)) return null;
+  const lats = arr.map(pointOf).filter(Boolean).map((p) => p!.lat);
+  return lats.length ? lats.reduce((a, b) => a + b, 0) / lats.length : null;
+}
+
+/** Mobile/SQL row length (metres) from startPoint/endPoint, or null. */
+export function physicalRowLengthMeters(row: RawPaddockRow, centroidLat: number | null): number | null {
+  const a = pointOf(row?.startPoint ?? row?.start);
+  const b = pointOf(row?.endPoint ?? row?.end);
+  if (!a || !b) return null;
+  const lat0 = centroidLat ?? (a.lat + b.lat) / 2;
+  const dy = (b.lat - a.lat) * M_PER_DEG_LAT;
+  const dx = (b.lng - a.lng) * M_PER_DEG_LAT * Math.cos((lat0 * Math.PI) / 180);
+  const len = Math.hypot(dx, dy);
+  return Number.isFinite(len) ? len : null;
+}
+
+/** Automatic per-row count, mobile/SQL contract. Null when not calculable. */
+export function physicalCalculatedRowVineCount(
+  row: RawPaddockRow,
+  vineSpacingM: unknown,
+  centroidLat: number | null,
+): number | null {
+  const spacing = Number(vineSpacingM);
+  if (!Number.isFinite(spacing) || spacing <= 0) return null;
+  const len = physicalRowLengthMeters(row, centroidLat);
+  if (len == null || len <= 0) return null;
+  return roundHalfAwayFromZero(len / spacing);
+}
+
+/** Valid positive block override, or null (zero/negative/invalid ignored). */
+export function validBlockVineCountOverride(paddock: any): number | null {
+  const v = Number(paddock?.vine_count_override);
+  if (paddock?.vine_count_override == null || !Number.isFinite(v) || v <= 0) return null;
+  return Math.round(v);
+}
+
+/**
+ * Complete row-effective total, or null when there is no valid manual row
+ * override OR any untouched row cannot be calculated (partial = rejected).
+ * All-manual rows need neither geometry nor vine spacing.
+ */
+export function completeRowEffectiveVineCount(paddock: any): number | null {
+  const rows = parseRawRows(paddock?.rows);
+  if (!rows.length) return null;
+  if (!rows.some((r) => readVineCountOverride(r) != null)) return null;
+  const centroidLat = polygonCentroidLatitude(paddock?.polygon_points);
+  let total = 0;
+  for (const r of rows) {
+    const v = readVineCountOverride(r) ?? physicalCalculatedRowVineCount(r, paddock?.vine_spacing, centroidLat);
+    if (v == null) return null;
+    total += v;
+  }
+  return total;
+}
+
+export type AuthoritativeVineSource = "block_override" | "row_effective" | "fallback";
+
+/** Physical vine override only (block or complete rows), or null. */
+export function physicalVineCountOverride(
+  paddock: any,
+): { count: number; source: "block_override" | "row_effective" } | null {
+  const block = validBlockVineCountOverride(paddock);
+  if (block != null) return { count: block, source: "block_override" };
+  const rows = completeRowEffectiveVineCount(paddock);
+  if (rows != null) return { count: rows, source: "row_effective" };
+  return null;
+}
+
+/** block override → complete row total → caller's fallback. */
+export function authoritativeVineCount(
+  paddock: any,
+  fallback: number | null,
+): { count: number | null; source: AuthoritativeVineSource } {
+  const physical = physicalVineCountOverride(paddock);
+  if (physical) return physical;
+  return { count: fallback, source: "fallback" };
+}
+
 /**
  * USER-FACING vine-count summary (display only — iOS/Android parity).
- * Precedence:
- *   1. valid paddocks.vine_count_override
- *   2. if ANY row has rows[].vineCountOverride → SUM(effectiveVineCount(row))
- *   3. otherwise the existing calculated block count (deriveMetrics.vineCount)
- * Never written back to storage; never used by spray/irrigation/fertiliser/
- * yield/piece-rate calculations (they keep deriveMetrics).
+ * Delegates to authoritativeVineCount with the calculated block count as the
+ * fallback. Never used by spray/irrigation/fertiliser/piece-rate.
  */
 export function summaryVineCount(
   paddock: any,
   calculatedBlockCount: number | null,
 ): number | null {
-  const block = Number(paddock?.vine_count_override);
-  if (isFiniteNum(block) && block > 0) return Math.round(block);
-  const rows = parseRawRows(paddock?.rows);
-  if (rows.some((r) => readVineCountOverride(r) != null)) {
-    const lenMap = readRowLengthOverrides(paddock);
-    return rows.reduce((s, r) => {
-      const n = Number(r?.number);
-      const len = lenMap && Number.isFinite(n) ? lenMap.get(n) : undefined;
-      return s + (effectiveRowVineCount(r, paddock?.vine_spacing, len) ?? 0);
-    }, 0);
-  }
-  return calculatedBlockCount;
+  return authoritativeVineCount(paddock, calculatedBlockCount).count;
 }
