@@ -39,12 +39,13 @@ interface SetupCounts {
 
 /** Head-only count of Chemical Purchase ledger rows for the vineyard. */
 export async function fetchChemicalPurchaseCount(vineyardId: string, client: any = supabase): Promise<number | null> {
-  const base = () =>
-    client.from("chemical_inventory_purchases").select("*", { count: "exact", head: true }).eq("vineyard_id", vineyardId);
-  let res = await base().is("deleted_at", null);
-  if (res.error) res = await base();
-  if (res.error) return null;
-  return res.count ?? 0;
+  // Purchase rows are immutable audit records (no deleted_at column).
+  const { count, error } = await client
+    .from("chemical_inventory_purchases")
+    .select("*", { count: "exact", head: true })
+    .eq("vineyard_id", vineyardId);
+  if (error) return null;
+  return count ?? 0;
 }
 
 export const CHEMICAL_SETUP_COPY = {
