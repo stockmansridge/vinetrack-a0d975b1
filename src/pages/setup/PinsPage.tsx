@@ -365,7 +365,7 @@ export default function PinsPage() {
 
   return (
     <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-col items-start gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Pins</h1>
           <p className="text-sm text-muted-foreground">Record location-based repairs, hazards, observations and other field items directly on the vineyard map. Use pins for anything that needs to be found, reviewed or actioned at a specific location.</p>

@@ -282,7 +282,7 @@ export default function TractorFuelLogsPage({ embedded = false }: { embedded?: b
             calculated from consecutive fills for each machine.
           </p>
         </div>
-        <div className="flex gap-2 ml-auto">
+        <div className="flex gap-2">
           <Button variant="outline" onClick={exportCsv} disabled={!rows.length}>
             <Download className="h-4 w-4 mr-1" /> CSV
           </Button>
