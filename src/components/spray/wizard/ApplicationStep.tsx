@@ -18,6 +18,7 @@ import { applyOperationType, applyTemplate, hydrateDraft } from "@/lib/sprayAppl
 import { chemicalLinesSummary, fetchSprayJobs } from "@/lib/sprayJobsQuery";
 import { SelectTile } from "./controls";
 import type { StepProps } from "./types";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
 
 const STATUS_OPTIONS = ["draft", "scheduled", "in_progress", "completed", "cancelled"];
 
@@ -25,9 +26,16 @@ const OPERATION_HELP: Record<OperationType, string> = {
   foliar: "Sprayed over the canopy — carrier volume and head target apply.",
   banded: "Sprayed as a band along the row — treated area is calculated from the band width.",
   spreader: "Solid product spread over the block — no liquid carrier.",
+  fertigation: "Nutrients or amendments applied through an irrigation cycle. The irrigation session records the actual water and blocks.",
 };
 
 export function ApplicationStep({ app, patch, update, canEdit, vineyardId, intelligenceById }: StepProps) {
+  const { isAdmin } = useIsSystemAdmin();
+  // Development gate: Fertigation is only offered to System Admins and only
+  // when editing a reusable Program Step. It is not a normal Spray Job type.
+  const operationTypes = OPERATION_TYPES.filter(
+    (op) => op !== "fertigation" || (isAdmin && app.isTemplate),
+  );
   return (
     <div className="space-y-6">
       <section className="space-y-3">
@@ -102,7 +110,7 @@ export function ApplicationStep({ app, patch, update, canEdit, vineyardId, intel
         {/* Same shared selector as Canopy & Spray Volume — one selection
             language across the whole wizard. */}
         <div role="radiogroup" aria-label="Application type" className="grid gap-3 sm:grid-cols-3">
-          {OPERATION_TYPES.map((op) => (
+          {operationTypes.map((op) => (
             <SelectTile
               key={op}
               selected={app.operationType === op}
@@ -116,6 +124,11 @@ export function ApplicationStep({ app, patch, update, canEdit, vineyardId, intel
         {app.operationType === "banded" && (
           <p className="text-xs text-muted-foreground">
             Head target does not apply to banded applications and has been cleared.
+          </p>
+        )}
+        {app.operationType === "fertigation" && (
+          <p className="text-xs text-muted-foreground">
+            Development preview — System Admin only. This Program Step will be executed by linking it to an Irrigation Record, not by creating a Spray Trip.
           </p>
         )}
       </section>
