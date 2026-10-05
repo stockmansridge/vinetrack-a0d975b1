@@ -11,6 +11,7 @@
 //   7. Costs (when available)
 //   8. Route Map (from path_points)
 //   9. Footer
+import { formatTripChemicalCost, quantityBasisLabel, chemicalStatusLabel } from "@/lib/chemicalCostResolver";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Trip } from "./tripsQuery";
@@ -706,6 +707,9 @@ export function tripToCsvRow(
     base.chemical_cost = num(cost.chemicals.cost);
     base.chemical_lines = String(cost.chemicals.lineCount);
     base.chemical_lines_missing_cost = String(cost.chemicals.missingCostLines);
+    base.chemical_cost_status = chemicalStatusLabel(cost.chemicals.status);
+    base.chemical_quantity_basis = quantityBasisLabel(cost.chemicals.quantityBasis);
+    base.chemical_pricing_basis = cost.chemicals.pricingBases.join(", ");
     base.input_cost = num(cost.inputs.cost);
     base.input_lines = String(cost.inputs.lineCount);
     base.input_lines_missing_cost = String(cost.inputs.missingCostLines);
@@ -1124,7 +1128,7 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
           ? `${fmtR.fuel(c.fuel.litres)} (no cost/${fuelLabel} on file)`
           : "—";
     const chemLabel = `Chemicals${c.chemicals.lineCount ? ` (${c.chemicals.lineCount} line${c.chemicals.lineCount === 1 ? "" : "s"})` : ""}`;
-    const chemValue = c.chemicals.cost != null ? cur(c.chemicals.cost) : "—";
+    const chemValue = formatTripChemicalCost(c.chemicals, cur);
     const rows: [string, string][] = [
       ["Active hours", fmtHours(c.activeHours)],
       [labourLabel, labourValue],

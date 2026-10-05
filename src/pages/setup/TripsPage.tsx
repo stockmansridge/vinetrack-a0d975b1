@@ -77,6 +77,7 @@ import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
 import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
 import { fetchSprayRecordsForVineyard } from "@/lib/sprayRecordsQuery";
 import { useTripChemicalCosting } from "@/lib/useTripChemicalCosting";
+import { formatTripChemicalCost } from "@/lib/chemicalCostResolver";
 import { fetchSavedInputsForVineyard } from "@/lib/savedInputsQuery";
 import { fetchYieldReportsForVineyard } from "@/lib/yieldReportsQuery";
 import { computeTripCost, fmtCurrency, fmtHa, fmtHours, fmtTonnes, type TractorLite } from "@/lib/tripCosting";
@@ -1126,7 +1127,7 @@ function TripSheet({
                 )}
                 <Field
                   label={`Chemicals${cost.chemicals.lineCount ? ` (${cost.chemicals.lineCount} line${cost.chemicals.lineCount === 1 ? "" : "s"})` : ""}`}
-                  value={cost.chemicals.cost != null ? fmtCurrency(cost.chemicals.cost) : "—"}
+                  value={formatTripChemicalCost(cost.chemicals, fmtCurrency)}
                 />
                 {cost.inputs.lineCount > 0 && (
                   <Field

@@ -618,3 +618,14 @@ export function overlaySprayReportCost(
   out.chemicalPricingBasis = res.pricingBases.join(", ") || "—";
   return out;
 }
+
+/** One display string for a trip's chemical cost across screens and exports. */
+export function formatTripChemicalCost(
+  c: { cost: number | null; status: ChemicalCostStatus },
+  money: (n: number) => string,
+  empty = "—",
+): string {
+  if (c.status === "no_chemicals") return empty;
+  if (c.cost == null || c.status === "unavailable") return UNAVAILABLE_LABEL;
+  return c.status === "partial" ? `${money(c.cost)} (partial / incomplete)` : money(c.cost);
+}
