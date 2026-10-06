@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { AlertTriangle, ArrowLeft, Check, Pencil, Plus } from "lucide-react";
+import { HelpTip } from "@/components/spray/wizard/controls";
 import {
   ALLOCATION_METHOD_LABEL,
   useAvailableRows,
@@ -1466,7 +1467,20 @@ function ConnectionsTab({
             </Select>
           </div>
           <div>
-            <Label>Allocation method</Label>
+            <div className="flex items-center gap-1">
+              <Label>Allocation method</Label>
+              <HelpTip
+                title="Allocation methods"
+                body={
+                  "How a valve's water is shared across the blocks it feeds.\n\n" +
+                  "Rows (recommended): the quickest and easiest to set up. Pick the vineyard rows this valve waters and VineTrack works out the water automatically from those rows.\n\n" +
+                  "Manual percentage: you enter the share (%) of the valve's water that goes to each block. Shares must add up to 100%.\n\n" +
+                  "Emitter count: water is split by the number of emitters (drippers) in each block.\n\n" +
+                  "Vine count: water is split by the number of vines in each block.\n\n" +
+                  "Irrigated area: water is split by the irrigated area of each block."
+                }
+              />
+            </div>
             <Select
               value={method}
               onValueChange={(v) => {
@@ -1479,9 +1493,9 @@ function ConnectionsTab({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(Object.keys(ALLOCATION_METHOD_LABEL) as AllocationMethod[]).map((m) => (
+                {(["rows", ...(Object.keys(ALLOCATION_METHOD_LABEL) as AllocationMethod[]).filter((m) => m !== "rows")] as AllocationMethod[]).map((m) => (
                   <SelectItem key={m} value={m}>
-                    {ALLOCATION_METHOD_LABEL[m]}
+                    {m === "rows" ? "Rows (recommended)" : ALLOCATION_METHOD_LABEL[m]}
                   </SelectItem>
                 ))}
               </SelectContent>
