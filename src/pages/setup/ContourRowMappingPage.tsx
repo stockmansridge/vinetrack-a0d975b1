@@ -360,6 +360,7 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
   const sum = (m: typeof allMetrics, k: "lengthM" | "chordM") => m.reduce((s, r) => s + r[k], 0);
   const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 1 });
 
+  const locked = !!busy;
   const centre = boundary[0] ?? { lat: -34.5, lng: 138.7 };
   const mapShapes: CShape[] = [];
   if (boundary.length >= 3) mapShapes.push({ id: "boundary", kind: "polygon", points: boundary, color: "#34C759", width: 2, fillOpacity: 0.05 });
@@ -400,7 +401,6 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
   })));
   const blocking = hasErrors(geoIssues) || shapeErrors.length > 0;
   const canSave = !setupRequired && dirty && !busy && !blocking;
-  const locked = !!busy;
 
   return (
     <div className="p-6 space-y-4 max-w-7xl mx-auto">
