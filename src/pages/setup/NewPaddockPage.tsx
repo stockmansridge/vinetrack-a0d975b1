@@ -1,14 +1,13 @@
 import { validateRowNumbering, assertValidRowsPayload } from "@/lib/physicalRowNumbers";
-// New Paddock wizard — Phase 2C scaffold.
-//
-// SAFETY: Final "Save paddock" button is gated by a TEST FLAG and is
-// disabled until explicitly enabled. No write is performed yet — the Save
-// button currently only logs the prepared payload to the console.
+// New Paddock wizard. Production save inserts into the shared `paddocks`
+// table. System Admins may opt to open the Contour Row Mapping (Beta) draft
+// editor for the newly saved block after a successful insert.
 //
 // Spec: docs/paddock-geometry-writer-spec.md
 
 import { generateUuid } from "@/lib/uuid";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import BoundaryDrawMap from "@/components/paddocks/BoundaryDrawMap";
@@ -100,6 +99,17 @@ export default function NewPaddockPage() {
   const { user } = useAuth();
   const canEdit = currentRole === "owner" || currentRole === "manager";
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const { isAdmin: isSystemAdmin, loading: adminLoading } = useIsSystemAdmin();
+  const contourAdmin = isSystemAdmin && !adminLoading;
+  const scopeKey = `${user?.id ?? ""}:${selectedVineyardId ?? ""}`;
+  const scopeRef = useRef(scopeKey);
+  scopeRef.current = scopeKey;
+  const adminRef = useRef(contourAdmin);
+  adminRef.current = contourAdmin;
+  // Choice is bound to the auth user + vineyard it was made in.
+  const [contourChoiceScope, setContourChoiceScope] = useState<string | null>(null);
+  const openContourAfterSave = contourAdmin && contourChoiceScope === scopeKey;
   const rf = useRegionFormatters();
 
   const [step, setStep] = useState<Step>("details");
@@ -316,15 +326,31 @@ export default function NewPaddockPage() {
       toast({ title: "Test mode — save disabled" });
       return;
     }
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
+    // Capture once: id, scope and contour choice cannot drift with later renders.
+    const submitted = payload;
+    const submittedId = submitted.id as string;
+    const submittedScope = scopeKey;
+    const wantContour = openContourAfterSave && adminRef.current;
     try {
-      assertValidRowsPayload(payload as any);
-      const { error } = await supabase.from("paddocks").insert(payload as any);
+      assertValidRowsPayload(submitted as any);
+      const { error } = await supabase.from("paddocks").insert(submitted as any);
       if (error) throw error;
-      toast({ title: "Block created", description: payload.name });
+      toast({ title: "Block created", description: submitted.name });
       qc.invalidateQueries({ queryKey: ["paddocks"] });
       qc.invalidateQueries({ queryKey: ["vineyard_variety_usage"] });
-      navigate("/setup/paddocks");
+      if (scopeRef.current !== submittedScope) {
+        // Account or vineyard changed mid-save: never open another scope's editor.
+        navigate("/setup/paddocks");
+        return;
+      }
+      if (wantContour && adminRef.current) {
+        navigate(`/setup/paddocks/${submittedId}/contour-rows`);
+      } else {
+        navigate("/setup/paddocks");
+      }
     } catch (err: any) {
       toast({
         title: "Save failed",
@@ -332,6 +358,7 @@ export default function NewPaddockPage() {
         variant: "destructive",
       });
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -435,6 +462,25 @@ export default function NewPaddockPage() {
                 <Metric label="Total row length" value={`${fmt(totalRowLengthM, 0)} m`} />
                 {effectiveVineCount != null && <Metric label="Estimated vines" value={fmt(effectiveVineCount, 0)} />}
               </div>
+
+              {contourAdmin && (
+                <div className="rounded-md border border-orange-500 p-3 text-sm space-y-2">
+                  <label className="flex items-center gap-2 font-medium text-orange-600 dark:text-orange-400">
+                    <input
+                      type="checkbox"
+                      aria-label="Open Contour Row Mapping (Beta) after saving"
+                      checked={openContourAfterSave}
+                      onChange={(e) => setContourChoiceScope(e.target.checked ? scopeKey : null)}
+                    />
+                    Contour Row Mapping (Beta)
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Open the contour mapper after saving. The block is saved first, then the mapper opens.
+                    Contour mappings stay separate draft mappings during this pilot — the row setup above
+                    remains this block's saved operational rows and is not changed.
+                  </p>
+                </div>
+              )}
 
               <div className="flex justify-between gap-2 pt-2">
                 <Button variant="ghost" onClick={() => setStep("boundary")}>Back</Button>
@@ -615,13 +661,19 @@ export default function NewPaddockPage() {
               </div>
             )}
 
+            {openContourAfterSave && (
+              <div className="rounded-md border border-orange-500 p-3 text-sm text-orange-600 dark:text-orange-400">
+                Contour Row Mapping (Beta) will open after this block is saved. Operational rows are saved as set up in Rows.
+              </div>
+            )}
+
             <div className="flex justify-between gap-2">
               <Button variant="ghost" onClick={() => setStep("soil")} disabled={saving}>Back</Button>
               <Button
                 onClick={onSavePressed}
                 disabled={!isValid || saving}
               >
-                {saving ? "Saving…" : "Save block"}
+                {saving ? "Saving…" : openContourAfterSave ? "Save block & open contour mapping" : "Save block"}
               </Button>
             </div>
           </CardContent>
