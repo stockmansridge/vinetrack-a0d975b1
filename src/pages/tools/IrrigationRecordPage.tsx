@@ -142,8 +142,20 @@ export default function IrrigationRecordPage() {
   // The client generates the session id up front so retries are idempotent.
   const sessionIdRef = useRef<string>(generateUuid());
 
-  const validation = useValveValidation(selectedVineyardId, valveId || null);
-  const valve = valves.data?.find((v) => v.id === valveId) ?? null;
+  // Only valves listed for the selected vineyard (and stamped with it) count.
+  const valve =
+    valves.data?.find(
+      (v) => v.id === valveId && (!v.vineyard_id || v.vineyard_id === selectedVineyardId),
+    ) ?? null;
+  // Clear a selection that doesn't belong to the current vineyard.
+  useEffect(() => {
+    if (!valveId || valves.isLoading || !valves.data) return;
+    if (!valve) setValveId("");
+  }, [valveId, valve, valves.isLoading, valves.data]);
+  useEffect(() => {
+    setValveId("");
+  }, [selectedVineyardId]);
+  const validation = useValveValidation(selectedVineyardId, valve ? valve.id : null);
 
   // SQL 131: the backend resolves the flow rate. The portal never derives one.
   const v = validation.data;
