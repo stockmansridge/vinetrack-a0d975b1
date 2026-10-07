@@ -341,7 +341,11 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
     if (s?.onClick) { s.onClick(); return; }
     const c = mapkitAt(p.x, p.y); if (c) clickRef.current(c);
   };
-  const onWheel = (e: React.WheelEvent) => { if (e.deltaY < 0) zoomIn(); else if (e.deltaY > 0) zoomOut(); };
+  const lastWheel = useRef(0);
+  const onWheel = (e: React.WheelEvent) => {
+    const now = Date.now(); if (now - lastWheel.current < 300) return; lastWheel.current = now;
+    if (e.deltaY < 0) zoomIn(); else if (e.deltaY > 0) zoomOut();
+  };
 
   const fmtScale = (m: number) => (m < 0.01 ? `${(m * 1000).toFixed(1)} mm` : m < 1 ? `${(m * 100).toFixed(1)} cm` : `${m.toFixed(2)} m`);
 
