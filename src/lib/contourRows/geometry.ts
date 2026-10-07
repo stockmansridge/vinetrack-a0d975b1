@@ -272,3 +272,90 @@ export function clipPolyline(pts: XY[], region: ClipRegion, minPartM = 0.5): XY[
   }
   return parts.map(dedupeXY).filter((p) => p.length >= 2 && polylineLengthXY(p) >= minPartM);
 }
+
+// ------------------------------------------------- robust segment relations
+
+const ORIENT_EPS = 1e-6; // m² (cross-product tolerance in metres)
+
+function orient(a: XY, b: XY, c: XY): number {
+  const v = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  return Math.abs(v) < ORIENT_EPS ? 0 : v;
+}
+
+export type SegRelation = "none" | "touch" | "cross" | "overlap";
+
+/**
+ * Relationship between segments ab and cd, including collinear overlap
+ * and degenerate (zero-length) cases. "touch" = share exactly one point
+ * without crossing through; "overlap" = collinear with a shared length.
+ */
+export function segRelation(a: XY, b: XY, c: XY, d: XY, eps = 1e-3): SegRelation {
+  const o1 = orient(a, b, c), o2 = orient(a, b, d), o3 = orient(c, d, a), o4 = orient(c, d, b);
+  if (o1 === 0 && o2 === 0 && o3 === 0 && o4 === 0) {
+    // Collinear (or degenerate). Project onto the dominant axis of both.
+    const ux = (b.x - a.x) + (d.x - c.x), uy = (b.y - a.y) + (d.y - c.y);
+    const useX = Math.abs(ux) >= Math.abs(uy);
+    const p = (q: XY) => (useX ? q.x : q.y);
+    const lo1 = Math.min(p(a), p(b)), hi1 = Math.max(p(a), p(b));
+    const lo2 = Math.min(p(c), p(d)), hi2 = Math.max(p(c), p(d));
+    const ov = Math.min(hi1, hi2) - Math.max(lo1, lo2);
+    // Collinear check via orient alone fails when a segment is a point; also verify distance.
+    if (ov > eps) return "overlap";
+    if (ov >= -eps && Math.min(pointSegDist(a, c, d), pointSegDist(b, c, d), pointSegDist(c, a, b), pointSegDist(d, a, b)) <= eps) return "touch";
+    return "none";
+  }
+  if (o1 * o2 < 0 && o3 * o4 < 0) return "cross";
+  // Endpoint on the other segment.
+  if (pointSegDist(c, a, b) <= eps || pointSegDist(d, a, b) <= eps || pointSegDist(a, c, d) <= eps || pointSegDist(b, c, d) <= eps) return "touch";
+  return "none";
+}
+
+export function polygonAreaXY(ring: XY[]): number {
+  let s = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) s += (ring[j].x * ring[i].y - ring[i].x * ring[j].y);
+  return Math.abs(s) / 2;
+}
+
+export function distToRingXY(p: XY, ring: XY[]): number {
+  let m = Infinity;
+  for (let i = 0; i < ring.length; i++) m = Math.min(m, pointSegDist(p, ring[i], ring[(i + 1) % ring.length]));
+  return m;
+}
+
+/** True when any two non-adjacent edges of a closed ring touch/cross/overlap,
+ *  or adjacent edges fold back on each other. */
+export function ringSelfIntersects(ring: XY[]): boolean {
+  const n = ring.length;
+  for (let i = 0; i < n; i++) {
+    const a = ring[i], b = ring[(i + 1) % n];
+    for (let j = i + 1; j < n; j++) {
+      const c = ring[j], d = ring[(j + 1) % n];
+      const adjacent = j === i + 1 || (i === 0 && j === n - 1);
+      const rel = segRelation(a, b, c, d);
+      if (adjacent ? rel === "overlap" : rel !== "none") return true;
+    }
+  }
+  return false;
+}
+
+export const MASK_LIMITS = { maxPoints: 500, minAreaM2: 1 };
+
+/** Friendly problem text for an invalid working area / cut-out, else null. */
+export function maskProblem(points: LatLng[], proj: Projection): string | null {
+  if (points.length < 3) return "needs at least three points";
+  if (points.length > MASK_LIMITS.maxPoints) return `has more than ${MASK_LIMITS.maxPoints} points`;
+  if (!points.every(isFiniteLL)) return "has invalid coordinates";
+  const xy = points.map(proj.toXY);
+  for (let i = 0; i < xy.length; i++) if (dist(xy[i], xy[(i + 1) % xy.length]) < 0.01) return "has repeated points";
+  if (polygonAreaXY(xy) < MASK_LIMITS.minAreaM2) return "has no area";
+  if (ringSelfIntersects(xy)) return "crosses itself";
+  return null;
+}
+
+/** Minimum distance between two multipart rows, testing each part
+ *  separately so gaps between parts never create fake segments. */
+export function minDistanceBetweenParts(a: XY[][], b: XY[][]): number {
+  let m = Infinity;
+  for (const pa of a) for (const pb of b) m = Math.min(m, minDistanceBetween(pa, pb));
+  return m;
+}
