@@ -4,7 +4,7 @@
 // row; multi-geometries keep their parts as one row. Remote links
 // (NetworkLink) are never fetched; DOCTYPE/ENTITY declarations rejected.
 import type { LatLng } from "./geometry";
-import { isFiniteLL } from "./geometry";
+import { isFiniteLL, projectionForPolygon, pointInPolygonXY, distToRingXY } from "./geometry";
 import { LIMITS } from "./draft";
 
 export const IMPORT_LIMITS = { maxBytes: 5_000_000, maxRows: LIMITS.maxRows, maxVertices: 100_000 };
@@ -29,40 +29,64 @@ function checkPart(pts: LatLng[], where: string): LatLng[] {
   return pts;
 }
 
+const finiteNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+
 function fromGeoJsonCoords(c: unknown, where: string): LatLng[] {
   if (!Array.isArray(c)) throw new Error(`${where}: missing coordinates.`);
-  return checkPart(c.map((p: any) => {
-    if (!Array.isArray(p) || p.length < 2) throw new Error(`${where}: malformed coordinate.`);
-    return { lng: Number(p[0]), lat: Number(p[1]) };
+  return checkPart(c.map((p: unknown) => {
+    // Only real JSON numbers are accepted (null/""/"138.7" are rejected, never coerced).
+    if (!Array.isArray(p) || p.length < 2 || p.length > 4 || !p.every(finiteNum)) throw new Error(`${where}: each coordinate must be [longitude, latitude] numbers.`);
+    return { lng: p[0], lat: p[1] };
   }), where);
+}
+
+const CRS_OK = /^(urn:ogc:def:crs:OGC:(1\.3:)?CRS84|urn:ogc:def:crs:EPSG::4326|EPSG:4326)$/i;
+function checkCrs(o: any, where: string) {
+  if (o == null || typeof o !== "object" || !("crs" in o) || o.crs == null) return;
+  const name = o.crs?.properties?.name;
+  if (typeof name !== "string" || !CRS_OK.test(name.trim()))
+    throw new Error(`${where}: unsupported coordinate system (${typeof name === "string" ? name : "unknown"}). Export the file in WGS84 (EPSG:4326).`);
 }
 
 export function parseGeoJsonLines(text: string): LineImportResult {
   let j: any;
   try { j = JSON.parse(text); } catch { throw new Error("This file is not valid GeoJSON."); }
-  const crs = j?.crs?.properties?.name;
-  if (crs && !/CRS84|EPSG:?:?4326/i.test(String(crs)))
-    throw new Error(`Unsupported coordinate system (${crs}). Export the file in WGS84 (EPSG:4326).`);
-  const feats: any[] = j?.type === "FeatureCollection" ? j.features ?? []
-    : j?.type === "Feature" ? [j] : j?.type ? [{ type: "Feature", geometry: j, properties: {} }] : [];
+  if (j == null || typeof j !== "object" || Array.isArray(j)) throw new Error("This file is not a GeoJSON object.");
+  checkCrs(j, "File");
+  let feats: any[];
+  if (j.type === "FeatureCollection") {
+    if (!Array.isArray(j.features)) throw new Error("This FeatureCollection has no features list.");
+    feats = j.features;
+  } else if (j.type === "Feature") feats = [j];
+  else if (j.type === "LineString" || j.type === "MultiLineString") feats = [{ type: "Feature", geometry: j, properties: {} }];
+  else throw new Error(`Unsupported GeoJSON type (${typeof j.type === "string" ? j.type : "missing"}). Use LineString, MultiLineString, Feature or FeatureCollection.`);
   const warnings: string[] = [];
   const lines: ImportedLine[] = [];
   feats.forEach((f, i) => {
-    const g = f?.geometry; const where = `Feature ${i + 1}`;
-    const props = f?.properties ?? {};
+    const where = `Feature ${i + 1}`;
+    if (f == null || typeof f !== "object" || Array.isArray(f) || f.type !== "Feature") throw new Error(`${where} is not a valid GeoJSON Feature.`);
+    checkCrs(f, where);
+    const g = f.geometry;
+    if (g != null) checkCrs(g, where);
+    const props = f.properties != null && typeof f.properties === "object" ? f.properties : {};
     const name = typeof props.name === "string" ? props.name : null;
     const num = numberFrom(props.row_number ?? props.row ?? props.number ?? props.name);
     if (g?.type === "LineString") lines.push({ featureIndex: i, name, suggestedNumber: num, parts: [fromGeoJsonCoords(g.coordinates, where)] });
-    else if (g?.type === "MultiLineString") lines.push({ featureIndex: i, name, suggestedNumber: num, parts: (g.coordinates ?? []).map((c: unknown, k: number) => fromGeoJsonCoords(c, `${where} part ${k + 1}`)) });
+    else if (g?.type === "MultiLineString") {
+      if (!Array.isArray(g.coordinates) || g.coordinates.length === 0) throw new Error(`${where}: the MultiLineString has no lines.`);
+      lines.push({ featureIndex: i, name, suggestedNumber: num, parts: g.coordinates.map((c: unknown, k: number) => fromGeoJsonCoords(c, `${where} part ${k + 1}`)) });
+    }
     else warnings.push(`${where} is a ${g?.type ?? "missing geometry"} and was skipped — only lines are imported. Use Boundary import for block polygons.`);
   });
   return finish("geojson", lines, warnings);
 }
 
 function parseKmlCoords(s: string, where: string): LatLng[] {
+  const NUM = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/;
   return checkPart(s.trim().split(/\s+/).filter(Boolean).map((t) => {
-    const [lng, lat] = t.split(",").map(Number);
-    return { lng, lat };
+    const c = t.split(",");
+    if (c.length < 2 || c.length > 3 || !c.every((x) => NUM.test(x))) throw new Error(`${where}: each coordinate must be "longitude,latitude[,altitude]" numbers.`);
+    return { lng: Number(c[0]), lat: Number(c[1]) };
   }), where);
 }
 
@@ -120,4 +144,15 @@ export function duplicateNumbers(assigned: number[], used: Set<number>): number[
   const seen = new Set<number>(); const dups = new Set<number>();
   for (const n of assigned) { if (seen.has(n) || used.has(n)) dups.add(n); seen.add(n); }
   return Array.from(dups).sort((a, b) => a - b);
+}
+
+/** Lines with any point more than `maxM` metres outside the block. */
+export function linesFarOutside(lines: ImportedLine[], boundary: LatLng[], maxM = 100): ImportedLine[] {
+  if (boundary.length < 3) return [];
+  const proj = projectionForPolygon(boundary);
+  const ring = boundary.map(proj.toXY);
+  return lines.filter((l) => l.parts.some((p) => p.some((q) => {
+    const xy = proj.toXY(q);
+    return !pointInPolygonXY(xy, ring) && distToRingXY(xy, ring) > maxM;
+  })));
 }
