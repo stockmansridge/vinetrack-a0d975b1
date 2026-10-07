@@ -204,7 +204,7 @@ export function SessionFertigationSummary({ app }: { app: FertigationApplication
             <span className="text-foreground">{p.product_name}</span> · {fertigationRateText({ rate: p.planned_rate, rateBasis: p.rate_basis, rateUnit: p.rate_unit })}
             {" · planned "}{p.planned_quantity == null ? "unknown" : `${formatNumber(p.planned_quantity, 2)} ${p.quantity_unit ?? ""}`}
             {" · actual "}{p.actual_quantity == null ? "not entered" : `${formatNumber(p.actual_quantity, 2)} ${p.quantity_unit ?? ""}`}
-            {p.cost_per_unit != null && p.actual_quantity != null && ` · $${formatNumber(p.cost_per_unit * p.actual_quantity, 2)}`}
+            {p.actual_quantity != null && (p.cost_per_unit != null && Number(p.cost_per_unit) > 0 ? ` · $${formatNumber(Number(p.cost_per_unit) * p.actual_quantity, 2)}` : " · Cost unavailable")}
           </li>
         ))}
       </ul>

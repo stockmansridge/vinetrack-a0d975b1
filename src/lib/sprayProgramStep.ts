@@ -40,6 +40,14 @@ export function growthStageDescription(code?: string | null): string | null {
  * on the line decides the suffix — `/ha` is never assumed.
  */
 export function chemicalLineRateText(line: SprayJobChemicalLine): string {
+  // Fertigation lines carry their own canonical unit; never fall back to the
+  // spray `unit` field (which may hold a product-form unit like "L").
+  const fertBasis = (line as any).fertigation_rate_basis;
+  const fertUnit = (line as any).fertigation_rate_unit as string | null | undefined;
+  if (fertBasis || fertUnit) {
+    if (line.rate == null || !fertUnit) return "";
+    return fertBasis === "per_irrigation_cycle" ? `${line.rate} ${fertUnit} per irrigation cycle` : `${line.rate} ${fertUnit}`;
+  }
   const unit = normaliseUnit(line.unit) || (line.unit ?? "");
   const productBasis = (line as any).product_rate_basis as string | null | undefined;
   const legacyBasis = line.rate_basis as string | null | undefined;
