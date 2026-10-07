@@ -6,8 +6,13 @@
 -- Verified with sql/contour_row_mapping_round1_VERIFY_rollback.sql using real
 -- fixtures (admin+member block; genuine non-admin on own member block; admin
 -- on a block outside their memberships), plus mutation denials: all checks
--- passed, paddock hash unchanged, all 3 tables empty after rollback; security
--- advisor reported no contour findings. The race check is stale-first-save
+-- passed, paddock hash unchanged, all 3 tables empty after rollback. Security
+-- advisor: three expected private-table RLS/no-policy notices (drafts, saves,
+-- discarded_drafts — intentional: no grants/policies, access only via the
+-- authorised private definer functions; do not add grants or permissive
+-- policies to silence them); RPC privileges verified (all 3 public RPCs
+-- SECURITY INVOKER, anon EXECUTE=false, authenticated EXECUTE=true).
+-- The race check is stale-first-save
 -- contract coverage, not a simultaneous two-connection test.
 -- The executable body below is unchanged from the applied file.
 -- Live helpers used (confirmed):

@@ -12,7 +12,12 @@ VineTrack database on 2026-10-07 as migration `contour_row_mapping_round1`
 rollback-only `sql/contour_row_mapping_round1_VERIFY_rollback.sql` using real
 fixtures (admin+member, genuine non-admin member, admin outside membership)
 plus mutation denials: all passed, paddock hash unchanged, tables empty after
-rollback, no security-advisor findings. The race check covers the
+rollback. Security advisor: three expected private-table RLS/no-policy
+notices (`drafts`, `saves`, `discarded_drafts`) — intentional, since the
+tables have no grants or policies and are reached only through the authorised
+private definer functions; never add grants or permissive policies to silence
+them. RPC privileges verified: all three public RPCs are SECURITY INVOKER,
+anon EXECUTE = false, authenticated EXECUTE = true. The race check covers the
 stale-first-save contract, not two simultaneous connections. Browser
 interaction / trace testing still requires a signed-in preview. Tables live in the private schema `vt_contour_private`
 (no grants, RLS on, no policies):
