@@ -210,37 +210,109 @@ export function generateGroupRows(g: RowGroup, boundary: LatLng[]): GenerateResu
 export const hasManualEdits = (g: RowGroup) => g.rows.some((r) => r.provenance === "edited");
 
 // -------------------------------------------------------------- validation
+//
+// Strict, null-safe structural validation shared by load, save and backup
+// import. Mirrors vt_contour_validate_payload in the pending SQL.
+//
+// Explicit in-progress rule: an empty draft (no groups) and groups with no
+// rows and a partial reference trace (0..maxTracePoints points) are valid,
+// so work can be saved mid-trace. Working areas and cut-outs, if present,
+// must be complete (>= 3 points); rows must have >= 1 part of >= 2 points.
 
-export function validateDraft(d: ContourDraft): string[] {
+export interface DraftScope { vineyardId: string; paddockId: string; canonicalRowIds?: ReadonlySet<string> | null }
+
+const isObj = (v: unknown): v is Record<string, any> => typeof v === "object" && v !== null && !Array.isArray(v);
+const isInt = (v: unknown, min: number, max: number) => typeof v === "number" && Number.isInteger(v) && v >= min && v <= max;
+const isNum = (v: unknown, min: number, max: number) => typeof v === "number" && Number.isFinite(v) && v >= min && v <= max;
+const isPoint = (q: unknown) => isObj(q) && typeof q.lat === "number" && typeof q.lng === "number" && isFiniteLL(q as LatLng);
+const enc = typeof TextEncoder !== "undefined" ? new TextEncoder() : null;
+export const jsonBytes = (v: unknown) => { const t = JSON.stringify(v) ?? ""; return enc ? enc.encode(t).length : t.length; };
+
+const MODES = new Set(["straight", "contour", "imported"]);
+const PROVENANCE = new Set(["generated", "edited", "imported"]);
+
+/** Returns friendly error messages; empty array = structurally valid. Never throws. */
+export function validateDraftShape(x: unknown, scope?: DraftScope | null): string[] {
   const errs: string[] = [];
-  if (d.schema !== DRAFT_SCHEMA || d.version !== DRAFT_SCHEMA_VERSION) errs.push("Unsupported draft format.");
-  if (d.groups.length > LIMITS.maxGroups) errs.push(`At most ${LIMITS.maxGroups} row groups.`);
-  const ids = new Set<string>();
-  const dup = (id: string) => { if (ids.has(id)) errs.push(`Duplicate identifier ${id}.`); ids.add(id); };
-  dup(d.draftId);
-  const numbers = new Map<number, string>();
-  let rows = 0, pts = 0;
-  for (const g of d.groups) {
-    dup(g.id);
-    for (const m of g.exclusions) dup(m.id);
-    for (const r of g.rows) {
-      dup(r.id); rows++;
-      if (!Number.isInteger(r.number) || r.number < 1) errs.push(`Row in "${g.name}" has an invalid row number.`);
-      const prev = numbers.get(r.number);
-      if (prev) errs.push(`Row number ${r.number} is used twice (${prev} and ${g.name}).`);
-      numbers.set(r.number, g.name);
-      if (!r.parts.length) errs.push(`Row ${r.number} has no geometry.`);
-      for (const p of r.parts) {
-        dup(p.id); pts += p.points.length;
-        if (p.points.length < 2) errs.push(`Row ${r.number} has a part with fewer than two points.`);
-        if (!p.points.every(isFiniteLL)) errs.push(`Row ${r.number} has invalid coordinates.`);
+  const add = (m: string) => { if (errs.length < 25 && !errs.includes(m)) errs.push(m); };
+  try {
+    if (!isObj(x)) return ["The draft is not a valid object."];
+    if (x.schema !== DRAFT_SCHEMA || x.version !== DRAFT_SCHEMA_VERSION) add("Unsupported draft format or version.");
+    if (!isUuid(x.draftId)) add("The draft has a missing or invalid identifier.");
+    if (!isUuid(x.vineyardId) || !isUuid(x.paddockId)) add("The draft has a missing or invalid vineyard/block reference.");
+    if (scope && (x.vineyardId !== scope.vineyardId || x.paddockId !== scope.paddockId)) add("This draft belongs to a different vineyard or block.");
+    if (!Array.isArray(x.groups)) { add("The draft has no row group list."); return errs; }
+    if (x.groups.length > LIMITS.maxGroups) add(`At most ${LIMITS.maxGroups} row groups.`);
+    if (jsonBytes(x) > LIMITS.maxPayloadBytes) add("The draft is too large to save.");
+    const ids = new Set<string>();
+    const id = (v: unknown, what: string) => {
+      if (!isUuid(v)) { add(`${what} has a missing or invalid identifier.`); return; }
+      if (ids.has(v)) add(`Duplicate identifier ${v}.`); ids.add(v);
+    };
+    if (isUuid(x.draftId)) ids.add(x.draftId);
+    const numbers = new Map<number, string>();
+    let rows = 0, pts = 0;
+    x.groups.forEach((g: unknown, gi: number) => {
+      const gn = `Row group ${gi + 1}`;
+      if (!isObj(g)) { add(`${gn} is malformed.`); return; }
+      id(g.id, gn);
+      if (typeof g.name !== "string" || g.name.length > LIMITS.maxNameLength) add(`${gn} needs a name of up to ${LIMITS.maxNameLength} characters.`);
+      if (!MODES.has(g.mode)) add(`${gn} has an unsupported mode.`);
+      if (!Array.isArray(g.referenceTrace) || g.referenceTrace.length > LIMITS.maxTracePoints || !g.referenceTrace.every(isPoint)) add(`${gn} has an invalid traced row.`);
+      else if (jsonBytes(g.referenceTrace) > LIMITS.maxTraceBytes) add(`${gn}'s traced row is too large.`);
+      if (!isInt(g.smoothing, 0, 2)) add(`${gn} smoothing must be 0, 1 or 2.`);
+      if (!isNum(g.spacingM, LIMITS.minSpacingM, LIMITS.maxSpacingM)) add(`${gn} row spacing must be ${LIMITS.minSpacingM}–${LIMITS.maxSpacingM} m.`);
+      if (!isInt(g.startNumber, 1, LIMITS.maxRowNumber)) add(`${gn} starting row number must be a whole number from 1 to ${LIMITS.maxRowNumber}.`);
+      if (!isInt(g.leftCount, 0, LIMITS.maxSideCount) || !isInt(g.rightCount, 0, LIMITS.maxSideCount)) add(`${gn} left/right counts must be whole numbers from 0 to ${LIMITS.maxSideCount}.`);
+      if (typeof g.ascending !== "boolean" || typeof g.extendToArea !== "boolean") add(`${gn} has invalid settings.`);
+      if (g.workingArea !== null) {
+        if (!Array.isArray(g.workingArea) || g.workingArea.length < 3 || g.workingArea.length > LIMITS.maxMaskPoints || !g.workingArea.every(isPoint)) add(`${gn}'s working area must be a finished outline of 3–${LIMITS.maxMaskPoints} valid points (or cleared).`);
+        else if (jsonBytes(g.workingArea) > LIMITS.maxMaskBytes) add(`${gn}'s working area is too large.`);
       }
-    }
+      if (!Array.isArray(g.exclusions) || g.exclusions.length > LIMITS.maxMasksPerGroup) add(`${gn} has an invalid cut-out list.`);
+      else g.exclusions.forEach((m: unknown, mi: number) => {
+        const mn = `${gn} cut-out ${mi + 1}`;
+        if (!isObj(m)) { add(`${mn} is malformed.`); return; }
+        id(m.id, mn);
+        if (!Array.isArray(m.points) || m.points.length < 3 || m.points.length > LIMITS.maxMaskPoints || !m.points.every(isPoint)) add(`${mn} must be a finished outline of 3–${LIMITS.maxMaskPoints} valid points.`);
+        else if (jsonBytes(m.points) > LIMITS.maxMaskBytes) add(`${mn} is too large.`);
+      });
+      if (!Array.isArray(g.rows)) { add(`${gn} has no row list.`); return; }
+      g.rows.forEach((r: unknown) => {
+        rows++;
+        if (!isObj(r)) { add(`${gn} has a malformed row.`); return; }
+        const rn = isInt(r.number, 1, LIMITS.maxRowNumber) ? `Row ${r.number}` : `A row in ${gn}`;
+        id(r.id, rn);
+        if (!isInt(r.number, 1, LIMITS.maxRowNumber)) add(`${rn} needs a whole row number from 1 to ${LIMITS.maxRowNumber}.`);
+        else { const prev = numbers.get(r.number); if (prev) add(`Row number ${r.number} is used twice (${prev} and ${g.name}).`); numbers.set(r.number, String(g.name)); }
+        if (!(r.offsetIndex === null || isInt(r.offsetIndex, -LIMITS.maxSideCount, LIMITS.maxSideCount))) add(`${rn} has an invalid offset.`);
+        if (!PROVENANCE.has(r.provenance)) add(`${rn} has an unsupported origin.`);
+        if (!(r.canonicalRowId === null || isUuid(r.canonicalRowId))) add(`${rn} has an invalid link to a block row.`);
+        else if (r.canonicalRowId && scope?.canonicalRowIds && !scope.canonicalRowIds.has(r.canonicalRowId)) add(`${rn} links to a row that isn't in this block.`);
+        if (!(r.source === undefined || r.source === null || (isObj(r.source) && jsonBytes(r.source) <= LIMITS.maxSourceBytes))) add(`${rn} has invalid source details.`);
+        if (!Array.isArray(r.parts) || r.parts.length < 1 || r.parts.length > LIMITS.maxPartsPerRow) { add(`${rn} needs 1–${LIMITS.maxPartsPerRow} line parts.`); return; }
+        if (jsonBytes(r) > LIMITS.maxRowBytes) add(`${rn} is too large.`);
+        r.parts.forEach((p: unknown) => {
+          if (!isObj(p)) { add(`${rn} has a malformed part.`); return; }
+          id(p.id, `${rn} part`);
+          if (!Array.isArray(p.points) || p.points.length < 2 || p.points.length > LIMITS.maxPointsPerRow) { add(`${rn} has a part with fewer than two points or too many points.`); return; }
+          pts += p.points.length;
+          if (!p.points.every(isPoint)) { add(`${rn} has invalid coordinates.`); return; }
+          const first = p.points[0];
+          if (p.points.every((q: LatLng) => q.lat === first.lat && q.lng === first.lng)) add(`${rn} has a part with zero length.`);
+        });
+      });
+    });
+    if (rows > LIMITS.maxRows) add(`At most ${LIMITS.maxRows} rows per draft.`);
+    if (pts > LIMITS.maxTotalPoints) add(`Too many points (${pts}); the limit is ${LIMITS.maxTotalPoints}.`);
+  } catch {
+    add("The draft could not be read.");
   }
-  if (rows > LIMITS.maxRows) errs.push(`At most ${LIMITS.maxRows} rows per draft.`);
-  if (pts > LIMITS.maxTotalPoints) errs.push(`Too many points (${pts}).`);
-  return Array.from(new Set(errs));
+  return errs;
 }
+
+/** Back-compat alias: structural validation of a typed draft. */
+export const validateDraft = (d: ContourDraft, scope?: DraftScope | null) => validateDraftShape(d, scope);
 
 // ---------------------------------------------------------------- metrics
 
@@ -255,21 +327,27 @@ export function rowMetrics(rows: DraftRow[], boundary: LatLng[]): RowMetric[] {
 
 // ---------------------------------------------------- export / import JSON
 
+export const EXPORT_FORMAT = "vinetrack.contour_row_mapping_export";
+
 export interface DraftExportFile {
-  format: "vinetrack.contour_row_mapping_export";
+  format: typeof EXPORT_FORMAT;
   exportVersion: 1;
   exportedAt: string;
   draft: ContourDraft;
 }
 
 export function exportDraft(d: ContourDraft): DraftExportFile {
-  return { format: "vinetrack.contour_row_mapping_export", exportVersion: 1, exportedAt: new Date().toISOString(), draft: structuredClone(d) };
+  return { format: EXPORT_FORMAT, exportVersion: 1, exportedAt: new Date().toISOString(), draft: structuredClone(d) };
 }
 
-/** Regenerate every draft/group/mask/row/part id and clear canonical row links. */
-export function regenerateIds(d: ContourDraft, vineyardId: string, paddockId: string): ContourDraft {
+/**
+ * Regenerate every group/mask/row/part id and clear canonical row links.
+ * The draft container id is set to `draftId` (the block's current draft),
+ * because one block holds one draft and saves must target it.
+ */
+export function regenerateIds(d: ContourDraft, vineyardId: string, paddockId: string, draftId: string): ContourDraft {
   return {
-    ...structuredClone(d), draftId: generateUuid(), vineyardId, paddockId,
+    ...structuredClone(d), draftId, vineyardId, paddockId,
     groups: d.groups.map((g) => ({
       ...structuredClone(g), id: generateUuid(),
       exclusions: g.exclusions.map((m) => ({ id: generateUuid(), points: m.points.map((p) => ({ ...p })) })),
@@ -281,22 +359,35 @@ export function regenerateIds(d: ContourDraft, vineyardId: string, paddockId: st
   };
 }
 
-export interface ImportedDraft { draft: ContourDraft; sameDraft: boolean }
+export interface BackupInfo { draft: ContourDraft; canRestoreInPlace: boolean }
+
+/** Parse and structurally validate a backup file. Never throws TypeErrors. */
+export function readBackupFile(text: string, scope: DraftScope, currentDraftId: string): BackupInfo {
+  if (typeof text !== "string" || text.length > LIMITS.maxBackupFileBytes) throw new Error("This backup is larger than 5 MB.");
+  let parsed: unknown;
+  try { parsed = JSON.parse(text); } catch { throw new Error("This file is not valid JSON."); }
+  if (!isObj(parsed) || parsed.format !== EXPORT_FORMAT || parsed.exportVersion !== 1 || !isObj(parsed.draft))
+    throw new Error("This is not a VineTrack contour row mapping backup.");
+  // Structural check without scope: backups from other blocks may be copied.
+  const errs = validateDraftShape(parsed.draft, null);
+  if (errs.length) throw new Error(`Backup is invalid: ${errs[0]}`);
+  const d = parsed.draft as unknown as ContourDraft;
+  return { draft: d, canRestoreInPlace: d.draftId === currentDraftId && d.vineyardId === scope.vineyardId && d.paddockId === scope.paddockId };
+}
 
 /**
- * Parse an export file. Same draft id + block + vineyard → identities kept.
- * Anything else (import as new, other block/vineyard) → all ids regenerated.
+ * "restore": same draft/block/vineyard only — every identity kept.
+ * "copy": imported as a new copy into this block's draft — group, mask, row
+ * and part ids regenerated, canonical links cleared, draftId = current.
  */
-export function importDraftFile(text: string, vineyardId: string, paddockId: string, currentDraftId: string | null, asNew = false): ImportedDraft {
-  let parsed: any;
-  try { parsed = JSON.parse(text); } catch { throw new Error("This file is not valid JSON."); }
-  if (parsed?.format !== "vinetrack.contour_row_mapping_export" || parsed?.exportVersion !== 1 || !parsed?.draft)
-    throw new Error("This is not a VineTrack contour row mapping backup.");
-  const d = parsed.draft as ContourDraft;
-  if (d.schema !== DRAFT_SCHEMA || d.version !== DRAFT_SCHEMA_VERSION || !Array.isArray(d.groups))
-    throw new Error("This backup uses an unsupported draft version.");
-  const errs = validateDraft(d);
+export function importDraftFile(text: string, scope: DraftScope, currentDraftId: string, mode: "restore" | "copy"): ContourDraft {
+  const info = readBackupFile(text, scope, currentDraftId);
+  let out: ContourDraft;
+  if (mode === "restore") {
+    if (!info.canRestoreInPlace) throw new Error("This backup is from a different draft or block. Import it as a copy instead.");
+    out = structuredClone(info.draft);
+  } else out = regenerateIds(info.draft, scope.vineyardId, scope.paddockId, currentDraftId);
+  const errs = validateDraftShape(out, scope);
   if (errs.length) throw new Error(`Backup is invalid: ${errs[0]}`);
-  const sameDraft = !asNew && d.draftId === currentDraftId && d.paddockId === paddockId && d.vineyardId === vineyardId;
-  return { draft: sameDraft ? structuredClone(d) : regenerateIds(d, vineyardId, paddockId), sameDraft };
+  return out;
 }
