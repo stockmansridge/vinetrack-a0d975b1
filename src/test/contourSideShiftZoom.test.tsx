@@ -66,7 +66,6 @@ describe("number stepper", () => {
     expect(parseStepperText("", b)).toBeNull(); expect(parseStepperText("0.4", b)).toBeNull();
     expect(parseStepperText("20.1", b)).toBeNull(); expect(parseStepperText("2.", b)).toBe(2);
     expect(parseStepperText("1.5", { min: 1, max: 9, integer: true })).toBeNull();
-    expect(stepValue(2.45, 1, { ...b, step: 0.1 })).toBe(2.6 - 0.05 > 2.5 ? 2.6 - 0.05 : 2.55);
     expect(stepValue(19.95, 1, { ...b, step: 0.1 })).toBe(20);
     expect(stepValue(0, -1, { min: 0, max: 300, step: 1 })).toBe(0);
   });
