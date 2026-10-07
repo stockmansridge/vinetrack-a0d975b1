@@ -231,7 +231,7 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
     setGroupId(g.id); setTool("trace"); setIssues([]); setRowSel(null);
   });
 
-  const shiftProj = useMemo(() => shiftProjection(boundary, paddock.polygon_points ? boundary[0] ?? { lat: 0, lng: 0 } : { lat: 0, lng: 0 }), [boundary, paddock]);
+  const shiftProj = useMemo(() => shiftProjection(boundary, group?.referenceTrace[0] ?? { lat: -34.5, lng: 138.7 }), [boundary, group]);
   const shiftDir = group ? shiftDirection(group, shiftProj) : null;
   const doShift = guard((side: ShiftSide) => {
     if (!group) return;
