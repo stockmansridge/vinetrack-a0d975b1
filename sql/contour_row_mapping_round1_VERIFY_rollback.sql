@@ -1,5 +1,5 @@
 -- Contour Row Mapping — ROLLBACK-ONLY verification for the pending migration.
--- Run AFTER applying sql/contour_row_mapping_round1_PENDING.sql inside a
+-- Run AFTER applying sql/contour_row_mapping_round1_applied.sql inside a
 -- transaction on the shared VineTrack database, as a role able to SET ROLE
 -- authenticated (e.g. postgres in the SQL editor). Everything is rolled back.
 --

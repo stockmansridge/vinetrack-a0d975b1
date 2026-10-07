@@ -1,9 +1,15 @@
 -- Contour Row Mapping (Beta) — Round 1 draft persistence (revision 2).
--- STATUS: PENDING — NOT APPLIED. Prepared by the Portal for Rork review.
--- Rork: assign the next free migration number on the shared VineTrack
--- database before applying. Verify with
--- sql/contour_row_mapping_round1_VERIFY_rollback.sql (rolls back).
---
+-- STATUS: APPLIED to the shared VineTrack database on 2026-10-07 as
+-- migration "contour_row_mapping_round1" (applied by Jonathan Hambrook from
+-- commit 69b4a256597dce38b74391666555922e084d06a8). Do NOT run again.
+-- Not a numbered Rork migration; no number was assigned.
+-- Verified with sql/contour_row_mapping_round1_VERIFY_rollback.sql using real
+-- fixtures (admin+member block; genuine non-admin on own member block; admin
+-- on a block outside their memberships), plus mutation denials: all checks
+-- passed, paddock hash unchanged, all 3 tables empty after rollback; security
+-- advisor reported no contour findings. The race check is stale-first-save
+-- contract coverage, not a simultaneous two-connection test.
+-- The executable body below is unchanged from the applied file.
 -- Live helpers used (confirmed):
 --   public.is_system_admin()        -> system_admins, auth.uid(), is_active = true
 --   public.is_vineyard_member(uuid) -> vineyards.owner_id = auth.uid() OR a vineyard_members row
