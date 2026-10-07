@@ -4,12 +4,12 @@
 // Drafts are review-only. Nothing here writes paddocks.rows or any other
 // operational block input.
 
-import { generateUuid } from "@/lib/uuid";
+import { generateUuid, isUuid } from "@/lib/uuid";
 import {
   type LatLng, type XY, type Projection,
   projectionForPolygon, isFiniteLL, chaikin, extendEnds, offsetPolylineChecked,
-  clipPolyline, polylineSelfIntersects, polylinesCross, minDistanceBetween,
-  polylineLengthXY, dedupeXY, multipartLengthM, chordLengthM,
+  clipPolyline, polylineSelfIntersects, polylinesCross,
+  polylineLengthXY, dedupeXY, multipartLengthM, chordLengthM, maskProblem, minDistanceBetweenParts,
 } from "./geometry";
 
 export const DRAFT_SCHEMA = "vinetrack.contour_row_mapping_draft";
@@ -24,6 +24,18 @@ export const LIMITS = {
   maxTracePoints: 500,
   minSpacingM: 0.5,
   maxSpacingM: 20,
+  maxMasksPerGroup: 50,
+  maxMaskPoints: 500,
+  maxPartsPerRow: 50,
+  maxRowNumber: 100_000,
+  maxNameLength: 120,
+  /** Compact JSON byte limits (UTF-8). The SQL validator allows 1.5× for jsonb text spacing. */
+  maxPayloadBytes: 4_000_000,
+  maxRowBytes: 200_000,
+  maxTraceBytes: 60_000,
+  maxMaskBytes: 60_000,
+  maxSourceBytes: 2_000,
+  maxBackupFileBytes: 5_000_000,
 };
 
 export type GroupMode = "straight" | "contour" | "imported";
@@ -128,12 +140,21 @@ export function generateGroupRows(g: RowGroup, boundary: LatLng[]): GenerateResu
   if (ref.length < 2 || polylineLengthXY(ref) < 1)
     issues.push({ level: "error", message: "Trace one existing row first — click at least two points along it." });
   if (polylineSelfIntersects(ref)) issues.push({ level: "error", message: "The traced row crosses itself. Undo or drag points so it follows one row." });
+  // Invalid masks are rejected, never silently ignored.
+  if (g.workingArea) {
+    const why = maskProblem(g.workingArea, proj);
+    if (why) issues.push({ level: "error", message: `The working area ${why}. Fix or clear it before generating.` });
+  }
+  g.exclusions.forEach((m, i) => {
+    const why = maskProblem(m.points, proj);
+    if (why) issues.push({ level: "error", message: `Cut-out ${i + 1} ${why}. Fix or remove it before generating.` });
+  });
   if (issues.some((i) => i.level === "error")) return { rows: [], issues };
 
   const region = {
     boundary: boundary.map(proj.toXY),
-    workingArea: g.workingArea && g.workingArea.length >= 3 ? g.workingArea.map(proj.toXY) : null,
-    exclusions: g.exclusions.filter((e) => e.points.length >= 3).map((e) => e.points.map(proj.toXY)),
+    workingArea: g.workingArea ? g.workingArea.map(proj.toXY) : null,
+    exclusions: g.exclusions.map((e) => e.points.map(proj.toXY)),
   };
   let diag = 0;
   for (const a of region.boundary) for (const b of region.boundary) diag = Math.max(diag, Math.hypot(a.x - b.x, a.y - b.y));
@@ -177,10 +198,9 @@ export function generateGroupRows(g: RowGroup, boundary: LatLng[]): GenerateResu
   // Neighbour checks — crossing or squeezing rows.
   for (let i = 1; i < xyRows.length; i++) {
     const a = xyRows[i - 1], b = xyRows[i];
-    const A = a.parts.flat(), B = b.parts.flat();
     const crosses = a.parts.some((pa) => b.parts.some((pb) => polylinesCross(pa, pb)));
     if (crosses) issues.push({ level: "error", message: `Rows ${a.number} and ${b.number} cross. Use a smaller group or adjust the trace.` });
-    else if (minDistanceBetween(A, B) < g.spacingM * 0.5)
+    else if (minDistanceBetweenParts(a.parts, b.parts) < g.spacingM * 0.5)
       issues.push({ level: "warning", message: `Rows ${a.number} and ${b.number} come closer than half the spacing. Check the trace around tight bends.` });
   }
   if (issues.some((i) => i.level === "error")) return { rows: [], issues };
