@@ -139,7 +139,8 @@ const toPayload = (i: WorkTaskMachineLineWriteInput) => ({
   hourly_machine_rate: num(i.hourly_machine_rate),
   total_machine_cost: num(i.total_machine_cost),
   entry_source: i.entry_source ?? "manual",
-  notes: i.notes ?? null,
+  // Schema contract: notes is never NULL; empty means "".
+  notes: i.notes ?? "",
 });
 
 export async function createWorkTaskMachineLine(

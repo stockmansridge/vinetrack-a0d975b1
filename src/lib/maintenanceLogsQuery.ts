@@ -123,7 +123,8 @@ export async function createMaintenanceLog(
     hours: input.hours ?? null,
     machine_hours: input.machine_hours ?? null,
     work_completed: input.work_completed ?? null,
-    parts_used: input.parts_used ?? null,
+    // Schema contract: parts_used is never NULL; no parts means "".
+    parts_used: input.parts_used ?? "",
     parts_cost: input.parts_cost ?? null,
     labour_cost: input.labour_cost ?? null,
     is_finalized: !!input.is_finalized,
@@ -169,7 +170,7 @@ export async function updateMaintenanceLog(
   if (input.hours !== undefined) patch.hours = input.hours;
   if (input.machine_hours !== undefined) patch.machine_hours = input.machine_hours;
   if (input.work_completed !== undefined) patch.work_completed = input.work_completed;
-  if (input.parts_used !== undefined) patch.parts_used = input.parts_used;
+  if (input.parts_used !== undefined) patch.parts_used = input.parts_used ?? "";
   if (input.parts_cost !== undefined) patch.parts_cost = input.parts_cost;
   if (input.labour_cost !== undefined) patch.labour_cost = input.labour_cost;
   if (input.is_finalized !== undefined) {
