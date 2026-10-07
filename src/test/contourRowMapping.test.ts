@@ -5,10 +5,17 @@ const from = vi.fn();
 vi.mock("@/integrations/ios-supabase/client", () => ({ supabase: { rpc: (...a: any[]) => rpc(...a), from: (...a: any[]) => from(...a) } }));
 
 import { makeProjection, offsetPolyline, clipPolyline, polylineLengthXY, multipartLengthM, chordLengthM, type XY } from "@/lib/contourRows/geometry";
-import { newDraft, newGroup, generateGroupRows, validateDraft, exportDraft, importDraftFile, numberForOffset, totalRowsFor } from "@/lib/contourRows/draft";
+import { newDraft, newGroup, generateGroupRows, validateDraft, validateDraftShape, exportDraft, importDraftFile, readBackupFile, numberForOffset, totalRowsFor } from "@/lib/contourRows/draft";
+import { checkDraftGeometry } from "@/lib/contourRows/checks";
+import { generateUuid } from "@/lib/uuid";
 import { moveVertex, splitAfterVertex } from "@/lib/contourRows/rowEdits";
-import { parseGeoJsonLines, parseKmlLines, parseLineFile, duplicateNumbers } from "@/lib/contourRows/importLines";
-import { saveDraft, loadDraft } from "@/lib/contourRows/draftApi";
+import { parseGeoJsonLines, parseKmlLines, parseLineFile, duplicateNumbers, linesFarOutside } from "@/lib/contourRows/importLines";
+import { saveDraft, loadDraft, discardDraft } from "@/lib/contourRows/draftApi";
+
+const V = "aaaaaaaa-0000-4000-8000-000000000001", P = "aaaaaaaa-0000-4000-8000-000000000002";
+const V2 = "aaaaaaaa-0000-4000-8000-000000000003", P2 = "aaaaaaaa-0000-4000-8000-000000000004";
+const CANON = "aaaaaaaa-0000-4000-8000-0000000000cc";
+const scope = { vineyardId: V, paddockId: P };
 
 const proj = makeProjection({ lat: -34.5, lng: 138.7 });
 const toLL = (pts: XY[]) => pts.map(proj.toLL);
@@ -100,28 +107,127 @@ describe("generator and draft rules", () => {
   });
 
   it("flags duplicate row numbers across groups", () => {
-    const d = newDraft("v1", "p1");
+    const d = newDraft(V, P);
     const a = { ...g0(), rows: generateGroupRows(g0(), square).rows };
-    const b = { ...g0(), id: "g2", rows: generateGroupRows(g0(), square).rows };
+    const b = { ...g0(), id: generateUuid(), rows: generateGroupRows(g0(), square).rows };
     d.groups = [a, b];
     expect(validateDraft(d).some((m) => /used twice/.test(m))).toBe(true);
   });
 
-  it("export/import round trip keeps ids for same draft, regenerates for another block", () => {
-    const d = newDraft("v1", "p1");
-    d.groups = [{ ...g0(), rows: generateGroupRows(g0(), square).rows, canonicalRowId: undefined } as any];
-    d.groups[0].rows[0].canonicalRowId = "11111111-1111-1111-1111-111111111111";
+  it("backup restore keeps ids only for same draft; copy regenerates children and keeps container id", () => {
+    const d = newDraft(V, P);
+    d.groups = [{ ...g0(), rows: generateGroupRows(g0(), square).rows }];
     const text = JSON.stringify(exportDraft(d));
-    const same = importDraftFile(text, "v1", "p1", d.draftId);
-    expect(same.sameDraft).toBe(true);
-    expect(same.draft).toEqual(d);
-    const other = importDraftFile(text, "v2", "p9", null);
-    expect(other.sameDraft).toBe(false);
-    const oldIds = new Set([d.draftId, ...d.groups.flatMap((g) => [g.id, ...g.rows.flatMap((r) => [r.id, ...r.parts.map((p) => p.id)])])]);
-    const newIds = [other.draft.draftId, ...other.draft.groups.flatMap((g) => [g.id, ...g.rows.flatMap((r) => [r.id, ...r.parts.map((p) => p.id)])])];
-    expect(newIds.some((i) => oldIds.has(i))).toBe(false);
-    expect(other.draft.groups[0].rows.every((r) => r.canonicalRowId === null)).toBe(true);
-    expect(other.draft.paddockId).toBe("p9");
+    expect(importDraftFile(text, scope, d.draftId, "restore")).toEqual(d);
+    expect(() => importDraftFile(text, scope, generateUuid(), "restore")).toThrow(/copy/);
+    const cur = generateUuid();
+    const copy = importDraftFile(text, { vineyardId: V2, paddockId: P2 }, cur, "copy");
+    expect(copy.draftId).toBe(cur);
+    const oldIds = new Set(d.groups.flatMap((g) => [g.id, ...g.rows.flatMap((r) => [r.id, ...r.parts.map((p) => p.id)])]));
+    const newIds = copy.groups.flatMap((g) => [g.id, ...g.rows.flatMap((r) => [r.id, ...r.parts.map((p) => p.id)])]);
+    expect(newIds.some((x) => oldIds.has(x))).toBe(false);
+    expect(copy.paddockId).toBe(P2);
+  });
+
+  it("backup import rejects malformed structures without TypeErrors", () => {
+    const bad = [ "{", "null", JSON.stringify({ format: "vinetrack.contour_row_mapping_export", exportVersion: 1, draft: null }),
+      JSON.stringify({ format: "vinetrack.contour_row_mapping_export", exportVersion: 1, draft: { schema: "vinetrack.contour_row_mapping_draft", version: 1, groups: [null] } }),
+      "x".repeat(5_000_001) ];
+    for (const t of bad) expect(() => readBackupFile(t, scope, generateUuid())).toThrow(Error);
+  });
+});
+
+describe("strict shape validation", () => {
+  const valid = () => { const d = newDraft(V, P); d.groups = [{ ...g0(), rows: generateGroupRows(g0(), square).rows }]; return d; };
+  it("accepts a valid draft, an empty draft and an in-progress trace", () => {
+    expect(validateDraftShape(valid(), scope)).toEqual([]);
+    expect(validateDraftShape(newDraft(V, P), scope)).toEqual([]);
+    const d = newDraft(V, P); d.groups = [{ ...newGroup("A"), referenceTrace: square.slice(0, 1) }];
+    expect(validateDraftShape(d, scope)).toEqual([]);
+  });
+  it.each([
+    ["missing schema", (d: any) => { delete d.schema; }],
+    ["missing scope", (d: any) => { delete d.paddockId; }],
+    ["wrong scope", (d: any) => { d.vineyardId = V2; }],
+    ["missing groups", (d: any) => { delete d.groups; }],
+    ["null group", (d: any) => { d.groups.push(null); }],
+    ["missing parts", (d: any) => { delete d.groups[0].rows[0].parts; }],
+    ["empty parts", (d: any) => { d.groups[0].rows[0].parts = []; }],
+    ["row number 0", (d: any) => { d.groups[0].rows[0].number = 0; }],
+    ["fractional row number", (d: any) => { d.groups[0].rows[0].number = 1.5; }],
+    ["missing row id", (d: any) => { d.groups[0].rows[0].id = null; }],
+    ["non-uuid id", (d: any) => { d.groups[0].id = "g1"; }],
+    ["duplicate id", (d: any) => { d.groups[0].rows[1].id = d.groups[0].rows[0].id; }],
+    ["null coordinate", (d: any) => { d.groups[0].rows[0].parts[0].points[0].lat = null; }],
+    ["string coordinate", (d: any) => { d.groups[0].rows[0].parts[0].points[0].lng = "138.7"; }],
+    ["out of range", (d: any) => { d.groups[0].rows[0].parts[0].points[0].lng = 181; }],
+    ["zero-length part", (d: any) => { const p = d.groups[0].rows[0].parts[0]; p.points = [p.points[0], { ...p.points[0] }]; }],
+    ["unsupported mode", (d: any) => { d.groups[0].mode = "spline"; }],
+    ["unsupported provenance", (d: any) => { d.groups[0].rows[0].provenance = "magic"; }],
+    ["spacing range", (d: any) => { d.groups[0].spacingM = 0; }],
+    ["smoothing range", (d: any) => { d.groups[0].smoothing = 3; }],
+    ["count range", (d: any) => { d.groups[0].rightCount = 301; }],
+    ["incomplete working area", (d: any) => { d.groups[0].workingArea = [square[0]]; }],
+    ["malformed mask", (d: any) => { d.groups[0].exclusions = [{ id: generateUuid(), points: [square[0], null, square[2]] }]; }],
+    ["oversize trace", (d: any) => { d.groups[0].referenceTrace = Array.from({ length: 501 }, () => square[0]); }],
+    ["unknown canonical row", (d: any) => { d.groups[0].rows[0].canonicalRowId = generateUuid(); }],
+  ])("rejects %s", (_n, mutate) => {
+    const d: any = structuredClone(valid()); mutate(d);
+    expect(validateDraftShape(d, { ...scope, canonicalRowIds: new Set([CANON]) }).length).toBeGreaterThan(0);
+  });
+  it("accepts a canonical row that belongs to the block", () => {
+    const d = valid(); d.groups[0].rows[0].canonicalRowId = CANON;
+    expect(validateDraftShape(d, { ...scope, canonicalRowIds: new Set([CANON]) })).toEqual([]);
+  });
+});
+
+describe("final geometry checks", () => {
+  const draftWith = (rows: XY[][][], mode: "imported" | "contour" = "imported") => {
+    const d = newDraft(V, P);
+    d.groups = [{ ...newGroup("I"), mode, rows: rows.map((parts, i) => ({ id: generateUuid(), number: i + 1, offsetIndex: null, provenance: "imported" as const, canonicalRowId: null,
+      parts: parts.map((p) => ({ id: generateUuid(), points: toLL(p) })) })) }];
+    return d;
+  };
+  const errs = (d: any) => checkDraftGeometry(d, square).filter((i) => i.level === "error").map((i) => i.message).join(" | ");
+  it("clean parallel rows pass", () => {
+    expect(errs(draftWith([[[{ x: -50, y: 0 }, { x: 50, y: 0 }]], [[{ x: -50, y: 3 }, { x: 50, y: 3 }]]]))).toBe("");
+  });
+  it("detects self-intersection", () => {
+    expect(errs(draftWith([[[{ x: -50, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 10 }, { x: 0, y: -10 }]]]))).toMatch(/crosses or doubles back/);
+  });
+  it("detects a collinear doubling back on adjacent segments", () => {
+    expect(errs(draftWith([[[{ x: -50, y: 0 }, { x: 50, y: 0 }, { x: 10, y: 0 }]]]))).toMatch(/doubles back/);
+  });
+  it("detects crossing rows and collinear overlap between rows", () => {
+    expect(errs(draftWith([[[{ x: -50, y: 0 }, { x: 50, y: 0 }]], [[{ x: 0, y: -20 }, { x: 0, y: 20 }]]]))).toMatch(/Rows 1 and 2 cross/);
+    expect(errs(draftWith([[[{ x: -50, y: 0 }, { x: 10, y: 0 }]], [[{ x: 0, y: 0 }, { x: 50, y: 0 }]]]))).toMatch(/Rows 1 and 2 overlap/);
+  });
+  it("multipart rows are not flattened: a gap between parts is not a segment", () => {
+    // Part gap would cross row 2 if flattened.
+    const d = draftWith([[[{ x: -50, y: 0 }, { x: -10, y: 0 }], [{ x: -10, y: 20 }, { x: 50, y: 20 }]], [[{ x: -9, y: -30 }, { x: -9, y: -5 }]]]);
+    expect(errs(d)).toBe("");
+  });
+  it("flags rows outside the block and repeated points", () => {
+    expect(errs(draftWith([[[{ x: -50, y: 0 }, { x: 150, y: 0 }]]]))).toMatch(/outside the block/);
+    expect(errs(draftWith([[[{ x: -50, y: 0 }, { x: -50, y: 0 }, { x: 50, y: 0 }]]]))).toMatch(/repeated points/);
+  });
+  it("flags rows through a cut-out and invalid masks", () => {
+    const d = draftWith([[[{ x: -50, y: 0 }, { x: 50, y: 0 }]]], "contour");
+    d.groups[0].exclusions = [{ id: generateUuid(), points: toLL([{ x: -5, y: -5 }, { x: 5, y: -5 }, { x: 5, y: 5 }, { x: -5, y: 5 }]) }];
+    expect(errs(d)).toMatch(/through a cut-out/);
+    d.groups[0].exclusions = [{ id: generateUuid(), points: toLL([{ x: -5, y: -5 }, { x: 5, y: 5 }, { x: 5, y: -5 }, { x: -5, y: 5 }]) }];
+    expect(errs(d)).toMatch(/crosses itself/);
+  });
+  it("generator rejects invalid masks instead of ignoring them", () => {
+    const res = generateGroupRows({ ...g0(), workingArea: square.slice(0, 2) }, square);
+    expect(res.rows).toHaveLength(0);
+    expect(res.issues.some((i) => /working area/.test(i.message))).toBe(true);
+  });
+  it("large drafts finish quickly (grid, no all-pairs freeze)", () => {
+    const rows = Array.from({ length: 70 }, (_, i) => [[...Array.from({ length: 200 }, (_, k) => ({ x: -95 + k * 0.95, y: -90 + i * 2.5 }))]]);
+    const t = Date.now();
+    expect(errs(draftWith(rows))).toBe("");
+    expect(Date.now() - t).toBeLessThan(4000);
   });
 });
 
@@ -152,50 +258,127 @@ describe("row import", () => {
   });
 });
 
+describe("row import strictness", () => {
+  const fc = (coords: unknown) => JSON.stringify({ type: "FeatureCollection", features: [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coords } }] });
+  it("rejects null/blank/string coordinates instead of coercing", () => {
+    expect(() => parseGeoJsonLines(fc([[null, -34.5], [138.7, -34.5]]))).toThrow(/numbers/);
+    expect(() => parseGeoJsonLines(fc([["138.7", -34.5], [138.7, -34.6]]))).toThrow(/numbers/);
+    expect(() => parseKmlLines(`<kml><Placemark><LineString><coordinates>138.7, 138.701,-34.5</coordinates></LineString></Placemark></kml>`)).toThrow();
+    expect(() => parseKmlLines(`<kml><Placemark><LineString><coordinates>,-34.5 138.701,-34.5</coordinates></LineString></Placemark></kml>`)).toThrow(/numbers/);
+  });
+  it("rejects empty MultiLineString, invalid FeatureCollection and nested CRS", () => {
+    expect(() => parseGeoJsonLines(JSON.stringify({ type: "Feature", properties: {}, geometry: { type: "MultiLineString", coordinates: [] } }))).toThrow(/no lines/);
+    expect(() => parseGeoJsonLines(JSON.stringify({ type: "FeatureCollection", features: {} }))).toThrow(/features/);
+    expect(() => parseGeoJsonLines(JSON.stringify({ type: "FeatureCollection", features: [null] }))).toThrow(/Feature/);
+    expect(() => parseGeoJsonLines(JSON.stringify({ type: "FeatureCollection", features: [{ type: "Feature", properties: {}, geometry: { type: "LineString", crs: { properties: { name: "EPSG:28354" } }, coordinates: [[1, 1], [2, 2]] } }] }))).toThrow(/coordinate system/);
+  });
+  it("flags lines far outside the block", () => {
+    const near = parseGeoJsonLines(fc(toLL([{ x: -50, y: 0 }, { x: 50, y: 0 }]).map((p) => [p.lng, p.lat])));
+    expect(linesFarOutside(near.lines, square)).toHaveLength(0);
+    const far = parseGeoJsonLines(fc(toLL([{ x: 500, y: 0 }, { x: 600, y: 0 }]).map((p) => [p.lng, p.lat])));
+    expect(linesFarOutside(far.lines, square)).toHaveLength(1);
+  });
+});
+
 describe("draft API", () => {
   beforeEach(() => { rpc.mockReset(); from.mockReset(); });
-  const d = () => ({ ...newDraft("v1", "p1") });
+  const d = () => newDraft(V, P);
+  const SID = "bbbbbbbb-0000-4000-8000-000000000001";
 
-  it("missing backend is reported as setup required, not empty", async () => {
+  it("missing backend is reported as setup required, not empty; discarded slot keeps its revision", async () => {
     rpc.mockResolvedValue({ data: null, error: { code: "PGRST202", message: "Could not find the function" } });
-    expect((await loadDraft("p1")).status).toBe("setup_required");
+    expect((await loadDraft(scope)).status).toBe("setup_required");
     rpc.mockResolvedValue({ data: null, error: null });
-    expect((await loadDraft("p1")).status).toBe("empty");
+    expect(await loadDraft(scope)).toEqual({ status: "empty", revision: 0 });
+    rpc.mockResolvedValue({ data: { draft_id: null, payload: null, revision: 5 }, error: null });
+    expect(await loadDraft(scope)).toEqual({ status: "empty", revision: 5 });
+  });
+
+  it("invalid server payload is rejected before rendering", async () => {
+    const bad = { ...d(), groups: [{ id: "x" }] };
+    rpc.mockResolvedValue({ data: { draft_id: bad.draftId, revision: 1, payload: bad }, error: null });
+    await expect(loadDraft(scope)).rejects.toMatchObject({ kind: "invalid" });
+    const other = newDraft(V2, P);
+    rpc.mockResolvedValue({ data: { draft_id: other.draftId, revision: 1, payload: other }, error: null });
+    await expect(loadDraft(scope)).rejects.toMatchObject({ kind: "invalid" });
   });
 
   it("denied backend access surfaces as an error", async () => {
     rpc.mockResolvedValue({ data: null, error: { code: "42501", message: "not_authorised" } });
-    await expect(loadDraft("p1")).rejects.toMatchObject({ kind: "denied" });
+    await expect(loadDraft(scope)).rejects.toMatchObject({ kind: "denied" });
   });
 
   it("stale save is a conflict; never touches the paddocks table", async () => {
-    rpc.mockResolvedValue({ data: null, error: { code: "P0001", message: "stale_revision" } });
-    await expect(saveDraft("p1", 3, "s1", d())).rejects.toMatchObject({ kind: "stale" });
+    rpc.mockResolvedValue({ data: null, error: { code: "40001", message: "stale_revision" } });
+    await expect(saveDraft(scope, { draftId: null, revision: 3 }, SID, d())).rejects.toMatchObject({ kind: "stale" });
     expect(from).not.toHaveBeenCalled();
   });
 
-  it("confirms save only after read-back with matching identity/revision", async () => {
+  it("confirms only an exact acknowledgement (revision, save id, content)", async () => {
     const draft = d();
     rpc.mockImplementation(async (fn: string, args: any) => {
       if (fn === "save_contour_row_mapping_draft") {
-        expect(args).toMatchObject({ p_paddock_id: "p1", p_expected_revision: 0, p_client_save_id: "s1" });
-        return { data: { revision: 1, payload: draft }, error: null };
+        expect(args).toMatchObject({ p_paddock_id: P, p_expected_draft_id: null, p_expected_revision: 0, p_client_save_id: SID });
+        return { data: { draft_id: draft.draftId, revision: 1, client_save_id: SID }, error: null };
       }
-      return { data: { revision: 1, payload: draft }, error: null };
+      // key order differs: still equal
+      return { data: { draft_id: draft.draftId, revision: 1, last_client_save_id: SID, payload: JSON.parse(JSON.stringify({ groups: draft.groups, ...draft })) }, error: null };
     });
-    const s = await saveDraft("p1", 0, "s1", draft);
+    const s = await saveDraft(scope, { draftId: null, revision: 0 }, SID, draft);
     expect(s.revision).toBe(1);
-    expect(rpc).toHaveBeenCalledWith("get_contour_row_mapping_draft", { p_paddock_id: "p1" });
     expect(from).not.toHaveBeenCalled();
-
-    rpc.mockImplementation(async (fn: string) => fn === "save_contour_row_mapping_draft"
-      ? { data: { revision: 2, payload: draft }, error: null }
-      : { data: { revision: 2, payload: { ...draft, draftId: "other" } }, error: null });
-    await expect(saveDraft("p1", 1, "s2", draft)).rejects.toThrow(/confirmed/);
   });
 
-  it("network failure is recoverable", async () => {
-    rpc.mockRejectedValueOnce(new TypeError("Failed to fetch"));
-    await expect(saveDraft("p1", 0, "s1", d())).rejects.toBeTruthy();
+  it("read-back with different content at the same revision is not confirmed", async () => {
+    const draft = d();
+    const changed = { ...draft, groups: [newGroup("other")] };
+    rpc.mockImplementation(async (fn: string) => fn === "save_contour_row_mapping_draft"
+      ? { data: { draft_id: draft.draftId, revision: 1, client_save_id: SID }, error: null }
+      : { data: { draft_id: draft.draftId, revision: 1, last_client_save_id: SID, payload: changed }, error: null });
+    await expect(saveDraft(scope, { draftId: null, revision: 0 }, SID, draft)).rejects.toMatchObject({ kind: "unknown" });
+  });
+
+  it("a newer writer after our ack is a conflict and their payload is never returned", async () => {
+    const draft = d();
+    const theirs = { ...draft, groups: [newGroup("theirs")] };
+    rpc.mockImplementation(async (fn: string) => fn === "save_contour_row_mapping_draft"
+      ? { data: { draft_id: draft.draftId, revision: 2, client_save_id: SID }, error: null }
+      : { data: { draft_id: draft.draftId, revision: 3, last_client_save_id: "bbbbbbbb-0000-4000-8000-000000000009", payload: theirs }, error: null });
+    await expect(saveDraft(scope, { draftId: draft.draftId, revision: 1 }, SID, draft)).rejects.toMatchObject({ kind: "conflict" });
+  });
+
+  it("ack with a different save id is rejected", async () => {
+    const draft = d();
+    rpc.mockResolvedValue({ data: { draft_id: draft.draftId, revision: 1, client_save_id: "bbbbbbbb-0000-4000-8000-000000000002" }, error: null });
+    await expect(saveDraft(scope, { draftId: null, revision: 0 }, SID, draft)).rejects.toThrow(/acknowledged/);
+  });
+
+  it("network retry reuses the original save id", async () => {
+    const draft = d();
+    const ids: string[] = [];
+    let n = 0;
+    rpc.mockImplementation(async (fn: string, args: any) => {
+      if (fn === "save_contour_row_mapping_draft") {
+        ids.push(args.p_client_save_id);
+        if (n++ === 0) throw new TypeError("Failed to fetch");
+        return { data: { draft_id: draft.draftId, revision: 1, client_save_id: SID }, error: null };
+      }
+      return { data: { draft_id: draft.draftId, revision: 1, last_client_save_id: SID, payload: draft }, error: null };
+    });
+    await saveDraft(scope, { draftId: null, revision: 0 }, SID, draft);
+    expect(ids).toEqual([SID, SID]);
+  });
+
+  it("rejects invalid save inputs before calling the server", async () => {
+    await expect(saveDraft(scope, { draftId: null, revision: -1 }, SID, d())).rejects.toMatchObject({ kind: "invalid" });
+    await expect(saveDraft(scope, { draftId: null, revision: 0 }, "nope", d())).rejects.toMatchObject({ kind: "invalid" });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("discard sends draft identity and reports idempotent repeats", async () => {
+    rpc.mockResolvedValue({ data: { revision: 4, already_discarded: true }, error: null });
+    const draftId = generateUuid();
+    expect(await discardDraft(P, draftId, 3)).toEqual({ revision: 4, alreadyDiscarded: true });
+    expect(rpc).toHaveBeenCalledWith("discard_contour_row_mapping_draft", { p_paddock_id: P, p_draft_id: draftId, p_expected_revision: 3 });
   });
 });
