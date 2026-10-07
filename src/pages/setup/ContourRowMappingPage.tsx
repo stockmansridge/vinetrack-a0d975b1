@@ -3,9 +3,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { MapContainer, TileLayer, Polygon, Polyline, Marker, useMap, useMapEvents } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import ContourAppleMap, { type CShape, type CMarker } from "@/components/paddocks/ContourAppleMap";
 import { ArrowLeft, Plus, Trash2, Undo2, Save, Download, Upload, Maximize, AlertTriangle, Info } from "lucide-react";
 
 import { fetchOne } from "@/lib/queries";
@@ -44,28 +42,6 @@ type Tool = "none" | "trace" | "area" | "exclusion";
 const DRAFT_COLOUR = "#22D3EE";
 const SELECTED_COLOUR = "#FACC15";
 const EXISTING_COLOUR = "#E5E7EB";
-
-const vIcon = (active: boolean) => L.divIcon({
-  className: "",
-  html: `<div style="width:12px;height:12px;border-radius:9999px;border:2px solid #fff;background:${active ? "#EF4444" : "#0EA5E9"};box-shadow:0 0 2px #000"></div>`,
-  iconSize: [12, 12], iconAnchor: [6, 6],
-});
-const midIcon = L.divIcon({ className: "", html: `<div style="width:8px;height:8px;border-radius:9999px;background:#fff;opacity:.8"></div>`, iconSize: [8, 8], iconAnchor: [4, 4] });
-
-const ll = (p: LatLng) => [p.lat, p.lng] as [number, number];
-
-function FitTo({ points, nonce }: { points: LatLng[]; nonce: number }) {
-  const map = useMap();
-  useEffect(() => {
-    if (points.length) map.fitBounds(L.latLngBounds(points.map(ll)), { padding: [30, 30] });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nonce]);
-  return null;
-}
-function Clicks({ onClick }: { onClick: (p: LatLng) => void }) {
-  useMapEvents({ click: (e) => onClick({ lat: e.latlng.lat, lng: e.latlng.lng }) });
-  return null;
-}
 
 export default function ContourRowMappingPage() {
   const { isAdmin, loading } = useIsSystemAdmin();
@@ -385,6 +361,43 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
   const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 1 });
 
   const centre = boundary[0] ?? { lat: -34.5, lng: 138.7 };
+  const mapShapes: CShape[] = [];
+  if (boundary.length >= 3) mapShapes.push({ id: "boundary", kind: "polygon", points: boundary, color: "#34C759", width: 2, fillOpacity: 0.05 });
+  legacyRows.forEach((r, i) => { if (r.start && r.end) mapShapes.push({ id: `legacy-${i}`, kind: "polyline", points: [r.start, r.end], color: EXISTING_COLOUR, width: 1, opacity: 0.35, dash: [3, 4] }); });
+  const mapMarkers: CMarker[] = [];
+  for (const g of draft.groups) {
+    const active = g.id === groupId; const selRowId = rowSel?.rowId ?? null;
+    if (g.workingArea && g.workingArea.length >= 2) mapShapes.push({ id: `wa-${g.id}`, kind: "polygon", points: g.workingArea, color: "#60A5FA", width: active ? 2 : 1, dash: [6, 4], fillOpacity: 0.04 });
+    g.exclusions.forEach((m) => { if (m.points.length >= 2) mapShapes.push({ id: `ex-${m.id}`, kind: "polygon", points: m.points, color: "#F87171", width: 1.5, fillOpacity: 0.25 }); });
+    g.rows.forEach((r) => r.parts.forEach((p) => mapShapes.push({
+      id: `row-${p.id}`, kind: "polyline", points: p.points,
+      color: r.id === selRowId ? SELECTED_COLOUR : DRAFT_COLOUR, width: r.id === selRowId ? 4 : active ? 2.5 : 1.5, opacity: active ? 1 : 0.6,
+      onClick: guard(() => { setGroupId(g.id); setTool("none"); setRowSel({ rowId: r.id, part: 0, idx: null }); }),
+    })));
+    if (g.referenceTrace.length >= 2) {
+      mapShapes.push({ id: `trace-${g.id}`, kind: "polyline", points: g.referenceTrace, color: "#F97316", width: active ? 3 : 1.5, dash: [8, 6] });
+      if (active) mapMarkers.push({ id: `end-${g.id}`, point: g.referenceTrace[g.referenceTrace.length - 1], size: 16, labelOffsetX: 30,
+        html: `<div style="color:#F97316;font-weight:700;font-size:14px;text-shadow:0 0 2px #000;white-space:nowrap">▶ end</div>` });
+    }
+  }
+  const dot = (active: boolean) => `<div style="width:12px;height:12px;border-radius:9999px;border:2px solid #fff;background:${active ? "#EF4444" : "#0EA5E9"};box-shadow:0 0 2px #000"></div>`;
+  if (group && tool !== "none") {
+    editPts.forEach((p, i) => mapMarkers.push({ id: `v-${tool}-${exclusionId}-${i}`, point: p, size: 12, html: dot(selVertex === i), draggable: !locked,
+      onClick: () => setSelVertex(i),
+      onDragEnd: (q) => setEditPts((pts) => pts.map((x, j) => (j === i ? q : x))) }));
+    if (!locked) editPts.forEach((a, i) => {
+      const b = editPts[i + 1] ?? (closedOutline && editPts.length >= 3 ? editPts[0] : null);
+      if (!b) return;
+      const mid = { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 };
+      mapMarkers.push({ id: `m-${tool}-${i}`, point: mid, size: 8, html: `<div style="width:8px;height:8px;border-radius:9999px;background:#fff;opacity:.8"></div>`,
+        onClick: () => setEditPts((pts) => { const t = pts.slice(); t.splice(i + 1, 0, mid); return t; }) });
+    });
+  }
+  if (selRow) selRow.parts.forEach((p, pi) => p.points.forEach((q, qi) => mapMarkers.push({
+    id: `r-${pi}-${qi}`, point: q, size: 12, html: dot(rowSel?.part === pi && rowSel?.idx === qi), draggable: !locked,
+    onClick: () => setRowSel({ rowId: selRow.id, part: pi, idx: qi }),
+    onDragEnd: (x) => updateRow(selRow.id, (r) => moveVertex(r, pi, qi, x)),
+  })));
   const blocking = hasErrors(geoIssues) || shapeErrors.length > 0;
   const canSave = !setupRequired && dirty && !busy && !blocking;
   const locked = !!busy;
@@ -439,43 +452,10 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
 
       <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
         <div className="relative h-[640px] rounded-lg border overflow-hidden">
-          <MapContainer center={ll(centre)} zoom={18} maxZoom={21} scrollWheelZoom className="h-full w-full">
-            <FitTo points={boundary} nonce={fitNonce} />
-            <TileLayer attribution="Tiles &copy; Esri" maxNativeZoom={19} maxZoom={21}
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
-            <Clicks onClick={onMapClick} />
-            {boundary.length >= 3 && <Polygon positions={boundary.map(ll)} interactive={false} pathOptions={{ color: "#34C759", weight: 2, fillOpacity: 0.05 }} />}
-            {legacyRows.map((r, i) => r.start && r.end && (
-              <Polyline key={`legacy-${i}`} positions={[ll(r.start), ll(r.end)]} interactive={false} pathOptions={{ color: EXISTING_COLOUR, weight: 1, opacity: 0.35, dashArray: "3 4" }} />
-            ))}
-            {draft.groups.map((g) => (
-              <GroupLayer key={g.id} g={g} active={g.id === groupId} selRowId={rowSel?.rowId ?? null}
-                onSelectRow={guard((rowId: string) => { setGroupId(g.id); setTool("none"); setRowSel({ rowId, part: 0, idx: null }); })} />
-            ))}
-            {group && tool !== "none" && editPts.map((p, i) => (
-              <Marker key={`v-${tool}-${exclusionId}-${i}`} position={ll(p)} draggable={!locked} icon={vIcon(selVertex === i)}
-                eventHandlers={{
-                  click: () => setSelVertex(i),
-                  dragend: (e) => { const q = (e.target as L.Marker).getLatLng(); setEditPts((pts) => pts.map((x, j) => (j === i ? { lat: q.lat, lng: q.lng } : x))); },
-                }} />
-            ))}
-            {group && tool !== "none" && !locked && editPts.map((a, i) => {
-              const b = editPts[i + 1] ?? (closedOutline && editPts.length >= 3 ? editPts[0] : null);
-              if (!b) return null;
-              const mid = { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 };
-              return <Marker key={`m-${tool}-${i}`} position={ll(mid)} icon={midIcon}
-                eventHandlers={{ click: (e) => { L.DomEvent.stopPropagation(e); setEditPts((pts) => { const t = pts.slice(); t.splice(i + 1, 0, mid); return t; }); } }} />;
-            })}
-            {selRow && selRow.parts.map((p, pi) => p.points.map((q, qi) => (
-              <Marker key={`r-${pi}-${qi}`} position={ll(q)} draggable={!locked} icon={vIcon(rowSel?.part === pi && rowSel?.idx === qi)}
-                eventHandlers={{
-                  click: () => setRowSel({ rowId: selRow.id, part: pi, idx: qi }),
-                  dragend: (e) => { const x = (e.target as L.Marker).getLatLng(); updateRow(selRow.id, (r) => moveVertex(r, pi, qi, { lat: x.lat, lng: x.lng })); },
-                }} />
-            )))}
-          </MapContainer>
+          <ContourAppleMap centre={centre} fitPoints={boundary} fitNonce={fitNonce} onMapClick={onMapClick}
+            shapes={mapShapes} markers={mapMarkers} />
           <Button size="sm" variant="secondary" className="absolute right-3 top-3 z-[400] gap-1" onClick={() => setFitNonce((n) => n + 1)}><Maximize className="h-4 w-4" /> Fit to block</Button>
-          {tool !== "none" && <div className="absolute left-3 bottom-3 z-[400] rounded bg-background/90 px-3 py-1.5 text-xs shadow">
+          {tool !== "none" && <div className="absolute left-3 bottom-10 z-[400] rounded bg-background/90 px-3 py-1.5 text-xs shadow">
             {tool === "trace" ? "Click along one existing vine row, from one end to the other." : tool === "area" ? "Click to outline the working area. Drag points to move them; click a white dot to add one." : "Click to outline a track or obstacle. Drag points to move them; click a white dot to add one."}
           </div>}
         </div>
@@ -585,22 +565,6 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
             <Button disabled={importDups.length > 0 || locked} onClick={commitLineImport}>Add to draft</Button></AlertDialogFooter>
         </AlertDialogContent></AlertDialog>
     </div>
-  );
-}
-
-function GroupLayer({ g, active, selRowId, onSelectRow }: { g: RowGroup; active: boolean; selRowId: string | null; onSelectRow: (id: string) => void }) {
-  return (
-    <>
-      {g.workingArea && g.workingArea.length >= 2 && <Polygon positions={g.workingArea.map(ll)} interactive={false} pathOptions={{ color: "#60A5FA", weight: active ? 2 : 1, dashArray: "6 4", fillOpacity: 0.04 }} />}
-      {g.exclusions.map((m) => m.points.length >= 2 && <Polygon key={m.id} positions={m.points.map(ll)} interactive={false} pathOptions={{ color: "#F87171", weight: 1.5, fillOpacity: 0.25 }} />)}
-      {g.rows.map((r) => r.parts.map((p) => (
-        <Polyline key={p.id} positions={p.points.map(ll)} eventHandlers={{ click: (e) => { L.DomEvent.stopPropagation(e); onSelectRow(r.id); } }}
-          pathOptions={{ color: r.id === selRowId ? SELECTED_COLOUR : DRAFT_COLOUR, weight: r.id === selRowId ? 4 : active ? 2.5 : 1.5, opacity: active ? 1 : 0.6 }} />
-      )))}
-      {g.referenceTrace.length >= 2 && <Polyline positions={g.referenceTrace.map(ll)} interactive={false} pathOptions={{ color: "#F97316", weight: active ? 3 : 1.5, dashArray: "8 6" }} />}
-      {active && g.referenceTrace.length >= 2 && <Marker position={ll(g.referenceTrace[g.referenceTrace.length - 1])} interactive={false}
-        icon={L.divIcon({ className: "", html: `<div style="color:#F97316;font-weight:700;font-size:14px;text-shadow:0 0 2px #000">▶ end</div>`, iconSize: [50, 16], iconAnchor: [-6, 8] })} />}
-    </>
   );
 }
 

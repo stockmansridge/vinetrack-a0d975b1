@@ -47,6 +47,11 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
   const overlaysRef = useRef<any[]>([]);
   const annsRef = useRef<any[]>([]);
   const suppressTapUntil = useRef(0);
+  // Latest callbacks by id, so overlays only rebuild when geometry/style changes.
+  const latestShapes = useRef(shapes); latestShapes.current = shapes;
+  const latestMarkers = useRef(markers); latestMarkers.current = markers;
+  const shapeKey = JSON.stringify(shapes.map(({ onClick, ...r }) => ({ ...r, c: !!onClick })));
+  const markerKey = JSON.stringify(markers.map(({ onClick, onDragEnd, ...r }) => ({ ...r, c: !!onClick, d: !!onDragEnd })));
 
   useEffect(() => {
     let cancelled = false;
@@ -122,12 +127,13 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
         ? new mapkit.PolygonOverlay(coords, { style })
         : new mapkit.PolylineOverlay(coords, { style });
       try { ov.enabled = !!s.onClick; } catch { /* noop */ }
-      if (s.onClick) shapeClicks.current.set(ov, s.onClick);
+      if (s.onClick) { const id = s.id; shapeClicks.current.set(ov, () => latestShapes.current.find((x) => x.id === id)?.onClick?.()); }
       list.push(ov);
     }
     try { map.addOverlays(list); } catch { /* noop */ }
     overlaysRef.current = list;
-  }, [ready, shapes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, shapeKey]);
 
   // Markers
   useEffect(() => {
@@ -148,17 +154,18 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
       ann.addEventListener("select", () => {
         suppressTapUntil.current = Date.now() + 300;
         try { ann.selected = false; } catch { /* noop */ }
-        m.onClick?.();
+        latestMarkers.current.find((x) => x.id === m.id)?.onClick?.();
       });
       if (m.onDragEnd) ann.addEventListener("drag-end", () => {
         suppressTapUntil.current = Date.now() + 300;
-        m.onDragEnd?.({ lat: ann.coordinate.latitude, lng: ann.coordinate.longitude });
+        latestMarkers.current.find((x) => x.id === m.id)?.onDragEnd?.({ lat: ann.coordinate.latitude, lng: ann.coordinate.longitude });
       });
       return ann;
     });
     try { map.addAnnotations(list); } catch { /* noop */ }
     annsRef.current = list;
-  }, [ready, markers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, markerKey]);
 
   return (
     <div className="relative h-full w-full">
