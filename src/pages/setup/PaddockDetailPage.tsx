@@ -433,6 +433,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
           </p>
         </div>
         {!canEdit && <Badge variant="secondary">Read-only</Badge>}
+        <ContourRowMappingLink paddockId={paddock.id} />
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">

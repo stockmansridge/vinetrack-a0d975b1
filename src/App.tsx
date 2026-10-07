@@ -22,6 +22,7 @@ import ComingSoon from "./pages/ComingSoon";
 import ListPage from "./pages/setup/ListPage";
 import DetailPage from "./pages/setup/DetailPage";
 import PaddockDetailPage from "./pages/setup/PaddockDetailPage";
+import ContourRowMappingPage from "./pages/setup/ContourRowMappingPage";
 import BlockDetailPage from "./pages/BlockDetailPage";
 import PaddocksListPage from "./pages/PaddocksListPage";
 import NotFound from "./pages/NotFound";
@@ -188,6 +189,10 @@ const App = () => (
                       path="/setup/paddocks/:id"
                       element={<PaddockDetailPage />}
                     />
+                    <Route element={<RequireSystemAdmin />}>
+                      <Route path="/setup/paddocks/:id/contour-rows" element={<ContourRowMappingPage />} />
+                    </Route>
+
                     <Route
                       path="/setup/tractors"
                       element={<TractorsPage />}
