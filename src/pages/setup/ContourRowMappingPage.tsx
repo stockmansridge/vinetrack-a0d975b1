@@ -3,8 +3,9 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import RowMapWorkspace from "@/components/paddocks/RowMapWorkspace";
 import ContourAppleMap, { type CShape, type CMarker } from "@/components/paddocks/ContourAppleMap";
-import { ArrowLeft, Plus, Trash2, Undo2, Save, Download, Upload, Maximize, AlertTriangle, Info } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Undo2, Save, Download, Upload, AlertTriangle, Info } from "lucide-react";
 
 import { fetchOne } from "@/lib/queries";
 import { parsePolygonPoints, parseRows } from "@/lib/paddockGeometry";
@@ -428,10 +429,11 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
   const canSave = !setupRequired && dirty && !busy && !blocking;
 
   return (
-    <div className="p-6 space-y-4 max-w-7xl mx-auto">
+    <div className="space-y-4">
       <BackTo id={paddock.id} />
+      <RowMapWorkspace title="Contour mapping" onFit={() => setFitNonce((n) => n + 1)} settings={<>
       <div className="flex flex-col items-start gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight text-orange-600 dark:text-orange-400">Contour Row Mapping (Beta)</h1>
+        <h1 className="text-lg font-semibold tracking-tight text-orange-600 dark:text-orange-400">Contour Row Mapping (Beta)</h1>
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span>{paddock.name}</span>
           <Badge variant="outline">Draft mapping — for review</Badge>
@@ -474,16 +476,6 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
           </AlertDescription></Alert>
       )}
       {boundary.length < 3 && <Alert variant="destructive"><AlertTitle>No block boundary</AlertTitle><AlertDescription>Draw the block boundary in Block Setup first.</AlertDescription></Alert>}
-
-      <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
-        <div className="relative h-[640px] rounded-lg border overflow-hidden">
-          <ContourAppleMap centre={centre} fitPoints={boundary} fitNonce={fitNonce} onMapClick={onMapClick}
-            shapes={mapShapes} markers={mapMarkers} />
-          <Button size="sm" variant="secondary" className="absolute right-3 top-3 z-[400] gap-1" onClick={() => setFitNonce((n) => n + 1)}><Maximize className="h-4 w-4" /> Fit to block</Button>
-          {tool !== "none" && <div className="absolute left-3 bottom-10 z-[400] rounded bg-background/90 px-3 py-1.5 text-xs shadow">
-            {tool === "trace" ? "Click along one existing vine row, from one end to the other." : tool === "area" ? "Click to outline the working area. Drag points to move them; click a white dot to add one." : "Click to outline a track or obstacle. Drag points to move them; click a white dot to add one."}
-          </div>}
-        </div>
 
         <fieldset disabled={locked} className="space-y-4 min-w-0">
           <Card><CardHeader className="pb-2"><CardTitle className="text-base">Row groups</CardTitle></CardHeader>
@@ -552,7 +544,13 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
               )}
             </CardContent></Card>
         </fieldset>
-      </div>
+      </>}>
+        <ContourAppleMap centre={centre} fitPoints={boundary} fitNonce={fitNonce} onMapClick={onMapClick}
+          shapes={mapShapes} markers={mapMarkers} controlsPosition="left" />
+        {tool !== "none" && <div className="pointer-events-none absolute left-3 right-3 bottom-10 z-[400] rounded bg-background/90 px-3 py-1.5 text-xs shadow md:right-[410px]">
+          {tool === "trace" ? "Click along one existing vine row, from one end to the other." : tool === "area" ? "Click to outline the working area. Drag points to move them; click a white dot to add one." : "Click to outline a track or obstacle. Drag points to move them; click a white dot to add one."}
+        </div>}
+      </RowMapWorkspace>
 
       <AlertDialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
         <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{confirm?.title}</AlertDialogTitle><AlertDialogDescription>{confirm?.body}</AlertDialogDescription></AlertDialogHeader>

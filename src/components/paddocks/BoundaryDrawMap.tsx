@@ -21,6 +21,9 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 import { initMapKit } from "@/lib/mapkit";
+import ContourAppleMap, { type CShape, type CMarker } from "@/components/paddocks/ContourAppleMap";
+import { Button } from "@/components/ui/button";
+import { Minus, Plus } from "lucide-react";
 import { fetchVineyardLocation } from "@/lib/vineyardLocationQuery";
 import { fetchList } from "@/lib/queries";
 import { useVineyard } from "@/context/VineyardContext";
@@ -54,6 +57,9 @@ interface Props {
   rows?: RowOverlay[];
   excludePaddockId?: string;
   editingExistingBoundary?: boolean;
+  /** Opt in only for readonly row previews; boundary editing keeps its existing map. */
+  precisionPreview?: boolean;
+  fitNonce?: number;
 }
 
 
@@ -146,6 +152,8 @@ export default function BoundaryDrawMap({
   rows = [],
   excludePaddockId,
   editingExistingBoundary = false,
+  precisionPreview = false,
+  fitNonce = 0,
 }: Props) {
   const { selectedVineyardId } = useVineyard();
   const { data: loc } = useQuery({
@@ -230,10 +238,14 @@ export default function BoundaryDrawMap({
   }
 
   const setPoly = setPolygon ?? (() => {});
+  const precise = readonly && precisionPreview;
 
   return (
     <div className="relative h-full w-full">
-      {mode === "apple" ? (
+      {mode === "apple" && precise ? (
+        <PrecisionRowPreview centre={centre} polygon={polygon} rows={rows} rowLabels={rowLabels}
+          existingPolygons={existingPolygons} fitNonce={fitNonce} />
+      ) : mode === "apple" ? (
         <AppleDrawMap
           centre={centre}
           initialBBox={initialBBox}
@@ -255,25 +267,49 @@ export default function BoundaryDrawMap({
           rows={rows}
           rowLabels={rowLabels}
           existingPolygons={existingPolygons}
+          precisionPreview={precise}
+          fitNonce={fitNonce}
         />
       )}
-      <div className="pointer-events-none absolute left-2 top-2 rounded bg-background/85 px-2 py-1 text-[11px] text-foreground shadow">
+      {!precise && <div className="pointer-events-none absolute left-2 top-2 rounded bg-background/85 px-2 py-1 text-[11px] text-foreground shadow">
         {mode === "apple" ? "Apple Maps · Hybrid" : "Satellite (Esri)"}
         {polygon.length > 0 && ` · ${polygon.length} pts`}
         {rows.length > 0 && ` · ${rows.length} rows`}
-      </div>
+      </div>}
       {!readonly && (
         <div className="pointer-events-none absolute left-2 bottom-2 right-2 rounded bg-background/85 px-2 py-1 text-[11px] text-muted-foreground shadow">
           Tap empty map to add a point · <strong>click and hold (~1s) then drag</strong> a point to move it · tap a small <span className="inline-block w-2 h-2 rounded-full bg-white border border-[color:hsl(145_42%_28%)] align-middle" /> midpoint to insert · tap a numbered point to delete (needs ≥4)
         </div>
       )}
-      {mode === "fallback" && reason && (
+      {mode === "fallback" && reason && !precise && (
         <div className="pointer-events-none absolute right-2 top-2 rounded bg-background/85 px-2 py-1 text-[11px] text-muted-foreground shadow" title={reason}>
           Apple Maps unavailable — using satellite fallback
         </div>
       )}
     </div>
   );
+}
+
+// Reuse the tested contour zoom/projection, with no editable markers or writes.
+function PrecisionRowPreview({ centre, polygon, rows, rowLabels, existingPolygons, fitNonce }: {
+  centre: LatLng; polygon: LatLng[]; rows: RowOverlay[];
+  rowLabels: { n: number; lat: number; lng: number }[];
+  existingPolygons: LatLng[][]; fitNonce: number;
+}) {
+  const shapes = useMemo<CShape[]>(() => [
+    ...existingPolygons.map((points, i): CShape => ({ id: `existing-${i}`, kind: "polygon", points,
+      color: EXISTING_STROKE, width: 1, opacity: 0.7, fillOpacity: 0.18 })),
+    ...(polygon.length >= 2 ? [{ id: "boundary", kind: polygon.length >= 3 ? "polygon" : "polyline",
+      points: polygon, color: POLY_STROKE, width: 2.5, fillOpacity: 0.25 } as CShape] : []),
+    ...rows.map((r, i): CShape => ({ id: `row-${r.id ?? i}`, kind: "polyline",
+      points: [{ lat: r.startPoint.latitude, lng: r.startPoint.longitude }, { lat: r.endPoint.latitude, lng: r.endPoint.longitude }],
+      color: ROW_STROKE, width: 1.75, opacity: 0.95 })),
+  ], [existingPolygons, polygon, rows]);
+  const markers = useMemo<CMarker[]>(() => rowLabels.map((r) => ({ id: `label-${r.n}`, point: r, size: 20,
+    html: `<div style="background:#FFD60A;color:#1f1f1f;font-size:11px;font-weight:700;padding:2px 6px;border-radius:9999px;box-shadow:0 1px 2px #0008;white-space:nowrap">Row ${r.n}</div>`,
+  })), [rowLabels]);
+  return <ContourAppleMap centre={centre} shapes={shapes} markers={markers} onMapClick={() => {}}
+    fitPoints={polygon.length ? polygon : existingPolygons.flat()} fitNonce={fitNonce} controlsPosition="left" />;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -615,7 +651,7 @@ function AppleDrawMap({
 // ────────────────────────────────────────────────────────────────────────────
 
 function LeafletSatelliteDraw({
-  centre, initialBBox, polygon, setPolygon, readonly, rows, rowLabels, existingPolygons,
+  centre, initialBBox, polygon, setPolygon, readonly, rows, rowLabels, existingPolygons, precisionPreview = false, fitNonce = 0,
 }: {
   centre: LatLng;
   initialBBox: { sw: LatLng; ne: LatLng } | null;
@@ -625,19 +661,25 @@ function LeafletSatelliteDraw({
   rows: RowOverlay[];
   rowLabels: { n: number; lat: number; lng: number }[];
   existingPolygons: LatLng[][];
+  precisionPreview?: boolean;
+  fitNonce?: number;
 }) {
   return (
-    <MapContainer center={[centre.lat, centre.lng]} zoom={17} scrollWheelZoom className="h-full w-full">
-      {initialBBox && <FitBoundsOnce bbox={initialBBox} />}
+    <MapContainer center={[centre.lat, centre.lng]} zoom={17} maxZoom={precisionPreview ? 23 : 19}
+      zoomControl={!precisionPreview} scrollWheelZoom className="h-full w-full">
+      {initialBBox && <FitBoundsOnce bbox={initialBBox} fitNonce={fitNonce} />}
+      {precisionPreview && <PrecisionLeafletControls />}
       <TileLayer
         attribution='Tiles &copy; Esri'
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-        maxZoom={19}
+        maxNativeZoom={19}
+        maxZoom={precisionPreview ? 23 : 19}
       />
       <TileLayer
         attribution=""
         url="https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
-        maxZoom={19}
+        maxNativeZoom={19}
+        maxZoom={precisionPreview ? 23 : 19}
         opacity={0.85}
       />
       {/* Existing paddocks — reference outlines */}
@@ -751,20 +793,49 @@ function ClickHandler({ polygon, setPolygon }: { polygon: LatLng[]; setPolygon: 
 
 // Fit the map to the existing paddock bounds once on mount so the
 // boundary is visible immediately without requiring user interaction.
-function FitBoundsOnce({ bbox }: { bbox: { sw: LatLng; ne: LatLng } }) {
+function FitBoundsOnce({ bbox, fitNonce = 0 }: { bbox: { sw: LatLng; ne: LatLng }; fitNonce?: number }) {
   const map = useMap();
-  const did = useRef(false);
+  const lastFit = useRef<number | null>(null);
   useEffect(() => {
-    if (did.current) return;
-    did.current = true;
+    if (lastFit.current === fitNonce) return;
+    lastFit.current = fitNonce;
     try {
       map.fitBounds(
         L.latLngBounds([bbox.sw.lat, bbox.sw.lng], [bbox.ne.lat, bbox.ne.lng]),
         { padding: [40, 40], maxZoom: 19 },
       );
     } catch { /* noop */ }
-  }, [map, bbox]);
+  }, [map, bbox, fitNonce]);
   return null;
+}
+
+function PrecisionLeafletControls() {
+  const map = useMap();
+  const [zoom, setZoom] = useState(map.getZoom());
+  const controls = useRef<HTMLDivElement>(null);
+  useMapEvents({ zoomend: () => setZoom(map.getZoom()) });
+  useEffect(() => {
+    if (controls.current) {
+      L.DomEvent.disableClickPropagation(controls.current);
+      L.DomEvent.disableScrollPropagation(controls.current);
+    }
+    if (typeof ResizeObserver === "undefined") return;
+    // Leaflet's pan adjustment preserves the geographic centre after a resize.
+    const ro = new ResizeObserver(() => map.invalidateSize({ pan: true, animate: false, debounceMoveend: true }));
+    ro.observe(map.getContainer());
+    return () => ro.disconnect();
+  }, [map]);
+  return <div ref={controls} className="absolute left-3 top-14 z-[1000] flex flex-col items-start gap-1">
+    <div className="flex flex-col overflow-hidden rounded-md border bg-background shadow">
+      <Button type="button" size="icon" variant="ghost" className="h-8 w-8 rounded-none" aria-label="Zoom in"
+        disabled={zoom >= 23} onClick={() => map.zoomIn()}><Plus className="h-4 w-4" /></Button>
+      <Button type="button" size="icon" variant="ghost" className="h-8 w-8 rounded-none border-t" aria-label="Zoom out"
+        disabled={zoom <= map.getMinZoom()} onClick={() => map.zoomOut()}><Minus className="h-4 w-4" /></Button>
+    </div>
+    <div className="max-w-40 rounded bg-background/95 px-2 py-1 text-[11px] shadow">
+      Satellite (Esri) fallback{zoom > 19 && ` · ${2 ** (zoom - 19)}× overzoom — image may blur`}
+    </div>
+  </div>;
 }
 
 function vertexIcon(n: number) {

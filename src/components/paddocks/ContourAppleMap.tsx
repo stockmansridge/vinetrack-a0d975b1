@@ -44,6 +44,7 @@ interface Props {
   onMapClick: (p: CLatLng) => void;
   fitPoints: CLatLng[];
   fitNonce: number;
+  controlsPosition?: "left" | "right";
   /** Test-harness only: receives the MapKit map instance. Not used in production. */
   mapInstanceRef?: { current: any };
 }
@@ -69,7 +70,7 @@ function distToSeg(px: number, py: number, ax: number, ay: number, bx: number, b
   return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
 }
 
-export default function ContourAppleMap({ centre, shapes, markers, onMapClick, fitPoints, fitNonce, mapInstanceRef }: Props) {
+export default function ContourAppleMap({ centre, shapes, markers, onMapClick, fitPoints, fitNonce, mapInstanceRef, controlsPosition = "right" }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -220,9 +221,21 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
   }, []);
   useEffect(() => {
     const el = wrapRef.current; if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => refreshAtMax()); ro.observe(el);
-    return () => ro.disconnect();
-  }, [refreshAtMax]);
+    let first = 0, second = 0;
+    const ro = new ResizeObserver(() => {
+      refreshAtMax();
+      cancelAnimationFrame(first); cancelAnimationFrame(second);
+      // Wait for MapKit's canvas resize before repositioning precision markers.
+      first = requestAnimationFrame(() => {
+        second = requestAnimationFrame(() => {
+          updateReadout();
+          setLayoutNonce((n) => n + 1);
+        });
+      });
+    });
+    ro.observe(el);
+    return () => { ro.disconnect(); cancelAnimationFrame(first); cancelAnimationFrame(second); };
+  }, [refreshAtMax, updateReadout]);
   // + always tries native zoom first (at any magnification); digital
   // magnification steps up only when native zoom has genuinely clamped.
   const zoomIn = () => {
@@ -411,7 +424,7 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
         </div>
       )}
       {ready && (
-        <div className="absolute right-3 top-14 z-[400] flex flex-col items-end gap-1">
+        <div className={`absolute top-14 z-[400] flex flex-col gap-1 ${controlsPosition === "left" ? "left-3 items-start" : "right-3 items-end"}`}>
           <div className="flex flex-col overflow-hidden rounded-md border bg-background/95 shadow">
             <Button type="button" size="icon" variant="ghost" className="h-8 w-8 rounded-none" aria-label="Zoom in" disabled={atMax} title={atMax ? "Maximum zoom reached" : undefined} onClick={zoomIn}><Plus className="h-4 w-4" /></Button>
             <Button type="button" size="icon" variant="ghost" className="h-8 w-8 rounded-none border-t" aria-label="Zoom out" onClick={zoomOut}><Minus className="h-4 w-4" /></Button>

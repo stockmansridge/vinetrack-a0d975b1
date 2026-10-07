@@ -75,6 +75,7 @@ import {
 } from "@/components/ui/dialog";
 
 import BoundaryDrawMap from "@/components/paddocks/BoundaryDrawMap";
+import RowMapWorkspace from "@/components/paddocks/RowMapWorkspace";
 import VarietyAllocationEditor, {
   deserialiseAllocations,
   isAllocationsValid,
@@ -164,6 +165,8 @@ interface EditorProps {
 }
 
 function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDeleted }: EditorProps) {
+  const [rowsFitNonce, setRowsFitNonce] = useState(0);
+  const [activeTab, setActiveTab] = useState("overview");
   const rf = useRegionFormatters();
   const metrics = useMemo(() => deriveMetrics(paddock), [paddock]);
   const initialPolygon = useMemo(() => parsePolygonPoints(paddock.polygon_points), [paddock]);
@@ -424,7 +427,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
   };
 
   return (
-    <div className="p-6 space-y-4 max-w-5xl mx-auto">
+    <div className={activeTab === "rows" ? "space-y-4" : "p-6 space-y-4 max-w-5xl mx-auto"}>
       <BackLink />
       <div className="flex flex-col items-start gap-3">
         <div>
@@ -437,7 +440,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
         <ContourRowMappingLink paddockId={paddock.id} />
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="flex flex-wrap">
           <TabsTrigger value="overview" className="gap-2">
             <LayoutDashboard className="h-4 w-4" />
@@ -551,17 +554,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
 
         {/* Rows */}
         <TabsContent value="rows">
-          <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-            <Card className="overflow-hidden">
-              <div className="h-[520px]">
-                <BoundaryDrawMap
-                  polygon={polygon}
-                  readonly
-                  rows={generatedRows}
-                  excludePaddockId={paddock.id}
-                />
-              </div>
-            </Card>
+          <RowMapWorkspace onFit={() => setRowsFitNonce((n) => n + 1)} settings={<>
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Row setup</CardTitle>
@@ -608,9 +601,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
                 )}
               </CardContent>
             </Card>
-          </div>
-
-          <Card className="mt-4">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Vine counts per row</CardTitle>
               <CardDescription>
@@ -619,6 +610,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
               </CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="overflow-x-auto"><div className="min-w-[480px]">
               <RowVineCountOverrides
                 rows={rowsToSave}
                 vineSpacingM={Number(vineSpacing) > 0 ? Number(vineSpacing) : null}
@@ -627,6 +619,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
                 onChange={setRowOverrides}
                 disabled={!canEdit}
               />
+              </div></div>
               {canEdit && (
                 <div className="flex justify-end pt-3">
                   <Button onClick={onSaveRows} disabled={saving || rowOverrideError} className="gap-1">
@@ -636,6 +629,10 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
               )}
             </CardContent>
           </Card>
+          </>}>
+            <BoundaryDrawMap polygon={polygon} readonly rows={generatedRows}
+              excludePaddockId={paddock.id} precisionPreview fitNonce={rowsFitNonce} />
+          </RowMapWorkspace>
         </TabsContent>
 
         {/* Varieties */}

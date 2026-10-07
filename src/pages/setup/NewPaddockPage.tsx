@@ -11,6 +11,7 @@ import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import BoundaryDrawMap from "@/components/paddocks/BoundaryDrawMap";
+import RowMapWorkspace from "@/components/paddocks/RowMapWorkspace";
 
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
@@ -91,6 +92,7 @@ function polygonHasSelfIntersection(pts: LatLng[]): boolean {
 }
 
 export default function NewPaddockPage() {
+  const [rowsFitNonce, setRowsFitNonce] = useState(0);
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { selectedVineyardId, currentRole, memberships } = useVineyard();
@@ -420,12 +422,7 @@ export default function NewPaddockPage() {
       )}
 
       {step === "rows" && (
-        <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-          <Card className="overflow-hidden">
-            <div className="h-[520px]">
-              <PreviewMap polygon={polygon} rows={generated} />
-            </div>
-          </Card>
+        <RowMapWorkspace onFit={() => setRowsFitNonce((n) => n + 1)} settings={
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Row setup</CardTitle>
@@ -488,7 +485,9 @@ export default function NewPaddockPage() {
               </div>
             </CardContent>
           </Card>
-        </div>
+        }>
+          <PreviewMap polygon={polygon} rows={generated} fitNonce={rowsFitNonce} />
+        </RowMapWorkspace>
       )}
 
       {step === "varieties" && (
@@ -887,7 +886,7 @@ function BoundaryStep({
 // Boundary step (existing paddocks shown as reference outlines).
 // ────────────────────────────────────────────────────────────────────────────
 
-function PreviewMap({ polygon, rows }: { polygon: LatLng[]; rows: GeneratedRow[] }) {
-  return <BoundaryDrawMap polygon={polygon} readonly rows={rows} />;
+function PreviewMap({ polygon, rows, fitNonce }: { polygon: LatLng[]; rows: GeneratedRow[]; fitNonce: number }) {
+  return <BoundaryDrawMap polygon={polygon} readonly rows={rows} precisionPreview fitNonce={fitNonce} />;
 }
 
