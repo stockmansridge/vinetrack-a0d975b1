@@ -100,7 +100,9 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
     if (!map || !el) return null;
     try {
       const r = map.visibleMapRect;
-      return { ox: r.origin.x, oy: r.origin.y, w: r.size.width, h: r.size.height, elW: el.offsetWidth || 1, elH: el.offsetHeight || 1, k: magRef.current };
+      return { ox: r.origin.x, oy: r.origin.y, w: r.size.width, h: r.size.height, // offsetWidth/Height (integers) are what MapKit sizes its canvas to; a
+      // browser harness at 703.5 px confirmed <0.02 px error off-centre.
+      elW: el.offsetWidth || 1, elH: el.offsetHeight || 1, k: magRef.current };
     } catch { return null; }
   }, []);
   const updateReadout = useCallback(() => {

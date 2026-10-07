@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { useState } from "react";
 import { makeProjection } from "@/lib/contourRows/geometry";
 import { newGroup, newDraft, exportDraft, importDraftFile, type RowGroup } from "@/lib/contourRows/draft";
-import { shiftGroup, shiftDirection, canUndoShift } from "@/lib/contourRows/sideShift";
+import { shiftGroup, shiftDirection, canUndoShift, makeShiftUndo } from "@/lib/contourRows/sideShift";
 import NumberStepper, { parseStepperText, stepValue } from "@/components/paddocks/NumberStepper";
 import { screenToMapUnits, mapUnitsToScreen, metresPerScreenPx, type ViewFrame } from "@/components/paddocks/ContourAppleMap";
 
@@ -42,15 +42,22 @@ describe("side shift", () => {
   });
   it("traceless group uses first row direction; none -> null", () => {
     const g = group(); g.referenceTrace = [];
-    expect(shiftDirection(g, proj)?.source).toBe("row");
+    const d = shiftDirection(g, proj)!;
+    expect(d.source).toBe("row");
+    const first = [...g.rows].sort((a, b) => a.number - b.number)[0].parts.flatMap((p) => p.points);
+    expect(d.start).toEqual(first[0]); expect(d.end).toEqual(first[first.length - 1]);
     g.rows = []; expect(shiftDirection(g, proj)).toBeNull();
     expect(() => shiftGroup(g, proj, 0.1, "left")).toThrow();
   });
   it("undo is valid only while the group is unchanged since the shift", () => {
     const g = group(); const s = shiftGroup(g, proj, 0.1, "left");
-    const stack = [{ groupId: g.id, before: g, afterJson: JSON.stringify(s) }];
-    expect(canUndoShift(stack, s)).toBe(true);
-    expect(canUndoShift(stack, { ...s, spacingM: 3 })).toBe(false);
+    const entry = makeShiftUndo(g, s);
+    expect(canUndoShift(entry, s)).toBe(true);
+    expect(canUndoShift(entry, { ...s, spacingM: 3 })).toBe(false);
+    expect(canUndoShift(entry, g)).toBe(false);
+    expect(canUndoShift(null, s)).toBe(false);
+    expect(Object.keys(entry).sort()).toEqual(["afterHash", "before", "groupId"]);
+    expect(entry.afterHash.length).toBeLessThan(40);
   });
   it("survives export/import roundtrip with identical coordinates", () => {
     const d = newDraft(V, P); const s = shiftGroup(group(), proj, 0.1, "left"); d.groups = [s];

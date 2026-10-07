@@ -36,7 +36,7 @@ import { checkDraftGeometry, hasErrors } from "@/lib/contourRows/checks";
 import { moveVertex, deleteVertex, insertVertexAfter, splitAfterVertex, trimRow } from "@/lib/contourRows/rowEdits";
 import { loadDraft, saveDraft, discardDraft, DraftApiError, type DraftLoad, type StoredDraft } from "@/lib/contourRows/draftApi";
 import { workingCopyKey, getWorkingCopy, putWorkingCopy, clearWorkingCopy, reconcileSaved, clearWorkingCopiesExcept } from "@/lib/contourRows/workingCopy";
-import { shiftGroup, shiftDirection, shiftProjection, canUndoShift, SHIFT_LIMITS, type ShiftSide, type ShiftUndo } from "@/lib/contourRows/sideShift";
+import { shiftGroup, shiftDirection, shiftProjection, canUndoShift, makeShiftUndo, SHIFT_LIMITS, type ShiftSide, type ShiftUndo } from "@/lib/contourRows/sideShift";
 import NumberStepper from "@/components/paddocks/NumberStepper";
 import { parseLineFile, looksSwapped, duplicateNumbers, linesFarOutside, IMPORT_LIMITS, type LineImportResult } from "@/lib/contourRows/importLines";
 
@@ -164,7 +164,7 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
   const [confirm, setConfirm] = useState<null | { title: string; body: string; action: () => void }>(null);
   const [trimM, setTrimM] = useState(1);
   const [shiftM, setShiftM] = useState(SHIFT_LIMITS.defaultM);
-  const [shiftUndo, setShiftUndo] = useState<ShiftUndo[]>([]);
+  const [shiftUndo, setShiftUndo] = useState<ShiftUndo | null>(null);
   const [lineImport, setLineImport] = useState<null | { res: LineImportResult; fileName: string; numbers: number[]; error: string | null }>(null);
   const [backup, setBackup] = useState<null | { text: string; canRestoreInPlace: boolean; fileName: string }>(null);
   const jsonInput = useRef<HTMLInputElement>(null);
@@ -238,15 +238,13 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
     let next: RowGroup;
     try { next = shiftGroup(group, shiftProj, shiftM, side); }
     catch (e) { toast({ title: "Can't shift", description: (e as Error).message }); return; }
-    const keep = canUndoShift(shiftUndo, group) ? shiftUndo : [];
-    setShiftUndo([...keep, { groupId: group.id, before: group, afterJson: JSON.stringify(next) }].slice(-50));
+    setShiftUndo(makeShiftUndo(group, next)); // only the last shift is kept
     updateGroup(group.id, () => next);
   });
   const undoShift = guard(() => {
-    if (!group || !canUndoShift(shiftUndo, group)) { setShiftUndo([]); return; }
-    const top = shiftUndo[shiftUndo.length - 1];
-    setShiftUndo(shiftUndo.slice(0, -1));
-    updateGroup(group.id, () => top.before);
+    const entry = shiftUndo; setShiftUndo(null);
+    if (!group || !entry || !canUndoShift(entry, group)) return;
+    updateGroup(group.id, () => entry.before);
   });
 
   const runGenerate = () => {
@@ -402,6 +400,11 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
       if (active) mapMarkers.push({ id: `end-${g.id}`, point: g.referenceTrace[g.referenceTrace.length - 1], size: 16, labelOffsetX: 30,
         html: `<div style="color:#F97316;font-weight:700;font-size:14px;text-shadow:0 0 2px #000;white-space:nowrap">▶ end</div>` });
     }
+  }
+  if (shiftDir?.source === "row" && shiftDir.start && shiftDir.end && group) {
+    const cue = (t: string) => `<div style="color:#F97316;font-weight:700;font-size:12px;text-shadow:0 0 2px #000;white-space:nowrap">${t}</div>`;
+    mapMarkers.push({ id: `shift-start-${group.id}`, point: shiftDir.start, size: 14, labelOffsetX: 8, html: cue(`● start row ${shiftDir.rowNumber}`) });
+    mapMarkers.push({ id: `shift-end-${group.id}`, point: shiftDir.end, size: 14, labelOffsetX: 8, html: cue("▶ end") });
   }
   const dot = (active: boolean) => `<div style="width:12px;height:12px;border-radius:9999px;border:2px solid #fff;background:${active ? "#EF4444" : "#0EA5E9"};box-shadow:0 0 2px #000"></div>`;
   if (group && tool !== "none") {
@@ -643,7 +646,7 @@ function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, sel
         </>}
         {hasGeometry && <div className="rounded border p-2 space-y-2">
           <div className="font-medium text-xs">Side shift</div>
-          <p className="text-[11px] text-muted-foreground">Slides this group's trace and all its rows sideways together, keeping their shape, spacing and edits. Left/right are as you face the {shift.dir?.source === "row" ? `direction of row ${shift.dir.rowNumber} (first point → last point)` : "▶ end arrow"}. The map isn't rotated; working areas, cut-outs and other groups don't move.</p>
+          <p className="text-[11px] text-muted-foreground">Slides this group's trace and all its rows sideways together, keeping their shape, spacing and edits. Left/right are as you face the {shift.dir?.source === "row" ? `direction of row ${shift.dir.rowNumber} (from the orange "start" marker to "▶ end" on the map)` : "▶ end arrow"}. The map isn't rotated; working areas, cut-outs and other groups don't move.</p>
           <div className="flex flex-wrap items-end gap-2">
             <NumberStepper className="w-36" label="Side shift (m)" value={shift.amount} min={SHIFT_LIMITS.minM} max={SHIFT_LIMITS.maxM} step={0.1} disabled={locked} onChange={shift.setAmount} />
             <Button size="sm" variant="outline" disabled={locked || !shift.dir} onClick={() => shift.onShift("left")}>◀ Shift left</Button>
