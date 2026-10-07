@@ -37,6 +37,7 @@ import {
 import { checkDraftGeometry, hasErrors } from "@/lib/contourRows/checks";
 import { moveVertex, deleteVertex, insertVertexAfter, splitAfterVertex, trimRow } from "@/lib/contourRows/rowEdits";
 import { loadDraft, saveDraft, discardDraft, DraftApiError, type DraftLoad, type StoredDraft } from "@/lib/contourRows/draftApi";
+import { workingCopyKey, getWorkingCopy, putWorkingCopy, clearWorkingCopy, reconcileSaved, clearWorkingCopiesExcept } from "@/lib/contourRows/workingCopy";
 import { parseLineFile, looksSwapped, duplicateNumbers, linesFarOutside, IMPORT_LIMITS, type LineImportResult } from "@/lib/contourRows/importLines";
 
 type Tool = "none" | "trace" | "area" | "exclusion";
@@ -93,6 +94,8 @@ function ContourRowMappingInner() {
     queryFn: () => loadDraft({ vineyardId: selectedVineyardId!, paddockId: id! }),
   });
   const [nonce, setNonce] = useState(0);
+  // Account change: drop other users' unsaved working copies.
+  useEffect(() => { clearWorkingCopiesExcept(userId); }, [userId]);
 
   if (!scopeReady || paddockQ.isLoading) return <div className="p-6 text-muted-foreground">Loading…</div>;
   if (paddockQ.error || !paddock || !inScope) {
@@ -122,6 +125,7 @@ function ContourRowMappingInner() {
     <Editor
       key={`${userId}:${selectedVineyardId}:${id}:${nonce}`}
       paddock={paddock}
+      copyKey={workingCopyKey(userId!, selectedVineyardId!, id!)}
       scope={{ vineyardId: selectedVineyardId!, paddockId: id!, canonicalRowIds }}
       load={load}
       onSaved={(s) => qc.setQueryData(draftKey, { status: "loaded", draft: s } satisfies DraftLoad)}
@@ -136,24 +140,30 @@ function BackTo({ id, onClick }: { id?: string; onClick?: (e: React.MouseEvent) 
 }
 
 interface EditorProps {
-  paddock: any; scope: DraftScope; load: DraftLoad;
+  paddock: any; scope: DraftScope; load: DraftLoad; copyKey?: string;
   onSaved: (s: StoredDraft) => void; onReload: () => void; onDiscarded: (revision: number) => void;
 }
 
 type Busy = null | "saving" | "discarding";
 
-export function Editor({ paddock, scope, load, onSaved, onReload, onDiscarded }: EditorProps) {
+export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDiscarded }: EditorProps) {
+  // Tab-only working copy (Back/Forward, vineyard switch). Restored only after the normal load passed.
+  const [restored] = useState(() => (copyKey ? getWorkingCopy(copyKey) : null));
   const navigate = useNavigate();
   const setupRequired = load.status === "setup_required";
   const boundary = useMemo(() => parsePolygonPoints(paddock.polygon_points), [paddock]);
   const legacyRows = useMemo(() => parseRows(paddock.rows), [paddock]);
-  const initial = useMemo(() => (load.status === "loaded" ? load.draft.payload : newDraft(scope.vineyardId, scope.paddockId)),
+  const initial = useMemo(() => restored ? (JSON.parse(restored.savedJson) as ContourDraft) : (load.status === "loaded" ? load.draft.payload : newDraft(scope.vineyardId, scope.paddockId)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []);
-  const [draft, setDraftRaw] = useState<ContourDraft>(() => structuredClone(initial));
-  const [base, setBase] = useState<{ draftId: string | null; revision: number }>(() =>
-    load.status === "loaded" ? { draftId: load.draft.draftId, revision: load.draft.revision } : { draftId: null, revision: load.status === "empty" ? load.revision : 0 });
-  const savedJson = useRef(JSON.stringify(initial));
+  const [draft, setDraftRaw] = useState<ContourDraft>(() => structuredClone(restored?.draft ?? initial));
+  const [base, setBase] = useState<{ draftId: string | null; revision: number }>(() => restored?.base ?? (
+    load.status === "loaded" ? { draftId: load.draft.draftId, revision: load.draft.revision } : { draftId: null, revision: load.status === "empty" ? load.revision : 0 }));
+  const [showRestored, setShowRestored] = useState(!!restored);
+  const serverMoved = !!restored && (load.status === "loaded" ? load.draft.draftId !== restored.base.draftId || load.draft.revision !== restored.base.revision
+    : load.status === "empty" ? restored.base.draftId !== null || restored.base.revision !== load.revision : false);
+  const savedJson = useRef(restored?.savedJson ?? JSON.stringify(initial));
+  useEffect(() => { if (copyKey) putWorkingCopy(copyKey, { draft, base, savedJson: savedJson.current }); }, [copyKey, draft, base]);
   const dirty = JSON.stringify(draft) !== savedJson.current;
   const attempt = useRef<{ json: string; id: string; revision: number; draftId: string | null } | null>(null);
 
@@ -210,11 +220,11 @@ export function Editor({ paddock, scope, load, onSaved, onReload, onDiscarded }:
       if (url.origin !== window.location.origin) return;
       e.preventDefault(); e.stopPropagation();
       if (busyRef.current) { toast({ title: "Please wait", description: "The draft is still saving." }); return; }
-      setConfirm({ title: "Leave without saving?", body: "Your unsaved draft changes will be lost.", action: () => { savedJson.current = JSON.stringify(draft); navigate(url.pathname + url.search + url.hash); } });
+      setConfirm({ title: "Leave without saving?", body: "Your unsaved draft changes will be lost.", action: () => { savedJson.current = JSON.stringify(draft); if (copyKey) clearWorkingCopy(copyKey); navigate(url.pathname + url.search + url.hash); } });
     };
     document.addEventListener("click", h, true);
     return () => document.removeEventListener("click", h, true);
-  }, [leaveRisk, draft, navigate]);
+  }, [leaveRisk, draft, navigate, copyKey]);
 
   // Points of whichever outline is being edited.
   const editPts: LatLng[] = !group ? [] : tool === "trace" ? group.referenceTrace : tool === "area" ? group.workingArea ?? []
@@ -273,6 +283,7 @@ export function Editor({ paddock, scope, load, onSaved, onReload, onDiscarded }:
     setBusy("saving"); setSaveError(null);
     try {
       const s = await saveDraft(scope, { draftId: snap.draftId, revision: snap.revision }, snap.id, JSON.parse(snap.json));
+      if (copyKey) reconcileSaved(copyKey, snap.json, { draftId: s.draftId, revision: s.revision });
       savedJson.current = snap.json;
       attempt.current = null;
       setBase({ draftId: s.draftId, revision: s.revision });
@@ -298,6 +309,7 @@ export function Editor({ paddock, scope, load, onSaved, onReload, onDiscarded }:
       try {
         const r = await discardDraft(scope.paddockId, base.draftId, base.revision);
         busyRef.current = null;
+        if (copyKey) clearWorkingCopy(copyKey);
         savedJson.current = JSON.stringify(draft); // suppress leave guard during remount
         onDiscarded(r.revision);
         toast({ title: r.alreadyDiscarded ? "Draft was already discarded" : "Draft discarded" });
@@ -402,6 +414,15 @@ export function Editor({ paddock, scope, load, onSaved, onReload, onDiscarded }:
         </div>
       </div>
 
+      {showRestored && (
+        <Alert><Info className="h-4 w-4" /><AlertTitle>Unsaved draft restored</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>Your unsaved changes from earlier in this browser tab were kept. They are not saved to VineTrack until you press Save.
+              {serverMoved && " The saved draft has changed since — saving will report a conflict; export a backup first."}</p>
+            <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setShowRestored(false)}>OK</Button>
+              <Button size="sm" variant="ghost" disabled={locked} onClick={() => setConfirm({ title: "Throw away restored changes?", body: "The editor goes back to the last saved draft.", action: () => { if (copyKey) clearWorkingCopy(copyKey); onReload(); } })}>Throw away and reload</Button></div>
+          </AlertDescription></Alert>
+      )}
       {setupRequired && (
         <Alert><AlertTriangle className="h-4 w-4" /><AlertTitle>Database setup required — saving is off</AlertTitle>
           <AlertDescription>The VineTrack database doesn't have Contour Row Mapping storage yet. You can try the tools and export a backup, but nothing can be saved until it's set up.</AlertDescription></Alert>
@@ -411,7 +432,7 @@ export function Editor({ paddock, scope, load, onSaved, onReload, onDiscarded }:
           <AlertDescription className="space-y-2"><p>{saveError}</p><p>Your edits are still here.</p>
             <div className="flex gap-2"><Button size="sm" variant="outline" disabled={locked || !canSave} onClick={doSave}>Try again</Button>
               <Button size="sm" variant="outline" onClick={exportJson}>Export backup</Button>
-              <Button size="sm" variant="ghost" disabled={locked} onClick={() => setConfirm({ title: "Reload latest?", body: "Your unsaved edits here will be lost. Export a backup first if you need them.", action: () => { savedJson.current = JSON.stringify(draft); onReload(); } })}>Reload latest (loses edits)</Button></div>
+              <Button size="sm" variant="ghost" disabled={locked} onClick={() => setConfirm({ title: "Reload latest?", body: "Your unsaved edits here will be lost. Export a backup first if you need them.", action: () => { savedJson.current = JSON.stringify(draft); if (copyKey) clearWorkingCopy(copyKey); onReload(); } })}>Reload latest (loses edits)</Button></div>
           </AlertDescription></Alert>
       )}
       {boundary.length < 3 && <Alert variant="destructive"><AlertTitle>No block boundary</AlertTitle><AlertDescription>Draw the block boundary in Block Setup first.</AlertDescription></Alert>}
