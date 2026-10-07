@@ -112,7 +112,7 @@ export function fertigationLinesFromJob(job: SprayJob | null | undefined): Ferti
       rateUnit: (l.fertigation_rate_unit as string | null) ?? null,
       productCategory: (l.product_category as string | null) ?? null,
       productForm: (l.product_form as string | null) ?? null,
-      costPerUnit: Number.isFinite(Number(l.costPerUnit)) ? Number(l.costPerUnit) : null,
+      costPerUnit: l.costPerUnit != null && Number.isFinite(Number(l.costPerUnit)) && Number(l.costPerUnit) > 0 ? Number(l.costPerUnit) : null,
     };
   });
 }
