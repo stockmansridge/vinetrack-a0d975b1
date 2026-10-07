@@ -168,7 +168,7 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
           Apple Maps couldn't load. Please reload the page.
         </div>
       )}
-      <div className="absolute left-3 top-3 z-[400]"><MapSourceBadge /></div>
+      <MapSourceBadge source="apple" />
     </div>
   );
 }
