@@ -1,7 +1,8 @@
 -- Contour Row Mapping (Beta) — Round 1 draft persistence (revision 2).
 -- STATUS: APPLIED to the shared VineTrack database on 2026-10-07 as
--- migration "contour_row_mapping_round1" (applied by Jonathan Hambrook from
--- commit 69b4a256597dce38b74391666555922e084d06a8). Do NOT run again.
+-- migration "contour_row_mapping_round1" (applied through the authorised
+-- Supabase integration from commit
+-- 69b4a256597dce38b74391666555922e084d06a8). Do NOT run again.
 -- Not a numbered Rork migration; no number was assigned.
 -- Verified with sql/contour_row_mapping_round1_VERIFY_rollback.sql using real
 -- fixtures (admin+member block; genuine non-admin on own member block; admin
