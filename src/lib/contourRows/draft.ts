@@ -7,7 +7,7 @@
 import { generateUuid } from "@/lib/uuid";
 import {
   type LatLng, type XY, type Projection,
-  projectionForPolygon, isFiniteLL, chaikin, extendEnds, offsetPolyline,
+  projectionForPolygon, isFiniteLL, chaikin, extendEnds, offsetPolylineChecked,
   clipPolyline, polylineSelfIntersects, polylinesCross, minDistanceBetween,
   polylineLengthXY, dedupeXY, multipartLengthM, chordLengthM,
 } from "./geometry";
@@ -146,13 +146,13 @@ export function generateGroupRows(g: RowGroup, boundary: LatLng[]): GenerateResu
   const xyRows: { number: number; parts: XY[][] }[] = [];
   for (let k = -g.leftCount; k <= g.rightCount; k++) {
     // k < 0 → left of arrow (positive offset); k > 0 → right.
-    const off = offsetPolyline(base, -k * g.spacingM);
+    const { points: off, folded } = offsetPolylineChecked(base, -k * g.spacingM);
     const number = numberForOffset(g, k);
     if (off.some((p) => !Number.isFinite(p.x) || !Number.isFinite(p.y))) {
       issues.push({ level: "error", rowNumber: number, message: `Row ${number}: geometry could not be calculated. Adjust the trace.` });
       continue;
     }
-    if (polylineSelfIntersects(off)) {
+    if (folded || polylineSelfIntersects(off)) {
       issues.push({ level: "error", rowNumber: number, message: `Row ${number}: the curve is too tight at this distance and the row folds over itself. Use a smaller group or split this area into separate groups.` });
       continue;
     }

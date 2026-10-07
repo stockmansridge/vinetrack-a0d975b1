@@ -94,7 +94,7 @@ describe("generator and draft rules", () => {
 
   it("rejects a tight curve that folds rows over", () => {
     const tight = toLL(Array.from({ length: 13 }, (_, i) => ({ x: 3 * Math.cos((i / 12) * Math.PI), y: 3 * Math.sin((i / 12) * Math.PI) })));
-    const res = generateGroupRows({ ...g0(), mode: "contour", referenceTrace: tight, leftCount: 0, rightCount: 4, spacingM: 2.5 }, square);
+    const res = generateGroupRows({ ...g0(), mode: "contour", referenceTrace: tight, leftCount: 3, rightCount: 0, extendToArea: false, spacingM: 2.5 }, square);
     expect(res.rows).toHaveLength(0);
     expect(res.issues.some((i) => i.level === "error")).toBe(true);
   });

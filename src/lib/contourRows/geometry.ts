@@ -176,7 +176,14 @@ export function extendEnds(pts: XY[], m: number): XY[] {
  * which signals a curve too tight for that offset.
  */
 export function offsetPolyline(pts: XY[], d: number): XY[] {
-  if (pts.length < 2 || d === 0) return pts.slice();
+  return offsetPolylineChecked(pts, d).points;
+}
+
+/** Offset plus a fold check: true when any offset segment runs backwards
+ *  relative to the reference (the offset exceeds the local curve radius). */
+export function offsetPolylineChecked(pts: XY[], d: number): { points: XY[]; folded: boolean } {
+  if (pts.length < 2 || d === 0) return { points: pts.slice(), folded: false };
+  const src: number[] = [0];
   const normals: XY[] = [];
   for (let i = 0; i < pts.length - 1; i++) {
     const dx = pts[i + 1].x - pts[i].x, dy = pts[i + 1].y - pts[i].y;
@@ -192,15 +199,25 @@ export function offsetPolyline(pts: XY[], d: number): XY[] {
     if (ml < 1e-9 || 1 / cos > 4) {
       out.push({ x: pts[i].x + n1.x * d, y: pts[i].y + n1.y * d });
       out.push({ x: pts[i].x + n2.x * d, y: pts[i].y + n2.y * d });
+      src.push(i, i);
     } else {
       const k = d / (cos * ml);
       out.push({ x: pts[i].x + mx * k, y: pts[i].y + my * k });
+      src.push(i);
     }
   }
   const nl = normals[normals.length - 1];
   const last = pts[pts.length - 1];
   out.push({ x: last.x + nl.x * d, y: last.y + nl.y * d });
-  return out;
+  src.push(pts.length - 1);
+  let folded = false;
+  for (let j = 1; j < out.length && !folded; j++) {
+    const a = src[j - 1], b = src[j];
+    if (a === b) continue;
+    const tx = pts[b].x - pts[a].x, ty = pts[b].y - pts[a].y;
+    if ((out[j].x - out[j - 1].x) * tx + (out[j].y - out[j - 1].y) * ty < 0) folded = true;
+  }
+  return { points: out, folded };
 }
 
 // --------------------------------------------------------------- clipping
