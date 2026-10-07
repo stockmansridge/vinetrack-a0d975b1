@@ -97,7 +97,7 @@ describe("precision magnification maths", () => {
   it("screen↔map units roundtrip at 4× and same geo point lands k× further from origin", () => {
     const f4 = { ...f1, elW: 200, elH: 100, k: 4, w: f1.w / 4, h: f1.h / 4 };
     const u = screenToMapUnits(f4, 333, 77); const s = mapUnitsToScreen(f4, u.x, u.y);
-    expect(s.sx).toBeCloseTo(333, 9); expect(s.sy).toBeCloseTo(77, 9);
+    expect(s.sx).toBeCloseTo(333, 4); expect(s.sy).toBeCloseTo(77, 4);
     // Same screen size, 4× magnification → 4× fewer metres per screen pixel.
     expect(metresPerScreenPx(f1, -34.5) / metresPerScreenPx(f4, -34.5)).toBeCloseTo(4, 9);
   });

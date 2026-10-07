@@ -33,7 +33,7 @@ export function parseStepperText(text: string, p: Pick<StepperProps, "min" | "ma
 const decimals = (s: number) => (String(s).split(".")[1]?.length ?? 0);
 
 export function stepValue(current: number, dir: 1 | -1, p: Pick<StepperProps, "min" | "max" | "step">): number {
-  const d = decimals(p.step);
+  const d = Math.min(6, Math.max(decimals(p.step), decimals(current)));
   const n = Math.round((current + dir * p.step) * 10 ** d) / 10 ** d;
   return Math.min(p.max, Math.max(p.min, n));
 }
