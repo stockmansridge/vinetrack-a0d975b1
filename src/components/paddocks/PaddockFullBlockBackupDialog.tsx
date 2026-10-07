@@ -654,6 +654,11 @@ export default function PaddockFullBlockBackupDialog() {
                     {lastResult.mode === "new"
                       ? "Source blocks were imported as new blocks into this vineyard."
                       : "Matched blocks were updated using the selected field groups."}
+                    <div className="mt-1 font-medium">
+                      {lastResult.mode === "new"
+                        ? `${lastResult.data.rowsCopied} rows copied · ${lastResult.data.rowIdsCreated} new row identities created · no operational history copied`
+                        : `${lastResult.data.rowsCopied} rows copied · ${lastResult.data.rowIdsPreserved} existing row identities kept · ${lastResult.data.rowIdsCreated} new row identities created · no operational history copied`}
+                    </div>
                   </AlertDescription>
                 </Alert>
                 {lastResult.mode === "new" ? (
