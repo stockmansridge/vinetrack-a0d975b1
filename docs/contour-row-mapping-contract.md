@@ -6,9 +6,15 @@ write `paddocks.rows`, `row_direction`, `row_width`, `row_count`,
 Activation into real rows is a later phase.
 
 ## Storage
-Defined in `sql/contour_row_mapping_round1_PENDING.sql` (**not applied** — Rork
-assigns the number and applies). Verification: `sql/contour_row_mapping_round1_VERIFY_rollback.sql`
-(rollback-only). Tables live in the private schema `vt_contour_private`
+Defined in `sql/contour_row_mapping_round1_applied.sql`, **applied** to the shared
+VineTrack database on 2026-10-07 as migration `contour_row_mapping_round1`
+(from commit 69b4a25; not a numbered Rork migration). Verified with the
+rollback-only `sql/contour_row_mapping_round1_VERIFY_rollback.sql` using real
+fixtures (admin+member, genuine non-admin member, admin outside membership)
+plus mutation denials: all passed, paddock hash unchanged, tables empty after
+rollback, no security-advisor findings. The race check covers the
+stale-first-save contract, not two simultaneous connections. Browser
+interaction / trace testing still requires a signed-in preview. Tables live in the private schema `vt_contour_private`
 (no grants, RLS on, no policies):
 
 - `drafts` — one slot per block. The slot survives discard (`draft_id`/`payload`
@@ -114,7 +120,13 @@ The server enforces structure only (no PostGIS dependency).
 State is keyed by user + selected vineyard + block (+ reload/discard nonce).
 During save/discard every mutation is frozen (guarded handlers + disabled
 controls); after a confirmed save the editor is not remounted. Unsaved
-changes are protected on browser unload and in-app link clicks.
+changes are protected on browser unload and in-app link clicks. For browser
+Back/Forward and vineyard switches (BrowserRouter has no supported blocker),
+a tab-only in-memory working copy keyed by user + vineyard + block
+(`src/lib/contourRows/workingCopy.ts`) is restored after the normal
+permission/backend load, with an "Unsaved draft restored" notice. It is not
+storage (no localStorage), is reconciled on save/discard (even after
+unmount) and cleared on account change.
 
 ## Future activation (later phase)
 Applying a draft to real rows must preserve existing `paddocks.rows` ids via
