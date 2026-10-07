@@ -42,3 +42,7 @@
 - [x] Style Yield & Harvest cross-links as buttons matching Records, Analytics and Comparison
 - [x] Style the Spray Equipment cross-link as a matching button
 - [x] Reorganise all 28 System Admin destinations into concise collapsible groups without changing routes or permissions
+
+## Open
+- [ ] Row setup maps: apply contour 1×/2×/4× overzoom to New Block Step 3 Rows and existing block Rows tab (Apple first; Esri fallback with tile overzoom).
+- [ ] Map-dominant layout on New Rows, existing Rows and contour editor: full-width/height map, floating hide/show settings panel, Full screen + Escape, dialogs stay on top, narrow-screen panel.
