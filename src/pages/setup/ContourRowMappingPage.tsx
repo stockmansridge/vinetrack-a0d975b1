@@ -36,6 +36,8 @@ import { checkDraftGeometry, hasErrors } from "@/lib/contourRows/checks";
 import { moveVertex, deleteVertex, insertVertexAfter, splitAfterVertex, trimRow } from "@/lib/contourRows/rowEdits";
 import { loadDraft, saveDraft, discardDraft, DraftApiError, type DraftLoad, type StoredDraft } from "@/lib/contourRows/draftApi";
 import { workingCopyKey, getWorkingCopy, putWorkingCopy, clearWorkingCopy, reconcileSaved, clearWorkingCopiesExcept } from "@/lib/contourRows/workingCopy";
+import { shiftGroup, shiftDirection, shiftProjection, canUndoShift, SHIFT_LIMITS, type ShiftSide, type ShiftUndo } from "@/lib/contourRows/sideShift";
+import NumberStepper from "@/components/paddocks/NumberStepper";
 import { parseLineFile, looksSwapped, duplicateNumbers, linesFarOutside, IMPORT_LIMITS, type LineImportResult } from "@/lib/contourRows/importLines";
 
 type Tool = "none" | "trace" | "area" | "exclusion";
@@ -160,7 +162,9 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
   const [fitNonce, setFitNonce] = useState(1);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<null | { title: string; body: string; action: () => void }>(null);
-  const [trimM, setTrimM] = useState("1");
+  const [trimM, setTrimM] = useState(1);
+  const [shiftM, setShiftM] = useState(SHIFT_LIMITS.defaultM);
+  const [shiftUndo, setShiftUndo] = useState<ShiftUndo[]>([]);
   const [lineImport, setLineImport] = useState<null | { res: LineImportResult; fileName: string; numbers: number[]; error: string | null }>(null);
   const [backup, setBackup] = useState<null | { text: string; canRestoreInPlace: boolean; fileName: string }>(null);
   const jsonInput = useRef<HTMLInputElement>(null);
@@ -225,6 +229,24 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
     const g = newGroup(`Row group ${draft.groups.length + 1}`, nextFreeRowNumber(draft));
     setDraft((d) => ({ ...d, groups: [...d.groups, g] }));
     setGroupId(g.id); setTool("trace"); setIssues([]); setRowSel(null);
+  });
+
+  const shiftProj = useMemo(() => shiftProjection(boundary, group?.referenceTrace[0] ?? { lat: -34.5, lng: 138.7 }), [boundary, group]);
+  const shiftDir = group ? shiftDirection(group, shiftProj) : null;
+  const doShift = guard((side: ShiftSide) => {
+    if (!group) return;
+    let next: RowGroup;
+    try { next = shiftGroup(group, shiftProj, shiftM, side); }
+    catch (e) { toast({ title: "Can't shift", description: (e as Error).message }); return; }
+    const keep = canUndoShift(shiftUndo, group) ? shiftUndo : [];
+    setShiftUndo([...keep, { groupId: group.id, before: group, afterJson: JSON.stringify(next) }].slice(-50));
+    updateGroup(group.id, () => next);
+  });
+  const undoShift = guard(() => {
+    if (!group || !canUndoShift(shiftUndo, group)) { setShiftUndo([]); return; }
+    const top = shiftUndo[shiftUndo.length - 1];
+    setShiftUndo(shiftUndo.slice(0, -1));
+    updateGroup(group.id, () => top.before);
   });
 
   const runGenerate = () => {
@@ -488,7 +510,8 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
             update={(f) => updateGroup(group.id, f)} selVertex={selVertex} setSelVertex={setSelVertex}
             onDeleteVertex={() => { if (selVertex == null) return; setEditPts((pts) => pts.filter((_, i) => i !== selVertex)); setSelVertex(null); }}
             onUndoVertex={() => setEditPts((pts) => pts.slice(0, -1))} editCount={editPts.length}
-            onGenerate={generate} issues={issues}
+            onGenerate={generate} issues={issues} locked={locked}
+            shift={{ amount: shiftM, setAmount: setShiftM, onShift: doShift, canUndo: canUndoShift(shiftUndo, group), onUndo: undoShift, dir: shiftDir }}
             onDelete={() => setConfirm({ title: `Delete ${group.name}?`, body: "Only this group's draft rows are removed. Other groups keep their numbers.", action: () => { setDraft((d) => ({ ...d, groups: d.groups.filter((x) => x.id !== group.id) })); setGroupId(null); setRowSel(null); } })} />}
 
           {selRow && rowSel && (
@@ -501,9 +524,9 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
                   <Button size="sm" variant="outline" disabled={rowSel.idx == null} onClick={() => { try { updateRow(selRow.id, (r) => splitAfterVertex(r, rowSel.part, rowSel.idx!)); setRowSel({ ...rowSel, idx: null }); } catch (e) { toast({ title: "Can't split here", description: (e as Error).message }); } }}>Split after point</Button>
                 </div>
                 <div className="flex items-end gap-2">
-                  <div><Label className="text-xs">Trim (m)</Label><Input className="h-8 w-20" value={trimM} onChange={(e) => setTrimM(e.target.value)} inputMode="decimal" /></div>
-                  <Button size="sm" variant="outline" onClick={() => updateRow(selRow.id, (r) => trimRow(r, "start", Number(trimM)))}>Trim start</Button>
-                  <Button size="sm" variant="outline" onClick={() => updateRow(selRow.id, (r) => trimRow(r, "end", Number(trimM)))}>Trim end</Button>
+                  <NumberStepper className="w-36" label="Trim (m)" value={trimM} onChange={setTrimM} min={0.1} max={1000} step={0.1} disabled={locked} />
+                  <Button size="sm" variant="outline" onClick={() => updateRow(selRow.id, (r) => trimRow(r, "start", trimM))}>Trim start</Button>
+                  <Button size="sm" variant="outline" onClick={() => updateRow(selRow.id, (r) => trimRow(r, "end", trimM))}>Trim end</Button>
                 </div>
                 <Button size="sm" variant="ghost" onClick={() => setRowSel(null)}>Done</Button>
               </CardContent></Card>
@@ -555,8 +578,9 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
             <div className="max-h-64 overflow-auto rounded border"><table className="w-full text-xs"><thead className="bg-muted/50"><tr><th className="p-1 text-left">Feature</th><th className="p-1 text-left">Parts</th><th className="p-1 text-left">Row number</th></tr></thead>
               <tbody>{lineImport.res.lines.map((l, i) => (
                 <tr key={i} className="border-t"><td className="p-1">{l.name ?? `#${l.featureIndex + 1}`}</td><td className="p-1">{l.parts.length}</td>
-                  <td className="p-1"><Input className="h-7 w-20" inputMode="numeric" value={Number.isFinite(lineImport.numbers[i]) ? String(lineImport.numbers[i]) : ""}
-                    onChange={(e) => setLineImport({ ...lineImport, error: null, numbers: lineImport.numbers.map((n, j) => (j === i ? (e.target.value.trim() === "" ? NaN : Number(e.target.value)) : n)) })} /></td></tr>
+                  <td className="p-1"><NumberStepper className="w-36" hideLabel label={`Row number for ${l.name ?? `feature ${l.featureIndex + 1}`}`} integer min={1} max={LIMITS.maxRowNumber} step={1} disabled={locked}
+                    value={Number.isFinite(lineImport.numbers[i]) ? lineImport.numbers[i] : 1}
+                    onChange={(n) => setLineImport((cur) => cur && ({ ...cur, error: null, numbers: cur.numbers.map((x, j) => (j === i ? n : x)) }))} /></td></tr>
               ))}</tbody></table></div>
             {importDups.length > 0 && <p className="text-xs text-destructive">Row numbers used more than once or already in the draft: {importDups.join(", ")}</p>}
             {lineImport.error && <p className="text-xs text-destructive">Can't add these rows: {lineImport.error}</p>}
@@ -568,17 +592,14 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
   );
 }
 
-function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, selVertex, setSelVertex, onDeleteVertex, onUndoVertex, editCount, onGenerate, issues, onDelete }: {
+function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, selVertex, setSelVertex, onDeleteVertex, onUndoVertex, editCount, onGenerate, issues, onDelete, locked, shift }: {
   g: RowGroup; tool: Tool; setTool: (t: Tool) => void; exclusionId: string | null; setExclusionId: (s: string | null) => void;
   update: (f: (g: RowGroup) => RowGroup) => void; selVertex: number | null; setSelVertex: (n: number | null) => void;
   onDeleteVertex: () => void; onUndoVertex: () => void; editCount: number;
-  onGenerate: () => void; issues: GenIssue[]; onDelete: () => void;
+  onGenerate: () => void; issues: GenIssue[]; onDelete: () => void; locked: boolean;
+  shift: { amount: number; setAmount: (n: number) => void; onShift: (s: ShiftSide) => void; canUndo: boolean; onUndo: () => void; dir: ReturnType<typeof shiftDirection> };
 }) {
-  const num = (s: string) => (s.trim() === "" ? NaN : Number(s));
-  const field = (label: string, value: number, set: (n: number) => void, hint?: string) => (
-    <div><Label className="text-xs">{label}</Label><Input className="h-8" inputMode="decimal" defaultValue={String(value)} key={`${g.id}-${label}-${value}`}
-      onBlur={(e) => set(num(e.target.value))} />{hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}</div>
-  );
+  const hasGeometry = g.referenceTrace.length > 0 || g.rows.length > 0;
   const imported = g.mode === "imported";
   const maskEditing = tool === "area" || tool === "exclusion";
   const maskTools = maskEditing && (
@@ -609,10 +630,10 @@ function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, sel
               {[0, 1, 2].map((s) => <Button key={s} size="sm" variant={g.smoothing === s ? "default" : "outline"} className="h-7 px-2" onClick={() => update((x) => ({ ...x, smoothing: s }))}>{s === 0 ? "Off" : s === 1 ? "Light" : "More"}</Button>)}</div>}
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {field("Row spacing (m)", g.spacingM, (n) => update((x) => ({ ...x, spacingM: n })))}
-            {field("Starting row number", g.startNumber, (n) => update((x) => ({ ...x, startNumber: n })))}
-            {field("Rows on the left", g.leftCount, (n) => update((x) => ({ ...x, leftCount: n })), "Extra rows")}
-            {field("Rows on the right", g.rightCount, (n) => update((x) => ({ ...x, rightCount: n })), "Extra rows")}
+            <NumberStepper label="Row spacing (m)" value={g.spacingM} min={LIMITS.minSpacingM} max={LIMITS.maxSpacingM} step={0.1} disabled={locked} onChange={(n) => update((x) => ({ ...x, spacingM: n }))} />
+            <NumberStepper label="Starting row number" integer value={g.startNumber} min={1} max={LIMITS.maxRowNumber} step={1} disabled={locked} onChange={(n) => update((x) => ({ ...x, startNumber: n }))} />
+            <NumberStepper label="Rows on the left" integer value={g.leftCount} min={0} max={LIMITS.maxSideCount} step={1} disabled={locked} hint="Extra rows" onChange={(n) => update((x) => ({ ...x, leftCount: n }))} />
+            <NumberStepper label="Rows on the right" integer value={g.rightCount} min={0} max={LIMITS.maxSideCount} step={1} disabled={locked} hint="Extra rows" onChange={(n) => update((x) => ({ ...x, rightCount: n }))} />
           </div>
           <p className="text-xs">Total: <b>{Number.isFinite(totalRowsFor(g)) ? totalRowsFor(g) : "—"}</b> rows (traced row + {g.leftCount} left + {g.rightCount} right). Left and right are as you face the ▶ end arrow.</p>
           <div className="flex items-center gap-2"><Switch checked={g.ascending} onCheckedChange={(v) => update((x) => ({ ...x, ascending: v }))} />
@@ -620,6 +641,17 @@ function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, sel
           <div className="flex items-center gap-2"><Switch checked={g.extendToArea} onCheckedChange={(v) => update((x) => ({ ...x, extendToArea: v }))} />
             <span className="text-xs">Extend rows to the edge of the area</span></div>
         </>}
+        {hasGeometry && <div className="rounded border p-2 space-y-2">
+          <div className="font-medium text-xs">Side shift</div>
+          <p className="text-[11px] text-muted-foreground">Slides this group's trace and all its rows sideways together, keeping their shape, spacing and edits. Left/right are as you face the {shift.dir?.source === "row" ? `direction of row ${shift.dir.rowNumber} (first point → last point)` : "▶ end arrow"}. The map isn't rotated; working areas, cut-outs and other groups don't move.</p>
+          <div className="flex flex-wrap items-end gap-2">
+            <NumberStepper className="w-36" label="Side shift (m)" value={shift.amount} min={SHIFT_LIMITS.minM} max={SHIFT_LIMITS.maxM} step={0.1} disabled={locked} onChange={shift.setAmount} />
+            <Button size="sm" variant="outline" disabled={locked || !shift.dir} onClick={() => shift.onShift("left")}>◀ Shift left</Button>
+            <Button size="sm" variant="outline" disabled={locked || !shift.dir} onClick={() => shift.onShift("right")}>Shift right ▶</Button>
+            <Button size="sm" variant="ghost" className="gap-1" disabled={locked || !shift.canUndo} onClick={shift.onUndo}><Undo2 className="h-3.5 w-3.5" /> Undo shift</Button>
+          </div>
+          {!shift.dir && <p className="text-[11px] text-amber-700 dark:text-amber-400">Shift needs a trace or row at least 0.5 m long to know which way is left and right.</p>}
+        </div>}
         <div className="rounded border p-2 space-y-2">
           <div className="font-medium text-xs">Working area & cut-outs (optional)</div>
           <p className="text-[11px] text-muted-foreground">Limit this group to part of the block so differently aligned rows don't overlap. Cut out tracks or obstacles. Editing an outline never changes rows until you regenerate. The real block boundary isn't changed.</p>
