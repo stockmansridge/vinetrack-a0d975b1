@@ -31,6 +31,9 @@ function minDistToPolyline(p: XY, line: XY[]) {
   return m;
 }
 
+const g0 = () => ({ ...newGroup("A", 1), mode: "straight" as const, spacingM: 2.5, leftCount: 2, rightCount: 3,
+  referenceTrace: toLL([{ x: -50, y: 0 }, { x: 50, y: 0 }]) });
+
 describe("geometry", () => {
   it("curved path is longer than its chord", () => {
     const arc = toLL(Array.from({ length: 21 }, (_, i) => ({ x: -50 + i * 5, y: 20 * Math.sin((i / 20) * Math.PI) })));
@@ -68,8 +71,6 @@ describe("geometry", () => {
 });
 
 describe("generator and draft rules", () => {
-  const g0 = () => ({ ...newGroup("A", 1), mode: "straight" as const, spacingM: 2.5, leftCount: 2, rightCount: 3,
-    referenceTrace: toLL([{ x: -50, y: 0 }, { x: 50, y: 0 }]) });
 
   it("counts include the reference once and number ascending from the left", () => {
     const g = g0();
@@ -215,7 +216,7 @@ describe("final geometry checks", () => {
     const d = draftWith([[[{ x: -50, y: 0 }, { x: 50, y: 0 }]]], "contour");
     d.groups[0].exclusions = [{ id: generateUuid(), points: toLL([{ x: -5, y: -5 }, { x: 5, y: -5 }, { x: 5, y: 5 }, { x: -5, y: 5 }]) }];
     expect(errs(d)).toMatch(/through a cut-out/);
-    d.groups[0].exclusions = [{ id: generateUuid(), points: toLL([{ x: -5, y: -5 }, { x: 5, y: 5 }, { x: 5, y: -5 }, { x: -5, y: 5 }]) }];
+    d.groups[0].exclusions = [{ id: generateUuid(), points: toLL([{ x: -5, y: -5 }, { x: 5, y: 5 }, { x: 5, y: -2 }, { x: -5, y: 5 }]) }];
     expect(errs(d)).toMatch(/crosses itself/);
   });
   it("generator rejects invalid masks instead of ignoring them", () => {
