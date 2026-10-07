@@ -141,7 +141,7 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
           if (c && typeof c.latitude === "number") clickRef.current({ lat: c.latitude, lng: c.longitude });
         } catch { /* noop */ }
       });
-      map.addEventListener("region-change-end", () => { updateReadout(); setViewTick((n) => n + 1); });
+      map.addEventListener("region-change-end", () => { updateReadout(); refreshAtMax(); setViewTick((n) => n + 1); });
       mapRef.current = map;
       if (mapInstanceRef) mapInstanceRef.current = map;
       setReady(true);
@@ -183,6 +183,7 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
   const centreBeforeMag = useRef<any>(null);
   const changeMag = (k: number) => {
     if (k === magRef.current) return;
+    if (k < 4) setAtMax(false);
     try { centreBeforeMag.current = mapRef.current?.center ?? null; } catch { centreBeforeMag.current = null; }
     setMag(k);
   };
@@ -204,23 +205,36 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
     });
   }, [mag, doFit, updateReadout]);
 
+  // Native camera distance at which Apple clamped (null until observed).
+  const clampDist = useRef<number | null>(null);
+  const [atMax, setAtMax] = useState(false);
+  const refreshAtMax = useCallback(() => {
+    let d = NaN; try { d = Number(mapRef.current?.cameraDistance); } catch { /* noop */ }
+    const c = clampDist.current;
+    setAtMax(magRef.current >= 4 && c != null && d <= c * 1.05);
+  }, []);
+  // + always tries native zoom first (at any magnification); digital
+  // magnification steps up only when native zoom has genuinely clamped.
   const zoomIn = () => {
     const map = mapRef.current; if (!map) return;
-    if (magRef.current > 1) { changeMag(Math.min(4, magRef.current * 2)); return; }
     const before = Number(map.cameraDistance);
     try { map.setCameraDistanceAnimated ? map.setCameraDistanceAnimated(before / 2, false) : (map.cameraDistance = before / 2); } catch { /* noop */ }
     requestAnimationFrame(() => {
       const after = Number(map.cameraDistance);
-      if (!(after < before * 0.9)) changeMag(2); // Apple clamped native zoom: switch to precision
-      updateReadout();
+      if (!(after < before * 0.9)) {
+        clampDist.current = after;
+        if (magRef.current < 4) changeMag(Math.min(4, magRef.current * 2));
+      }
+      updateReadout(); refreshAtMax();
     });
   };
+  // − reverses: digital magnification first, then native zoom.
   const zoomOut = () => {
     const map = mapRef.current; if (!map) return;
-    if (magRef.current > 1) { changeMag(magRef.current / 2); return; }
+    if (magRef.current > 1) { changeMag(magRef.current / 2); setAtMax(false); return; }
     const d = Number(map.cameraDistance) * 2;
     try { map.setCameraDistanceAnimated ? map.setCameraDistanceAnimated(d, false) : (map.cameraDistance = d); } catch { /* noop */ }
-    requestAnimationFrame(updateReadout);
+    requestAnimationFrame(() => { updateReadout(); refreshAtMax(); });
   };
 
   // Shapes (line widths compensated for magnification so they look the same on screen)
@@ -389,7 +403,7 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
       {ready && (
         <div className="absolute right-3 top-14 z-[400] flex flex-col items-end gap-1">
           <div className="flex flex-col overflow-hidden rounded-md border bg-background/95 shadow">
-            <Button type="button" size="icon" variant="ghost" className="h-8 w-8 rounded-none" aria-label="Zoom in" onClick={zoomIn}><Plus className="h-4 w-4" /></Button>
+            <Button type="button" size="icon" variant="ghost" className="h-8 w-8 rounded-none" aria-label="Zoom in" disabled={atMax} title={atMax ? "Maximum zoom reached" : undefined} onClick={zoomIn}><Plus className="h-4 w-4" /></Button>
             <Button type="button" size="icon" variant="ghost" className="h-8 w-8 rounded-none border-t" aria-label="Zoom out" onClick={zoomOut}><Minus className="h-4 w-4" /></Button>
           </div>
           <div className="flex overflow-hidden rounded-md border bg-background/95 text-xs shadow" role="group" aria-label="Precision magnification">
