@@ -44,6 +44,8 @@ interface Props {
   onMapClick: (p: CLatLng) => void;
   fitPoints: CLatLng[];
   fitNonce: number;
+  /** Test-harness only: receives the MapKit map instance. Not used in production. */
+  mapInstanceRef?: { current: any };
 }
 
 export const MAGNIFICATIONS = [1, 2, 4] as const;
@@ -67,7 +69,7 @@ function distToSeg(px: number, py: number, ax: number, ay: number, bx: number, b
   return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
 }
 
-export default function ContourAppleMap({ centre, shapes, markers, onMapClick, fitPoints, fitNonce }: Props) {
+export default function ContourAppleMap({ centre, shapes, markers, onMapClick, fitPoints, fitNonce, mapInstanceRef }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -76,6 +78,10 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
   const [mag, setMag] = useState<number>(1);
   const magRef = useRef(1); magRef.current = mag;
   const [mpp, setMpp] = useState<number | null>(null);
+  // Bumped after MapKit has processed a magnification resize so annotations
+  // are rebuilt against the new element size (stale positions otherwise).
+  const [layoutNonce, setLayoutNonce] = useState(0);
+  const [, setViewTick] = useState(0);
   const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null);
   const clickRef = useRef(onMapClick); clickRef.current = onMapClick;
   const shapeClicks = useRef(new Map<any, () => void>());
@@ -133,15 +139,16 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
           if (c && typeof c.latitude === "number") clickRef.current({ lat: c.latitude, lng: c.longitude });
         } catch { /* noop */ }
       });
-      map.addEventListener("region-change-end", () => updateReadout());
+      map.addEventListener("region-change-end", () => { updateReadout(); setViewTick((n) => n + 1); });
       mapRef.current = map;
-      (window as any).__contourMap = map; // test/diagnostic handle only
+      if (mapInstanceRef) mapInstanceRef.current = map;
       setReady(true);
     }).catch((e) => { if (!cancelled) setFailed(String(e?.message ?? e)); });
     return () => {
       cancelled = true;
       try { mapRef.current?.destroy?.(); } catch { /* noop */ }
       mapRef.current = null;
+      if (mapInstanceRef) mapInstanceRef.current = null;
       setReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -185,10 +192,13 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
     // Let MapKit pick up the new element size, then restore the centre.
     try { window.dispatchEvent(new Event("resize")); } catch { /* noop */ }
     requestAnimationFrame(() => {
-      if (fitAfterMag.current) { fitAfterMag.current = false; doFit(); return; }
-      const c = centreBeforeMag.current;
-      if (c) { try { map.setCenterAnimated(c, false); } catch { /* noop */ } }
-      updateReadout();
+      if (fitAfterMag.current) { fitAfterMag.current = false; doFit(); }
+      else {
+        const c = centreBeforeMag.current;
+        if (c) { try { map.setCenterAnimated(c, false); } catch { /* noop */ } }
+        updateReadout();
+      }
+      requestAnimationFrame(() => setLayoutNonce((n) => n + 1));
     });
   }, [mag, doFit, updateReadout]);
 
@@ -243,17 +253,20 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
     if (!ready || !map || !mapkit) return;
     if (annsRef.current.length) { try { map.removeAnnotations(annsRef.current); } catch { /* noop */ } }
     const native = mag === 1;
-    const list = markers.map((m) => {
+    // At k>1 MapKit's DOM annotations are misplaced inside the CSS-scaled
+    // element (measured in a browser harness), so markers are drawn by the
+    // precision surface instead, from the same maths used for hit-testing.
+    const list = native ? markers.map((m) => {
       const ann = new mapkit.Annotation(new mapkit.Coordinate(m.point.lat, m.point.lng), () => {
         const el = document.createElement("div");
-        el.innerHTML = native ? m.html : `<div style="transform:scale(${1 / mag});transform-origin:${m.labelOffsetX ? "left" : "center"} center">${m.html}</div>`;
+        el.innerHTML = m.html;
         el.style.cursor = m.draggable ? "grab" : m.onClick ? "pointer" : "default";
-        if (!native || (!m.onClick && !m.draggable)) el.style.pointerEvents = "none";
+        if (!m.onClick && !m.draggable) el.style.pointerEvents = "none";
         return el;
       });
       // MapKit anchors element bottom-centre; positive y moves up.
-      try { ann.anchorOffset = new DOMPoint((m.labelOffsetX ?? 0) / mag, -m.size / 2); } catch { /* noop */ }
-      try { ann.draggable = native && !!m.draggable; ann.enabled = native && !!(m.onClick || m.draggable); } catch { /* noop */ }
+      try { ann.anchorOffset = new DOMPoint(m.labelOffsetX ?? 0, -m.size / 2); } catch { /* noop */ }
+      try { ann.draggable = !!m.draggable; ann.enabled = !!(m.onClick || m.draggable); } catch { /* noop */ }
       ann.addEventListener("select", () => {
         suppressTapUntil.current = Date.now() + 300;
         try { ann.selected = false; } catch { /* noop */ }
@@ -264,11 +277,11 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
         latestMarkers.current.find((x) => x.id === m.id)?.onDragEnd?.({ lat: ann.coordinate.latitude, lng: ann.coordinate.longitude });
       });
       return ann;
-    });
+    }) : [];
     try { map.addAnnotations(list); } catch { /* noop */ }
     annsRef.current = list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, markerKey, mag]);
+  }, [ready, markerKey, mag, layoutNonce]);
 
   // ---- Precision-mode input (k > 1) ----
   const mapkitAt = (sx: number, sy: number): CLatLng | null => {
@@ -325,6 +338,7 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
     if (!f || !d.centre || !mapkit) return;
     const dx = ((p.x - d.sx) / f.k / f.elW) * f.w, dy = ((p.y - d.sy) / f.k / f.elH) * f.h;
     try { mapRef.current.setCenterAnimated(new mapkit.MapPoint(d.centre.x - dx, d.centre.y - dy).toCoordinate(), false); } catch { /* noop */ }
+    setViewTick((n) => n + 1);
   };
   const onUp = (e: React.PointerEvent) => {
     const d = drag.current; drag.current = null; setGhost(null);
@@ -356,6 +370,17 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
       {mag > 1 && ready && (
         <div className="absolute inset-0 z-[300] touch-none" style={{ cursor: ghost ? "grabbing" : "crosshair" }} aria-label="Precision map surface"
           onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => { drag.current = null; setGhost(null); }} onWheel={onWheel}>
+          {(() => {
+            const f = frame(); if (!f || !(window as any).mapkit) return null;
+            return markers.map((m) => {
+              if (ghost && drag.current?.id === m.id) return null;
+              const p = toScreen(f, m.point);
+              return <div key={m.id} className="pointer-events-none absolute" style={m.labelOffsetX
+                ? { left: p.sx + m.labelOffsetX, top: p.sy, transform: "translateY(-50%)" }
+                : { left: p.sx, top: p.sy, transform: "translate(-50%,-50%)" }}
+                dangerouslySetInnerHTML={{ __html: m.html }} />;
+            });
+          })()}
           {ghost && <div className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background bg-destructive" style={{ left: ghost.x, top: ghost.y }} />}
         </div>
       )}
