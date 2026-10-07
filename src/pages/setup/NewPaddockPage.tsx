@@ -425,7 +425,7 @@ export default function NewPaddockPage() {
                 <summary className="cursor-pointer text-muted-foreground">Optional overrides</summary>
                 <div className="mt-3 space-y-3">
                   <NumberField label="Vine count override" value={vineCountOverride} onChange={setVineCountOverride} step="1" />
-                  <NumberField label="Row length override (m)" value={rowLengthOverride} onChange={setRowLengthOverride} step="1" />
+                  <NumberField label="Total row length override (m)" hint="Optional. Overrides the calculated total length of all rows in this block." value={rowLengthOverride} onChange={setRowLengthOverride} step="1" />
                 </div>
               </details>
 
@@ -674,12 +674,13 @@ function StepNav({
 
 
 function NumberField({
-  label, value, onChange, step, min, error,
-}: { label: string; value: string; onChange: (v: string) => void; step?: string; min?: string; error?: string }) {
+  label, value, onChange, step, min, error, hint,
+}: { hint?: string; label: string; value: string; onChange: (v: string) => void; step?: string; min?: string; error?: string }) {
   return (
     <div className="space-y-1.5">
       <Label className="text-xs">{label}</Label>
       <Input type="number" step={step} min={min} value={value} onChange={(e) => onChange(e.target.value)} className="h-9" aria-invalid={error ? true : undefined} />
+      {hint && !error && <p className="text-xs text-muted-foreground">{hint}</p>}
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );

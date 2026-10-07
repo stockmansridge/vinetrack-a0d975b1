@@ -141,7 +141,7 @@ export function PaddockDetailContent({
           label="Average row length"
           value={metrics.rowCount > 0 ? `${fmt(metrics.totalRowLengthM / metrics.rowCount, 1)} m` : "—"}
         />
-        <Row label="Row length override" value={paddock.row_length_override ? `${paddock.row_length_override} m` : "—"} />
+        <Row label="Total row length override" value={paddock.row_length_override ? `${paddock.row_length_override} m` : "—"} />
         <Row label="Vine count override" value={fmtInt(paddock.vine_count_override)} />
         <Row
           label="Vines"
