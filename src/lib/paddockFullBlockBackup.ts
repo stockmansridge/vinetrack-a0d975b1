@@ -20,6 +20,111 @@
 
 import { findInvalidRowNumbers, InvalidPhysicalRowsError } from "@/lib/physicalRowNumbers";
 import { supabase } from "@/integrations/ios-supabase/client";
+import { generateUuid } from "@/lib/uuid";
+
+// ---------- Identity safety ----------
+//
+// Full Block Backup copies SETUP, never identity. Every id in a backup file
+// (vineyard.id, blocks[].id, blocks[].vineyard_id, rows[].id, rows[].startPoint.id,
+// rows[].endPoint.id, polygon_points[].id) is informational only. At the
+// destination write boundary:
+//  - new blocks get fresh ids for every row, row endpoint and polygon point;
+//  - matched existing blocks keep their own row ids (matched by physical row
+//    number) and polygon point ids (matched by position); only unmatched
+//    incoming rows/points get fresh ids.
+// Operational data (valves, pruning, work tasks, trips, pins, sessions) is
+// never part of the backup and is never written.
+
+type Minimal = { from: (t: string) => any };
+
+export const CROSS_VINEYARD_ROW_IDENTITY_MESSAGE =
+  "This import contains internal row identities that already belong to another vineyard. VineTrack could not safely create the copy. Please try the import again or contact support.";
+
+/** Map raw DB errors to user-safe text. Never bypasses the database guard. */
+export function friendlyImportError(message: string | null | undefined): string {
+  const m = message ?? "";
+  if (m.includes("cross_vineyard_row_identity")) return CROSS_VINEYARD_ROW_IDENTITY_MESSAGE;
+  return m || "Import failed";
+}
+
+function withPointId(p: any, id: string) {
+  return p && typeof p === "object" ? { ...p, id } : p;
+}
+
+export interface IdentityStats {
+  rowsCopied: number;
+  rowIdsCreated: number;
+  rowIdsPreserved: number;
+}
+
+/** Fresh ids for every row, endpoint and polygon point. Geometry/order kept. */
+export function regenerateBlockIdentities(
+  block: { rows?: any; polygon_points?: any },
+): { rows?: any; polygon_points?: any; stats: IdentityStats } {
+  const stats: IdentityStats = { rowsCopied: 0, rowIdsCreated: 0, rowIdsPreserved: 0 };
+  const out: { rows?: any; polygon_points?: any; stats: IdentityStats } = { stats };
+  if (Array.isArray(block.rows)) {
+    out.rows = block.rows.map((r: any) => {
+      if (!r || typeof r !== "object") return r;
+      stats.rowsCopied++;
+      stats.rowIdsCreated++;
+      return {
+        ...r,
+        id: generateUuid(),
+        startPoint: withPointId(r.startPoint, generateUuid()),
+        endPoint: withPointId(r.endPoint, generateUuid()),
+      };
+    });
+  } else if (block.rows !== undefined) out.rows = block.rows;
+  if (Array.isArray(block.polygon_points)) {
+    out.polygon_points = block.polygon_points.map((p: any) => withPointId(p, generateUuid()));
+  } else if (block.polygon_points !== undefined) out.polygon_points = block.polygon_points;
+  return out;
+}
+
+/**
+ * Merge incoming rows into an existing block: rows matched by physical row
+ * number keep the destination's row/endpoint ids; new rows get fresh ids.
+ * Source ids are never written.
+ */
+export function mergeRowsPreservingIdentity(
+  sourceRows: any[],
+  targetRows: any,
+): { rows: any[]; stats: IdentityStats } {
+  const stats: IdentityStats = { rowsCopied: 0, rowIdsCreated: 0, rowIdsPreserved: 0 };
+  const byNumber = new Map<number, any>();
+  if (Array.isArray(targetRows)) {
+    for (const t of targetRows) if (t && typeof t.number === "number") byNumber.set(t.number, t);
+  }
+  const rows = sourceRows.map((r: any) => {
+    if (!r || typeof r !== "object") return r;
+    stats.rowsCopied++;
+    const t = typeof r.number === "number" ? byNumber.get(r.number) : undefined;
+    if (t && typeof t.id === "string" && t.id) {
+      stats.rowIdsPreserved++;
+      return {
+        ...r,
+        id: t.id,
+        startPoint: withPointId(r.startPoint, t.startPoint?.id || generateUuid()),
+        endPoint: withPointId(r.endPoint, t.endPoint?.id || generateUuid()),
+      };
+    }
+    stats.rowIdsCreated++;
+    return {
+      ...r,
+      id: generateUuid(),
+      startPoint: withPointId(r.startPoint, generateUuid()),
+      endPoint: withPointId(r.endPoint, generateUuid()),
+    };
+  });
+  return { rows, stats };
+}
+
+/** Polygon points for an existing block: reuse destination ids by position, else fresh. */
+export function mergePolygonPreservingIdentity(sourcePts: any[], targetPts: any): any[] {
+  const t = Array.isArray(targetPts) ? targetPts : [];
+  return sourcePts.map((p: any, i: number) => withPointId(p, (t[i]?.id as string) || generateUuid()));
+}
 
 export const FULL_BLOCK_FORMAT = "vinetrack.full-block-backup";
 export const FULL_BLOCK_VERSION = 1;
@@ -299,6 +404,9 @@ export function buildImportPlan(
 }
 
 export interface ImportApplyResult {
+  rowsCopied: number;
+  rowIdsCreated: number;
+  rowIdsPreserved: number;
   blocksUpdated: number;
   blocksUnchanged: number;
   fieldsWritten: number;
@@ -308,8 +416,14 @@ export interface ImportApplyResult {
 export async function applyImportPlan(
   plan: ImportPlan,
   targetVineyardId: string,
+  target: FullBlock[] = [],
+  client: Minimal = supabase,
 ): Promise<ImportApplyResult> {
+  const targetById = new Map(target.filter((t) => t.id).map((t) => [t.id!, t]));
   const result: ImportApplyResult = {
+    rowsCopied: 0,
+    rowIdsCreated: 0,
+    rowIdsPreserved: 0,
     blocksUpdated: 0,
     blocksUnchanged: 0,
     fieldsWritten: 0,
@@ -329,19 +443,34 @@ export async function applyImportPlan(
     // Safety: never let imported id / vineyard_id leak in.
     delete patch.id;
     delete patch.vineyard_id;
+    const tgt = targetById.get(m.targetId);
+    let rowStats: IdentityStats | null = null;
+    if (Array.isArray(patch.rows)) {
+      const merged = mergeRowsPreservingIdentity(patch.rows, tgt?.rows);
+      patch.rows = merged.rows;
+      rowStats = merged.stats;
+    }
+    if (Array.isArray(patch.polygon_points)) {
+      patch.polygon_points = mergePolygonPreservingIdentity(patch.polygon_points, tgt?.polygon_points);
+    }
     const bad = findInvalidRowNumbers(patch.rows);
     if ("rows" in patch && bad.length) {
       result.errors.push(new InvalidPhysicalRowsError(bad, m.targetName ?? m.source.name ?? undefined).message);
       continue;
     }
-    const { error } = await supabase
+    const { error } = await client
       .from("paddocks")
       .update(patch)
       .eq("id", m.targetId)
       .eq("vineyard_id", targetVineyardId);
     if (error) {
-      result.errors.push(`${m.targetName ?? m.source.name}: ${error.message}`);
+      result.errors.push(`${m.targetName ?? m.source.name}: ${friendlyImportError(error.message)}`);
       continue;
+    }
+    if (rowStats) {
+      result.rowsCopied += rowStats.rowsCopied;
+      result.rowIdsCreated += rowStats.rowIdsCreated;
+      result.rowIdsPreserved += rowStats.rowIdsPreserved;
     }
     result.blocksUpdated++;
     result.fieldsWritten += writes.length;
@@ -360,4 +489,65 @@ export function summarizeBackup(blocks: FullBlock[]) {
       withVarieties++;
   }
   return { total: blocks.length, withBoundary, withRows, withVarieties };
+}
+
+// ---------- Import as new ----------
+
+const NEW_BLOCK_COLUMNS: FullBlockField[] = Array.from(
+  new Set((["boundary", "rows", "setup", "varieties"] as FieldGroup[]).flatMap((g) => FIELD_GROUP_COLUMNS[g])),
+);
+
+export interface CreateResult {
+  blocksCreated: number;
+  fieldsWritten: number;
+  skippedFields: number;
+  rowsCopied: number;
+  rowIdsCreated: number;
+  errors: string[];
+}
+
+/**
+ * Create every backup block as a new block in the target vineyard. Only setup
+ * columns are written; block id is assigned by the database; every row,
+ * endpoint and polygon point id is freshly generated.
+ */
+export async function applyImportAsNew(
+  source: FullBlock[],
+  targetVineyardId: string,
+  client: Minimal = supabase,
+): Promise<CreateResult> {
+  const result: CreateResult = {
+    blocksCreated: 0, fieldsWritten: 0, skippedFields: 0, rowsCopied: 0, rowIdsCreated: 0, errors: [],
+  };
+  for (const s of source) {
+    const row: Record<string, any> = {
+      vineyard_id: targetVineyardId,
+      name: (s.name ?? "").trim() || "Imported block",
+    };
+    let written = 0;
+    for (const col of NEW_BLOCK_COLUMNS) {
+      const v = (s as any)[col];
+      if (isEmptyValue(v)) { result.skippedFields++; continue; }
+      row[col] = v;
+      written++;
+    }
+    const fresh = regenerateBlockIdentities(row);
+    if ("rows" in row) row.rows = fresh.rows;
+    if ("polygon_points" in row) row.polygon_points = fresh.polygon_points;
+    const badRows = findInvalidRowNumbers(row.rows);
+    if ("rows" in row && badRows.length) {
+      result.errors.push(new InvalidPhysicalRowsError(badRows, row.name).message);
+      continue;
+    }
+    const { error } = await client.from("paddocks").insert(row);
+    if (error) {
+      result.errors.push(`${row.name}: ${friendlyImportError(error.message)}`);
+      continue;
+    }
+    result.blocksCreated++;
+    result.fieldsWritten += written;
+    result.rowsCopied += fresh.stats.rowsCopied;
+    result.rowIdsCreated += fresh.stats.rowIdsCreated;
+  }
+  return result;
 }

@@ -1,4 +1,3 @@
-import { findInvalidRowNumbers, InvalidPhysicalRowsError } from "@/lib/physicalRowNumbers";
 import { useMemo, useRef, useState } from "react";
 import {
   Dialog,
@@ -22,7 +21,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
 import {
+  applyImportAsNew,
   applyImportPlan,
+  friendlyImportError,
+  type CreateResult,
   buildFullBlockBackup,
   buildImportPlan,
   DEFAULT_IMPORT_OPTIONS,
@@ -67,54 +69,6 @@ function isEmpty(v: any) {
   if (typeof v === "object") return Object.keys(v).length === 0;
   if (typeof v === "string") return v.trim() === "";
   return false;
-}
-
-interface CreateResult {
-  blocksCreated: number;
-  fieldsWritten: number;
-  skippedFields: number;
-  errors: string[];
-}
-
-async function applyImportAsNew(
-  source: FullBlock[],
-  targetVineyardId: string,
-): Promise<CreateResult> {
-  const result: CreateResult = {
-    blocksCreated: 0,
-    fieldsWritten: 0,
-    skippedFields: 0,
-    errors: [],
-  };
-  for (const s of source) {
-    const row: Record<string, any> = {
-      vineyard_id: targetVineyardId,
-      name: (s.name ?? "").trim() || "Imported block",
-    };
-    let written = 0;
-    for (const col of NEW_BLOCK_COLUMNS) {
-      const v = (s as any)[col];
-      if (isEmpty(v)) {
-        result.skippedFields++;
-        continue;
-      }
-      row[col] = v;
-      written++;
-    }
-    const badRows = findInvalidRowNumbers(row.rows);
-    if ("rows" in row && badRows.length) {
-      result.errors.push(new InvalidPhysicalRowsError(badRows, row.name).message);
-      continue;
-    }
-    const { error } = await supabase.from("paddocks").insert(row);
-    if (error) {
-      result.errors.push(`${row.name}: ${error.message}`);
-      continue;
-    }
-    result.blocksCreated++;
-    result.fieldsWritten += written;
-  }
-  return result;
 }
 
 export default function PaddockFullBlockBackupDialog() {
@@ -261,7 +215,7 @@ export default function PaddockFullBlockBackupDialog() {
         }
       } else {
         if (!plan) return;
-        const result = await applyImportPlan(plan, selectedVineyardId);
+        const result = await applyImportPlan(plan, selectedVineyardId, blocks);
         setLastResult({ mode: "update", data: result });
         if (result.errors.length) {
           toast.error(
@@ -280,7 +234,7 @@ export default function PaddockFullBlockBackupDialog() {
       await queryClient.invalidateQueries({ queryKey: ["paddocks-boundary-import"] });
       setView("result");
     } catch (e: any) {
-      toast.error(e?.message ?? "Import failed");
+      toast.error(friendlyImportError(e?.message));
     } finally {
       setBusy(false);
     }
@@ -431,6 +385,15 @@ export default function PaddockFullBlockBackupDialog() {
 
             {view === "preview" && parsed && plan && parsedStats && (
               <div className="space-y-3">
+                <Alert>
+                  <AlertTitle className="text-sm">Setup replication</AlertTitle>
+                  <AlertDescription className="text-xs">
+                    This import copies block geometry, rows and vineyard setup. Internal record
+                    identities and operational history are not copied, so the destination vineyard
+                    remains completely independent.
+                    {importAsNew && " New row and boundary identities will be created for every imported block."}
+                  </AlertDescription>
+                </Alert>
                 <div className="text-xs text-muted-foreground">
                   <code>{filename}</code> · {parsed.blocks.length} block(s)
                   {parsed.vineyard?.name ? (
@@ -691,6 +654,11 @@ export default function PaddockFullBlockBackupDialog() {
                     {lastResult.mode === "new"
                       ? "Source blocks were imported as new blocks into this vineyard."
                       : "Matched blocks were updated using the selected field groups."}
+                    <div className="mt-1 font-medium">
+                      {lastResult.mode === "new"
+                        ? `${lastResult.data.rowsCopied} rows copied · ${lastResult.data.rowIdsCreated} new row identities created · no operational history copied`
+                        : `${lastResult.data.rowsCopied} rows copied · ${lastResult.data.rowIdsPreserved} existing row identities kept · ${lastResult.data.rowIdsCreated} new row identities created · no operational history copied`}
+                    </div>
                   </AlertDescription>
                 </Alert>
                 {lastResult.mode === "new" ? (
