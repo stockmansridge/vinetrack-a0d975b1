@@ -183,7 +183,7 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
   const centreBeforeMag = useRef<any>(null);
   const changeMag = (k: number) => {
     if (k === magRef.current) return;
-    if (k < 4) setAtMax(false);
+    setAtMax(false); // no clamp observed yet for the new layout
     try { centreBeforeMag.current = mapRef.current?.center ?? null; } catch { centreBeforeMag.current = null; }
     setMag(k);
   };
@@ -206,13 +206,23 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
   }, [mag, doFit, updateReadout]);
 
   // Native camera distance at which Apple clamped (null until observed).
-  const clampDist = useRef<number | null>(null);
+  // The clamp depends on element size + magnification, so it is bound to the
+  // exact layout it was observed in and ignored for any other layout.
+  const clampDist = useRef<{ d: number; key: string } | null>(null);
+  const layoutKey = () => { const el = containerRef.current; return `${magRef.current}:${el?.offsetWidth ?? 0}x${el?.offsetHeight ?? 0}`; };
   const [atMax, setAtMax] = useState(false);
   const refreshAtMax = useCallback(() => {
     let d = NaN; try { d = Number(mapRef.current?.cameraDistance); } catch { /* noop */ }
     const c = clampDist.current;
-    setAtMax(magRef.current >= 4 && c != null && d <= c * 1.05);
+    if (c && c.key !== layoutKey()) clampDist.current = null;
+    const cur = clampDist.current;
+    setAtMax(magRef.current >= 4 && cur != null && d <= cur.d * 1.05);
   }, []);
+  useEffect(() => {
+    const el = wrapRef.current; if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => refreshAtMax()); ro.observe(el);
+    return () => ro.disconnect();
+  }, [refreshAtMax]);
   // + always tries native zoom first (at any magnification); digital
   // magnification steps up only when native zoom has genuinely clamped.
   const zoomIn = () => {
@@ -222,7 +232,7 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
     requestAnimationFrame(() => {
       const after = Number(map.cameraDistance);
       if (!(after < before * 0.9)) {
-        clampDist.current = after;
+        clampDist.current = { d: after, key: layoutKey() };
         if (magRef.current < 4) changeMag(Math.min(4, magRef.current * 2));
       }
       updateReadout(); refreshAtMax();
