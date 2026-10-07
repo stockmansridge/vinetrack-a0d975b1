@@ -183,7 +183,7 @@ export default function ContourAppleMap({ centre, shapes, markers, onMapClick, f
   const centreBeforeMag = useRef<any>(null);
   const changeMag = (k: number) => {
     if (k === magRef.current) return;
-    if (k < 4) setAtMax(false);
+    setAtMax(false); // no clamp observed yet for the new layout
     try { centreBeforeMag.current = mapRef.current?.center ?? null; } catch { centreBeforeMag.current = null; }
     setMag(k);
   };
