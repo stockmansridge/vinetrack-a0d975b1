@@ -13,22 +13,24 @@ export interface ShiftDirection {
   ux: number; uy: number;
   source: "trace" | "row";
   rowNumber?: number;
+  /** For source "row": the exact points used as start and end (for a map cue). */
+  start?: LatLng; end?: LatLng;
 }
 
 const MIN_CHORD_M = 0.5;
 
-function chord(pts: LatLng[], proj: Projection): { ux: number; uy: number } | null {
+function chord(pts: LatLng[], proj: Projection): { ux: number; uy: number; start: LatLng; end: LatLng } | null {
   const ok = pts.filter(isFiniteLL);
   if (ok.length < 2) return null;
   const a = proj.toXY(ok[0]), b = proj.toXY(ok[ok.length - 1]);
   const len = Math.hypot(b.x - a.x, b.y - a.y);
-  return len >= MIN_CHORD_M ? { ux: (b.x - a.x) / len, uy: (b.y - a.y) / len } : null;
+  return len >= MIN_CHORD_M ? { ux: (b.x - a.x) / len, uy: (b.y - a.y) / len, start: ok[0], end: ok[ok.length - 1] } : null;
 }
 
 /** Trace start→end; for traceless (imported) groups, the first usable row's first→last point. */
 export function shiftDirection(g: RowGroup, proj: Projection): ShiftDirection | null {
   const t = chord(g.referenceTrace, proj);
-  if (t) return { ...t, source: "trace" };
+  if (t) return { ux: t.ux, uy: t.uy, source: "trace" };
   for (const r of [...g.rows].sort((a, b) => a.number - b.number)) {
     const pts = r.parts.flatMap((p) => p.points);
     const c = chord(pts, proj);
@@ -56,9 +58,19 @@ export function shiftGroup(g: RowGroup, proj: Projection, metres: number, side: 
   };
 }
 
-/** Undo stack entry: valid only while the group is still exactly `after`. */
-export interface ShiftUndo { groupId: string; before: RowGroup; afterJson: string }
-export function canUndoShift(stack: ShiftUndo[], g: RowGroup | null): boolean {
-  const top = stack[stack.length - 1];
-  return !!g && !!top && top.groupId === g.id && top.afterJson === JSON.stringify(g);
+/** Small, stable content hash (cyrb53) so undo keeps no second copy of the group. */
+export function hashGroup(g: RowGroup): string {
+  const str = JSON.stringify(g);
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < str.length; i++) { const c = str.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return `${str.length}:${(h2 >>> 0).toString(16)}${(h1 >>> 0).toString(16)}`;
+}
+
+/** Single "undo last shift" entry: valid only while the group is still exactly the shifted result. */
+export interface ShiftUndo { groupId: string; before: RowGroup; afterHash: string }
+export const makeShiftUndo = (before: RowGroup, after: RowGroup): ShiftUndo => ({ groupId: before.id, before, afterHash: hashGroup(after) });
+export function canUndoShift(entry: ShiftUndo | null, g: RowGroup | null): boolean {
+  return !!g && !!entry && entry.groupId === g.id && entry.afterHash === hashGroup(g);
 }
