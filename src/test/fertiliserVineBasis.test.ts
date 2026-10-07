@@ -33,8 +33,8 @@ describe("Assumed full vine count", () => {
   it("ignores per-row vine-count overrides", () => {
     expect(assumedFullVineCount({ vine_spacing: 2, rows: rows([1000, 1000], [3, 4]) }).count).toBe(1000);
   });
-  it("respects a row-length override", () => {
-    expect(assumedFullVineCount({ vine_spacing: 2, rows: rows([1000, 1000]), row_length_override: 500 }).count).toBe(500);
+  it("respects a row-length override (block total, not per row)", () => {
+    expect(assumedFullVineCount({ vine_spacing: 2, rows: rows([1000, 1000]), row_length_override: 500 }).count).toBe(250);
   });
   it("missing vine spacing → unavailable", () => {
     expect(assumedFullVineCount({ vine_spacing: null, rows: rows([1000]) })).toEqual({ count: null, reason: "no_vine_spacing" });

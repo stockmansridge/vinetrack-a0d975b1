@@ -269,12 +269,10 @@ export function deriveMetrics(
   }
   if (appliedAnyOverride) {
     rowLengthSource = "per-row-override";
-  } else if (
-    isFiniteNum(paddock?.row_length_override) &&
-    paddock.row_length_override > 0 &&
-    rowCount > 0
-  ) {
-    totalRowLengthM = paddock.row_length_override * rowCount;
+  } else if (isFiniteNum(paddock?.row_length_override) && paddock.row_length_override > 0) {
+    // Singular row_length_override is the TOTAL effective row length for the
+    // block (Block editor / iOS / Android contract) — never multiplied by rows.
+    totalRowLengthM = paddock.row_length_override;
     rowLengthSource = "block-override";
   }
 
