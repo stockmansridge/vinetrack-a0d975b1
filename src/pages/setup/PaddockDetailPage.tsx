@@ -20,6 +20,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Save, AlertTriangle, Trash2, Pencil, Info, Archive, LayoutDashboard, Map as MapIcon, Table, Grape, Fence, Droplets, Shovel } from "lucide-react";
 
 import { fetchOne } from "@/lib/queries";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import {
   archivePaddock,
   fetchLinkedRecordCounts,
@@ -433,6 +434,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
           </p>
         </div>
         {!canEdit && <Badge variant="secondary">Read-only</Badge>}
+        <ContourRowMappingLink paddockId={paddock.id} />
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
@@ -1003,3 +1005,16 @@ function CountLine({ label, n }: { label: string; n: number }) {
   return <li>{label}: <span className="font-medium">{n}</span></li>;
 }
 
+
+/** System Admin-only entry to the Contour Row Mapping (Beta) draft pilot. */
+function ContourRowMappingLink({ paddockId }: { paddockId: string }) {
+  const { isAdmin } = useIsSystemAdmin();
+  if (!isAdmin) return null;
+  return (
+    <Button asChild size="sm" variant="outline" className="gap-1 border-orange-500 text-orange-600 dark:text-orange-400">
+      <Link to={`/setup/paddocks/${paddockId}/contour-rows`}>
+        <MapIcon className="h-4 w-4" /> Contour Row Mapping (Beta)
+      </Link>
+    </Button>
+  );
+}
