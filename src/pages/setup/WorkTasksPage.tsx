@@ -152,11 +152,10 @@ import { assignmentCellLabel, calendarDate, completionLabel, displayCompletedDat
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import ResourcePicker from "@/components/people/ResourcePicker";
 import { useExternalResources } from "@/components/people/ExternalResourcesCard";
-import { workTaskAssignmentFields, workTaskAssignmentValue, type ExternalResource, type ResourceValue } from "@/lib/externalResources";
+import { COMPLETED_BADGE_CLASS } from "@/lib/workTaskCompletion";
+import { canManageExternalResources, workTaskAssignmentFields, workTaskAssignmentValue, type ExternalResource, type ResourceValue } from "@/lib/externalResources";
 import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
 
-/** Brighter, accessible green for the Completed status only. */
-const COMPLETED_BADGE_CLASS = "border-transparent bg-success text-success-foreground hover:bg-success/90 font-semibold";
 
 export interface AssignableMember { userId: string; name: string; email: string | null }
 import { fetchVineyard } from "@/lib/vineyardSettingsQuery";
@@ -1157,6 +1156,7 @@ function WorkTaskDrawer({
   task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, linkedTrips, allTrips, paddockNameById, machineLines, machineLookups, allocByTripId, canSeeCosts, canSoftDelete, userId, vineyardId, vineyardTimeZone, assignableMembers, externals, externalsError, membersLoading, membersError, memberName, onSaved,
 }: DrawerProps) {
   const isNew = !task;
+  const { currentRole: drawerRole } = useVineyard();
   const [localLabourLines, setLocalLabourLines] = useState<WorkTaskLabourLine[]>([]);
   const [localMachineLines, setLocalMachineLines] = useState<WorkTaskMachineLine[]>([]);
   const rf = useRegionFormatters();
@@ -1485,6 +1485,7 @@ function WorkTaskDrawer({
                   error={membersError ?? externalsError}
                   memberName={memberName}
                   allowUnassigned
+                  quickAdd={{ canManage: canManageExternalResources(drawerRole), userId: userId ?? null }}
                 />
               </Field>
             </Section>

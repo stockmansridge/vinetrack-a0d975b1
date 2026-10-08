@@ -231,7 +231,18 @@ export default function VineyardSettingsPage() {
         </div>
       )}
 
-      {selectedVineyardId && <ExternalResourcesCard vineyardId={selectedVineyardId} role={currentRole ?? null} userId={user?.id ?? null} />}
+      {selectedVineyardId && (
+        <section aria-label="People and labour" className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-base font-semibold">People &amp; labour</h2>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => navigate("/setup/operator-categories")}>Worker Types (labour rates)</Button>
+              <Button size="sm" variant="outline" onClick={() => navigate("/team")}>Team</Button>
+            </div>
+          </div>
+          <ExternalResourcesCard vineyardId={selectedVineyardId} role={currentRole ?? null} userId={user?.id ?? null} vineyardName={currentName} />
+        </section>
+      )}
 
       <PendingInvitationsSection
         title="Pending invitations"

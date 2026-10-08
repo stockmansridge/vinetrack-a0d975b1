@@ -8,6 +8,9 @@ import { generateUuid, tryGenerateUuid } from "@/lib/uuid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useVineyard } from "@/context/VineyardContext";
+import { useAuth } from "@/context/AuthContext";
+import { canManageExternalResources } from "@/lib/externalResources";
 import ResourcePicker from "@/components/people/ResourcePicker";
 import { useExternalResources } from "@/components/people/ExternalResourcesCard";
 import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
@@ -151,9 +154,11 @@ export default function PruningActivityDialog({
   const memberIdsQ = useQuery({ queryKey: ["vineyard_member_ids", vineyardId], enabled: !!vineyardId && open, queryFn: () => fetchVineyardMembersWithCategory(vineyardId) });
   const resourceMembers = useMemo(() => {
     const ids = new Set((memberIdsQ.data ?? []).map((m) => m.user_id));
-    return teamMembers.filter((m) => ids.has(m.userId));
+    return (teamMembers ?? []).filter((m) => ids.has(m.userId));
   }, [memberIdsQ.data, teamMembers]);
   const extQ = useExternalResources(open ? vineyardId : null);
+  const { selectedVineyardId, currentRole } = useVineyard();
+  const { user } = useAuth();
   const externals = extQ.data ?? [];
   const memberName = (id: string) => teamLookup.get(id)?.name ?? null;
   // Typed resource: only sent to set_pruning_activity_resource when explicitly changed.
@@ -482,10 +487,11 @@ export default function PruningActivityDialog({
                   members={resourceMembers} externals={externals} memberName={memberName}
                   loading={memberIdsQ.isLoading || extQ.isLoading}
                   error={memberIdsQ.error ? (memberIdsQ.error as Error).message : extQ.error ? (extQ.error as Error).message : null}
-                  onChange={(v) => {
+                  quickAdd={{ canManage: selectedVineyardId === vineyardId && canManageExternalResources(currentRole), userId: user?.id ?? null }}
+                  onChange={(v, created) => {
                     setResource(v); setResourceTouched(true);
                     // Legacy worker_or_crew snapshot always carries the display name.
-                    setDraft((d) => ({ ...d, worker: pruningWorkerSnapshot(v, memberName, externals) }));
+                    setDraft((d) => ({ ...d, worker: pruningWorkerSnapshot(v, memberName, created ? [...externals, created] : externals) }));
                   }}
                 />
               </div>

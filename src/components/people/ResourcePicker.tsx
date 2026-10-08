@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Plus } from "lucide-react";
+import { ExternalResourceFormDialog } from "@/components/people/ExternalResourcesCard";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import {
   buildResourceGroups, resourceLabel,
@@ -11,10 +13,13 @@ import {
 /** Shared grouped picker: Internal resources, then Crew / External contractors. */
 export default function ResourcePicker({
   value, onChange, members, externals, vineyardId, memberName, loading, error,
-  allowUnassigned = false, allowOther = false, ariaLabel = "Assigned to", emptyLabel = "Unassigned",
+  allowUnassigned = false, allowOther = false, ariaLabel = "Assigned to", emptyLabel = "Unassigned", quickAdd,
 }: {
   value: ResourceValue;
-  onChange: (v: ResourceValue) => void;
+  /** `created` is passed when the value comes from a just-created quick-add resource. */
+  onChange: (v: ResourceValue, created?: ExternalResource) => void;
+  /** Owner/manager quick-add of a crew/contractor; omit to hide the button. */
+  quickAdd?: { canManage: boolean; userId: string | null };
   members: ResourceMember[];
   externals: ExternalResource[];
   vineyardId: string;
@@ -27,6 +32,7 @@ export default function ResourcePicker({
   emptyLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
   const groups = buildResourceGroups(members, externals, vineyardId);
   const label = value.kind === "none" ? emptyLabel
     : value.kind === "other" ? (value.text.trim() ? `Other: ${value.text.trim()}` : "Other")
@@ -35,6 +41,8 @@ export default function ResourcePicker({
   const inactiveSel = value.kind === "external" && !groups.external.some((r) => r.id === value.id);
   return (
     <div className="space-y-1">
+      <div className="flex gap-1">
+      <div className="flex-1 min-w-0">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button type="button" variant="outline" role="combobox" aria-expanded={open} aria-label={ariaLabel} className="w-full justify-between font-normal">
@@ -72,6 +80,17 @@ export default function ResourcePicker({
           </Command>
         </PopoverContent>
       </Popover>
+      </div>
+      {quickAdd?.canManage && (
+        <Button type="button" variant="outline" size="icon" aria-label="Add crew / contractor" title="Add crew / contractor" onClick={() => setAdding(true)}>
+          <Plus className="h-4 w-4" />
+        </Button>
+      )}
+      </div>
+      {quickAdd?.canManage && (
+        <ExternalResourceFormDialog open={adding} onOpenChange={setAdding} vineyardId={vineyardId} userId={quickAdd.userId}
+          onSaved={(r) => onChange({ kind: "external", id: r.id }, r)} />
+      )}
       {value.kind === "other" && (
         <Input aria-label="Other name" placeholder="Type a name" value={value.text} onChange={(e) => onChange({ kind: "other", text: e.target.value })} />
       )}
