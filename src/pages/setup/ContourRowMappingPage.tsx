@@ -605,7 +605,6 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
           <input ref={jsonInput} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onBackupFile(f); }} />
           <input ref={lineInput} type="file" accept=".geojson,.json,.kml" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onLineFile(f); }} />
         </div>
-        </div>
           </> },
         ]} />
       </>}>
