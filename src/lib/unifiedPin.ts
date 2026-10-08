@@ -464,7 +464,6 @@ export interface PinInsertRow {
   button_name: string;
   button_color: string | null;
   launcher_button_id: string | null;
-  category_id: string;
   category: string;
   growth_stage_code: string | null;
   latitude: number | null;
@@ -504,7 +503,6 @@ export function buildPinInsertRow(
     button_name: name,
     button_color: isStagePin ? GROWTH_STAGE_PIN_COLOUR : opts.button.colour,
     launcher_button_id: opts.button.launcherButtonId ?? opts.button.id,
-    category_id: opts.button.id,
     category: opts.button.name,
     growth_stage_code: stage,
 
