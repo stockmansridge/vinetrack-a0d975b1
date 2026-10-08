@@ -161,6 +161,8 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
   const [selVertex, setSelVertex] = useState<number | null>(null);
   const setTool = (t: Tool) => { setToolRaw(t); setSelVertex(null); };
   const [revealNonce, setRevealNonce] = useState(0);
+  const [setupSub, setSetupSub] = useState<string>("trace");
+  const openSetupFor = (g: RowGroup) => { setPanelTab("setup"); setSetupSub(g.mode === "imported" || g.referenceTrace.length >= 2 ? "rows" : "trace"); };
   const [panelTab, setPanelTab] = useState<string>(initial.groups.length ? "setup" : "groups");
   const [rowSel, setRowSel] = useState<{ rowId: string; part: number; idx: number | null } | null>(null);
   const [issues, setIssues] = useState<GenIssue[]>([]);
@@ -233,7 +235,7 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
   const addGroup = guard(() => {
     const g = newGroup(`Row group ${draft.groups.length + 1}`, nextFreeRowNumber(draft));
     setDraft((d) => ({ ...d, groups: [...d.groups, g] }));
-    setGroupId(g.id); setTool("none"); setIssues([]); setRowSel(null); setPanelTab("setup"); setRevealNonce((n) => n + 1);
+    setGroupId(g.id); setTool("none"); setIssues([]); setRowSel(null); setPanelTab("setup"); setSetupSub("trace"); setRevealNonce((n) => n + 1);
   });
 
   const shiftProj = useMemo(() => shiftProjection(boundary, group?.referenceTrace[0] ?? { lat: -34.5, lng: 138.7 }), [boundary, group]);
@@ -512,6 +514,14 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
               <Button size="sm" variant="ghost" disabled={locked} onClick={() => setConfirm({ title: "Reload latest?", body: "Your unsaved edits here will be lost. Export a backup first if you need them.", action: () => { savedJson.current = JSON.stringify(draft); if (copyKey) clearWorkingCopy(copyKey); onReload(); } })}>Reload latest (loses edits)</Button></div>
           </AlertDescription></Alert>
       )}
+      <ol className="flex flex-wrap gap-1 text-[11px]" aria-label="Steps">
+        {STEPS.map((t, i) => (
+          <li key={i}><button type="button" title={t}
+            onClick={() => { if (i === 0) setPanelTab("groups"); else if (i === 3) setPanelTab("review"); else if (group) { setPanelTab("setup"); setSetupSub(i === 1 && group.mode !== "imported" ? "trace" : "rows"); } else setPanelTab("groups"); }}
+            className={`rounded px-1.5 py-0.5 ${step === i + 1 ? "bg-orange-500/15 font-semibold text-orange-700 dark:text-orange-300" : "text-muted-foreground hover:text-foreground"}`} aria-current={step === i + 1 ? "step" : undefined}>{i + 1}. {STEP_SHORT[i]}</button></li>
+        ))}
+      </ol>
+      {step > 0 && <p className="text-[11px] text-orange-700 dark:text-orange-300">Next: {STEPS[step - 1]}</p>}
       {boundary.length < 3 && <Alert variant="destructive"><AlertTitle>No block boundary</AlertTitle><AlertDescription>Draw the block boundary in Block Setup first.</AlertDescription></Alert>}
 
         </div>}
@@ -521,16 +531,11 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
           <p><b>Rows tab</b> keeps the block's active rows, used for totals and the mobile apps.</p>
           <p><b>This page</b> is a separate review draft. Save Draft keeps it but doesn't replace the active rows, row count, boundary or vine counts.</p>
         </div>
-        <ol className="w-full space-y-0.5 text-xs" aria-label="Steps">
-          {["Add or select a row group", "Start trace, click along one vine row, then Finish trace", "Set spacing, left/right counts and first number, then Generate rows", "Review the rows, then Save Draft"].map((t, i) => (
-            <li key={i} className={`rounded px-2 py-0.5 ${step === i + 1 ? "bg-orange-500/15 font-semibold text-orange-700 dark:text-orange-300" : "text-muted-foreground"}`} aria-current={step === i + 1 ? "step" : undefined}>{i + 1}. {t}{step === i + 1 ? " ← next" : ""}</li>
-          ))}
-        </ol>
 <fieldset disabled={locked} className="min-w-0">
           <Card><CardHeader className="pb-2"><CardTitle className="text-base">Row groups</CardTitle></CardHeader>
             <CardContent className="space-y-2">
               {draft.groups.map((g) => (
-                <button key={g.id} type="button" onClick={guard(() => { setGroupId(g.id); setRowSel(null); setIssues([]); setTool("none"); setPanelTab("setup"); })}
+                <button key={g.id} type="button" onClick={guard(() => { setGroupId(g.id); setRowSel(null); setIssues([]); setTool("none"); openSetupFor(g); })}
                   className={`w-full rounded border px-3 py-2 text-left text-sm ${g.id === groupId ? "border-primary bg-primary/10" : "bg-card"}`}>
                   <div className="font-medium">{g.name}</div>
                   <div className="text-xs text-muted-foreground">{g.mode === "imported" ? "Imported" : g.mode === "contour" ? "Contour" : "Straight"} · {g.rows.length} rows drafted</div>
@@ -548,6 +553,7 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
             onDeleteVertex={() => { if (selVertex == null) return; setEditPts((pts) => pts.filter((_, i) => i !== selVertex)); setSelVertex(null); }}
             onUndoVertex={() => setEditPts((pts) => pts.slice(0, -1))} editCount={editPts.length}
             onGenerate={generate} issues={issues} locked={locked} status={status!} step={step} onRenumber={renumber}
+            sub={setupSub} setSub={setSetupSub}
             shift={{ amount: shiftM, setAmount: setShiftM, onShift: doShift, canUndo: canUndoShift(shiftUndo, group), onUndo: undoShift, dir: shiftDir }}
             onDelete={() => setConfirm({ title: `Delete ${group.name}?`, body: "Only this group's draft rows are removed. Other groups keep their numbers.", action: () => { setDraft((d) => ({ ...d, groups: d.groups.filter((x) => x.id !== group.id) })); setGroupId(null); setRowSel(null); } })} />}
 
@@ -665,7 +671,11 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
   );
 }
 
-function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, selVertex, setSelVertex, onDeleteVertex, onUndoVertex, editCount, onGenerate, issues, onDelete, locked, shift, status, step, onRenumber }: {
+const STEPS = ["Add or select a row group", "Start trace, click along one vine row, then Finish trace", "Set spacing, left/right counts and first number, then Generate rows", "Review the rows, then Save Draft"];
+const STEP_SHORT = ["Group", "Trace", "Rows", "Review & save"];
+
+function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, selVertex, setSelVertex, onDeleteVertex, onUndoVertex, editCount, onGenerate, issues, onDelete, locked, shift, status, step, onRenumber, sub, setSub }: {
+  sub: string; setSub: (s: string) => void;
   g: RowGroup; tool: Tool; setTool: (t: Tool) => void; exclusionId: string | null; setExclusionId: (s: string | null) => void;
   update: (f: (g: RowGroup) => RowGroup) => void; selVertex: number | null; setSelVertex: (n: number | null) => void;
   onDeleteVertex: () => void; onUndoVertex: () => void; editCount: number;
@@ -683,10 +693,8 @@ function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, sel
       <span className="text-[11px] text-muted-foreground self-center">{editCount} points{editCount < 3 ? " — needs at least 3" : ""}</span>
     </div>
   );
-  return (
-    <Card><CardHeader className="pb-2"><CardTitle className="text-base">Group settings</CardTitle></CardHeader>
-      <CardContent className="space-y-3 text-sm">
-        {!imported && <>
+  const tabs = [
+    ...(!imported ? [{ id: "trace", label: "Trace", content: <>
           <div className="flex gap-2">
             {(["contour", "straight"] as const).map((m) => <Button key={m} size="sm" variant={g.mode === m ? "default" : "outline"} onClick={() => update((x) => ({ ...x, mode: m }))}>{m === "contour" ? "Contour" : "Straight"}</Button>)}
           </div>
@@ -694,7 +702,7 @@ function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, sel
             <div className="font-medium text-xs">Trace one existing row</div>
             <p className="text-[11px] text-muted-foreground">{g.mode === "straight" ? "Click the two ends of one row." : "Click points along one vine row on the satellite image, end to end. Drag points to adjust; click a white dot to add a point."}</p>
             <div className="flex flex-wrap gap-2">
-              <Button size={step === 2 ? "default" : "sm"} variant={tool === "trace" || step === 2 ? "default" : "outline"} className={step === 2 ? "bg-orange-600 text-white hover:bg-orange-700 font-semibold" : ""} onClick={() => setTool(tool === "trace" ? "none" : "trace")}>{tool === "trace" ? "Finish trace" : g.referenceTrace.length ? "Edit trace" : "Start trace"}</Button>
+              <Button size={step === 2 ? "default" : "sm"} variant={tool === "trace" || step === 2 ? "default" : "outline"} className={step === 2 ? "bg-orange-600 text-white hover:bg-orange-700 font-semibold" : ""} onClick={() => { if (tool === "trace") { setTool("none"); if (g.referenceTrace.length >= 2) setSub("rows"); } else setTool("trace"); }}>{tool === "trace" ? "Finish trace" : g.referenceTrace.length ? "Edit trace" : "Start trace"}</Button>
               <Button size="sm" variant="outline" className="gap-1" disabled={!g.referenceTrace.length} onClick={() => update((x) => ({ ...x, referenceTrace: x.referenceTrace.slice(0, -1) }))}><Undo2 className="h-3.5 w-3.5" /> Undo point</Button>
               <Button size="sm" variant="outline" disabled={selVertex == null || tool !== "trace"} onClick={onDeleteVertex}>Delete point</Button>
             </div>
@@ -702,6 +710,9 @@ function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, sel
             {g.mode === "contour" && <div className="flex items-center gap-2 text-xs"><Label className="text-xs">Smoothing</Label>
               {[0, 1, 2].map((s) => <Button key={s} size="sm" variant={g.smoothing === s ? "default" : "outline"} className="h-7 px-2" onClick={() => update((x) => ({ ...x, smoothing: s }))}>{s === 0 ? "Off" : s === 1 ? "Light" : "More"}</Button>)}</div>}
           </div>
+    </> }] : []),
+    { id: "rows", label: "Rows", content: <>
+        {!imported && <>
           <div className="grid grid-cols-2 gap-2">
             <NumberStepper label="Row spacing (m)" value={g.spacingM} min={LIMITS.minSpacingM} max={LIMITS.maxSpacingM} step={0.1} disabled={locked} onChange={(n) => update((x) => ({ ...x, spacingM: n }))} />
             <NumberStepper label="Rows on the left" integer value={g.leftCount} min={0} max={LIMITS.maxSideCount} step={1} disabled={locked} hint="Extra rows" onChange={(n) => update((x) => ({ ...x, leftCount: n }))} />
@@ -711,6 +722,7 @@ function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, sel
           <div className="flex items-center gap-2"><Switch checked={g.extendToArea} onCheckedChange={(v) => update((x) => ({ ...x, extendToArea: v }))} />
             <span className="text-xs">Extend rows to the edge of the area</span></div>
         </>}
+
         <div className="rounded border p-2 space-y-2">
           <div className="font-medium text-xs">Row numbers</div>
           <NumberStepper label="Starting row number" integer value={g.startNumber} min={1} max={LIMITS.maxRowNumber} step={1} disabled={locked} onChange={(n) => update((x) => ({ ...x, startNumber: n }))} />
@@ -722,6 +734,14 @@ function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, sel
             {status.numbersOutOfDate && <p className="text-[11px] text-amber-700 dark:text-amber-400">Drafted row numbers don't match these settings yet.</p>}
           </>}
         </div>
+        <p className="text-xs">Drafted now: <b>{status.drafted}</b> rows{!imported && <> · these settings would generate <b>{Number.isFinite(status.configured) ? status.configured : "—"}</b></>}</p>
+        {!imported && g.rows.length > 0 && <p className="text-[11px] text-muted-foreground">{status.countDiffers ? `${status.drafted} rows drafted; ${status.configured} configured before boundary/cut-out clipping and any rows you deleted. ` : ""}Trace, spacing and count changes only apply when you regenerate.</p>}
+        {!imported && <Button className={`w-full ${step === 3 ? "ring-2 ring-orange-500" : ""}`} onClick={onGenerate}>{g.rows.length ? "Regenerate rows" : "Generate rows"}</Button>}
+        {issues.length > 0 && <div className="space-y-1">{issues.map((i, k) => (
+          <p key={k} className={`text-xs ${i.level === "error" ? "text-destructive" : "text-amber-700 dark:text-amber-400"}`}>{i.level === "error" ? "Problem: " : "Check: "}{i.message}</p>
+        ))}</div>}
+    </> },
+    { id: "shift", label: "Shift", content: <>
         {hasGeometry && <div className="rounded border p-2 space-y-2">
           <div className="font-medium text-xs">Side shift</div>
           <p className="text-[11px] text-muted-foreground">Slides this group's trace and all its rows sideways together, keeping their shape, spacing and edits. Left/right are as you face the {shift.dir?.source === "row" ? `direction of row ${shift.dir.rowNumber} (from the orange "start" marker to "▶ end" on the map)` : "▶ end arrow"}. The map isn't rotated; working areas, cut-outs and other groups don't move.</p>
@@ -733,6 +753,9 @@ function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, sel
           </div>
           {!shift.dir && <p className="text-[11px] text-amber-700 dark:text-amber-400">Shift needs a trace or row at least 0.5 m long to know which way is left and right.</p>}
         </div>}
+        {!hasGeometry && <p className="text-xs text-muted-foreground">Trace or generate rows first.</p>}
+    </> },
+    { id: "area", label: "Area", content: <>
         <div className="rounded border p-2 space-y-2">
           <div className="font-medium text-xs">Working area & cut-outs (optional)</div>
           <p className="text-[11px] text-muted-foreground">Limit this group to part of the block so differently aligned rows don't overlap. Cut out tracks or obstacles. Editing an outline never changes rows until you regenerate. The real block boundary isn't changed.</p>
@@ -751,14 +774,16 @@ function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, sel
               </span></div>
           ))}
         </div>
-        <p className="text-xs">Drafted now: <b>{status.drafted}</b> rows{!imported && <> · these settings would generate <b>{Number.isFinite(status.configured) ? status.configured : "—"}</b></>}</p>
-        {!imported && g.rows.length > 0 && <p className="text-[11px] text-muted-foreground">{status.countDiffers ? `${status.drafted} rows drafted; ${status.configured} configured before boundary/cut-out clipping and any rows you deleted. ` : ""}Trace, spacing and count changes only apply when you regenerate.</p>}
-        {!imported && <Button className={`w-full ${step === 3 ? "ring-2 ring-orange-500" : ""}`} onClick={onGenerate}>{g.rows.length ? "Regenerate rows" : "Generate rows"}</Button>}
-        {issues.length > 0 && <div className="space-y-1">{issues.map((i, k) => (
-          <p key={k} className={`text-xs ${i.level === "error" ? "text-destructive" : "text-amber-700 dark:text-amber-400"}`}>{i.level === "error" ? "Problem: " : "Check: "}{i.message}</p>
-        ))}</div>}
-        <div><Label className="text-xs">Name</Label><Input className="h-8" maxLength={LIMITS.maxNameLength} value={g.name} onChange={(e) => update((x) => ({ ...x, name: e.target.value }))} /></div>
+    </> },
+  ];
+  const active = imported && sub === "trace" ? "rows" : sub;
+  return (
+    <div className="space-y-2 text-sm">
+      <div className="flex items-end gap-2">
+        <div className="flex-1"><Label className="text-xs">Group name</Label><Input className="h-8" maxLength={LIMITS.maxNameLength} value={g.name} onChange={(e) => update((x) => ({ ...x, name: e.target.value }))} /></div>
         <Button size="sm" variant="ghost" className="text-destructive gap-1" onClick={onDelete}><Trash2 className="h-3.5 w-3.5" /> Delete group</Button>
-      </CardContent></Card>
+      </div>
+      <PanelTabs nested label="Group setup" value={active} onValueChange={setSub} tabs={tabs} />
+    </div>
   );
 }
