@@ -97,12 +97,15 @@ export default function ManualIssuesAppleMap({
           fillColor: "#34C759",
           fillOpacity: 0.08,
         });
-        next.push(
-          new mapkit.PolygonOverlay(
-            poly.pts.map((p) => new mapkit.Coordinate(p.lat, p.lng)),
-            { style },
-          ),
+        // Block outlines are display-only: disable interaction so taps inside a
+        // block reach the map's single-tap handler (pin drop) instead of
+        // selecting the overlay and swallowing the click.
+        const overlay = new mapkit.PolygonOverlay(
+          poly.pts.map((p) => new mapkit.Coordinate(p.lat, p.lng)),
+          { style, enabled: false },
         );
+        try { overlay.enabled = false; } catch { /* noop */ }
+        next.push(overlay);
       } catch { /* noop */ }
     }
     if (next.length) {
