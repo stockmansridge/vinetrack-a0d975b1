@@ -1,32 +1,55 @@
-# User Activity: why Portal users never show (findings, nothing changed)
+# Crew / External Contractors — inspection findings and implementation plan
 
-## What was traced
-- Page: `src/pages/admin/AdminUserActivityPage.tsx`. `fetchUserActivity()` calls one function on the shared VineTrack (mobile) database: `admin_list_user_login_activity`. There is no filtering by platform in the Portal; filters are only vineyard, role, status, last login and search.
-- Fields shown: Last login = `last_sign_in_at`; Last seen = `last_client_seen_at`; App type/version/build, OS, Device = `last_app_type`, `last_app_version`, `last_app_build`, `last_os_name/version`, `last_device_model`. Blank values render as "Not recorded". The older `app_platform/app_version/device_model` fields (support-request data) are received but not shown.
-- The function's SQL is not in this repo (it lives in Rork's mobile database). A read-only probe confirmed it exists and requires System Admin, so its body and join could not be read.
-- The same database has a function `record_my_client_activity` (found via a read-only name probe). This is what iOS/Android call to write app type, version, device, OS and last seen. Its parameters could not be read without signing in.
-- The Portal never calls `record_my_client_activity` or any other device/session write. A search of `src/`, `sql/`, `docs/` and `supabase/` found no telemetry write. The only "portal-web" marker is `app_version: "portal-web"` in `src/lib/supportRequestSubmit.ts`, and that is support-request data only.
-- Sign-in (`src/pages/Login.tsx`, `AuthCallback.tsx`, `AuthContext.tsx`) uses the mobile database's sign-in, so Portal sign-ins already update the shared `last_sign_in_at`.
+## What exists today
 
-## Root cause (confirmed on the Portal side)
-The Portal never records client activity. So:
-- Portal users are not missing. Every account is listed (192 = all accounts returned by the function).
-- A Portal-only user shows a real Last login, but Last seen, App type, version, device and OS read "Not recorded".
-- A user who uses both mobile and Portal keeps their last mobile values. A Portal visit can update Last login, while Last seen and App type still show iOS/Android.
-- App type only ever shows ios/android because nothing writes "portal".
+- **Team (internal, signed-in people):** `src/pages/Team.tsx` (route `/team`). Names come from `get_vineyard_team_members` through `src/hooks/useTeamLookup.ts`. Membership comes from `vineyard_members` through `fetchVineyardMembersWithCategory`. Vineyard Settings (`src/pages/setup/VineyardSettingsPage.tsx`) has no Team or Crew section.
+- **Work Task "Assigned to":** `AssigneePicker` in `src/pages/setup/WorkTasksPage.tsx` (around lines 357–369 and 1066–1130). It is a searchable Command popover that lists only vineyard members and writes `work_tasks.assigned_to` (uuid, linked to `profiles`). Completion display uses `resolveCompletedBy` in this order: `completed_by`, then the linked trip operator, then `finalized_by`.
+- **Pruning "Worker / crew":** a free-text `Input` in `src/components/pruning/PruningActivityDialog.tsx` (around line 454) and in `EditPruningDialog.tsx`. It saves as `worker_or_crew` text on the activity through `activityObject()` in `src/lib/pruningActivityContract.ts`. That goes through the shared `record_pruning_activity` / `update_pruning_activity` functions (`src/lib/pruningActivityApi.ts`), which are owned by Rork. Linked entries, history, reports and the Work Task link (`work_task_id`) read the same text (`pruningQuery.ts`, `pruningActivityQuery.ts`, `ActivityHistory.tsx`). No person or crew id is stored, so existing records are plain names only.
+- **Permission helpers on the shared database** (documented in `docs/supabase-schema.md` and used by the existing SQL): `is_vineyard_member(vineyard)`, `has_vineyard_role(vineyard, roles[])`, `is_vineyard_owner_or_manager(vineyard)`. The house pattern is: members can read, role-gated insert/update, no client deletes, and soft delete through an RPC.
 
-Not confirmed: whether the function stores only one latest row per user (which `last_*` naming suggests) and whether `record_my_client_activity` accepts an app type of "portal". Confirming this needs Rork or the SQL source.
+## Proposed schema (shared database, Rork applies; I won't run it)
 
-## Options
-1. **Portal-only, no SQL:** call the existing `record_my_client_activity` after sign-in and periodically while signed in, with app type "portal" and browser/OS details. This only works if the function accepts "portal". Because it stores only the latest client, this would overwrite the iOS/Android values with Portal. That loses the per-platform distinction, so it is **not recommended**.
-2. **Recommended minimal safe fix (needs SQL, Rork-owned):**
-   - Rork adds a per-platform activity table keyed by (user_id, app_type), plus an own-user upsert function that only uses `auth.uid()`. It accepts app_type in ios/android/portal and is server-timestamped, with no client-supplied times. Alternatively, Rork extends `record_my_client_activity` to write per-platform rows while keeping the current columns for released apps.
-   - `admin_list_user_login_activity` gains per-platform columns (last seen on iOS, Android and Portal, plus Portal browser/OS). Overall "Last seen" becomes the latest across platforms. The existing columns stay so older builds keep working.
-   - Portal: one small hook in the signed-in layout calls the upsert once per session start and at most every ~15 min while the tab is active. App type is "portal", the version is the build, and OS/browser come from the user agent. Last login stays the real sign-in time, never invented. The page then adds Portal columns/filters.
-3. **Historical limits:** past Portal usage cannot be rebuilt. Sign-in timestamps don't say which platform, and only the latest is kept. Portal activity will only appear from deployment onward. Earlier history should show "Not recorded", not a guess.
+1. New table `public.vineyard_external_resources`:
+   - Columns: `id`, `vineyard_id`, `name`, `kind` (`crew` or `contractor`), optional `contact_name`, `phone`, `email`, `notes`, `is_active`, `created_by`, `created_at`, `updated_at`, `deleted_at`.
+   - The name must be unique within a vineyard, ignoring case, for rows that are not deleted.
+   - Grants to `authenticated`; RLS on.
+   - Read: `is_vineyard_member(vineyard_id)`.
+   - Add and edit: `has_vineyard_role(vineyard_id, array['owner','manager'])`. Supervisor access is for you to decide.
+   - Removal: `soft_delete_vineyard_external_resource(p_id)` (security definer, same role check). No client deletes.
+   - No login, profile or membership is created, so an external resource can never act as a signed-in user.
+2. `work_tasks.assigned_external_resource_id uuid null`, linked to the new table.
+   - A check prevents setting it together with `assigned_to`.
+   - `assigned_to`, `completed_by` and `completed_at` are unchanged.
+3. Pruning activities: add `external_resource_id uuid null`, plus an optional internal `worker_user_id`.
+   - `record_pruning_activity` / `update_pruning_activity` accept these keys and check the id belongs to the same vineyard.
+   - `worker_or_crew` text keeps the chosen name, so older mobile builds, reports and history still work.
+   - Old records stay as plain text; nothing is guessed from names.
 
-## Is SQL / Rork required?
-Yes, for a correct fix with separate per-platform sessions (option 2). The function and its source table live in Rork's mobile database. Only the small Portal call and page columns are Portal work, and they should wait until Rork's contract lands.
+No costing fields change: labour still comes from hours × rate.
 
-## Next step if approved
-Write a short contract for Rork (table, upsert function, new list columns). After that, implement the Portal hook and columns. No code was changed in this investigation.
+## Portal implementation (after the schema is live)
+
+1. `src/lib/externalResources.ts`: list, create, update and soft delete calls, plus a hook scoped to the selected vineyard.
+2. Settings screen: a new "Crew & Contractors" card in `VineyardSettingsPage.tsx`, or its own page linked from Team. You can add, edit, deactivate and remove entries; it is read-only for roles that can't manage them.
+3. Shared picker `src/components/people/ResourcePicker.tsx`:
+   - One searchable list with two headings, "Team" (vineyard members) first and "Crew / contractors" (active external resources) second.
+   - It returns `{type:'member', userId}`, `{type:'external', id}` or nothing (unassigned).
+   - Inactive or removed resources still show by name on old records, marked "(inactive)".
+4. Work Tasks: replace `AssigneePicker` with `ResourcePicker`.
+   - Saving writes exactly one of `assigned_to` or `assigned_external_resource_id`; picking one clears the other.
+   - The "Assigned to" column shows the external name with a "Contractor"/"Crew" badge.
+   - Completed tasks still show the signed-in completer; an external crew is never shown as having completed one.
+5. Pruning New and Edit dialogs: replace the text box with `ResourcePicker` plus an "Other (type a name)" option.
+   - The display name is written to `worker_or_crew`, and the matching id to `external_resource_id` or `worker_user_id`.
+   - Lists keep reading `worker_or_crew`, so nothing has to be filled in for past records.
+6. Tests:
+   - picker grouping and order
+   - only one of the two assignment fields is ever set
+   - pruning payload keeps the text and sets the right id
+   - inactive resources still show on existing records
+
+## Blockers
+
+- All three schema changes and the pruning function updates need Rork, plus iOS/Android follow-up so mobile shows the same list.
+- Until then, the Portal can only offer a picker that fills in names (no stored id), and I don't recommend that.
+- The live permission rules on `work_tasks` and the pruning tables couldn't be read from this project. Before writing the migration, check that `assigned_external_resource_id` falls under the existing update rule.
