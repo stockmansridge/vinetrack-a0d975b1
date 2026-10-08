@@ -94,14 +94,19 @@ export const completePayload = (completedDate: string, userId: string | null, no
   end_date: completedDate,
   finalized_at: nowIso,
   finalized_by: userId,
+  // Shared completion identity: the authenticated user who explicitly completed it.
+  completed_by: userId,
+  completed_at: nowIso,
 });
 
-/** Payload for Reopen. */
+/** Payload for Reopen. Clears completion identity; assigned_to is never touched. */
 export const reopenPayload = () => ({
   is_finalized: false,
   end_date: null,
   finalized_at: null,
   finalized_by: null,
+  completed_by: null,
+  completed_at: null,
 });
 
 /** Payload for correcting the Completed Date; audit fields are untouched. */
@@ -109,3 +114,43 @@ export const completedDatePayload = (completedDate: string) => ({
   is_finalized: true,
   end_date: completedDate,
 });
+
+
+export type CompletedBySource = "completed_by" | "trip_operator" | "finalized_by" | "unknown";
+
+/**
+ * Who completed a task, in trust order:
+ *   completed_by → the single, same-vineyard linked trip operator (historical,
+ *   only when unambiguous) → finalized_by (the user who pressed Complete) → unknown.
+ * Never uses assigned_to, updated_by, person_name or spray created_by.
+ */
+export function resolveCompletedBy(
+  t: Pick<WorkTask, "is_finalized" | "completed_by" | "finalized_by" | "vineyard_id">,
+  linkedTrips: ReadonlyArray<{ vineyard_id?: string | null; operator_user_id?: string | null }> = [],
+): { userId: string | null; source: CompletedBySource } {
+  if (!isWorkTaskCompleted(t)) return { userId: null, source: "unknown" };
+  if (t.completed_by) return { userId: t.completed_by, source: "completed_by" };
+  if (linkedTrips.length > 0) {
+    const sameVineyard = linkedTrips.every((tr) => !t.vineyard_id || tr.vineyard_id === t.vineyard_id);
+    const ids = new Set(linkedTrips.map((tr) => tr.operator_user_id ?? ""));
+    if (sameVineyard && ids.size === 1 && !ids.has("")) {
+      return { userId: [...ids][0], source: "trip_operator" };
+    }
+  }
+  if (t.finalized_by) return { userId: t.finalized_by, source: "finalized_by" };
+  return { userId: null, source: "unknown" };
+}
+
+/** Table cell text for the Assigned to column. */
+export function assignmentCellLabel(
+  t: Pick<WorkTask, "is_finalized" | "completed_by" | "finalized_by" | "vineyard_id" | "assigned_to">,
+  linkedTrips: ReadonlyArray<{ vineyard_id?: string | null; operator_user_id?: string | null }>,
+  nameOf: (userId: string) => string | null,
+): string {
+  if (isWorkTaskCompleted(t)) {
+    const { userId } = resolveCompletedBy(t, linkedTrips);
+    const name = userId ? nameOf(userId) : null;
+    return `Completed by ${name || "unknown"}`;
+  }
+  return t.assigned_to ? nameOf(t.assigned_to) || "Unknown member" : "Unassigned";
+}
