@@ -45,6 +45,8 @@ export interface WorkTask {
   finalized_by?: string | null;
   /** Shared VineTrack schema — optional assignee (profiles.id). Never changed by completion. */
   assigned_to?: string | null;
+  /** Shared schema — assigned crew/contractor (exclusive with assigned_to). */
+  assigned_external_resource_id?: string | null;
   /** Shared VineTrack schema — user who actually completed the task (profiles.id). */
   completed_by?: string | null;
   /** Shared VineTrack schema — real instant the task was completed. */
@@ -238,6 +240,8 @@ export interface UpsertWorkTaskInput {
   is_finalized?: boolean | null;
   /** undefined = leave stored assignee untouched; null = unassign. */
   assigned_to?: string | null;
+  /** undefined = untouched; written together with assigned_to (exactly one set). */
+  assigned_external_resource_id?: string | null;
   user_id?: string | null;
   current_sync_version?: number | null;
   /** SQL 188 — omit to leave the task's existing costing untouched. */
@@ -265,6 +269,7 @@ export async function createWorkTask(input: UpsertWorkTaskInput): Promise<WorkTa
     duration_hours: input.duration_hours ?? 0,
     is_finalized: input.is_finalized ?? false,
     assigned_to: input.assigned_to ?? null,
+    assigned_external_resource_id: input.assigned_external_resource_id ?? null,
     is_archived: false,
     deleted_at: null,
     client_updated_at: nowIso(),
@@ -304,6 +309,7 @@ export async function updateWorkTask(input: UpsertWorkTaskInput): Promise<WorkTa
     updated_by: input.user_id ?? null,
     // Assignee only written when the caller supplied it; completion fields never.
     ...(input.assigned_to !== undefined ? { assigned_to: input.assigned_to } : {}),
+    ...(input.assigned_external_resource_id !== undefined ? { assigned_external_resource_id: input.assigned_external_resource_id } : {}),
     ...pieceRatePayload(input),
   };
   const { data, error } = await supabase

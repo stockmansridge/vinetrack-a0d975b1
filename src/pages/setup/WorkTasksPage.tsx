@@ -150,6 +150,9 @@ import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 import { WorkTaskCompletionSection } from "@/components/work-tasks/WorkTaskCompletionSection";
 import { assignmentCellLabel, calendarDate, completionLabel, displayCompletedDate, isWorkTaskCompleted, resolveCompletedBy } from "@/lib/workTaskCompletion";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
+import ResourcePicker from "@/components/people/ResourcePicker";
+import { useExternalResources } from "@/components/people/ExternalResourcesCard";
+import { workTaskAssignmentFields, workTaskAssignmentValue, type ExternalResource, type ResourceValue } from "@/lib/externalResources";
 import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
 
 /** Brighter, accessible green for the Completed status only. */
@@ -368,6 +371,9 @@ export default function WorkTasksPage() {
     return team.members.filter((m) => ids.has(m.userId));
   }, [memberRows, team.members]);
   const memberName = (id: string) => team.lookup.get(id)?.name ?? null;
+  const extQ = useExternalResources(selectedVineyardId);
+  const externals: ExternalResource[] = extQ.data ?? [];
+  const externalName = (id: string) => externals.find((r) => r.id === id)?.name ?? null;
 
   // SQL 103 — manually-entered machine usage attached to a work task.
   const { data: machineLines = [] } = useQuery({
@@ -696,7 +702,7 @@ export default function WorkTasksPage() {
       paddock: (r: WorkTask) => taskPaddockNames(r.id),
       task_type: (r: WorkTask) => r.task_type ?? "",
       status: (r: WorkTask) => completionLabel(r),
-      assigned: (r: WorkTask) => assignmentCellLabel(r, tripsByTask.get(r.id) ?? [], memberName),
+      assigned: (r: WorkTask) => assignmentCellLabel(r, tripsByTask.get(r.id) ?? [], memberName, externalName),
       area_ha: (r: WorkTask) => {
         const v = effectiveTaskAreaHa(r);
         return v == null ? null : v;
@@ -951,7 +957,7 @@ export default function WorkTasksPage() {
                 status: <TableCell>{isWorkTaskCompleted(t)
                   ? <Badge className={COMPLETED_BADGE_CLASS}>{completionLabel(t)}</Badge>
                   : <Badge variant="outline">{completionLabel(t)}</Badge>}</TableCell>,
-                assigned: <TableCell className="text-sm">{assignmentCellLabel(t, tripsByTask.get(t.id) ?? [], memberName)}</TableCell>,
+                assigned: <TableCell className="text-sm">{assignmentCellLabel(t, tripsByTask.get(t.id) ?? [], memberName, externalName)}</TableCell>,
                 area_ha: <TableCell className="text-right">{(() => { const v = effectiveTaskAreaHa(t); return v == null ? "—" : rf.area(v); })()}</TableCell>,
                 hours: <TableCell className="text-right">{num(tot?.labourHours ?? 0)}</TableCell>,
                 cost: (
@@ -1009,6 +1015,8 @@ export default function WorkTasksPage() {
         vineyardId={selectedVineyardId}
         vineyardTimeZone={vineyardTimeZone}
         assignableMembers={assignableMembers}
+        externals={externals}
+        externalsError={extQ.error ? (extQ.error as Error).message : null}
         membersLoading={membersLoading || (!!memberRows && !team.lookup.size && !team.error && memberRows.length > 0)}
         membersError={(membersError as Error | null)?.message ?? null}
         memberName={memberName}
@@ -1047,6 +1055,8 @@ export default function WorkTasksPage() {
         vineyardId={selectedVineyardId}
         vineyardTimeZone={vineyardTimeZone}
         assignableMembers={assignableMembers}
+        externals={externals}
+        externalsError={extQ.error ? (extQ.error as Error).message : null}
         membersLoading={membersLoading || (!!memberRows && !team.lookup.size && !team.error && memberRows.length > 0)}
         membersError={(membersError as Error | null)?.message ?? null}
         memberName={memberName}
@@ -1063,64 +1073,9 @@ export default function WorkTasksPage() {
   );
 }
 
-function AssigneePicker({ value, onChange, members, loading, error, memberName }: {
-  value: string | null;
-  onChange: (v: string | null) => void;
-  members: AssignableMember[];
-  loading: boolean;
-  error: string | null;
-  memberName: (id: string) => string | null;
-}) {
-  const [open, setOpen] = useState(false);
-  const label = value ? memberName(value) ?? "Unknown member" : "Unassigned";
-  return (
-    <div className="space-y-1">
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button type="button" variant="outline" role="combobox" aria-expanded={open} aria-label="Assigned to" className="w-full justify-between font-normal">
-            <span className="truncate">{label}</span>
-            <span className="text-muted-foreground text-xs">▾</span>
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
-          <Command>
-            <CommandInput placeholder="Search team members…" />
-            <CommandList>
-              {loading ? (
-                <div className="py-4 text-center text-sm text-muted-foreground">Loading team…</div>
-              ) : error ? (
-                <div className="py-4 px-3 text-center text-sm text-destructive">Couldn't load team: {error}</div>
-              ) : (
-                <>
-                  <CommandEmpty>No matching team members.</CommandEmpty>
-                  <CommandGroup>
-                    <CommandItem value="__unassigned" onSelect={() => { onChange(null); setOpen(false); }}>
-                      Unassigned
-                    </CommandItem>
-                    {members.map((m) => (
-                      <CommandItem key={m.userId} value={`${m.name} ${m.email ?? ""} ${m.userId}`}
-                        onSelect={() => { onChange(m.userId); setOpen(false); }}>
-                        <div className="flex flex-col">
-                          <span>{m.name}{m.userId === value ? " ✓" : ""}</span>
-                          {m.email && m.email !== m.name && <span className="text-xs text-muted-foreground">{m.email}</span>}
-                        </div>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </>
-              )}
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-      {!loading && !error && members.length === 0 && (
-        <p className="text-xs text-muted-foreground">No team members found for this vineyard.</p>
-      )}
-    </div>
-  );
-}
 
-function AssignmentDetails({ task, linkedTrips, memberName, fmtDate, timeZone }: {
+function AssignmentDetails({ task, linkedTrips, memberName, externals = [], fmtDate, timeZone }: {
+  externals?: ExternalResource[];
   task: WorkTask;
   linkedTrips: Trip[];
   memberName: (id: string) => string | null;
@@ -1138,7 +1093,7 @@ function AssignmentDetails({ task, linkedTrips, memberName, fmtDate, timeZone }:
   const name = (id: string | null | undefined) => (id ? memberName(id) ?? "Unknown member" : null);
   return (
     <div className="rounded-md border bg-card p-3 text-sm space-y-1" aria-label="Assignment and completion">
-      <div className="flex justify-between gap-2"><span className="text-muted-foreground">Assigned to</span><span>{name(task.assigned_to) ?? "Unassigned"}</span></div>
+      <div className="flex justify-between gap-2"><span className="text-muted-foreground">Assigned to</span><span>{task.assigned_external_resource_id ? `${externals.find((r) => r.id === task.assigned_external_resource_id)?.name ?? "Unknown crew / contractor"} (crew / contractor)` : name(task.assigned_to) ?? "Unassigned"}</span></div>
       {completed && (
         <>
           <div className="flex justify-between gap-2">
@@ -1190,6 +1145,8 @@ interface DrawerProps {
   vineyardId: string | null;
   vineyardTimeZone?: string | null;
   assignableMembers: AssignableMember[];
+  externals: ExternalResource[];
+  externalsError: string | null;
   membersLoading: boolean;
   membersError: string | null;
   memberName: (userId: string) => string | null;
@@ -1197,7 +1154,7 @@ interface DrawerProps {
 }
 
 function WorkTaskDrawer({
-  task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, linkedTrips, allTrips, paddockNameById, machineLines, machineLookups, allocByTripId, canSeeCosts, canSoftDelete, userId, vineyardId, vineyardTimeZone, assignableMembers, membersLoading, membersError, memberName, onSaved,
+  task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, linkedTrips, allTrips, paddockNameById, machineLines, machineLookups, allocByTripId, canSeeCosts, canSoftDelete, userId, vineyardId, vineyardTimeZone, assignableMembers, externals, externalsError, membersLoading, membersError, memberName, onSaved,
 }: DrawerProps) {
   const isNew = !task;
   const [localLabourLines, setLocalLabourLines] = useState<WorkTaskLabourLine[]>([]);
@@ -1224,7 +1181,7 @@ function WorkTaskDrawer({
   const [description, setDescription] = useState<string>(task?.description ?? "");
   const [notes, setNotes] = useState<string>(task?.notes ?? "");
   const [isFinalized, setIsFinalized] = useState<boolean>(!!task?.is_finalized);
-  const [assignedTo, setAssignedTo] = useState<string | null>(task?.assigned_to ?? null);
+  const [assignment, setAssignment] = useState<ResourceValue>(workTaskAssignmentValue(task));
   const [savedTaskId, setSavedTaskId] = useState<string | null>(task?.id ?? null);
   const [justCreated, setJustCreated] = useState(false);
 
@@ -1278,7 +1235,8 @@ function WorkTaskDrawer({
         description,
         notes,
         // Keep an existing assignee even if they are no longer listed as a member.
-        assigned_to: assignedTo,
+        // Exactly one of assigned_to / assigned_external_resource_id; the other is cleared.
+        ...workTaskAssignmentFields(assignment),
         user_id: userId,
         current_sync_version: task?.sync_version ?? 0,
       };
@@ -1517,13 +1475,16 @@ function WorkTaskDrawer({
                 <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
               </Field>
               <Field label="Assigned to">
-                <AssigneePicker
-                  value={assignedTo}
-                  onChange={setAssignedTo}
+                <ResourcePicker
+                  value={assignment}
+                  onChange={setAssignment}
                   members={assignableMembers}
+                  externals={externals}
+                  vineyardId={vineyardId}
                   loading={membersLoading}
-                  error={membersError}
+                  error={membersError ?? externalsError}
                   memberName={memberName}
+                  allowUnassigned
                 />
               </Field>
             </Section>
@@ -1539,7 +1500,7 @@ function WorkTaskDrawer({
               </div>
             )}
             {!isNew && task && (
-              <AssignmentDetails task={task} linkedTrips={linkedTrips} memberName={memberName} fmtDate={fmtDate} timeZone={vineyardTimeZone} />
+              <AssignmentDetails task={task} linkedTrips={linkedTrips} memberName={memberName} externals={externals} fmtDate={fmtDate} timeZone={vineyardTimeZone} />
             )}
             {!isNew && task && (
               <WorkTaskCompletionSection task={task} userId={userId} onSaved={onSaved} fmtDate={fmtDate} timeZone={vineyardTimeZone} />
