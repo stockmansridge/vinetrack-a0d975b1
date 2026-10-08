@@ -8,6 +8,8 @@ import {
 } from "@/lib/externalResources";
 import { assignmentCellLabel } from "@/lib/workTaskCompletion";
 
+(globalThis as any).ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
+(Element.prototype as any).scrollIntoView ??= () => {};
 vi.mock("@/integrations/ios-supabase/client", () => ({ supabase: {} }));
 
 const V = "v1";
