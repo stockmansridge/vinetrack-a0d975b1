@@ -125,10 +125,16 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
     for (const b of blocks) m.set(b.id.toLowerCase(), b.name);
     return m;
   }, [blocks]);
-  // Expanded by default; users collapse what they don't need.
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Collapsed by default; reset synchronously (no flash) when vineyard/vintage changes.
+  const scopeKey = `${vineyardId ?? ""}|${vintage ?? ""}`;
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [expandedScope, setExpandedScope] = useState(scopeKey);
+  if (expandedScope !== scopeKey) {
+    setExpandedScope(scopeKey);
+    setExpanded(new Set());
+  }
   const toggle = (k: string) =>
-    setCollapsed((prev) => {
+    setExpanded((prev) => {
       const n = new Set(prev);
       if (n.has(k)) n.delete(k);
       else n.add(k);
@@ -140,7 +146,7 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
     () => rows.map((r) => r.varietyKey).filter((k) => (breakdown.get(k)?.length ?? 0) > 0),
     [rows, breakdown],
   );
-  const anyOpen = expandableKeys.some((k) => !collapsed.has(k));
+  const anyOpen = expandableKeys.some((k) => expanded.has(k));
 
   const varieties = useMemo(() => {
     const s = new Set<string>(canonicalVarieties ?? []);
@@ -234,13 +240,13 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
 
       <Card>
         {expandableKeys.length > 0 && (
-          <div className="flex justify-end border-b px-3 py-1.5">
+          <div className="flex justify-start border-b px-3 py-1.5">
             <Button
               type="button"
               variant="ghost"
               size="sm"
               className="h-7 text-xs"
-              onClick={() => setCollapsed(anyOpen ? new Set(expandableKeys) : new Set())}
+              onClick={() => setExpanded(anyOpen ? new Set() : new Set(expandableKeys))}
             >
               {anyOpen ? "Collapse all" : "Expand all"}
             </Button>
@@ -294,7 +300,7 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
                     ? -1
                     : a.label.localeCompare(b.label, undefined, { numeric: true }),
                 );
-              const isOpen = !collapsed.has(r.varietyKey);
+              const isOpen = expanded.has(r.varietyKey);
               const avail = (v: number | null) =>
                 v == null ? "—" : v < 0 ? `${t(Math.abs(v))} over` : t(v);
               return (
