@@ -724,6 +724,13 @@ export default function WorkTasksPage() {
     WT_COLS as unknown as string[],
     { vineyardId: selectedVineyardId },
   );
+  // "Assigned to" always sits directly after "Status", even with a saved column order.
+  const wtDisplayOrder = useMemo(() => {
+    const base = wtOrder.filter((c) => c !== "assigned");
+    const i = base.indexOf("status");
+    base.splice(i < 0 ? base.length : i + 1, 0, "assigned");
+    return base;
+  }, [wtOrder]);
 
   const exportCsv = () => {
     const headers = canSeeCosts
