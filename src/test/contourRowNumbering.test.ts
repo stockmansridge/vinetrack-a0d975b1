@@ -61,3 +61,14 @@ describe("planRenumber", () => {
     expect(s).toMatchObject({ drafted: 2, configured: 6, countDiffers: true, numbersOutOfDate: true });
   });
 });
+
+import { firstLastRowStarts } from "@/lib/contourRows/rowNumbering";
+describe("firstLastRowStarts", () => {
+  it("labels lowest and highest numbers at their start points, skipping empty parts", () => {
+    const a = row("a", 9, 0), b = row("b", 8, 1), c = row("c", 10, 2);
+    c.parts = [{ id: "e", points: [] }, { id: "f", points: [{ lat: 1, lng: 2 }, { lat: 3, lng: 4 }] }];
+    expect(firstLastRowStarts([a, b, c]).map((x) => [x.number, x.point])).toEqual([[8, b.parts[0].points[0]], [10, { lat: 1, lng: 2 }]]);
+    expect(firstLastRowStarts([a])).toHaveLength(1);
+    expect(firstLastRowStarts([])).toEqual([]);
+  });
+});

@@ -66,3 +66,13 @@ export function groupStatus(d: ContourDraft, g: RowGroup) {
     numbersOutOfDate: plan.ok && plan.changed > 0,
   };
 }
+
+/** Start points of the lowest- and highest-numbered rows (one label when they coincide). */
+export function firstLastRowStarts(rows: DraftRow[]): { rowId: string; number: number; point: { lat: number; lng: number } }[] {
+  const usable = rows.map((r) => ({ r, p: r.parts.find((x) => x.points.length > 0)?.points[0] }))
+    .filter((x): x is { r: DraftRow; p: { lat: number; lng: number } } => !!x.p && Number.isFinite(x.r.number));
+  if (!usable.length) return [];
+  usable.sort((a, b) => a.r.number - b.r.number);
+  const pick = usable.length === 1 ? [usable[0]] : [usable[0], usable[usable.length - 1]];
+  return pick.map(({ r, p }) => ({ rowId: r.id, number: r.number, point: p }));
+}

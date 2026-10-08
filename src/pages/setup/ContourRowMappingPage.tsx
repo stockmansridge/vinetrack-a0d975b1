@@ -40,7 +40,7 @@ import { loadDraft, saveDraft, discardDraft, DraftApiError, type DraftLoad, type
 import { workingCopyKey, getWorkingCopy, putWorkingCopy, clearWorkingCopy, reconcileSaved, clearWorkingCopiesExcept } from "@/lib/contourRows/workingCopy";
 import { shiftGroup, shiftDirection, shiftProjection, canUndoShift, makeShiftUndo, SHIFT_LIMITS, type ShiftSide, type ShiftUndo } from "@/lib/contourRows/sideShift";
 import NumberStepper from "@/components/paddocks/NumberStepper";
-import { deleteDraftRow, planRenumber, applyRenumber, groupStatus } from "@/lib/contourRows/rowNumbering";
+import { deleteDraftRow, planRenumber, applyRenumber, groupStatus, firstLastRowStarts } from "@/lib/contourRows/rowNumbering";
 import { parseLineFile, looksSwapped, duplicateNumbers, linesFarOutside, IMPORT_LIMITS, type LineImportResult } from "@/lib/contourRows/importLines";
 
 type Tool = "none" | "trace" | "area" | "exclusion";
@@ -433,6 +433,12 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
       if (active) mapMarkers.push({ id: `end-${g.id}`, point: g.referenceTrace[g.referenceTrace.length - 1], size: 16, labelOffsetX: 30,
         html: `<div style="color:#F97316;font-weight:700;font-size:14px;text-shadow:0 0 2px #000;white-space:nowrap">▶ end</div>` });
     }
+  }
+  // First/last row number at each group's row START (first point of first non-empty part). Non-interactive.
+  for (const g of draft.groups) {
+    const ends = firstLastRowStarts(g.rows);
+    ends.forEach((e) => mapMarkers.push({ id: `rowlabel-${g.id}-${e.rowId}`, point: e.point, size: 18,
+      html: `<div style="background:#FFD60A;color:#1f1f1f;font-size:11px;font-weight:700;padding:1px 6px;border-radius:9999px;box-shadow:0 1px 2px #0008;white-space:nowrap;pointer-events:none">Row ${e.number}</div>` }));
   }
   if (shiftDir?.source === "row" && shiftDir.start && shiftDir.end && group) {
     const cue = (t: string) => `<div style="color:#F97316;font-weight:700;font-size:12px;text-shadow:0 0 2px #000;white-space:nowrap">${t}</div>`;
