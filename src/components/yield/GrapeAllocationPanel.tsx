@@ -265,10 +265,7 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
               const children = (breakdown.get(r.varietyKey) ?? [])
                 .map((c) => ({
                   ...c,
-                  label:
-                    c.blockKey === UNASSIGNED_BLOCK_KEY
-                      ? "No block specified"
-                      : blockName.get(c.blockKey) ?? "Unknown block",
+                  ...blockChildLabel(c.blockKey, r.varietyKey, blockName),
                 }))
                 .sort((a, b) =>
                   a.blockKey === UNASSIGNED_BLOCK_KEY
