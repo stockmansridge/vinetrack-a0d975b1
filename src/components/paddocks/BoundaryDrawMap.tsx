@@ -338,7 +338,8 @@ function PrecisionBoundaryEditor({ centre, polygon, setPolygon, existingPolygons
       onDragEnd: (q) => { const next = polyRef.current.slice(); next[i] = q; setRef.current(next); },
       onClick: () => { if (polyRef.current.length >= 4) setRef.current(polyRef.current.filter((_, j) => j !== i)); },
     }));
-    if (polygon.length >= 3) polygon.forEach((a, i) => {
+    // As in the native editor: one midpoint on the initial two-point segment, closing segments from 3 points.
+    if (polygon.length >= 2) polygon.slice(0, polygon.length >= 3 ? polygon.length : 1).forEach((a, i) => {
       const b = polygon[(i + 1) % polygon.length];
       out.push({ id: `m-${i}`, point: { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 }, size: 14,
         html: `<div style="width:12px;height:12px;border-radius:9999px;background:#fff;border:2px solid ${POLY_STROKE}"></div>`,
