@@ -58,6 +58,7 @@ import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { Fragment } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
+  CommandInput,
   Command,
   CommandEmpty,
   CommandGroup,
@@ -150,7 +151,6 @@ import { WorkTaskCompletionSection } from "@/components/work-tasks/WorkTaskCompl
 import { assignmentCellLabel, calendarDate, completionLabel, displayCompletedDate, isWorkTaskCompleted, resolveCompletedBy } from "@/lib/workTaskCompletion";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
 /** Brighter, accessible green for the Completed status only. */
 const COMPLETED_BADGE_CLASS = "border-transparent bg-success text-success-foreground hover:bg-success/90 font-semibold";
