@@ -51,6 +51,10 @@ export interface WorkTask {
   completed_by?: string | null;
   /** Shared VineTrack schema — real instant the task was completed. */
   completed_at?: string | null;
+  /** Shared schema — 'date' (default) | 'el_stage'. */
+  schedule_basis?: string | null;
+  /** Shared schema — target E-L stage 1..43, required when schedule_basis='el_stage'. */
+  target_el_stage?: number | null;
   /** SQL 119: authoritative production/costing vintage for this task,
    *  resolved server-side from the vineyard's season settings. All linked
    *  cost lines (labour, machinery, trips) report under this value —
@@ -248,7 +252,12 @@ export interface UpsertWorkTaskInput {
   costing_method?: CostingMethod | null;
   piece_rate_per_vine?: number | null;
   piece_vine_count?: number | null;
+  /** undefined = leave untouched. */
+  schedule_basis?: "date" | "el_stage";
+  target_el_stage?: number | null;
 }
+
+const schedulePart = (i: UpsertWorkTaskInput) => (i.schedule_basis !== undefined ? { schedule_basis: i.schedule_basis, target_el_stage: i.schedule_basis === "el_stage" ? (i.target_el_stage ?? null) : null } : {});
 
 export async function createWorkTask(input: UpsertWorkTaskInput): Promise<WorkTask> {
   // Keep `date` populated as fallback for older iOS clients.
@@ -264,7 +273,9 @@ export async function createWorkTask(input: UpsertWorkTaskInput): Promise<WorkTa
     notes: input.notes ?? "",
     start_date: input.start_date ?? null,
     end_date: input.end_date ?? null,
-    date: fallbackDate,
+    // E-L tasks: omit so the DB default (creation instant) is the compatibility anchor.
+    ...(fallbackDate != null ? { date: fallbackDate } : {}),
+    ...schedulePart(input),
     area_ha: input.area_ha ?? null,
     duration_hours: input.duration_hours ?? 0,
     is_finalized: input.is_finalized ?? false,
@@ -298,7 +309,9 @@ export async function updateWorkTask(input: UpsertWorkTaskInput): Promise<WorkTa
     description: input.description ?? "",
     notes: input.notes ?? "",
     start_date: input.start_date ?? null,
-    date: fallbackDate,
+    // Never null the NOT NULL legacy anchor (E-L tasks keep the stored value).
+    ...(fallbackDate != null ? { date: fallbackDate } : {}),
+    ...schedulePart(input),
     area_ha: input.area_ha ?? null,
     duration_hours: input.duration_hours ?? 0,
     // Completion fields (is_finalized / end_date / finalized_at / finalized_by)

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { COMPLETED_BADGE_CLASS } from "@/lib/workTaskCompletion";
+import { elStageLabel } from "@/lib/workTaskSchedule";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -153,8 +154,8 @@ export function WorkTaskCompletionSection({ task, userId, onSaved, fmtDate, time
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">
-              <Label className="text-xs">Work Date</Label>
-              <div className="text-sm">{fmtDate(workDate)}</div>
+              <Label className="text-xs">{(task as any).schedule_basis === "el_stage" ? "Scheduled by" : "Work Date"}</Label>
+              <div className="text-sm">{(task as any).schedule_basis === "el_stage" ? (elStageLabel((task as any).target_el_stage) ?? "E-L stage") : fmtDate(workDate)}</div>
             </div>
             <div className="space-y-1">
               <Label className="text-xs" htmlFor="wt-completed-date">Completed Date</Label>
