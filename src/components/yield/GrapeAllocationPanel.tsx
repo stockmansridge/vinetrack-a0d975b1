@@ -135,6 +135,12 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
       return n;
     });
   const allocById = useMemo(() => new Map(allocations.map((a) => [a.id, a])), [allocations]);
+  // Varieties that currently have child block rows; drives Expand/Collapse all.
+  const expandableKeys = useMemo(
+    () => rows.map((r) => r.varietyKey).filter((k) => (breakdown.get(k)?.length ?? 0) > 0),
+    [rows, breakdown],
+  );
+  const anyOpen = expandableKeys.some((k) => !collapsed.has(k));
 
   const varieties = useMemo(() => {
     const s = new Set<string>(canonicalVarieties ?? []);
@@ -227,6 +233,19 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
       </div>
 
       <Card>
+        {expandableKeys.length > 0 && (
+          <div className="flex justify-end border-b px-3 py-1.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setCollapsed(anyOpen ? new Set(expandableKeys) : new Set())}
+            >
+              {anyOpen ? "Collapse all" : "Expand all"}
+            </Button>
+          </div>
+        )}
         <Table>
           <TableHeader>
             <TableRow>
