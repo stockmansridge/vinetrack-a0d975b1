@@ -1,5 +1,7 @@
 import { isGrowthStagePin } from "@/lib/pinsFilter";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Maximize, Minimize } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
@@ -9,6 +11,7 @@ import { pinDisplayStyle, pinDisplayCoords, applyPinStatusFilter, pinDisplayTitl
 import { usePinCategoryColours } from "@/lib/pinCategoryColoursQuery";
 import MapSourceBadge from "@/components/MapSourceBadge";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
 import PinDetailSheet from "@/components/PinDetailSheet";
 import { usePinPlacements } from "@/lib/pinPlacementQuery";
@@ -47,6 +50,29 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active", h
   const isMobile = useIsMobile();
   const showMapPinDiagnostics = useDiagnosticPanel("show_map_pin_diagnostics");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Full screen: move the same host node so the map instance is never remounted.
+  const fsAnchorRef = useRef<HTMLDivElement | null>(null);
+  const [fsHost] = useState(() => document.createElement("div"));
+  const [fullScreen, setFullScreen] = useState(false);
+  useLayoutEffect(() => {
+    fsHost.className = fullScreen ? "fixed inset-0 z-40 bg-background" : "h-full w-full";
+    (fullScreen ? document.body : fsAnchorRef.current)?.appendChild(fsHost);
+    const frame = requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+    return () => cancelAnimationFrame(frame);
+  });
+  useLayoutEffect(() => () => { fsHost.remove(); }, [fsHost]);
+  useEffect(() => {
+    if (!fullScreen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (document.querySelector('[role="dialog"][data-state="open"], [data-radix-popper-content-wrapper]')) return;
+      setFullScreen(false);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => { document.body.style.overflow = prev; window.removeEventListener("keydown", onKey, true); };
+  }, [fullScreen]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const annsRef = useRef<any[]>([]);
@@ -308,6 +334,7 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active", h
               No pins recorded for this vineyard yet.
             </div>
           )}
+        </div>, fsHost)}
         </div>
       </Card>
 
