@@ -1156,6 +1156,7 @@ function WorkTaskDrawer({
   task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, linkedTrips, allTrips, paddockNameById, machineLines, machineLookups, allocByTripId, canSeeCosts, canSoftDelete, userId, vineyardId, vineyardTimeZone, assignableMembers, externals, externalsError, membersLoading, membersError, memberName, onSaved,
 }: DrawerProps) {
   const isNew = !task;
+  const { currentRole: drawerRole } = useVineyard();
   const [localLabourLines, setLocalLabourLines] = useState<WorkTaskLabourLine[]>([]);
   const [localMachineLines, setLocalMachineLines] = useState<WorkTaskMachineLine[]>([]);
   const rf = useRegionFormatters();
@@ -1744,7 +1745,6 @@ function LabourLinesSection({
   userId: string | null;
   onChanged: (savedLine?: WorkTaskLabourLine) => void;
 }) {
-  const { currentRole: drawerRole } = useVineyard();
   const [adding, setAdding] = useState(false);
 
   if (!taskId) {
