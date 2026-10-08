@@ -47,4 +47,17 @@ describe("normal row precision preview", () => {
     await waitFor(() => expect(screen.getByTestId("fallback")).toHaveAttribute("data-max-zoom", "19"));
     expect(h.props).toBeNull();
   });
+
+  it("precision boundary editor offers a midpoint on the initial two-point segment", async () => {
+    const setPolygon = vi.fn();
+    const two = polygon.slice(0, 2);
+    render(provider(<BoundaryDrawMap polygon={two} setPolygon={setPolygon} precisionPreview />));
+    await screen.findByText("Precision rows");
+    const mids = h.props.markers.filter((m: any) => m.id.startsWith("m-"));
+    expect(mids).toHaveLength(1);
+    mids[0].onClick();
+    expect(setPolygon).toHaveBeenCalledWith([two[0], { lat: -34.5, lng: 138.7005 }, two[1]]);
+    h.props.markers.find((m: any) => m.id === "v-0").onClick();
+    expect(setPolygon).toHaveBeenCalledTimes(1);
+  });
 });
