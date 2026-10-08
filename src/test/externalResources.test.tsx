@@ -37,7 +37,7 @@ describe("grouped resource picker", () => {
     expect(headings).toEqual(["Internal resources", "Crew / External contractors"]);
     expect(screen.queryByText("Retired Crew")).toBeNull();
     expect(screen.queryByText("Other Vineyard Crew")).toBeNull();
-    expect(screen.getByText("Unassigned")).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Unassigned" })).toBeTruthy();
     fireEvent.click(screen.getByText("Zeta Crew"));
     expect(onChange).toHaveBeenCalledWith({ kind: "external", id: "e1" });
   });
