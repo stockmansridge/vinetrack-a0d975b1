@@ -143,14 +143,16 @@ export function resolveCompletedBy(
 
 /** Table cell text for the Assigned to column. */
 export function assignmentCellLabel(
-  t: Pick<WorkTask, "is_finalized" | "completed_by" | "finalized_by" | "vineyard_id" | "assigned_to">,
+  t: Pick<WorkTask, "is_finalized" | "completed_by" | "finalized_by" | "vineyard_id" | "assigned_to"> & { assigned_external_resource_id?: string | null },
   linkedTrips: ReadonlyArray<{ vineyard_id?: string | null; operator_user_id?: string | null }>,
   nameOf: (userId: string) => string | null,
+  externalNameOf: (id: string) => string | null = () => null,
 ): string {
   if (isWorkTaskCompleted(t)) {
     const { userId } = resolveCompletedBy(t, linkedTrips);
     const name = userId ? nameOf(userId) : null;
     return `Completed by ${name || "unknown"}`;
   }
+  if (t.assigned_external_resource_id) return externalNameOf(t.assigned_external_resource_id) || "Unknown crew / contractor";
   return t.assigned_to ? nameOf(t.assigned_to) || "Unknown member" : "Unassigned";
 }

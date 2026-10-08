@@ -6,8 +6,12 @@
 // The legacy one-entry-per-block path is never used from here.
 import { generateUuid, tryGenerateUuid } from "@/lib/uuid";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import ResourcePicker from "@/components/people/ResourcePicker";
+import { useExternalResources } from "@/components/people/ExternalResourcesCard";
+import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
+import { persistPruningResourceAfterSave, pruningResourceValue, pruningWorkerSnapshot, type ResourceValue } from "@/lib/externalResources";
 import { AlertTriangle, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 
 import {
@@ -143,7 +147,20 @@ export default function PruningActivityDialog({
   const isEdit = !!activityId;
   const detailQ = usePruningActivityDetail(open && isEdit ? activityId : null);
   const save = useSavePruningActivity(isEdit ? "edit" : "create");
-  const { resolve: resolveUser } = useTeamLookup(vineyardId);
+  const { resolve: resolveUser, members: teamMembers, lookup: teamLookup } = useTeamLookup(vineyardId);
+  const memberIdsQ = useQuery({ queryKey: ["vineyard_member_ids", vineyardId], enabled: !!vineyardId && open, queryFn: () => fetchVineyardMembersWithCategory(vineyardId) });
+  const resourceMembers = useMemo(() => {
+    const ids = new Set((memberIdsQ.data ?? []).map((m) => m.user_id));
+    return teamMembers.filter((m) => ids.has(m.userId));
+  }, [memberIdsQ.data, teamMembers]);
+  const extQ = useExternalResources(open ? vineyardId : null);
+  const externals = extQ.data ?? [];
+  const memberName = (id: string) => teamLookup.get(id)?.name ?? null;
+  // Typed resource: only sent to set_pruning_activity_resource when explicitly changed.
+  const [resource, setResource] = useState<ResourceValue>({ kind: "none" });
+  const [resourceTouched, setResourceTouched] = useState(false);
+  const [resourceWarning, setResourceWarning] = useState<{ activityId: string; error: string } | null>(null);
+  const [resourceRetrying, setResourceRetrying] = useState(false);
 
   const [draft, setDraft] = useState<PruningActivityDraft>(emptyDraft);
   const [startInput, setStartInput] = useState("");
@@ -180,11 +197,13 @@ export default function PruningActivityDialog({
     if (isEdit) {
       if (loaded) {
         setDraft(draftFromActivity(loaded));
+        setResource(pruningResourceValue(loaded)); setResourceTouched(false); setResourceWarning(null);
         setStartInput(toTimeInput(loaded.startTime));
         setFinishInput(toTimeInput(loaded.finishTime));
       }
     } else {
       setDraft(emptyDraft());
+      setResource({ kind: "none" }); setResourceTouched(false); setResourceWarning(null);
       setStartInput("");
       setFinishInput("");
       setSkipped(false);
@@ -331,6 +350,11 @@ export default function PruningActivityDialog({
         setStartInput(toTimeInput(result.activity.startTime));
         setFinishInput(toTimeInput(result.activity.finishTime));
       }
+      // Typed resource identity is a separate RPC after the pruning save.
+      const res = await persistPruningResourceAfterSave(savedId, resource, resourceTouched);
+      if (res.status === "ok") setResourceTouched(false);
+      if (res.status === "failed") setResourceWarning({ activityId: savedId, error: res.error ?? "Unknown error" });
+      else setResourceWarning(null);
       onSaved?.(result.activity);
       toast.success(
         isEdit ? "Pruning activity updated." : "Pruning activity recorded.",
@@ -338,7 +362,7 @@ export default function PruningActivityDialog({
           ? { description: `${result.conflicts.length} quarter(s) were rejected — see the dialog.` }
           : undefined,
       );
-      if (!result.conflicts.length) onOpenChange(false);
+      if (!result.conflicts.length && res.status !== "failed") onOpenChange(false);
 
     } catch (e: any) {
       setSaveError(e?.message ?? String(e));
@@ -451,9 +475,19 @@ export default function PruningActivityDialog({
               </div>
               {!skipped && (<>
               <div className="space-y-1">
-                <Label htmlFor="pa-worker">Worker / crew</Label>
-                <Input id="pa-worker" value={draft.worker} placeholder="Who did the work"
-                  onChange={(e) => setDraft((d) => ({ ...d, worker: e.target.value }))} />
+                <Label>Worker / crew</Label>
+                <ResourcePicker
+                  ariaLabel="Worker / crew" emptyLabel="Not set" allowUnassigned allowOther
+                  value={resource} vineyardId={vineyardId}
+                  members={resourceMembers} externals={externals} memberName={memberName}
+                  loading={memberIdsQ.isLoading || extQ.isLoading}
+                  error={memberIdsQ.error ? (memberIdsQ.error as Error).message : extQ.error ? (extQ.error as Error).message : null}
+                  onChange={(v) => {
+                    setResource(v); setResourceTouched(true);
+                    // Legacy worker_or_crew snapshot always carries the display name.
+                    setDraft((d) => ({ ...d, worker: pruningWorkerSnapshot(v, memberName, externals) }));
+                  }}
+                />
               </div>
               <div className="space-y-1">
                 <Label>Method</Label>
@@ -550,6 +584,18 @@ export default function PruningActivityDialog({
               </div>
             )}
 
+            {resourceWarning && (
+              <div role="alert" className="rounded-md border border-amber-500/50 bg-amber-500/10 p-2 text-sm flex items-center gap-2">
+                <span className="flex-1">The activity was saved, but the worker / crew link was not: {resourceWarning.error}</span>
+                <Button size="sm" variant="outline" disabled={resourceRetrying} onClick={async () => {
+                  setResourceRetrying(true);
+                  const r = await persistPruningResourceAfterSave(resourceWarning.activityId, resource, true);
+                  setResourceRetrying(false);
+                  if (r.status === "ok") { setResourceWarning(null); setResourceTouched(false); toast.success("Worker / crew link saved."); }
+                  else setResourceWarning({ activityId: resourceWarning.activityId, error: r.error ?? "Unknown error" });
+                }}>Retry link</Button>
+              </div>
+            )}
             {saveError && (
               <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
                 {saveError}
