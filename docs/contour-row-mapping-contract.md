@@ -136,3 +136,8 @@ unmount) and cleared on account change.
 ## Future activation (later phase)
 Applying a draft to real rows must preserve existing `paddocks.rows` ids via
 explicit `canonicalRowId`, coordinated with iOS/Android and SQL row-identity guards.
+
+## Draft-only row deletion and renumbering (Portal UI)
+
+- **Delete row** removes one logical draft row (all parts) by stable group id + row id. Other rows keep ids, numbers and geometry. Regenerating recreates rows from the trace and left/right counts, so a deleted row returns unless counts are lowered; the Portal confirms before replacing any drafted group.
+- **Update row numbers** changes only `number` on the rows present in a group: start at the group's Starting row number, ordered by `offsetIndex` (left → right; rows without one, i.e. imported, follow their stored order after offset rows), reversed when numbering descends. Gaps close up. All candidates are validated first (integer 1..100000, no collision with other groups); ids, parts, provenance, source and canonical links are preserved. Draft format v1 and the save API are unchanged.

@@ -39,6 +39,7 @@ import { loadDraft, saveDraft, discardDraft, DraftApiError, type DraftLoad, type
 import { workingCopyKey, getWorkingCopy, putWorkingCopy, clearWorkingCopy, reconcileSaved, clearWorkingCopiesExcept } from "@/lib/contourRows/workingCopy";
 import { shiftGroup, shiftDirection, shiftProjection, canUndoShift, makeShiftUndo, SHIFT_LIMITS, type ShiftSide, type ShiftUndo } from "@/lib/contourRows/sideShift";
 import NumberStepper from "@/components/paddocks/NumberStepper";
+import { deleteDraftRow, planRenumber, applyRenumber, groupStatus } from "@/lib/contourRows/rowNumbering";
 import { parseLineFile, looksSwapped, duplicateNumbers, linesFarOutside, IMPORT_LIMITS, type LineImportResult } from "@/lib/contourRows/importLines";
 
 type Tool = "none" | "trace" | "area" | "exclusion";
@@ -229,7 +230,7 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
   const addGroup = guard(() => {
     const g = newGroup(`Row group ${draft.groups.length + 1}`, nextFreeRowNumber(draft));
     setDraft((d) => ({ ...d, groups: [...d.groups, g] }));
-    setGroupId(g.id); setTool("trace"); setIssues([]); setRowSel(null);
+    setGroupId(g.id); setTool("none"); setIssues([]); setRowSel(null);
   });
 
   const shiftProj = useMemo(() => shiftProjection(boundary, group?.referenceTrace[0] ?? { lat: -34.5, lng: 138.7 }), [boundary, group]);
@@ -263,10 +264,39 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
     setRowSel(null);
   };
   const generate = guard(() => {
-    if (group && hasManualEdits(group)) {
-      setConfirm({ title: "Replace manual edits?", body: "Regenerating replaces rows you've edited by hand in this group. Other groups aren't affected.", action: runGenerate });
+    if (group && group.rows.length) {
+      setConfirm({ title: `Replace the ${group.rows.length} drafted rows in ${group.name}?`,
+        body: `Regenerating recreates ${totalRowsFor(group)} rows from the trace and the left/right counts${hasManualEdits(group) ? ", replacing rows you've edited by hand" : ""}. Rows you deleted will come back unless you lower the counts. Other groups aren't affected.`,
+        action: () => { if (!busyRef.current) runGenerate(); } });
     } else runGenerate();
   });
+
+  // Delete one logical draft row (all parts), targeted by stable group + row ids.
+  const askDeleteRow = guard((gid: string, rowId: string) => {
+    const g = draft.groups.find((x) => x.id === gid); const r = g?.rows.find((x) => x.id === rowId);
+    if (!g || !r) return;
+    setConfirm({ title: `Delete row ${r.number} from ${g.name}?`,
+      body: `Only this draft row (${r.parts.length} part${r.parts.length === 1 ? "" : "s"}) is removed. Other rows keep their numbers and shapes. Regenerating this group would bring it back unless you lower the left/right counts. Not saved until you press Save Draft.`,
+      action: () => {
+        if (busyRef.current) return;
+        setDraft((d) => deleteDraftRow(d, gid, rowId));
+        setRowSel((cur) => (cur?.rowId === rowId ? null : cur)); setIssues([]);
+        toast({ title: `Row ${r.number} removed from the draft`, description: "Press Save Draft to keep this." });
+      } });
+  });
+
+  // Numbering only: never regenerates or moves rows.
+  const renumber = guard(() => {
+    if (!group) return;
+    const plan = planRenumber(draft, group.id);
+    if (plan.ok === false) { setIssues([{ level: "error", message: plan.error }]); return; }
+    if (!plan.changed) { toast({ title: "Row numbers already up to date" }); return; }
+    setDraft((d) => applyRenumber(d, group.id, plan)); setIssues([]);
+    toast({ title: `Updated ${plan.changed} row number${plan.changed === 1 ? "" : "s"}`, description: "Shapes and edits unchanged. Press Save Draft to keep this." });
+  });
+  const status = group ? groupStatus(draft, group) : null;
+  const step = !group ? 1 : group.mode !== "imported" && (group.referenceTrace.length < 2 || tool === "trace") ? 2
+    : !group.rows.length || status?.countDiffers ? 3 : dirty ? 4 : 0;
 
   const doSave = async () => {
     if (busyRef.current || setupRequired) return;
@@ -431,8 +461,31 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
   return (
     <div className="space-y-4">
       <BackTo id={paddock.id} />
-      <RowMapWorkspace title="Contour mapping" onFit={() => setFitNonce((n) => n + 1)} settings={<>
-      <div className="flex flex-col items-start gap-2">
+      <RowMapWorkspace title="Contour mapping" revealKey={rowSel?.rowId ?? null} onFit={() => setFitNonce((n) => n + 1)} settings={<>
+      <fieldset disabled={locked} className="min-w-0">
+{selRow && rowSel && (
+            <Card className="border-yellow-500"><CardHeader className="pb-2"><CardTitle className="text-base">Row {selRow.number} <span className="text-xs font-normal text-muted-foreground">({selRow.provenance}, {selRow.parts.length} part{selRow.parts.length === 1 ? "" : "s"})</span></CardTitle></CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <p className="text-xs text-muted-foreground">Drag points on the map. Click a point to select it.</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" disabled={rowSel.idx == null} onClick={() => { updateRow(selRow.id, (r) => deleteVertex(r, rowSel.part, rowSel.idx!)); setRowSel({ ...rowSel, idx: null }); }}>Delete point</Button>
+                  <Button size="sm" variant="outline" disabled={rowSel.idx == null} onClick={() => updateRow(selRow.id, (r) => insertVertexAfter(r, rowSel.part, rowSel.idx!))}>Add point after</Button>
+                  <Button size="sm" variant="outline" disabled={rowSel.idx == null} onClick={() => { try { updateRow(selRow.id, (r) => splitAfterVertex(r, rowSel.part, rowSel.idx!)); setRowSel({ ...rowSel, idx: null }); } catch (e) { toast({ title: "Can't split here", description: (e as Error).message }); } }}>Split after point</Button>
+                </div>
+                <div className="flex items-end gap-2">
+                  <NumberStepper className="w-36" label="Trim (m)" value={trimM} onChange={setTrimM} min={0.1} max={1000} step={0.1} disabled={locked} />
+                  <Button size="sm" variant="outline" onClick={() => updateRow(selRow.id, (r) => trimRow(r, "start", trimM))}>Trim start</Button>
+                  <Button size="sm" variant="outline" onClick={() => updateRow(selRow.id, (r) => trimRow(r, "end", trimM))}>Trim end</Button>
+                </div>
+                <div className="flex flex-wrap gap-2 border-t pt-2">
+                  <Button size="sm" variant="outline" className="gap-1 text-destructive" onClick={() => { const g = draft.groups.find((g) => g.rows.some((r) => r.id === selRow.id)); if (g) askDeleteRow(g.id, selRow.id); }}><Trash2 className="h-3.5 w-3.5" /> Delete row</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setRowSel(null)}>Done</Button>
+                </div>
+              </CardContent></Card>
+          )}
+
+</fieldset>
+<div className="flex flex-col items-start gap-2">
         <h1 className="text-lg font-semibold tracking-tight text-orange-600 dark:text-orange-400">Contour Row Mapping (Beta)</h1>
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span>{paddock.name}</span>
@@ -441,9 +494,17 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
             : dirty ? <Badge variant="secondary">Unsaved changes</Badge>
             : base.draftId ? <Badge variant="secondary">Saved · revision {base.revision}</Badge> : <Badge variant="secondary">Not yet saved</Badge>}
         </div>
-        <p className="text-xs text-muted-foreground">This draft never changes the block's real rows, row count, boundary or vine counts.</p>
+        <div className="rounded border bg-muted/40 p-2 text-[11px] text-muted-foreground space-y-1">
+          <p><b>Rows tab</b> keeps the block's active rows, used for totals and the mobile apps.</p>
+          <p><b>This page</b> is a separate review draft. Save Draft keeps it but doesn't replace the active rows, row count, boundary or vine counts.</p>
+        </div>
+        <ol className="w-full space-y-0.5 text-xs" aria-label="Steps">
+          {["Add or select a row group", "Start trace, click along one vine row, then Finish trace", "Set spacing, left/right counts and first number, then Generate rows", "Review the rows, then Save Draft"].map((t, i) => (
+            <li key={i} className={`rounded px-2 py-0.5 ${step === i + 1 ? "bg-orange-500/15 font-semibold text-orange-700 dark:text-orange-300" : "text-muted-foreground"}`} aria-current={step === i + 1 ? "step" : undefined}>{i + 1}. {t}{step === i + 1 ? " ← next" : ""}</li>
+          ))}
+        </ol>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={doSave} disabled={!canSave} className="gap-1"><Save className="h-4 w-4" /> {busy === "saving" ? "Saving…" : "Save Draft"}</Button>
+          <Button size="sm" onClick={doSave} disabled={!canSave} className={`gap-1 ${step === 4 ? "ring-2 ring-orange-500" : ""}`}><Save className="h-4 w-4" /> {busy === "saving" ? "Saving…" : "Save Draft"}</Button>
           <Button size="sm" variant="outline" disabled={!dirty || locked} onClick={guard(() => setConfirm({ title: "Cancel unsaved edits?", body: "Your changes since the last save will be lost.", action: () => { if (busyRef.current) return; setDraftRaw(JSON.parse(savedJson.current)); setRowSel(null); setIssues([]); setToolRaw("none"); } }))}>Cancel edits</Button>
           <Button size="sm" variant="outline" className="gap-1" onClick={exportJson}><Download className="h-4 w-4" /> Export backup</Button>
           <Button size="sm" variant="outline" className="gap-1" disabled={locked} onClick={() => jsonInput.current?.click()}><Upload className="h-4 w-4" /> Restore backup</Button>
@@ -487,7 +548,7 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
                   <div className="text-xs text-muted-foreground">{g.mode === "imported" ? "Imported" : g.mode === "contour" ? "Contour" : "Straight"} · {g.rows.length} rows drafted</div>
                 </button>
               ))}
-              <Button size="sm" variant="outline" className="w-full gap-1" onClick={addGroup}><Plus className="h-4 w-4" /> Add row group</Button>
+              <Button size="sm" variant={step === 1 ? "default" : "outline"} className="w-full gap-1" onClick={addGroup}><Plus className="h-4 w-4" /> Add row group</Button>
             </CardContent></Card>
 
           {(geoIssues.length > 0 || shapeErrors.length > 0 || missingLinks > 0) && (
@@ -505,27 +566,9 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
             update={(f) => updateGroup(group.id, f)} selVertex={selVertex} setSelVertex={setSelVertex}
             onDeleteVertex={() => { if (selVertex == null) return; setEditPts((pts) => pts.filter((_, i) => i !== selVertex)); setSelVertex(null); }}
             onUndoVertex={() => setEditPts((pts) => pts.slice(0, -1))} editCount={editPts.length}
-            onGenerate={generate} issues={issues} locked={locked}
+            onGenerate={generate} issues={issues} locked={locked} status={status!} step={step} onRenumber={renumber}
             shift={{ amount: shiftM, setAmount: setShiftM, onShift: doShift, canUndo: canUndoShift(shiftUndo, group), onUndo: undoShift, dir: shiftDir }}
             onDelete={() => setConfirm({ title: `Delete ${group.name}?`, body: "Only this group's draft rows are removed. Other groups keep their numbers.", action: () => { setDraft((d) => ({ ...d, groups: d.groups.filter((x) => x.id !== group.id) })); setGroupId(null); setRowSel(null); } })} />}
-
-          {selRow && rowSel && (
-            <Card><CardHeader className="pb-2"><CardTitle className="text-base">Row {selRow.number} <span className="text-xs font-normal text-muted-foreground">({selRow.provenance}, {selRow.parts.length} part{selRow.parts.length === 1 ? "" : "s"})</span></CardTitle></CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <p className="text-xs text-muted-foreground">Drag points on the map. Click a point to select it.</p>
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" disabled={rowSel.idx == null} onClick={() => { updateRow(selRow.id, (r) => deleteVertex(r, rowSel.part, rowSel.idx!)); setRowSel({ ...rowSel, idx: null }); }}>Delete point</Button>
-                  <Button size="sm" variant="outline" disabled={rowSel.idx == null} onClick={() => updateRow(selRow.id, (r) => insertVertexAfter(r, rowSel.part, rowSel.idx!))}>Add point after</Button>
-                  <Button size="sm" variant="outline" disabled={rowSel.idx == null} onClick={() => { try { updateRow(selRow.id, (r) => splitAfterVertex(r, rowSel.part, rowSel.idx!)); setRowSel({ ...rowSel, idx: null }); } catch (e) { toast({ title: "Can't split here", description: (e as Error).message }); } }}>Split after point</Button>
-                </div>
-                <div className="flex items-end gap-2">
-                  <NumberStepper className="w-36" label="Trim (m)" value={trimM} onChange={setTrimM} min={0.1} max={1000} step={0.1} disabled={locked} />
-                  <Button size="sm" variant="outline" onClick={() => updateRow(selRow.id, (r) => trimRow(r, "start", trimM))}>Trim start</Button>
-                  <Button size="sm" variant="outline" onClick={() => updateRow(selRow.id, (r) => trimRow(r, "end", trimM))}>Trim end</Button>
-                </div>
-                <Button size="sm" variant="ghost" onClick={() => setRowSel(null)}>Done</Button>
-              </CardContent></Card>
-          )}
 
           <Card><CardHeader className="pb-2"><CardTitle className="text-base">Draft measurements</CardTitle></CardHeader>
             <CardContent className="space-y-2 text-sm">
@@ -593,11 +636,12 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
   );
 }
 
-function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, selVertex, setSelVertex, onDeleteVertex, onUndoVertex, editCount, onGenerate, issues, onDelete, locked, shift }: {
+function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, selVertex, setSelVertex, onDeleteVertex, onUndoVertex, editCount, onGenerate, issues, onDelete, locked, shift, status, step, onRenumber }: {
   g: RowGroup; tool: Tool; setTool: (t: Tool) => void; exclusionId: string | null; setExclusionId: (s: string | null) => void;
   update: (f: (g: RowGroup) => RowGroup) => void; selVertex: number | null; setSelVertex: (n: number | null) => void;
   onDeleteVertex: () => void; onUndoVertex: () => void; editCount: number;
   onGenerate: () => void; issues: GenIssue[]; onDelete: () => void; locked: boolean;
+  status: ReturnType<typeof groupStatus>; step: number; onRenumber: () => void;
   shift: { amount: number; setAmount: (n: number) => void; onShift: (s: ShiftSide) => void; canUndo: boolean; onUndo: () => void; dir: ReturnType<typeof shiftDirection> };
 }) {
   const hasGeometry = g.referenceTrace.length > 0 || g.rows.length > 0;
@@ -622,7 +666,7 @@ function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, sel
             <div className="font-medium text-xs">Trace one existing row</div>
             <p className="text-[11px] text-muted-foreground">{g.mode === "straight" ? "Click the two ends of one row." : "Click points along one vine row on the satellite image, end to end. Drag points to adjust; click a white dot to add a point."}</p>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant={tool === "trace" ? "default" : "outline"} onClick={() => setTool(tool === "trace" ? "none" : "trace")}>{tool === "trace" ? "Finish trace" : g.referenceTrace.length ? "Edit trace" : "Start trace"}</Button>
+              <Button size={step === 2 ? "default" : "sm"} variant={tool === "trace" || step === 2 ? "default" : "outline"} className={step === 2 ? "bg-orange-600 text-white hover:bg-orange-700 font-semibold" : ""} onClick={() => setTool(tool === "trace" ? "none" : "trace")}>{tool === "trace" ? "Finish trace" : g.referenceTrace.length ? "Edit trace" : "Start trace"}</Button>
               <Button size="sm" variant="outline" className="gap-1" disabled={!g.referenceTrace.length} onClick={() => update((x) => ({ ...x, referenceTrace: x.referenceTrace.slice(0, -1) }))}><Undo2 className="h-3.5 w-3.5" /> Undo point</Button>
               <Button size="sm" variant="outline" disabled={selVertex == null || tool !== "trace"} onClick={onDeleteVertex}>Delete point</Button>
             </div>
@@ -632,16 +676,24 @@ function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, sel
           </div>
           <div className="grid grid-cols-2 gap-2">
             <NumberStepper label="Row spacing (m)" value={g.spacingM} min={LIMITS.minSpacingM} max={LIMITS.maxSpacingM} step={0.1} disabled={locked} onChange={(n) => update((x) => ({ ...x, spacingM: n }))} />
-            <NumberStepper label="Starting row number" integer value={g.startNumber} min={1} max={LIMITS.maxRowNumber} step={1} disabled={locked} onChange={(n) => update((x) => ({ ...x, startNumber: n }))} />
             <NumberStepper label="Rows on the left" integer value={g.leftCount} min={0} max={LIMITS.maxSideCount} step={1} disabled={locked} hint="Extra rows" onChange={(n) => update((x) => ({ ...x, leftCount: n }))} />
             <NumberStepper label="Rows on the right" integer value={g.rightCount} min={0} max={LIMITS.maxSideCount} step={1} disabled={locked} hint="Extra rows" onChange={(n) => update((x) => ({ ...x, rightCount: n }))} />
           </div>
           <p className="text-xs">Total: <b>{Number.isFinite(totalRowsFor(g)) ? totalRowsFor(g) : "—"}</b> rows (traced row + {g.leftCount} left + {g.rightCount} right). Left and right are as you face the ▶ end arrow.</p>
-          <div className="flex items-center gap-2"><Switch checked={g.ascending} onCheckedChange={(v) => update((x) => ({ ...x, ascending: v }))} />
-            <span className="text-xs">{g.ascending ? "Numbers go up from left to right" : "Numbers go up from right to left"}</span></div>
           <div className="flex items-center gap-2"><Switch checked={g.extendToArea} onCheckedChange={(v) => update((x) => ({ ...x, extendToArea: v }))} />
             <span className="text-xs">Extend rows to the edge of the area</span></div>
         </>}
+        <div className="rounded border p-2 space-y-2">
+          <div className="font-medium text-xs">Row numbers</div>
+          <NumberStepper label="Starting row number" integer value={g.startNumber} min={1} max={LIMITS.maxRowNumber} step={1} disabled={locked} onChange={(n) => update((x) => ({ ...x, startNumber: n }))} />
+          <div className="flex items-center gap-2"><Switch checked={g.ascending} onCheckedChange={(v) => update((x) => ({ ...x, ascending: v }))} />
+            <span className="text-xs">{g.ascending ? "Numbers go up from left to right" : "Numbers go up from right to left"}</span></div>
+          {g.rows.length > 0 && <>
+            <p className="text-[11px] text-muted-foreground">Update row numbers renumbers the {g.rows.length} rows already drafted, {imported ? "in the order they were imported" : "left to right as you face ▶ end"}, without moving or recreating them. Gaps from deleted rows close up.</p>
+            <Button size="sm" variant={status.numbersOutOfDate ? "default" : "outline"} disabled={locked} onClick={onRenumber}>Update row numbers</Button>
+            {status.numbersOutOfDate && <p className="text-[11px] text-amber-700 dark:text-amber-400">Drafted row numbers don't match these settings yet.</p>}
+          </>}
+        </div>
         {hasGeometry && <div className="rounded border p-2 space-y-2">
           <div className="font-medium text-xs">Side shift</div>
           <p className="text-[11px] text-muted-foreground">Slides this group's trace and all its rows sideways together, keeping their shape, spacing and edits. Left/right are as you face the {shift.dir?.source === "row" ? `direction of row ${shift.dir.rowNumber} (from the orange "start" marker to "▶ end" on the map)` : "▶ end arrow"}. The map isn't rotated; working areas, cut-outs and other groups don't move.</p>
@@ -671,7 +723,9 @@ function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, sel
               </span></div>
           ))}
         </div>
-        {!imported && <Button className="w-full" onClick={onGenerate}>{g.rows.length ? "Regenerate rows" : "Generate rows"}</Button>}
+        <p className="text-xs">Drafted now: <b>{status.drafted}</b> rows{!imported && <> · these settings would generate <b>{Number.isFinite(status.configured) ? status.configured : "—"}</b></>}</p>
+        {status.countDiffers && <p className="text-[11px] text-amber-700 dark:text-amber-400">Settings differ from the drafted rows. Regenerate to apply spacing/count changes (this replaces hand edits and deleted rows).</p>}
+        {!imported && <Button className={`w-full ${step === 3 ? "ring-2 ring-orange-500" : ""}`} onClick={onGenerate}>{g.rows.length ? "Regenerate rows" : "Generate rows"}</Button>}
         {issues.length > 0 && <div className="space-y-1">{issues.map((i, k) => (
           <p key={k} className={`text-xs ${i.level === "error" ? "text-destructive" : "text-amber-700 dark:text-amber-400"}`}>{i.level === "error" ? "Problem: " : "Check: "}{i.message}</p>
         ))}</div>}

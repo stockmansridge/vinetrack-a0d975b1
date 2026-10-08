@@ -8,15 +8,25 @@ interface Props {
   settings: ReactNode;
   onFit: () => void;
   title?: string;
+  /** When this changes to a new non-null value, open the settings panel and scroll its own contents to the top. */
+  revealKey?: string | null;
 }
 
 /** One map instance, including when the workspace escapes AppLayout's stacking context. */
-export default function RowMapWorkspace({ children, settings, onFit, title = "Row setup" }: Props) {
+export default function RowMapWorkspace({ children, settings, onFit, title = "Row setup", revealKey = null }: Props) {
   const anchor = useRef<HTMLDivElement>(null);
   const [host] = useState(() => document.createElement("div"));
   const [fullScreen, setFullScreen] = useState(false);
   const [showSettings, setShowSettings] = useState(true);
   const panelId = useId();
+  const panel = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    if (revealKey == null) return;
+    setShowSettings(true);
+    // Scroll only the panel (never the document); runs once per new key.
+    const frame = requestAnimationFrame(() => { if (panel.current) panel.current.scrollTop = 0; });
+    return () => cancelAnimationFrame(frame);
+  }, [revealKey]);
 
   // Move the same portal host instead of changing portal targets/remounting the map.
   // z-40 covers the app header; Radix dialogs/menus at z-50 still appear above it.
@@ -75,7 +85,7 @@ export default function RowMapWorkspace({ children, settings, onFit, title = "Ro
             {showSettings ? "Hide settings" : "Show settings"}
           </Button>
           {/* Keep fields mounted, including partially typed numbers and table state. */}
-          <aside id={panelId} aria-label={`${title} settings`} hidden={!showSettings}
+          <aside ref={panel} id={panelId} aria-label={`${title} settings`} hidden={!showSettings}
             className="absolute bottom-11 left-3 right-3 z-10 max-h-[45%] overflow-auto overscroll-contain rounded-lg border bg-background p-2 shadow-xl md:left-auto md:top-14 md:max-h-none md:w-[380px] md:max-w-[calc(100%-6rem)]"
             onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
             <div className="space-y-3">{settings}</div>
