@@ -4,6 +4,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, ty
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import RowMapWorkspace from "@/components/paddocks/RowMapWorkspace";
+import PanelTabs from "@/components/paddocks/PanelTabs";
 import ContourAppleMap, { type CShape, type CMarker } from "@/components/paddocks/ContourAppleMap";
 import { ArrowLeft, Plus, Trash2, Undo2, Save, Download, Upload, AlertTriangle, Info } from "lucide-react";
 
@@ -159,6 +160,7 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
   const [exclusionId, setExclusionId] = useState<string | null>(null);
   const [selVertex, setSelVertex] = useState<number | null>(null);
   const setTool = (t: Tool) => { setToolRaw(t); setSelVertex(null); };
+  const [panelTab, setPanelTab] = useState<string>(initial.groups.length ? "setup" : "groups");
   const [rowSel, setRowSel] = useState<{ rowId: string; part: number; idx: number | null } | null>(null);
   const [issues, setIssues] = useState<GenIssue[]>([]);
   const [fitNonce, setFitNonce] = useState(1);
@@ -230,7 +232,7 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
   const addGroup = guard(() => {
     const g = newGroup(`Row group ${draft.groups.length + 1}`, nextFreeRowNumber(draft));
     setDraft((d) => ({ ...d, groups: [...d.groups, g] }));
-    setGroupId(g.id); setTool("none"); setIssues([]); setRowSel(null);
+    setGroupId(g.id); setTool("none"); setIssues([]); setRowSel(null); setPanelTab("setup");
   });
 
   const shiftProj = useMemo(() => shiftProjection(boundary, group?.referenceTrace[0] ?? { lat: -34.5, lng: 138.7 }), [boundary, group]);
@@ -456,37 +458,18 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
     onDragEnd: (x) => updateRow(selRow.id, (r) => moveVertex(r, pi, qi, x)),
   })));
   const blocking = hasErrors(geoIssues) || shapeErrors.length > 0;
+  // Selecting a different row opens Row edit (not repeated for point clicks on the same row).
+  const selRowId = rowSel?.rowId ?? null;
+  useEffect(() => { if (selRowId) setPanelTab("row"); }, [selRowId]);
   const canSave = !setupRequired && dirty && !busy && !blocking;
 
   return (
     <div className="space-y-4">
       <BackTo id={paddock.id} />
       <RowMapWorkspace title="Contour mapping" revealKey={rowSel?.rowId ?? null} onFit={() => setFitNonce((n) => n + 1)} settings={<>
-      <fieldset disabled={locked} className="min-w-0">
-{selRow && rowSel && (
-            <Card className="border-yellow-500"><CardHeader className="pb-2"><CardTitle className="text-base">Row {selRow.number} <span className="text-xs font-normal text-muted-foreground">({selRow.provenance}, {selRow.parts.length} part{selRow.parts.length === 1 ? "" : "s"})</span></CardTitle></CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <p className="text-xs text-muted-foreground">Drag points on the map. Click a point to select it.</p>
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" disabled={rowSel.idx == null} onClick={() => { updateRow(selRow.id, (r) => deleteVertex(r, rowSel.part, rowSel.idx!)); setRowSel({ ...rowSel, idx: null }); }}>Delete point</Button>
-                  <Button size="sm" variant="outline" disabled={rowSel.idx == null} onClick={() => updateRow(selRow.id, (r) => insertVertexAfter(r, rowSel.part, rowSel.idx!))}>Add point after</Button>
-                  <Button size="sm" variant="outline" disabled={rowSel.idx == null} onClick={() => { try { updateRow(selRow.id, (r) => splitAfterVertex(r, rowSel.part, rowSel.idx!)); setRowSel({ ...rowSel, idx: null }); } catch (e) { toast({ title: "Can't split here", description: (e as Error).message }); } }}>Split after point</Button>
-                </div>
-                <div className="flex items-end gap-2">
-                  <NumberStepper className="w-36" label="Trim (m)" value={trimM} onChange={setTrimM} min={0.1} max={1000} step={0.1} disabled={locked} />
-                  <Button size="sm" variant="outline" onClick={() => updateRow(selRow.id, (r) => trimRow(r, "start", trimM))}>Trim start</Button>
-                  <Button size="sm" variant="outline" onClick={() => updateRow(selRow.id, (r) => trimRow(r, "end", trimM))}>Trim end</Button>
-                </div>
-                <div className="flex flex-wrap gap-2 border-t pt-2">
-                  <Button size="sm" variant="outline" className="gap-1 text-destructive" onClick={() => { const g = draft.groups.find((g) => g.rows.some((r) => r.id === selRow.id)); if (g) askDeleteRow(g.id, selRow.id); }}><Trash2 className="h-3.5 w-3.5" /> Delete row</Button>
-                  <Button size="sm" variant="ghost" onClick={() => setRowSel(null)}>Done</Button>
-                </div>
-              </CardContent></Card>
-          )}
-
-</fieldset>
-<div className="flex flex-col items-start gap-2">
-        <h1 className="text-lg font-semibold tracking-tight text-orange-600 dark:text-orange-400">Contour Row Mapping (Beta)</h1>
+      <PanelTabs label="Contour mapping" value={panelTab} onValueChange={setPanelTab}
+        header={<div className="space-y-2">
+                <h1 className="text-lg font-semibold tracking-tight text-orange-600 dark:text-orange-400">Contour Row Mapping (Beta)</h1>
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span>{paddock.name}</span>
           <Badge variant="outline">Draft mapping — for review</Badge>
@@ -494,27 +477,11 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
             : dirty ? <Badge variant="secondary">Unsaved changes</Badge>
             : base.draftId ? <Badge variant="secondary">Saved · revision {base.revision}</Badge> : <Badge variant="secondary">Not yet saved</Badge>}
         </div>
-        <div className="rounded border bg-muted/40 p-2 text-[11px] text-muted-foreground space-y-1">
-          <p><b>Rows tab</b> keeps the block's active rows, used for totals and the mobile apps.</p>
-          <p><b>This page</b> is a separate review draft. Save Draft keeps it but doesn't replace the active rows, row count, boundary or vine counts.</p>
-        </div>
-        <ol className="w-full space-y-0.5 text-xs" aria-label="Steps">
-          {["Add or select a row group", "Start trace, click along one vine row, then Finish trace", "Set spacing, left/right counts and first number, then Generate rows", "Review the rows, then Save Draft"].map((t, i) => (
-            <li key={i} className={`rounded px-2 py-0.5 ${step === i + 1 ? "bg-orange-500/15 font-semibold text-orange-700 dark:text-orange-300" : "text-muted-foreground"}`} aria-current={step === i + 1 ? "step" : undefined}>{i + 1}. {t}{step === i + 1 ? " ← next" : ""}</li>
-          ))}
-        </ol>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" onClick={doSave} disabled={!canSave} className={`gap-1 ${step === 4 ? "ring-2 ring-orange-500" : ""}`}><Save className="h-4 w-4" /> {busy === "saving" ? "Saving…" : "Save Draft"}</Button>
           <Button size="sm" variant="outline" disabled={!dirty || locked} onClick={guard(() => setConfirm({ title: "Cancel unsaved edits?", body: "Your changes since the last save will be lost.", action: () => { if (busyRef.current) return; setDraftRaw(JSON.parse(savedJson.current)); setRowSel(null); setIssues([]); setToolRaw("none"); } }))}>Cancel edits</Button>
-          <Button size="sm" variant="outline" className="gap-1" onClick={exportJson}><Download className="h-4 w-4" /> Export backup</Button>
-          <Button size="sm" variant="outline" className="gap-1" disabled={locked} onClick={() => jsonInput.current?.click()}><Upload className="h-4 w-4" /> Restore backup</Button>
-          <Button size="sm" variant="outline" className="gap-1" disabled={locked} onClick={() => lineInput.current?.click()}><Upload className="h-4 w-4" /> Import rows (GeoJSON/KML)</Button>
-          <Button size="sm" variant="outline" className="gap-1 text-destructive" disabled={setupRequired || locked || (!base.draftId && !dirty)} onClick={doDiscard}><Trash2 className="h-4 w-4" /> {base.draftId ? "Discard draft" : "Clear draft"}</Button>
-          <input ref={jsonInput} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onBackupFile(f); }} />
-          <input ref={lineInput} type="file" accept=".geojson,.json,.kml" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onLineFile(f); }} />
+          {blocking && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setPanelTab("review")}>Fix problems</Button>}
         </div>
-      </div>
-
       {showRestored && (
         <Alert><Info className="h-4 w-4" /><AlertTitle>Unsaved draft restored</AlertTitle>
           <AlertDescription className="space-y-2">
@@ -538,11 +505,23 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
       )}
       {boundary.length < 3 && <Alert variant="destructive"><AlertTitle>No block boundary</AlertTitle><AlertDescription>Draw the block boundary in Block Setup first.</AlertDescription></Alert>}
 
-        <fieldset disabled={locked} className="space-y-4 min-w-0">
+        </div>}
+        tabs={[
+          { id: "groups", label: "Groups", content: <>
+        <div className="rounded border bg-muted/40 p-2 text-[11px] text-muted-foreground space-y-1">
+          <p><b>Rows tab</b> keeps the block's active rows, used for totals and the mobile apps.</p>
+          <p><b>This page</b> is a separate review draft. Save Draft keeps it but doesn't replace the active rows, row count, boundary or vine counts.</p>
+        </div>
+        <ol className="w-full space-y-0.5 text-xs" aria-label="Steps">
+          {["Add or select a row group", "Start trace, click along one vine row, then Finish trace", "Set spacing, left/right counts and first number, then Generate rows", "Review the rows, then Save Draft"].map((t, i) => (
+            <li key={i} className={`rounded px-2 py-0.5 ${step === i + 1 ? "bg-orange-500/15 font-semibold text-orange-700 dark:text-orange-300" : "text-muted-foreground"}`} aria-current={step === i + 1 ? "step" : undefined}>{i + 1}. {t}{step === i + 1 ? " ← next" : ""}</li>
+          ))}
+        </ol>
+<fieldset disabled={locked} className="min-w-0">
           <Card><CardHeader className="pb-2"><CardTitle className="text-base">Row groups</CardTitle></CardHeader>
             <CardContent className="space-y-2">
               {draft.groups.map((g) => (
-                <button key={g.id} type="button" onClick={guard(() => { setGroupId(g.id); setRowSel(null); setIssues([]); setTool("none"); })}
+                <button key={g.id} type="button" onClick={guard(() => { setGroupId(g.id); setRowSel(null); setIssues([]); setTool("none"); setPanelTab("setup"); })}
                   className={`w-full rounded border px-3 py-2 text-left text-sm ${g.id === groupId ? "border-primary bg-primary/10" : "bg-card"}`}>
                   <div className="font-medium">{g.name}</div>
                   <div className="text-xs text-muted-foreground">{g.mode === "imported" ? "Imported" : g.mode === "contour" ? "Contour" : "Straight"} · {g.rows.length} rows drafted</div>
@@ -551,6 +530,45 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
               <Button size="sm" variant={step === 1 ? "default" : "outline"} className="w-full gap-1" onClick={addGroup}><Plus className="h-4 w-4" /> Add row group</Button>
             </CardContent></Card>
 
+</fieldset>
+          </> },
+          { id: "setup", label: "Setup", content: <fieldset disabled={locked} className="min-w-0">
+            {group ? null : <p className="text-xs text-muted-foreground">Add or select a row group first.</p>}
+          {group && <GroupPanel g={group} tool={tool} setTool={setTool} exclusionId={exclusionId} setExclusionId={setExclusionId}
+            update={(f) => updateGroup(group.id, f)} selVertex={selVertex} setSelVertex={setSelVertex}
+            onDeleteVertex={() => { if (selVertex == null) return; setEditPts((pts) => pts.filter((_, i) => i !== selVertex)); setSelVertex(null); }}
+            onUndoVertex={() => setEditPts((pts) => pts.slice(0, -1))} editCount={editPts.length}
+            onGenerate={generate} issues={issues} locked={locked} status={status!} step={step} onRenumber={renumber}
+            shift={{ amount: shiftM, setAmount: setShiftM, onShift: doShift, canUndo: canUndoShift(shiftUndo, group), onUndo: undoShift, dir: shiftDir }}
+            onDelete={() => setConfirm({ title: `Delete ${group.name}?`, body: "Only this group's draft rows are removed. Other groups keep their numbers.", action: () => { setDraft((d) => ({ ...d, groups: d.groups.filter((x) => x.id !== group.id) })); setGroupId(null); setRowSel(null); } })} />}
+
+</fieldset> },
+          { id: "row", label: "Row edit", content: <fieldset disabled={locked} className="min-w-0">
+            {!(selRow && rowSel) && <p className="text-xs text-muted-foreground">Click a drafted row on the map, or in the Review table, to edit it.</p>}
+{selRow && rowSel && (
+            <Card className="border-yellow-500"><CardHeader className="pb-2"><CardTitle className="text-base">Row {selRow.number} <span className="text-xs font-normal text-muted-foreground">({selRow.provenance}, {selRow.parts.length} part{selRow.parts.length === 1 ? "" : "s"})</span></CardTitle></CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <p className="text-xs text-muted-foreground">Drag points on the map. Click a point to select it.</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" disabled={rowSel.idx == null} onClick={() => { updateRow(selRow.id, (r) => deleteVertex(r, rowSel.part, rowSel.idx!)); setRowSel({ ...rowSel, idx: null }); }}>Delete point</Button>
+                  <Button size="sm" variant="outline" disabled={rowSel.idx == null} onClick={() => updateRow(selRow.id, (r) => insertVertexAfter(r, rowSel.part, rowSel.idx!))}>Add point after</Button>
+                  <Button size="sm" variant="outline" disabled={rowSel.idx == null} onClick={() => { try { updateRow(selRow.id, (r) => splitAfterVertex(r, rowSel.part, rowSel.idx!)); setRowSel({ ...rowSel, idx: null }); } catch (e) { toast({ title: "Can't split here", description: (e as Error).message }); } }}>Split after point</Button>
+                </div>
+                <div className="flex items-end gap-2">
+                  <NumberStepper className="w-36" label="Trim (m)" value={trimM} onChange={setTrimM} min={0.1} max={1000} step={0.1} disabled={locked} />
+                  <Button size="sm" variant="outline" onClick={() => updateRow(selRow.id, (r) => trimRow(r, "start", trimM))}>Trim start</Button>
+                  <Button size="sm" variant="outline" onClick={() => updateRow(selRow.id, (r) => trimRow(r, "end", trimM))}>Trim end</Button>
+                </div>
+                <div className="flex flex-wrap gap-2 border-t pt-2">
+                  <Button size="sm" variant="outline" className="gap-1 text-destructive" onClick={() => { const g = draft.groups.find((g) => g.rows.some((r) => r.id === selRow.id)); if (g) askDeleteRow(g.id, selRow.id); }}><Trash2 className="h-3.5 w-3.5" /> Delete row</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setRowSel(null)}>Done</Button>
+                </div>
+              </CardContent></Card>
+          )}
+
+</fieldset> },
+          { id: "review", label: "Review", badge: blocking ? <span className="ml-0.5 rounded-full bg-destructive px-1.5 text-[10px] text-destructive-foreground">!</span> : null, content: <>
+<fieldset disabled={locked} className="space-y-3 min-w-0">
           {(geoIssues.length > 0 || shapeErrors.length > 0 || missingLinks > 0) && (
             <Card className="border-destructive/50"><CardHeader className="pb-2"><CardTitle className="text-base">Draft check</CardTitle></CardHeader>
               <CardContent className="space-y-1">
@@ -561,14 +579,6 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
                 {blocking && <p className="text-xs text-muted-foreground">Saving is off until problems are fixed.</p>}
               </CardContent></Card>
           )}
-
-          {group && <GroupPanel g={group} tool={tool} setTool={setTool} exclusionId={exclusionId} setExclusionId={setExclusionId}
-            update={(f) => updateGroup(group.id, f)} selVertex={selVertex} setSelVertex={setSelVertex}
-            onDeleteVertex={() => { if (selVertex == null) return; setEditPts((pts) => pts.filter((_, i) => i !== selVertex)); setSelVertex(null); }}
-            onUndoVertex={() => setEditPts((pts) => pts.slice(0, -1))} editCount={editPts.length}
-            onGenerate={generate} issues={issues} locked={locked} status={status!} step={step} onRenumber={renumber}
-            shift={{ amount: shiftM, setAmount: setShiftM, onShift: doShift, canUndo: canUndoShift(shiftUndo, group), onUndo: undoShift, dir: shiftDir }}
-            onDelete={() => setConfirm({ title: `Delete ${group.name}?`, body: "Only this group's draft rows are removed. Other groups keep their numbers.", action: () => { setDraft((d) => ({ ...d, groups: d.groups.filter((x) => x.id !== group.id) })); setGroupId(null); setRowSel(null); } })} />}
 
           <Card><CardHeader className="pb-2"><CardTitle className="text-base">Draft measurements</CardTitle></CardHeader>
             <CardContent className="space-y-2 text-sm">
@@ -586,7 +596,18 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
                 </div>
               )}
             </CardContent></Card>
-        </fieldset>
+</fieldset>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" className="gap-1" onClick={exportJson}><Download className="h-4 w-4" /> Export backup</Button>
+          <Button size="sm" variant="outline" className="gap-1" disabled={locked} onClick={() => jsonInput.current?.click()}><Upload className="h-4 w-4" /> Restore backup</Button>
+          <Button size="sm" variant="outline" className="gap-1" disabled={locked} onClick={() => lineInput.current?.click()}><Upload className="h-4 w-4" /> Import rows (GeoJSON/KML)</Button>
+          <Button size="sm" variant="outline" className="gap-1 text-destructive" disabled={setupRequired || locked || (!base.draftId && !dirty)} onClick={doDiscard}><Trash2 className="h-4 w-4" /> {base.draftId ? "Discard draft" : "Clear draft"}</Button>
+          <input ref={jsonInput} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onBackupFile(f); }} />
+          <input ref={lineInput} type="file" accept=".geojson,.json,.kml" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onLineFile(f); }} />
+        </div>
+        </div>
+          </> },
+        ]} />
       </>}>
         <ContourAppleMap centre={centre} fitPoints={boundary} fitNonce={fitNonce} onMapClick={onMapClick}
           shapes={mapShapes} markers={mapMarkers} controlsPosition="left" />
