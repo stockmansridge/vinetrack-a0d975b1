@@ -109,3 +109,16 @@ describe("delete row and renumber reach the saved payload", () => {
     expect(screen.getByText("Saved · revision 2")).toBeTruthy();
   });
 });
+
+describe("setup sub-tabs", () => {
+  it("existing traced group opens on Rows; Add row group opens Trace with Start trace", () => {
+    renderEditor();
+    expect(screen.getByRole("tab", { name: "Rows" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("button", { name: "Update row numbers" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Groups" }));
+    fireEvent.click(screen.getByRole("button", { name: /Add row group/ }));
+    expect(screen.getByRole("tab", { name: "Setup" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: "Trace" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("button", { name: "Start trace" })).toBeTruthy();
+  });
+});
