@@ -845,7 +845,7 @@ function BoundaryStep({
       </div>
       <Card className="overflow-hidden">
         <div className="h-[520px]">
-          <BoundaryDrawMap polygon={polygon} setPolygon={setPolygon} />
+          <BoundaryDrawMap polygon={polygon} setPolygon={setPolygon} precisionPreview />
         </div>
       </Card>
       <Card>
