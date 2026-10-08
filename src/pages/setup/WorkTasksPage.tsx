@@ -235,6 +235,8 @@ const mkDateRangeLabel = (rf: RegionFormatters, timeZone?: string | null) => {
     return d ?? "—";
   };
 };
+const effectiveStart = (t: WorkTask, tz?: string | null) => workTaskDateBounds(t, tz).start;
+const effectiveEnd = (t: WorkTask, tz?: string | null) => workTaskDateBounds(t, tz).end;
 /** Date / Range cell: E-L target on top (prominent while pending, smaller once completed). */
 function ScheduleCellView({ t, timeZone, fd }: { t: WorkTask; timeZone?: string | null; fd: (v?: string | null) => string }) {
   const c = scheduleCell(t, timeZone);
@@ -247,8 +249,6 @@ function ScheduleCellView({ t, timeZone, fd }: { t: WorkTask; timeZone?: string 
     </div>
   );
 }
-const effectiveStart = (t: WorkTask, tz?: string | null) => workTaskDateBounds(t, tz).start;
-const effectiveEnd = (t: WorkTask, tz?: string | null) => workTaskDateBounds(t, tz).end;
 const taskVintage = (t: WorkTask, seasonMonth: number, seasonDay: number, fallback: number) => {
   const d = effectiveStart(t) ?? effectiveEnd(t);
   if (!d) return fallback;
