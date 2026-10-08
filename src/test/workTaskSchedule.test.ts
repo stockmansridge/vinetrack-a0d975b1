@@ -47,3 +47,19 @@ describe("E-L scheduled work tasks", () => {
     expect(workTaskDateBounds(t).start).toBe("2026-08-05");
   });
 });
+
+import { matchesElRange as _mer } from "@/lib/workTaskSchedule";
+describe("E-L range filter", () => {
+  const el = (n: number) => ({ schedule_basis: "el_stage", target_el_stage: n } as any);
+  it("no bounds passes everything", () => { expect(_mer({ schedule_basis: "date" } as any, null, null)).toBe(true); });
+  it("inclusive bounds", () => {
+    expect(_mer(el(19), 19, 27)).toBe(true);
+    expect(_mer(el(27), 19, 27)).toBe(true);
+    expect(_mer(el(18), 19, 27)).toBe(false);
+    expect(_mer(el(31), 19, 27)).toBe(false);
+  });
+  it("excludes date-scheduled tasks even with a compatibility date", () => {
+    expect(_mer({ schedule_basis: "date", target_el_stage: null, date: "2026-01-01" } as any, 1, 43)).toBe(false);
+  });
+  it("single bound works", () => { expect(_mer(el(35), 30, null)).toBe(true); expect(_mer(el(5), null, 4)).toBe(false); });
+});
