@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/context/AuthContext";
 import { VineyardProvider } from "@/context/VineyardContext";
+import { PortalActivityTracker } from "@/components/PortalActivityTracker";
 import { RequireAuth, RequireVineyard } from "@/components/guards";
 import { RoleRoute } from "@/components/PermissionGate";
 import AppLayout from "@/components/AppLayout";
@@ -145,6 +146,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <VineyardProvider>
+            <PortalActivityTracker />
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
