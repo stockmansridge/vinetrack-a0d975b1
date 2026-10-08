@@ -154,6 +154,7 @@ import ResourcePicker from "@/components/people/ResourcePicker";
 import { useExternalResources } from "@/components/people/ExternalResourcesCard";
 import { COMPLETED_BADGE_CLASS } from "@/lib/workTaskCompletion";
 import { EL_TARGET_OPTIONS, elStageLabel, isElScheduled, matchesElRange, scheduleBasisOf, scheduleCell, schedulePayload, validateSchedule, workTaskDateBounds, type ScheduleBasis } from "@/lib/workTaskSchedule";
+import { sortWorkTasksDefault } from "@/lib/workTaskDefaultOrder";
 import { canManageExternalResources, workTaskAssignmentFields, workTaskAssignmentValue, type ExternalResource, type ResourceValue } from "@/lib/externalResources";
 import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
 
@@ -735,9 +736,12 @@ export default function WorkTasksPage() {
     [paddockNameById, totalsByTask, taskPaddockIds, paddocksByTask, paddockById, tripsByTask, team.lookup],
   );
 
-  const { sorted: rows, getSortDirection, toggleSort } = useSortableTable<WorkTask, SortKey>(seasonFiltered, {
+  // Default order (no column selected): To do first, E-L (highest stage) before
+  // date tasks, nearest upcoming date first. Explicit column sorts override it.
+  const defaultOrdered = useMemo(() => sortWorkTasksDefault(seasonFiltered, vineyardTimeZone), [seasonFiltered, vineyardTimeZone]);
+  const { sorted: rows, getSortDirection, toggleSort } = useSortableTable<WorkTask, SortKey>(defaultOrdered, {
     accessors,
-    initial: { key: "date", direction: "desc" },
+    initial: { key: null, direction: "asc" },
   });
 
 
