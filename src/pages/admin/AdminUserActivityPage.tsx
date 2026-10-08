@@ -34,6 +34,8 @@ import {
   formatDate,
   formatRelative,
 } from "./_shared";
+import { PORTAL_APP_TYPE, appTypeLabel } from "@/lib/portalClientActivity";
+import { activityRpcArgs } from "@/lib/userActivityQuery";
 
 interface UserActivityRow {
   user_id: string;
@@ -121,9 +123,10 @@ function statusClass(s: string | null | undefined) {
   }
 }
 
-async function fetchUserActivity(): Promise<UserActivityRow[]> {
+async function fetchUserActivity(appType: string): Promise<UserActivityRow[]> {
   const { data, error } = await (iosSupabase as any).rpc(
     "admin_list_user_login_activity",
+    activityRpcArgs(appType),
   );
   if (error) throw error;
   return (data ?? []) as UserActivityRow[];
@@ -331,10 +334,10 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
   },
   {
     key: "app_type",
-    label: "App type",
+    label: "Latest client",
     className: "whitespace-nowrap",
     sortable: true,
-    render: (r) => r.last_app_type ?? "Not recorded",
+    render: (r) => appTypeLabel(r.last_app_type),
   },
   {
     key: "app_version",
@@ -374,9 +377,10 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
 ];
 
 export default function AdminUserActivityPage() {
+  const [appTypeFilter, setAppTypeFilter] = useState("all");
   const { data = [], isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ["admin", "user-activity"],
-    queryFn: fetchUserActivity,
+    queryKey: ["admin", "user-activity", appTypeFilter],
+    queryFn: () => fetchUserActivity(appTypeFilter),
     staleTime: 30_000,
   });
 
@@ -613,6 +617,17 @@ export default function AdminUserActivityPage() {
               </SelectContent>
             </Select>
           )}
+          <Select value={appTypeFilter} onValueChange={setAppTypeFilter}>
+            <SelectTrigger className="h-9 w-48" aria-label="Client filter">
+              <SelectValue placeholder="Client" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any client</SelectItem>
+              <SelectItem value="ios">iOS</SelectItem>
+              <SelectItem value="android">Android</SelectItem>
+              <SelectItem value={PORTAL_APP_TYPE}>Portal (web)</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="ml-auto flex items-center gap-2">
             <ColumnSettingsMenu onReset={reset} />
           </div>
