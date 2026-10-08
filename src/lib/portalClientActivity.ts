@@ -131,3 +131,14 @@ export function appTypeLabel(t: string | null | undefined): string {
   if (t === "android") return "Android";
   return t;
 }
+
+/** localStorage, or null when blocked (privacy mode / sandboxed frames throw on access). */
+export function safeLocalStorage(): StorageLike | null {
+  try {
+    if (typeof window === "undefined") return null;
+    const s = window.localStorage;
+    return s ?? null;
+  } catch {
+    return null;
+  }
+}

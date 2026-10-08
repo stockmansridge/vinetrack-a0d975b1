@@ -65,6 +65,8 @@ interface UserActivityRow {
   last_device_model: string | null;
   last_client_seen_at: string | null;
   status: string | null;
+  /** Merged from admin_user_activity_platforms; undefined when that call failed. */
+  platforms?: PlatformActivityRow[];
 }
 
 
@@ -86,6 +88,7 @@ type ActivitySortKey =
   | "last_login"
   | "last_seen"
   | "app_type"
+  | "platforms"
   | "app_version"
   | "device"
   | "os"
@@ -425,6 +428,23 @@ export default function AdminUserActivityPage() {
     queryFn: fetchUserActivity,
     staleTime: 30_000,
   });
+  const platformsByUser = useMemo(
+    () => (platformsQ.data ? groupPlatformsByUser(platformsQ.data) : null),
+    [platformsQ.data],
+  );
+  // Merge history by user_id; undefined platforms = history unavailable.
+  const data = useMemo<UserActivityRow[]>(
+    () =>
+      baseData.map((r) => ({
+        ...r,
+        platforms: platformsByUser ? platformsByUser.get(r.user_id) ?? [] : undefined,
+      })),
+    [baseData, platformsByUser],
+  );
+  const refetch = () => {
+    void refetchBase();
+    void platformsQ.refetch();
+  });
 
   const [search, setSearch] = useState("");
   const [vineyardFilter, setVineyardFilter] = useState("all");
@@ -541,6 +561,7 @@ export default function AdminUserActivityPage() {
       last_login: (r) => (r.last_sign_in_at ? new Date(r.last_sign_in_at).getTime() : 0),
       last_seen: (r) => (r.last_client_seen_at ? new Date(r.last_client_seen_at).getTime() : 0),
       app_type: (r) => r.last_app_type ?? "",
+      platforms: (r) => (r.platforms ?? []).map((p) => p.app_type).join(","),
       app_version: (r) => r.last_app_version ?? "",
       device: (r) => r.last_device_model ?? "",
       os: (r) => osDisplay(r).toLowerCase(),
