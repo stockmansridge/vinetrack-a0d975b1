@@ -120,19 +120,83 @@ export function pruningResourceValue(a: { externalResourceId?: string | null; wo
   return t && t !== "—" ? { kind: "other", text: t } : { kind: "none" };
 }
 
+/** Typed resource ids as currently stored on a pruning activity. */
+export interface PruningResourceIds { externalResourceId: string | null; workerUserId: string | null }
+
+export function resourceIdsOf(v: ResourceValue): PruningResourceIds {
+  return {
+    externalResourceId: v.kind === "external" ? v.id : null,
+    workerUserId: v.kind === "member" ? v.userId : null,
+  };
+}
+
+export function resourceValueFromIds(ids: PruningResourceIds, fallbackText?: string | null): ResourceValue {
+  return pruningResourceValue({ ...ids, worker: fallbackText ?? null });
+}
+
+const sameIds = (a: PruningResourceIds, b: PruningResourceIds) =>
+  (a.externalResourceId ?? null) === (b.externalResourceId ?? null) &&
+  (a.workerUserId ?? null) === (b.workerUserId ?? null);
+
+/** CAS precondition read from the canonical activity row. */
+export interface PruningResourcePrecondition extends PruningResourceIds { clientUpdatedAt: string }
+
 /**
- * After a successful pruning save: only when the user explicitly changed the
- * resource, call set_pruning_activity_resource. Untouched edits never clear an
- * older saved association. Failure is reported (activity itself is saved) so
- * the caller can show a warning and retry safely (the RPC is idempotent).
+ * Extract the precondition only when the canonical row explicitly carries all
+ * three fields. A missing key is NOT treated as null — that could silently
+ * overwrite another user's selection.
+ */
+export function preconditionFromCanonical(raw: unknown): PruningResourcePrecondition | null {
+  const env = raw && typeof raw === "object" ? (raw as Record<string, any>) : null;
+  const a = env && (env.activity ?? env.pruning_activity ?? env);
+  if (!a || typeof a !== "object") return null;
+  const has = (k: string) => Object.prototype.hasOwnProperty.call(a, k);
+  if (!has("client_updated_at") || !has("external_resource_id") || !has("worker_user_id")) return null;
+  if (typeof a.client_updated_at !== "string" || !a.client_updated_at) return null;
+  return {
+    clientUpdatedAt: a.client_updated_at,
+    externalResourceId: a.external_resource_id ?? null,
+    workerUserId: a.worker_user_id ?? null,
+  };
+}
+
+export type PruningResourcePersistResult =
+  | { status: "skipped" | "ok" }
+  | { status: "conflict"; current: PruningResourceIds }
+  | { status: "failed"; error: string };
+
+export interface PruningResourceDeps {
+  /** Fresh authoritative read of the activity (raw canonical envelope). */
+  readCanonical: (activityId: string) => Promise<unknown>;
+  cas: typeof setPruningActivityResourceCas;
+}
+
+/**
+ * After a successful pruning save, and only when the user explicitly changed
+ * the resource: re-read the canonical row (the save RPC may have moved
+ * client_updated_at), require its CURRENT ids to equal the ids the user was
+ * editing against (`baseline`), then compare-and-set. Any mismatch or stale
+ * CAS is a visible conflict — never an overwrite. There is no 3-arg fallback.
  */
 export async function persistPruningResourceAfterSave(
   activityId: string, value: ResourceValue, touched: boolean,
-  call: (id: string, v: ResourceValue) => Promise<void> = setPruningActivityResource,
-): Promise<{ status: "skipped" | "ok" | "failed"; error?: string }> {
+  baseline: PruningResourceIds, deps: PruningResourceDeps,
+): Promise<PruningResourcePersistResult> {
   if (!touched) return { status: "skipped" };
-  try { await call(activityId, value); return { status: "ok" }; }
-  catch (e: any) { return { status: "failed", error: e?.message ?? String(e) }; }
+  try {
+    const pre = preconditionFromCanonical(await deps.readCanonical(activityId));
+    if (!pre) {
+      return { status: "failed", error: "The current worker / crew link could not be verified, so it was not changed." };
+    }
+    const current = { externalResourceId: pre.externalResourceId, workerUserId: pre.workerUserId };
+    if (!sameIds(current, baseline)) return { status: "conflict", current };
+    const r = await deps.cas(activityId, value, pre);
+    if (r.applied) return { status: "ok" };
+    if (r.conflict) return { status: "conflict", current: r.current ?? current };
+    return { status: "failed", error: "The worker / crew link was not confirmed by the server." };
+  } catch (e: any) {
+    return { status: "failed", error: e?.message ?? String(e) };
+  }
 }
 
 /** Legacy worker_or_crew snapshot text for the selected resource. */
@@ -140,13 +204,27 @@ export function pruningWorkerSnapshot(v: ResourceValue, memberName: (id: string)
   return resourceLabel(v, memberName, externals);
 }
 
-/** Persist typed pruning resource identity AFTER the pruning save RPC. */
-export async function setPruningActivityResource(activityId: string, v: ResourceValue): Promise<void> {
-  const { data, error } = await db().rpc("set_pruning_activity_resource", {
+/**
+ * Compare-and-set typed pruning resource identity (production RPC
+ * set_pruning_activity_resource_cas). Only `applied:true` counts as saved.
+ */
+export async function setPruningActivityResourceCas(
+  activityId: string, v: ResourceValue, expected: PruningResourcePrecondition,
+): Promise<{ applied: boolean; conflict: boolean; current: PruningResourceIds | null }> {
+  const ids = resourceIdsOf(v);
+  const { data, error } = await db().rpc("set_pruning_activity_resource_cas", {
     p_activity_id: activityId,
-    p_external_resource_id: v.kind === "external" ? v.id : null,
-    p_worker_user_id: v.kind === "member" ? v.userId : null,
+    p_external_resource_id: ids.externalResourceId,
+    p_worker_user_id: ids.workerUserId,
+    p_expected_client_updated_at: expected.clientUpdatedAt,
+    p_expected_external_resource_id: expected.externalResourceId,
+    p_expected_worker_user_id: expected.workerUserId,
   });
   if (error) throw new Error(error.message);
-  if (data && typeof data === "object" && (data as any).error) throw new Error(String((data as any).error));
+  const d = data && typeof data === "object" ? (data as Record<string, any>) : {};
+  if (d.error) throw new Error(String(d.error));
+  const c = d.canonical && typeof d.canonical === "object" ? d.canonical : null;
+  const current = c && ("external_resource_id" in c || "worker_user_id" in c)
+    ? { externalResourceId: c.external_resource_id ?? null, workerUserId: c.worker_user_id ?? null } : null;
+  return { applied: d.applied === true, conflict: d.conflict === true, current };
 }
