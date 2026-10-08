@@ -40,7 +40,8 @@ import {
   buildBlockBreakdown,
   UNASSIGNED_BLOCK_KEY,
   totalsFromRows,
-  varietyKeyOf,
+  varietyLabelOf,
+  blockChildLabel,
 } from "@/lib/grapeAllocationModel";
 import AllocationDialog from "@/components/yield/AllocationDialog";
 
@@ -317,7 +318,9 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
                       <TableRow key={`${r.varietyKey}:${c.blockKey}`} className="bg-muted/30 text-sm">
                         <TableCell className="pl-10 text-muted-foreground">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-foreground">{c.label}</span>
+                            <span className="text-foreground">
+                              {c.nameIsVariety ? <><span className="text-muted-foreground">Block: </span>{c.label}</> : c.label}
+                            </span>
                             <span className="flex">
                               {editable.map((a, i) => (
                                 <Button
@@ -442,7 +445,7 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
           vintage={vintage}
           canSeeFinancials={canSeeFinancials}
           currencySymbol={rf.currencySymbol}
-          varieties={varieties.length ? varieties : Array.from(estimatedByVariety.keys()).map(varietyKeyOf)}
+          varieties={varieties.length ? varieties : Array.from(estimatedByVariety.keys()).map((k) => varietyLabelOf(k))}
           blocks={blocks}
           existing={editing ? { ...editing, pricePerTonne: priceOf(editing.id) } : null}
           saving={save.isPending}
