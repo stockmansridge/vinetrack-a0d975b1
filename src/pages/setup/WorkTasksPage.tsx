@@ -153,6 +153,7 @@ import { useTeamLookup } from "@/hooks/useTeamLookup";
 import ResourcePicker from "@/components/people/ResourcePicker";
 import { useExternalResources } from "@/components/people/ExternalResourcesCard";
 import { COMPLETED_BADGE_CLASS } from "@/lib/workTaskCompletion";
+import { EL_TARGET_OPTIONS, elStageLabel, isElScheduled, scheduleBasisOf, scheduleCell, schedulePayload, validateSchedule, workTaskDateBounds, type ScheduleBasis } from "@/lib/workTaskSchedule";
 import { canManageExternalResources, workTaskAssignmentFields, workTaskAssignmentValue, type ExternalResource, type ResourceValue } from "@/lib/externalResources";
 import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
 
@@ -228,15 +229,26 @@ const mkDateRangeLabel = (rf: RegionFormatters, timeZone?: string | null) => {
   const fd = mkFmtDate(rf);
   return (t: WorkTask) => {
     // Business dates are compared as calendar days (YYYY-MM-DD).
-    const s = calendarDate(t.start_date ?? t.date ?? null);
-    const e = isWorkTaskCompleted(t) ? displayCompletedDate(t, timeZone) : calendarDate(t.end_date ?? null);
-    if (!s && !e) return "—";
-    if (s && e && s !== e) return `${fd(s)} → ${fd(e)}`;
-    return fd(s ?? e);
+    const c = scheduleCell(t, timeZone);
+    const d = c.date ? (c.endDate ? `${fd(c.date)} → ${fd(c.endDate)}` : fd(c.date)) : null;
+    if (c.stage) return d ? `${c.stage} · ${d}` : c.stage;
+    return d ?? "—";
   };
 };
-const effectiveStart = (t: WorkTask) => t.start_date ?? t.date ?? null;
-const effectiveEnd = (t: WorkTask) => t.end_date ?? t.start_date ?? t.date ?? null;
+const effectiveStart = (t: WorkTask, tz?: string | null) => workTaskDateBounds(t, tz).start;
+const effectiveEnd = (t: WorkTask, tz?: string | null) => workTaskDateBounds(t, tz).end;
+/** Date / Range cell: E-L target on top (prominent while pending, smaller once completed). */
+function ScheduleCellView({ t, timeZone, fd }: { t: WorkTask; timeZone?: string | null; fd: (v?: string | null) => string }) {
+  const c = scheduleCell(t, timeZone);
+  const d = c.date ? (c.endDate ? `${fd(c.date)} → ${fd(c.endDate)}` : fd(c.date)) : null;
+  if (!c.stage) return <>{d ?? "—"}</>;
+  return (
+    <div className="flex flex-col leading-tight">
+      <span className={d ? "text-xs text-muted-foreground" : "font-medium"}>{c.stage}</span>
+      {d && <span>{d}</span>}
+    </div>
+  );
+}
 const taskVintage = (t: WorkTask, seasonMonth: number, seasonDay: number, fallback: number) => {
   const d = effectiveStart(t) ?? effectiveEnd(t);
   if (!d) return fallback;
@@ -613,8 +625,8 @@ export default function WorkTasksPage() {
 
   const filtered = useMemo(() => {
     let list = tasks.slice();
-    if (from) list = list.filter((t) => (effectiveEnd(t) ?? "") >= from);
-    if (to) list = list.filter((t) => (effectiveStart(t) ?? "") <= to);
+    if (from) list = list.filter((t) => (effectiveEnd(t, vineyardTimeZone) ?? "") >= from);
+    if (to) list = list.filter((t) => (effectiveStart(t, vineyardTimeZone) ?? "") <= to);
     if (paddockId !== ANY)
       list = list.filter((t) => (taskPaddockIds.get(t.id) ?? []).includes(paddockId));
     if (taskType !== ANY) list = list.filter((t) => t.task_type === taskType);
@@ -627,7 +639,7 @@ export default function WorkTasksPage() {
     if (filter.trim()) {
       const f = filter.toLowerCase();
       list = list.filter((t) =>
-        [t.task_type, taskPaddockNames(t.id), t.notes, t.description, completionLabel(t), t.date]
+        [t.task_type, taskPaddockNames(t.id), t.notes, t.description, completionLabel(t), isElScheduled(t) ? elStageLabel(t.target_el_stage) : t.date]
           .some((v) => String(v ?? "").toLowerCase().includes(f)),
       );
     }
@@ -697,7 +709,7 @@ export default function WorkTasksPage() {
   type SortKey = "date" | "paddock" | "task_type" | "status" | "assigned" | "area_ha" | "hours" | "cost" | "finalized";
   const accessors = useMemo(
     () => ({
-      date: (r: WorkTask) => effectiveStart(r),
+      date: (r: WorkTask) => effectiveStart(r, vineyardTimeZone),
       paddock: (r: WorkTask) => taskPaddockNames(r.id),
       task_type: (r: WorkTask) => r.task_type ?? "",
       status: (r: WorkTask) => completionLabel(r),
@@ -739,8 +751,8 @@ export default function WorkTasksPage() {
 
   const exportCsv = () => {
     const headers = canSeeCosts
-      ? ["Task ID","Start","End","Blocks","Task type","Status","Area ha (total)","Total hours","Total cost","Cost per ha","Worker types","Description","Notes"]
-      : ["Task ID","Start","End","Blocks","Task type","Status","Area ha (total)","Total hours","Worker types","Description","Notes"];
+      ? ["Task ID","Start","End","Schedule","Blocks","Task type","Status","Area ha (total)","Total hours","Total cost","Cost per ha","Worker types","Description","Notes"]
+      : ["Task ID","Start","End","Schedule","Blocks","Task type","Status","Area ha (total)","Total hours","Worker types","Description","Notes"];
     const lines = [headers.join(",")];
     rows.forEach((t) => {
       const tot = totalsByTask.get(t.id);
@@ -752,8 +764,9 @@ export default function WorkTasksPage() {
       const costPerHa = cphNum == null ? "" : cphNum.toFixed(2);
       const base = [
         t.id,
-        effectiveStart(t) ?? "",
-        effectiveEnd(t) ?? "",
+        effectiveStart(t, vineyardTimeZone) ?? "",
+        effectiveEnd(t, vineyardTimeZone) ?? "",
+        isElScheduled(t) ? (elStageLabel(t.target_el_stage) ?? "E-L stage") : "Date",
         padNames,
         t.task_type ?? "",
         completionLabel(t),
@@ -945,7 +958,7 @@ export default function WorkTasksPage() {
                 </div>
               ) : null;
               const cellMap: Record<WtCol, React.ReactNode> = {
-                date: <TableCell>{dateRangeLabel(t)}</TableCell>,
+                date: <TableCell><ScheduleCellView t={t} timeZone={vineyardTimeZone} fd={fmtDate} /></TableCell>,
                 paddock: <TableCell title={padNamesFull || undefined}>{blockCellLabel}</TableCell>,
                 task_type: (
                   <TableCell>
@@ -1178,6 +1191,8 @@ function WorkTaskDrawer({
   const [status, setStatus] = useState<string>(task?.status ?? "");
   const [startDate, setStartDate] = useState<string>(calendarDate(task?.start_date ?? task?.date ?? null) ?? "");
   const [endDate, setEndDate] = useState<string>(task?.end_date ?? "");
+  const [scheduleBasis, setScheduleBasis] = useState<ScheduleBasis>(scheduleBasisOf(task));
+  const [targetEl, setTargetEl] = useState<number | null>(task?.target_el_stage ?? null);
   const [description, setDescription] = useState<string>(task?.description ?? "");
   const [notes, setNotes] = useState<string>(task?.notes ?? "");
   const [isFinalized, setIsFinalized] = useState<boolean>(!!task?.is_finalized);
@@ -1212,8 +1227,9 @@ function WorkTaskDrawer({
   const saveTask = useMutation({
     mutationFn: async () => {
       if (!vineyardId) throw new Error("No vineyard selected");
-      if (!startDate) {
-        const err = new Error("Task date is required. Please choose a date before creating the task.");
+      const schedErr = validateSchedule(scheduleBasis, startDate, targetEl);
+      if (schedErr) {
+        const err = new Error(schedErr);
         (err as any).__validation = true;
         throw err;
       }
@@ -1227,8 +1243,7 @@ function WorkTaskDrawer({
         paddock_name: padNames || null,
         task_type: taskType.trim() || null,
         status: status || null,
-        start_date: startDate || null,
-        date: startDate || task?.date || null,
+        ...schedulePayload(scheduleBasis, startDate, targetEl, task?.date ?? null),
         // Preserve existing area_ha when no paddocks are selected on edit,
         // so legacy iPhone-created rows aren't accidentally cleared.
         area_ha: selectedPaddocks.length ? totalAreaHa : (task?.area_ha ?? null),
@@ -1456,9 +1471,29 @@ function WorkTaskDrawer({
                     onCreated={onSaved}
                   />
                 </Field>
-                <Field label="Work Date">
-                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                <Field label="Schedule by">
+                  <div role="radiogroup" aria-label="Schedule by" className="flex gap-1">
+                    {([["date", "Work Date / Range"], ["el_stage", "E-L Growth Stage"]] as const).map(([k, l]) => (
+                      <Button key={k} type="button" size="sm" role="radio" aria-checked={scheduleBasis === k}
+                        variant={scheduleBasis === k ? "default" : "outline"} onClick={() => setScheduleBasis(k)}>{l}</Button>))}
+                  </div>
                 </Field>
+                {scheduleBasis === "date" ? (
+                  <Field label="Work Date">
+                    <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                  </Field>
+                ) : (
+                  <Field label="Target E-L stage">
+                    <Select value={targetEl != null ? String(targetEl) : ""} onValueChange={(v) => setTargetEl(Number(v))}>
+                      <SelectTrigger aria-label="Target E-L stage"><SelectValue placeholder="Choose E-L stage" /></SelectTrigger>
+                      <SelectContent>
+                        {EL_TARGET_OPTIONS.map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
+                        {targetEl != null && !EL_TARGET_OPTIONS.some((o) => o.value === targetEl) && <SelectItem value={String(targetEl)}>{elStageLabel(targetEl)}</SelectItem>}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">No Work Date needed. The actual date is recorded when you press Complete. Switching here clears any planned Work Date on save.</p>
+                  </Field>
+                )}
                 <Field label={`Area ${areaUnit} (auto)`}>
                   <Input type="number" value={areaHaDisplay} readOnly disabled placeholder="—" />
                 </Field>

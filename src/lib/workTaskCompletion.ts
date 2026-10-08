@@ -33,8 +33,9 @@ export function calendarDate(v: string | null | undefined): string | null {
   return d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3] ? `${m[1]}-${m[2]}-${m[3]}` : null;
 }
 
-export const workDateOf = (t: Pick<WorkTask, "start_date" | "date">): string | null =>
-  calendarDate(t.start_date ?? t.date ?? null);
+/** Planned Work Date. E-L scheduled tasks have none (legacy `date` is only an anchor). */
+export const workDateOf = (t: Pick<WorkTask, "start_date" | "date"> & { schedule_basis?: string | null }): string | null =>
+  t.schedule_basis === "el_stage" ? calendarDate(t.start_date ?? null) : calendarDate(t.start_date ?? t.date ?? null);
 
 /** Calendar date (YYYY-MM-DD) of an instant in the given time zone. */
 export function localDateOf(iso: string, timeZone?: string | null): string | null {
@@ -58,16 +59,18 @@ export const todayLocal = (timeZone?: string | null, now: Date = new Date()): st
   localDateOf(now.toISOString(), timeZone) ?? now.toISOString().slice(0, 10);
 
 /**
- * User-facing Completed Date: end_date → local date of finalized_at → null.
+ * User-facing Completed Date: end_date → local date of completed_at → finalized_at → null.
  * Only meaningful for completed tasks; never invents a date.
  */
 export function displayCompletedDate(
-  t: Pick<WorkTask, "is_finalized" | "end_date" | "finalized_at">,
+  t: Pick<WorkTask, "is_finalized" | "end_date" | "finalized_at"> & { completed_at?: string | null },
   timeZone?: string | null,
 ): string | null {
   if (!isWorkTaskCompleted(t)) return null;
   const end = calendarDate(t.end_date);
   if (end) return end;
+  // completed_at / finalized_at are real instants → vineyard-local calendar day.
+  if (t.completed_at) return localDateOf(t.completed_at, timeZone);
   // finalized_at is a real instant → vineyard-local calendar day.
   if (t.finalized_at) return localDateOf(t.finalized_at, timeZone);
   return null;

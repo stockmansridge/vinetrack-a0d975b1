@@ -1,3 +1,4 @@
+import { scheduleCell } from "@/lib/workTaskSchedule";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useState } from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
@@ -83,12 +84,12 @@ describe("calendar dates", () => {
     const body = src.slice(src.indexOf("const mkDateRangeLabel"), src.indexOf("const effectiveStart"));
     // Re-evaluate the real label function with a trivial formatter.
     const factory = new Function(
-      "mkFmtDate", "calendarDate", "isWorkTaskCompleted", "displayCompletedDate",
+      "mkFmtDate", "scheduleCell",
       body.replace(/: RegionFormatters/g, "").replace(/, timeZone\?: string \| null/, ", timeZone")
         .replace(/\(t: WorkTask\)/g, "(t)") + "; return mkDateRangeLabel;",
     );
     const mk = factory(
-      () => (v: string) => v, calendarDate, (t: any) => t.is_finalized === true, displayCompletedDate,
+      () => (v: string) => v, scheduleCell,
     );
     const label = mk({}, "Australia/Sydney");
     const base = { start_date: "2026-09-28T00:00:00+00:00", is_finalized: true };
