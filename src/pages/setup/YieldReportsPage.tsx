@@ -543,6 +543,7 @@ export default function YieldReportsPage() {
     const estimatedByAllocation = new Map<string, number>();
     const infoByBlock = new Map<string, SeasonYieldBlockEstimate>();
     const varietyTonnes = new Map<string, { name: string | null; tonnes: number; complete: boolean }>();
+    const blockVarietyTonnes = new Map<string, { tonnes: number; complete: boolean }>();
 
     const bunchByBlock = new Map<string, number>();
     for (const [key, est] of currentEstimates) {
@@ -573,6 +574,11 @@ export default function YieldReportsPage() {
         if (tonnes == null) row.complete = false;
         else row.tonnes += tonnes;
         varietyTonnes.set(vk, row);
+        const bvk = `${bk}|${vk}`;
+        const bRow = blockVarietyTonnes.get(bvk) ?? { tonnes: 0, complete: true };
+        if (tonnes == null) bRow.complete = false;
+        else bRow.tonnes += tonnes;
+        blockVarietyTonnes.set(bvk, bRow);
       });
     }
 
@@ -581,7 +587,10 @@ export default function YieldReportsPage() {
     const estimatedByVariety = new Map<string, number>();
     for (const [k, v] of varietyTonnes) if (v.complete) estimatedByVariety.set(k, v.tonnes);
 
-    return { estimatedByBlock, estimatedByAllocation, estimatedByVariety, infoByBlock };
+    const estimatedByBlockVariety = new Map<string, number>();
+    for (const [k, v] of blockVarietyTonnes) if (v.complete) estimatedByBlockVariety.set(k, v.tonnes);
+
+    return { estimatedByBlock, estimatedByAllocation, estimatedByVariety, estimatedByBlockVariety, infoByBlock };
   }, [seasonModel, currentEstimates, plantingUnits]);
 
   // ---- Overview (quick view) for the selected vintage -----------------------
@@ -814,6 +823,7 @@ export default function YieldReportsPage() {
             vintage={activeVintage === ANY ? null : Number(activeVintage)}
             role={currentRole}
             estimatedByVariety={estimatedByVariety}
+            estimatedByBlockVariety={seasonEstimates.estimatedByBlockVariety}
             blocks={allocationBlocks}
             varieties={allocationVarieties}
           />

@@ -178,6 +178,12 @@ export function buildBlockBreakdown(args: {
     if (!r.allocationIds.includes(a.id)) r.allocationIds.push(a.id);
   };
 
+  // Blocks with an estimate appear even before anything is allocated.
+  for (const k of estimatedByBlockVariety?.keys() ?? []) {
+    const [bk, vk] = k.split("|");
+    ensure(vk, bk, bk);
+  }
+
   for (const a of allocations) {
     const vk = varietyKeyOf(a.variety_name);
     const total = tonnesOf(a);
@@ -188,7 +194,10 @@ export function buildBlockBreakdown(args: {
       const k = b.paddock_id.toLowerCase();
       const prev = links.get(k);
       const q = typeof b.quantity_tonnes === "number" && Number.isFinite(b.quantity_tonnes) ? b.quantity_tonnes : null;
-      links.set(k, { id: b.paddock_id, q: prev ? (prev.q ?? 0) + (q ?? 0) || (prev.q ?? q) : q });
+      links.set(k, {
+        id: b.paddock_id,
+        q: prev ? (prev.q == null && q == null ? null : (prev.q ?? 0) + (q ?? 0)) : q,
+      });
     }
     let assigned = 0;
     if (links.size === 1) {
