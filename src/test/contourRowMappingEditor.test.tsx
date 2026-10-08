@@ -41,3 +41,18 @@ describe("Contour editor save freeze", () => {
     expect(screen.getAllByText("Row group 2").length).toBeGreaterThan(0);
   });
 });
+
+describe("Contour editor tabs", () => {
+  it("adding a group opens Setup with Start trace; typed fields survive tab switches", () => {
+    render(<MemoryRouter><Editor paddock={paddock} scope={{ vineyardId: V, paddockId: P }} load={{ status: "empty", revision: 0 }}
+      onSaved={() => {}} onReload={() => {}} onDiscarded={() => {}} /></MemoryRouter>);
+    fireEvent.click(screen.getByText("Add row group"));
+    expect(screen.getByRole("tab", { name: "Setup" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("button", { name: "Start trace" })).toBeTruthy();
+    const name = screen.getByDisplayValue("Row group 1");
+    fireEvent.change(name, { target: { value: "North" } });
+    fireEvent.click(screen.getByRole("tab", { name: "Review" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Setup" }));
+    expect(screen.getByDisplayValue("North")).toBeTruthy();
+  });
+});
