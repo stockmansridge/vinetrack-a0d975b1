@@ -251,3 +251,27 @@ export function buildBlockBreakdown(args: {
   }
   return out;
 }
+
+export interface BlockChildLabel {
+  label: string;
+  /** True when the Blocks-setup name is itself just the parent variety. */
+  nameIsVariety: boolean;
+}
+
+/**
+ * Child-row label: the block's own name from Blocks setup (paddocks.name —
+ * the only block identifier the shared schema has). Never derives a label
+ * from the variety; unknown ids show "Unknown block", blockless tonnes show
+ * "Unassigned block". Flags names that merely repeat the parent variety so
+ * the UI can make clear it is the block's name, not a variety row.
+ */
+export function blockChildLabel(
+  blockKey: string,
+  parentVarietyKey: string,
+  blockNames: Map<string, string>,
+): BlockChildLabel {
+  if (blockKey === UNASSIGNED_BLOCK_KEY) return { label: "Unassigned block", nameIsVariety: false };
+  const name = blockNames.get(blockKey.toLowerCase())?.trim();
+  if (!name) return { label: "Unknown block", nameIsVariety: false };
+  return { label: name, nameIsVariety: varietyKeyOf(name) === parentVarietyKey };
+}
