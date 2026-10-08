@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { Fragment, forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { PortalNotice } from "@/components/ui/PortalNotice";
-import { Pencil, Trash2 } from "lucide-react";
+import { ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { canSeeCosts } from "@/lib/permissions";
@@ -37,6 +37,8 @@ import {
 } from "@/lib/grapeAllocationsQuery";
 import {
   buildAllocationRows,
+  buildBlockBreakdown,
+  UNASSIGNED_BLOCK_KEY,
   totalsFromRows,
   varietyKeyOf,
 } from "@/lib/grapeAllocationModel";
@@ -48,6 +50,8 @@ export interface GrapeAllocationPanelProps {
   role: string | null;
   /** Authoritative estimated tonnes for the vintage, keyed by variety key. */
   estimatedByVariety: Map<string, number>;
+  /** Estimated tonnes keyed `${paddockId lower}|${varietyKey}`; unknown omitted. */
+  estimatedByBlockVariety?: Map<string, number>;
   blocks: { id: string; name: string; varieties?: string[] }[];
   /** Canonical vineyard varieties for the allocation picker. */
   varieties?: string[];
@@ -69,6 +73,7 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
     vintage,
     role,
     estimatedByVariety,
+    estimatedByBlockVariety,
     blocks,
     varieties: canonicalVarieties,
     active = true,
@@ -110,6 +115,25 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
     [allocations, estimatedByVariety, financials],
   );
   const totals = useMemo(() => totalsFromRows(rows), [rows]);
+  const breakdown = useMemo(
+    () => buildBlockBreakdown({ allocations, estimatedByBlockVariety }),
+    [allocations, estimatedByBlockVariety],
+  );
+  const blockName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const b of blocks) m.set(b.id.toLowerCase(), b.name);
+    return m;
+  }, [blocks]);
+  // Expanded by default; users collapse what they don't need.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggle = (k: string) =>
+    setCollapsed((prev) => {
+      const n = new Set(prev);
+      if (n.has(k)) n.delete(k);
+      else n.add(k);
+      return n;
+    });
+  const allocById = useMemo(() => new Map(allocations.map((a) => [a.id, a])), [allocations]);
 
   const varieties = useMemo(() => {
     const s = new Set<string>(canonicalVarieties ?? []);
@@ -238,24 +262,97 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
             )}
             {rows.map((r) => {
               const short = r.availableTonnes != null && r.availableTonnes < 0;
+              const children = (breakdown.get(r.varietyKey) ?? [])
+                .map((c) => ({
+                  ...c,
+                  label:
+                    c.blockKey === UNASSIGNED_BLOCK_KEY
+                      ? "No block specified"
+                      : blockName.get(c.blockKey) ?? "Unknown block",
+                }))
+                .sort((a, b) =>
+                  a.blockKey === UNASSIGNED_BLOCK_KEY
+                    ? 1
+                    : b.blockKey === UNASSIGNED_BLOCK_KEY
+                    ? -1
+                    : a.label.localeCompare(b.label, undefined, { numeric: true }),
+                );
+              const isOpen = !collapsed.has(r.varietyKey);
+              const avail = (v: number | null) =>
+                v == null ? "—" : v < 0 ? `${t(Math.abs(v))} over` : t(v);
               return (
-                <TableRow key={r.varietyKey}>
-                  <TableCell className="font-medium">{r.variety}</TableCell>
+                <Fragment key={r.varietyKey}>
+                <TableRow>
+                  <TableCell className="font-medium">
+                    {children.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => toggle(r.varietyKey)}
+                        aria-expanded={isOpen}
+                        aria-label={`${isOpen ? "Collapse" : "Expand"} ${r.variety} blocks`}
+                        className="inline-flex items-center gap-1 text-left hover:text-primary"
+                      >
+                        <ChevronRight className={`h-4 w-4 shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`} />
+                        {r.variety}
+                      </button>
+                    ) : (
+                      <span className="pl-5">{r.variety}</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">{t(r.estimatedTonnes)}</TableCell>
                   <TableCell className="text-right">{t(r.ownUseTonnes)}</TableCell>
                   <TableCell className="text-right">{t(r.externalTonnes)}</TableCell>
                   <TableCell className="text-right">{t(r.allocatedTonnes)}</TableCell>
                   <TableCell className={`text-right ${short ? "text-destructive font-medium" : ""}`}>
-                    {r.availableTonnes == null
-                      ? "—"
-                      : short
-                      ? `${t(Math.abs(r.availableTonnes))} over`
-                      : t(r.availableTonnes)}
+                    {avail(r.availableTonnes)}
                   </TableCell>
                   {canSeeFinancials && (
                     <TableCell className="text-right">{money(r.contractedIncome)}</TableCell>
                   )}
                 </TableRow>
+                {isOpen &&
+                  children.map((c) => {
+                    const cShort = c.availableTonnes != null && c.availableTonnes < 0;
+                    const editable = c.allocationIds
+                      .map((id) => allocById.get(id))
+                      .filter(Boolean) as GrapeAllocation[];
+                    return (
+                      <TableRow key={`${r.varietyKey}:${c.blockKey}`} className="bg-muted/30 text-sm">
+                        <TableCell className="pl-10 text-muted-foreground">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-foreground">{c.label}</span>
+                            <span className="flex">
+                              {editable.map((a, i) => (
+                                <Button
+                                  key={a.id}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2"
+                                  aria-label={`Edit ${r.variety} allocation for ${c.label}${editable.length > 1 ? ` (${i + 1} of ${editable.length})` : ""}`}
+                                  onClick={() => {
+                                    setEditing(a);
+                                    setOpen(true);
+                                  }}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                  {editable.length > 1 && <span className="ml-1 text-xs">{i + 1}</span>}
+                                </Button>
+                              ))}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">{t(c.estimatedTonnes)}</TableCell>
+                        <TableCell className="text-right">{t(c.ownUseTonnes)}</TableCell>
+                        <TableCell className="text-right">{t(c.externalTonnes)}</TableCell>
+                        <TableCell className="text-right">{t(c.allocatedTonnes)}</TableCell>
+                        <TableCell className={`text-right ${cShort ? "text-destructive font-medium" : ""}`}>
+                          {avail(c.availableTonnes)}
+                        </TableCell>
+                        {canSeeFinancials && <TableCell />}
+                      </TableRow>
+                    );
+                  })}
+                </Fragment>
               );
             })}
           </TableBody>

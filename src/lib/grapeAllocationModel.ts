@@ -117,3 +117,113 @@ export function totalsFromRows(rows: VarietyAllocationRow[]): AllocationTotals {
     contractedIncome: anyIncome ? rows.reduce((a, r) => a + (r.contractedIncome ?? 0), 0) : null,
   };
 }
+
+// ---- Per-block breakdown (presentation only) --------------------------------
+
+export const UNASSIGNED_BLOCK_KEY = "__no_block__";
+
+export interface BlockAllocationRow {
+  /** Lower-cased paddock id, or UNASSIGNED_BLOCK_KEY. */
+  blockKey: string;
+  paddockId: string | null;
+  estimatedTonnes: number | null;
+  ownUseTonnes: number;
+  externalTonnes: number;
+  allocatedTonnes: number;
+  availableTonnes: number | null;
+  /** Allocation records contributing to this block (for direct Edit). */
+  allocationIds: string[];
+}
+
+/**
+ * Splits each allocation across its linked blocks using the stored
+ * grape_allocation_blocks quantities. One block with no quantity takes the
+ * whole allocation. Any tonnes not covered by block quantities (no blocks,
+ * several blocks without quantities, or block sums below the total) land in
+ * the "No block" row so children always sum to the parent and nothing is
+ * counted twice.
+ */
+export function buildBlockBreakdown(args: {
+  allocations: GrapeAllocation[];
+  /** Estimated tonnes keyed `${paddockId lower}|${varietyKey}`. */
+  estimatedByBlockVariety?: Map<string, number>;
+}): Map<string, BlockAllocationRow[]> {
+  const { allocations, estimatedByBlockVariety } = args;
+  const byVariety = new Map<string, Map<string, BlockAllocationRow>>();
+
+  const ensure = (vk: string, bk: string, paddockId: string | null) => {
+    let m = byVariety.get(vk);
+    if (!m) byVariety.set(vk, (m = new Map()));
+    let r = m.get(bk);
+    if (!r) {
+      r = {
+        blockKey: bk,
+        paddockId,
+        estimatedTonnes:
+          bk === UNASSIGNED_BLOCK_KEY ? null : estimatedByBlockVariety?.get(`${bk}|${vk}`) ?? null,
+        ownUseTonnes: 0,
+        externalTonnes: 0,
+        allocatedTonnes: 0,
+        availableTonnes: null,
+        allocationIds: [],
+      };
+      m.set(bk, r);
+    }
+    return r;
+  };
+  const add = (r: BlockAllocationRow, a: GrapeAllocation, t: number) => {
+    if (a.allocation_type === "own_use") r.ownUseTonnes += t;
+    else r.externalTonnes += t;
+    r.allocatedTonnes += t;
+    if (!r.allocationIds.includes(a.id)) r.allocationIds.push(a.id);
+  };
+
+  // Blocks with an estimate appear even before anything is allocated.
+  for (const k of estimatedByBlockVariety?.keys() ?? []) {
+    const [bk, vk] = k.split("|");
+    ensure(vk, bk, bk);
+  }
+
+  for (const a of allocations) {
+    const vk = varietyKeyOf(a.variety_name);
+    const total = tonnesOf(a);
+    // Merge duplicate links to the same paddock.
+    const links = new Map<string, { id: string; q: number | null }>();
+    for (const b of a.blocks ?? []) {
+      if (!b.paddock_id) continue;
+      const k = b.paddock_id.toLowerCase();
+      const prev = links.get(k);
+      const q = typeof b.quantity_tonnes === "number" && Number.isFinite(b.quantity_tonnes) ? b.quantity_tonnes : null;
+      links.set(k, {
+        id: b.paddock_id,
+        q: prev ? (prev.q == null && q == null ? null : (prev.q ?? 0) + (q ?? 0)) : q,
+      });
+    }
+    let assigned = 0;
+    if (links.size === 1) {
+      const [[k, l]] = Array.from(links);
+      const t = l.q ?? total;
+      add(ensure(vk, k, l.id), a, t);
+      assigned = t;
+    } else {
+      for (const [k, l] of links) {
+        if (l.q == null) continue;
+        add(ensure(vk, k, l.id), a, l.q);
+        assigned += l.q;
+      }
+    }
+    const rest = total - assigned;
+    if (Math.abs(rest) > 1e-9 || links.size === 0) {
+      add(ensure(vk, UNASSIGNED_BLOCK_KEY, null), a, rest);
+    }
+  }
+
+  const out = new Map<string, BlockAllocationRow[]>();
+  for (const [vk, m] of byVariety) {
+    for (const r of m.values()) {
+      r.availableTonnes = r.estimatedTonnes == null ? null : r.estimatedTonnes - r.allocatedTonnes;
+    }
+    out.set(vk, Array.from(m.values()));
+  }
+  return out;
+}
