@@ -6,7 +6,7 @@
 // The legacy one-entry-per-block path is never used from here.
 import { generateUuid, tryGenerateUuid } from "@/lib/uuid";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import ResourcePicker from "@/components/people/ResourcePicker";
 import { useExternalResources } from "@/components/people/ExternalResourcesCard";
@@ -584,6 +584,18 @@ export default function PruningActivityDialog({
               </div>
             )}
 
+            {resourceWarning && (
+              <div role="alert" className="rounded-md border border-amber-500/50 bg-amber-500/10 p-2 text-sm flex items-center gap-2">
+                <span className="flex-1">The activity was saved, but the worker / crew link was not: {resourceWarning.error}</span>
+                <Button size="sm" variant="outline" disabled={resourceRetrying} onClick={async () => {
+                  setResourceRetrying(true);
+                  const r = await persistPruningResourceAfterSave(resourceWarning.activityId, resource, true);
+                  setResourceRetrying(false);
+                  if (r.status === "ok") { setResourceWarning(null); setResourceTouched(false); toast.success("Worker / crew link saved."); }
+                  else setResourceWarning({ activityId: resourceWarning.activityId, error: r.error ?? "Unknown error" });
+                }}>Retry link</Button>
+              </div>
+            )}
             {saveError && (
               <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
                 {saveError}
