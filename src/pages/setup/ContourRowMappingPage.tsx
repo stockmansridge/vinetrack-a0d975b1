@@ -161,7 +161,7 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
   const [selVertex, setSelVertex] = useState<number | null>(null);
   const setTool = (t: Tool) => { setToolRaw(t); setSelVertex(null); };
   const [revealNonce, setRevealNonce] = useState(0);
-  const [setupSub, setSetupSub] = useState<string>("trace");
+  const [setupSub, setSetupSub] = useState<string>(() => { const g0 = initial.groups[0]; return g0 && (g0.mode === "imported" || g0.referenceTrace.length >= 2) ? "rows" : "trace"; });
   const openSetupFor = (g: RowGroup) => { setPanelTab("setup"); setSetupSub(g.mode === "imported" || g.referenceTrace.length >= 2 ? "rows" : "trace"); };
   const [panelTab, setPanelTab] = useState<string>(initial.groups.length ? "setup" : "groups");
   const [rowSel, setRowSel] = useState<{ rowId: string; part: number; idx: number | null } | null>(null);
