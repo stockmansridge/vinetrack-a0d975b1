@@ -2373,7 +2373,7 @@ function MachineLineForm({
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-2">{/* inputs */}
+      <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
           <Label className="text-xs">Work date *</Label>
           <Input
