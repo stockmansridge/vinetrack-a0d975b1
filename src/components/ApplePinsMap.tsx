@@ -268,8 +268,15 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active", h
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
       <Card className="overflow-hidden">
-        <div className="relative h-[600px] w-full bg-muted">
+        <div ref={fsAnchorRef} className="h-[max(600px,calc(100dvh-14rem))] w-full">
+        {createPortal(<div className="relative h-full w-full bg-muted">
           <div ref={containerRef} className="h-full w-full" />
+          <Button type="button" size="sm" variant="secondary" className="absolute left-3 top-3 z-20 gap-1 shadow"
+            aria-label={fullScreen ? "Exit full screen" : "Full screen"} title={fullScreen ? "Exit full screen (Esc)" : "Full screen"}
+            onClick={() => setFullScreen((v) => !v)}>
+            {fullScreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+            <span className="hidden sm:inline">{fullScreen ? "Exit full screen" : "Full screen"}</span>
+          </Button>
           <MapSourceBadge source="apple" />
           {(isLoading || !mapReady) && (
             <div className="absolute inset-0 flex items-center justify-center text-muted-foreground bg-background/60">
