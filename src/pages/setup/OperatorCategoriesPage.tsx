@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { PeopleTypesExplainer } from "@/components/people/ExternalResourcesCard";
 import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
@@ -106,6 +107,10 @@ export default function OperatorCategoriesPage() {
           <p className="text-sm text-muted-foreground">
             Manage labour/worker types used across work tasks and reporting. These sync with the iOS app.
           </p>
+          <div className="mt-2 rounded-md border bg-muted/40 p-2">
+            <PeopleTypesExplainer />
+            <a href="/setup/vineyard#crew-contractors" className="mt-1 inline-block text-xs font-medium text-primary underline">Manage Crew / External Contractors in Vineyard Settings</a>
+          </div>
         </div>
         {canWrite && (
           <Button size="sm" onClick={() => setCreateOpen(true)} disabled={!selectedVineyardId}>
