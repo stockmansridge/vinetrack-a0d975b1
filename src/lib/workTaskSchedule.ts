@@ -85,3 +85,24 @@ export function scheduleCell(t: WorkTask, timeZone?: string | null): { stage: st
   const e = isWorkTaskCompleted(t) ? displayCompletedDate(t, timeZone) : calendarDate(t.end_date ?? null);
   return { stage: null, date: s ?? e, endDate: s && e && s !== e ? e : null };
 }
+
+/**
+ * Inclusive E-L range filter. When either bound is set, only tasks scheduled
+ * by E-L stage whose target stage falls within [min, max] pass; date-scheduled
+ * tasks (and the hidden compatibility date) are never considered.
+ */
+export function matchesElRange(
+  t: Partial<SchedFields> | null | undefined,
+  min: number | null,
+  max: number | null,
+): boolean {
+  if (min == null && max == null) return true;
+  if (!isElScheduled(t)) return false;
+  const n = Number((t as SchedFields).target_el_stage);
+  if (!Number.isFinite(n)) return false;
+  const lo = min != null && max != null ? Math.min(min, max) : min;
+  const hi = min != null && max != null ? Math.max(min, max) : max;
+  if (lo != null && n < lo) return false;
+  if (hi != null && n > hi) return false;
+  return true;
+}
