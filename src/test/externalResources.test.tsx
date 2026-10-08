@@ -58,18 +58,45 @@ describe("work task one-of-two assignment", () => {
   });
 });
 
-describe("pruning resource persistence", () => {
-  it("skips the RPC when the resource was not changed (keeps older association)", async () => {
-    const call = vi.fn();
-    expect(await persistPruningResourceAfterSave("a1", { kind: "none" }, false, call)).toEqual({ status: "skipped" });
-    expect(call).not.toHaveBeenCalled();
+describe("pruning resource persistence (CAS)", () => {
+  const NONE = { externalResourceId: null, workerUserId: null };
+  const canon = (ext: string | null, wu: string | null, ts = "2026-10-08T01:00:00Z") =>
+    ({ activity: { id: "a1", client_updated_at: ts, external_resource_id: ext, worker_user_id: wu } });
+  it("skips everything when the resource was not changed", async () => {
+    const readCanonical = vi.fn(); const cas = vi.fn();
+    expect(await persistPruningResourceAfterSave("a1", { kind: "none" }, false, NONE, { readCanonical, cas })).toEqual({ status: "skipped" });
+    expect(readCanonical).not.toHaveBeenCalled(); expect(cas).not.toHaveBeenCalled();
   });
-  it("calls RPC once on explicit change; reports failure for retry", async () => {
-    const ok = vi.fn().mockResolvedValue(undefined);
-    expect((await persistPruningResourceAfterSave("a1", { kind: "external", id: "e1" }, true, ok)).status).toBe("ok");
-    expect(ok).toHaveBeenCalledWith("a1", { kind: "external", id: "e1" });
-    const bad = vi.fn().mockRejectedValue(new Error("cross-vineyard"));
-    expect(await persistPruningResourceAfterSave("a1", { kind: "member", userId: "u1" }, true, bad)).toEqual({ status: "failed", error: "cross-vineyard" });
+  it("uses the post-save timestamp and current ids as CAS preconditions", async () => {
+    const cas = vi.fn().mockResolvedValue({ applied: true, conflict: false, current: null });
+    const r = await persistPruningResourceAfterSave("a1", { kind: "external", id: "e1" }, true, NONE,
+      { readCanonical: async () => canon(null, null, "2026-10-08T09:09:09Z"), cas });
+    expect(r.status).toBe("ok");
+    expect(cas).toHaveBeenCalledWith("a1", { kind: "external", id: "e1" },
+      { clientUpdatedAt: "2026-10-08T09:09:09Z", externalResourceId: null, workerUserId: null });
+  });
+  it("reports a conflict and never writes when someone else changed the selection", async () => {
+    const cas = vi.fn();
+    const r = await persistPruningResourceAfterSave("a1", { kind: "member", userId: "u1" }, true, NONE,
+      { readCanonical: async () => canon("e2", null), cas });
+    expect(r).toEqual({ status: "conflict", current: { externalResourceId: "e2", workerUserId: null } });
+    expect(cas).not.toHaveBeenCalled();
+  });
+  it("surfaces a server CAS conflict instead of claiming success", async () => {
+    const cas = vi.fn().mockResolvedValue({ applied: false, conflict: true, current: { externalResourceId: null, workerUserId: "u2" } });
+    const r = await persistPruningResourceAfterSave("a1", { kind: "member", userId: "u1" }, true, NONE, { readCanonical: async () => canon(null, null), cas });
+    expect(r).toEqual({ status: "conflict", current: { externalResourceId: null, workerUserId: "u2" } });
+  });
+  it("refuses to write when the canonical row lacks the precondition fields", async () => {
+    const cas = vi.fn();
+    const r = await persistPruningResourceAfterSave("a1", { kind: "external", id: "e1" }, true, NONE,
+      { readCanonical: async () => ({ activity: { id: "a1", client_updated_at: "x" } }), cas });
+    expect(r.status).toBe("failed"); expect(cas).not.toHaveBeenCalled();
+  });
+  it("reports read or RPC failures for retry", async () => {
+    const r = await persistPruningResourceAfterSave("a1", { kind: "external", id: "e1" }, true, NONE,
+      { readCanonical: async () => canon(null, null), cas: vi.fn().mockRejectedValue(new Error("boom")) });
+    expect(r).toEqual({ status: "failed", error: "boom" });
   });
   it("preserves historical free text and stale ids; snapshot uses display name", () => {
     expect(pruningResourceValue({ worker: "Old Gang" })).toEqual({ kind: "other", text: "Old Gang" });

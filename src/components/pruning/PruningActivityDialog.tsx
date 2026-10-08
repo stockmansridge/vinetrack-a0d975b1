@@ -14,7 +14,11 @@ import { canManageExternalResources } from "@/lib/externalResources";
 import ResourcePicker from "@/components/people/ResourcePicker";
 import { useExternalResources } from "@/components/people/ExternalResourcesCard";
 import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
-import { persistPruningResourceAfterSave, pruningResourceValue, pruningWorkerSnapshot, type ResourceValue } from "@/lib/externalResources";
+import { persistPruningResourceAfterSave, pruningResourceValue, pruningWorkerSnapshot, resourceLabel, resourceValueFromIds, setPruningActivityResourceCas, type PruningResourceIds, type ResourceValue } from "@/lib/externalResources";
+import { fetchPruningActivity } from "@/lib/pruningActivityApi";
+
+const NO_IDS: PruningResourceIds = { externalResourceId: null, workerUserId: null };
+const resourceDeps = { readCanonical: async (id: string) => (await fetchPruningActivity(id))?.raw ?? null, cas: setPruningActivityResourceCas };
 import { AlertTriangle, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 
 import {
@@ -165,6 +169,9 @@ export default function PruningActivityDialog({
   const [resource, setResource] = useState<ResourceValue>({ kind: "none" });
   const [resourceTouched, setResourceTouched] = useState(false);
   const [resourceWarning, setResourceWarning] = useState<{ activityId: string; error: string } | null>(null);
+  // Ids the user is editing against (CAS baseline). New activities start empty.
+  const resourceBaseline = useRef<PruningResourceIds>(NO_IDS);
+  const [resourceConflict, setResourceConflict] = useState<{ activityId: string; current: PruningResourceIds } | null>(null);
   const [resourceRetrying, setResourceRetrying] = useState(false);
 
   const [draft, setDraft] = useState<PruningActivityDraft>(emptyDraft);
@@ -202,13 +209,15 @@ export default function PruningActivityDialog({
     if (isEdit) {
       if (loaded) {
         setDraft(draftFromActivity(loaded));
-        setResource(pruningResourceValue(loaded)); setResourceTouched(false); setResourceWarning(null);
+        setResource(pruningResourceValue(loaded)); setResourceTouched(false); setResourceWarning(null); setResourceConflict(null);
+        resourceBaseline.current = { externalResourceId: loaded.externalResourceId ?? null, workerUserId: loaded.workerUserId ?? null };
         setStartInput(toTimeInput(loaded.startTime));
         setFinishInput(toTimeInput(loaded.finishTime));
       }
     } else {
       setDraft(emptyDraft());
-      setResource({ kind: "none" }); setResourceTouched(false); setResourceWarning(null);
+      setResource({ kind: "none" }); setResourceTouched(false); setResourceWarning(null); setResourceConflict(null);
+      resourceBaseline.current = NO_IDS;
       setStartInput("");
       setFinishInput("");
       setSkipped(false);
@@ -316,6 +325,17 @@ export default function PruningActivityDialog({
   };
 
 
+  const applyResourceResult = (activityId: string, res: Awaited<ReturnType<typeof persistPruningResourceAfterSave>>) => {
+    if (res.status === "ok") {
+      resourceBaseline.current = { externalResourceId: resource.kind === "external" ? resource.id : null, workerUserId: resource.kind === "member" ? resource.userId : null };
+      setResourceTouched(false); setResourceWarning(null); setResourceConflict(null);
+    } else if (res.status === "failed") {
+      setResourceConflict(null); setResourceWarning({ activityId, error: res.error });
+    } else if (res.status === "conflict") {
+      setResourceWarning(null); setResourceConflict({ activityId, current: res.current });
+    } else { setResourceWarning(null); setResourceConflict(null); }
+  };
+
   const handleSave = async () => {
     setConflicts([]);
     setSaveError(null);
@@ -356,18 +376,21 @@ export default function PruningActivityDialog({
         setFinishInput(toTimeInput(result.activity.finishTime));
       }
       // Typed resource identity is a separate RPC after the pruning save.
-      const res = await persistPruningResourceAfterSave(savedId, resource, resourceTouched);
-      if (res.status === "ok") setResourceTouched(false);
-      if (res.status === "failed") setResourceWarning({ activityId: savedId, error: res.error ?? "Unknown error" });
-      else setResourceWarning(null);
+      const res = await persistPruningResourceAfterSave(savedId, resource, resourceTouched, resourceBaseline.current, resourceDeps);
+      applyResourceResult(savedId, res);
       onSaved?.(result.activity);
-      toast.success(
-        isEdit ? "Pruning activity updated." : "Pruning activity recorded.",
-        result.conflicts.length
-          ? { description: `${result.conflicts.length} quarter(s) were rejected — see the dialog.` }
-          : undefined,
-      );
-      if (!result.conflicts.length && res.status !== "failed") onOpenChange(false);
+      if (res.status === "ok" || res.status === "skipped") {
+        toast.success(
+          isEdit ? "Pruning activity updated." : "Pruning activity recorded.",
+          result.conflicts.length
+            ? { description: `${result.conflicts.length} quarter(s) were rejected — see the dialog.` }
+            : undefined,
+        );
+      } else {
+        // Main save succeeded; the link did not — say so, don't claim full success.
+        toast.warning(isEdit ? "Pruning activity updated, but the worker / crew link was not saved." : "Pruning activity recorded, but the worker / crew link was not saved.");
+      }
+      if (!result.conflicts.length && (res.status === "ok" || res.status === "skipped")) onOpenChange(false);
 
     } catch (e: any) {
       setSaveError(e?.message ?? String(e));
@@ -595,13 +618,37 @@ export default function PruningActivityDialog({
                 <span className="flex-1">The activity was saved, but the worker / crew link was not: {resourceWarning.error}</span>
                 <Button size="sm" variant="outline" disabled={resourceRetrying} onClick={async () => {
                   setResourceRetrying(true);
-                  const r = await persistPruningResourceAfterSave(resourceWarning.activityId, resource, true);
+                  const r = await persistPruningResourceAfterSave(resourceWarning.activityId, resource, true, resourceBaseline.current, resourceDeps);
                   setResourceRetrying(false);
-                  if (r.status === "ok") { setResourceWarning(null); setResourceTouched(false); toast.success("Worker / crew link saved."); }
-                  else setResourceWarning({ activityId: resourceWarning.activityId, error: r.error ?? "Unknown error" });
+                  applyResourceResult(resourceWarning.activityId, r);
+                  if (r.status === "ok") toast.success("Worker / crew link saved.");
                 }}>Retry link</Button>
               </div>
             )}
+            {resourceConflict && (() => {
+              const theirs = resourceValueFromIds(resourceConflict.current);
+              const theirsLabel = resourceLabel(theirs, memberName, externals) || "no worker / crew";
+              return (
+                <div role="alert" className="rounded-md border border-amber-500/50 bg-amber-500/10 p-2 text-sm space-y-2">
+                  <p>The activity was saved, but someone else changed the worker / crew link to <strong>{theirsLabel}</strong> while you were editing. Your selection was not saved.</p>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" disabled={resourceRetrying} onClick={() => {
+                      resourceBaseline.current = resourceConflict.current;
+                      setResource(theirs); setResourceTouched(false); setResourceConflict(null);
+                    }}>Keep theirs</Button>
+                    <Button size="sm" variant="outline" disabled={resourceRetrying} onClick={async () => {
+                      // Explicit choice: edit against the selection the user has now seen.
+                      resourceBaseline.current = resourceConflict.current;
+                      setResourceRetrying(true);
+                      const r = await persistPruningResourceAfterSave(resourceConflict.activityId, resource, true, resourceBaseline.current, resourceDeps);
+                      setResourceRetrying(false);
+                      applyResourceResult(resourceConflict.activityId, r);
+                      if (r.status === "ok") toast.success("Worker / crew link saved.");
+                    }}>Use my selection</Button>
+                  </div>
+                </div>
+              );
+            })()}
             {saveError && (
               <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
                 {saveError}
