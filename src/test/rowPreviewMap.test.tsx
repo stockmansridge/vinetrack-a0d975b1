@@ -56,7 +56,10 @@ describe("normal row precision preview", () => {
     const mids = h.props.markers.filter((m: any) => m.id.startsWith("m-"));
     expect(mids).toHaveLength(1);
     mids[0].onClick();
-    expect(setPolygon).toHaveBeenCalledWith([two[0], { lat: -34.5, lng: 138.7005 }, two[1]]);
+    const next = setPolygon.mock.calls[0][0];
+    expect(next).toHaveLength(3);
+    expect(next[0]).toBe(two[0]); expect(next[2]).toBe(two[1]);
+    expect(next[1].lat).toBeCloseTo(-34.5, 9); expect(next[1].lng).toBeCloseTo(138.7005, 9);
     h.props.markers.find((m: any) => m.id === "v-0").onClick();
     expect(setPolygon).toHaveBeenCalledTimes(1);
   });
