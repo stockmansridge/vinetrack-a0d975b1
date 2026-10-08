@@ -59,7 +59,7 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active", h
     (fullScreen ? document.body : fsAnchorRef.current)?.appendChild(fsHost);
     const frame = requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
     return () => cancelAnimationFrame(frame);
-  });
+  }, [fullScreen, fsHost, selectedVineyardId]);
   useLayoutEffect(() => () => { fsHost.remove(); }, [fsHost]);
   useEffect(() => {
     if (!fullScreen) return;
