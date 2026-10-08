@@ -9,7 +9,7 @@ export function appTypeBadgeClass(t: string | null | undefined): string {
     case "android":
       return "bg-green-500/10 text-green-700 border-green-500/30 dark:bg-green-400/15 dark:text-green-300 dark:border-green-400/40";
     case PORTAL_APP_TYPE:
-      return "bg-violet-500/10 text-violet-700 border-violet-500/30 dark:bg-violet-400/15 dark:text-violet-300 dark:border-violet-400/40";
+      return "bg-purple-500/10 text-purple-700 border-purple-500/30 dark:bg-purple-400/15 dark:text-purple-300 dark:border-purple-400/40";
     default:
       return "bg-muted text-muted-foreground border-border";
   }
