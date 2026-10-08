@@ -6,7 +6,7 @@ import {
   parseUserAgent,
   appTypeLabel,
 } from "@/lib/portalClientActivity";
-import { activityRpcArgs } from "@/lib/userActivityQuery";
+import { groupPlatformsByUser, userUsedAppType } from "@/lib/userActivityQuery";
 
 function mem(init: Record<string, string> = {}) {
   const s = { ...init };
@@ -45,7 +45,23 @@ describe("portal client activity", () => {
   });
   it("labels portal and omits server filter for all", () => {
     expect(appTypeLabel("portal-web")).toBe("Portal (web)");
-    expect(activityRpcArgs("all")).toBeUndefined();
-    expect(activityRpcArgs("portal-web")).toEqual({ p_app_type: "portal-web" });
+  });
+
+  it("keeps storage failures from throwing", () => {
+    const bad = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); } };
+    expect(getOrCreateClientInstanceId(bad, () => ID)).toBe(ID);
+    expect(getOrCreateClientInstanceId(null, () => ID)).toBe(ID);
+  });
+  it("matches users on ANY platform in history, not just latest client", () => {
+    const m = groupPlatformsByUser([
+      { user_id: "u1", app_type: "ios", last_seen_at: "2026-10-08T05:00:00Z", browser_name: null, browser_version: null },
+      { user_id: "u1", app_type: "portal-web", last_seen_at: "2026-10-01T00:00:00Z", browser_name: "Chrome", browser_version: "129" },
+      { user_id: "u2", app_type: "android", last_seen_at: "2026-10-07T00:00:00Z", browser_name: null, browser_version: null },
+    ]);
+    expect(userUsedAppType(m.get("u1"), "portal-web")).toBe(true);
+    expect(userUsedAppType(m.get("u2"), "portal-web")).toBe(false);
+    expect(userUsedAppType(m.get("u3"), "portal-web")).toBe(false);
+    expect(userUsedAppType(m.get("u3"), "all")).toBe(true);
+    expect(m.get("u1")!.map((p) => p.app_type)).toEqual(["ios", "portal-web"]);
   });
 });
