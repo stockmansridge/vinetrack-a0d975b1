@@ -10,6 +10,9 @@ import {
   type ExternalResource, type ResourceMember, type ResourceValue,
 } from "@/lib/externalResources";
 
+/** Shared heading bar style for both resource groups. */
+const GROUP_HEADING_CLASS = "[&_[cmdk-group-heading]]:-mx-1 [&_[cmdk-group-heading]]:mb-1 [&_[cmdk-group-heading]]:border-y [&_[cmdk-group-heading]]:border-border [&_[cmdk-group-heading]]:bg-muted [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-foreground";
+
 /** Shared grouped picker: Internal resources, then Crew / External contractors. */
 export default function ResourcePicker({
   value, onChange, members, externals, vineyardId, memberName, loading, error,
@@ -58,7 +61,7 @@ export default function ResourcePicker({
                 : <>
                   <CommandEmpty>No matches.</CommandEmpty>
                   {allowUnassigned && <CommandGroup><CommandItem value="__unassigned" onSelect={() => pick({ kind: "none" })}>{emptyLabel}</CommandItem></CommandGroup>}
-                  <CommandGroup heading="Internal resources">
+                  <CommandGroup heading="Internal resources" className={GROUP_HEADING_CLASS}>
                     {groups.internal.map((m) => (
                       <CommandItem key={m.userId} value={`member ${m.name} ${m.email ?? ""} ${m.userId}`} onSelect={() => pick({ kind: "member", userId: m.userId })}>
                         <div className="flex flex-col"><span>{m.name}{value.kind === "member" && value.userId === m.userId ? " ✓" : ""}</span>
@@ -66,7 +69,7 @@ export default function ResourcePicker({
                       </CommandItem>))}
                     {!groups.internal.length && <div className="px-2 py-1.5 text-xs text-muted-foreground">No team members.</div>}
                   </CommandGroup>
-                  <CommandGroup heading="Crew / External contractors">
+                  <CommandGroup heading="Crew / External contractors" className={`${GROUP_HEADING_CLASS} mt-1`}>
                     {groups.external.map((r) => (
                       <CommandItem key={r.id} value={`external ${r.name} ${r.contact_name ?? ""} ${r.id}`} onSelect={() => pick({ kind: "external", id: r.id })}>
                         <span>{r.name}{value.kind === "external" && value.id === r.id ? " ✓" : ""}</span>
