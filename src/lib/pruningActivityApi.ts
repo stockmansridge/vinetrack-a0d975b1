@@ -77,6 +77,8 @@ export interface PruningActivity {
   /** Typed resource identity (shared schema); null when only free text is known. */
   externalResourceId?: string | null;
   workerUserId?: string | null;
+  /** Canonical client_updated_at (CAS precondition); null when not returned. */
+  clientUpdatedAt?: string | null;
   method: string;
   startTime: string | null;
   finishTime: string | null;
@@ -261,6 +263,7 @@ export function normaliseActivity(input: any): PruningActivity | null {
     worker: str(pick(a, ["worker_or_crew", "worker", "crew"]) ?? "") || "—",
     externalResourceId: (pick(a, ["external_resource_id"]) as string) ?? null,
     workerUserId: (pick(a, ["worker_user_id"]) as string) ?? null,
+    clientUpdatedAt: (pick(a, ["client_updated_at"]) as string) ?? null,
     method: str(pick(a, ["method", "pruning_method"]) ?? "") || "—",
     startTime: (pick(a, ["start_time", "started_at"]) as string) ?? null,
     finishTime: (pick(a, ["finish_time", "finished_at"]) as string) ?? null,
