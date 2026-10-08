@@ -162,3 +162,6 @@ export function assignmentCellLabel(
 
 /** Single shared bright, accessible green for every Work Task "Completed" badge (list + details). */
 export const COMPLETED_BADGE_CLASS = "border-transparent bg-success text-success-foreground hover:bg-success/90 font-semibold";
+
+/** Actionable Complete button — same success tokens as COMPLETED_BADGE_CLASS, with focus/disabled states. */
+export const COMPLETE_BUTTON_CLASS = "bg-success text-success-foreground font-semibold hover:bg-success/90 focus-visible:ring-2 focus-visible:ring-success focus-visible:ring-offset-2 disabled:opacity-50";

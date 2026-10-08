@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
-import { COMPLETED_BADGE_CLASS } from "@/lib/workTaskCompletion";
+import { COMPLETED_BADGE_CLASS, COMPLETE_BUTTON_CLASS } from "@/lib/workTaskCompletion";
 import { elStageLabel } from "@/lib/workTaskSchedule";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -110,6 +110,7 @@ export function WorkTaskCompletionSection({ task, userId, onSaved, fmtDate, time
         ) : (
           <Button
             size="sm"
+            className={COMPLETE_BUTTON_CLASS}
             disabled={busy}
             onClick={() => {
               setPickDate(today);
@@ -172,7 +173,7 @@ export function WorkTaskCompletionSection({ task, userId, onSaved, fmtDate, time
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button disabled={!!pickError || complete.isPending} onClick={() => complete.mutate()}>
+            <Button className={COMPLETE_BUTTON_CLASS} disabled={!!pickError || complete.isPending} onClick={() => complete.mutate()}>
               {complete.isPending ? "Completing…" : "Complete"}
             </Button>
           </DialogFooter>
