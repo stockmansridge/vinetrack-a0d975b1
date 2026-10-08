@@ -56,14 +56,23 @@ export default function PanelTabs({ tabs, value, onValueChange, header, footer, 
   };
 
   const list = (
-    <div role="tablist" aria-label={label} onKeyDown={onKey} className={`flex gap-1 rounded-md bg-muted p-1 ${nested ? "p-0.5" : ""}`}>
-      {tabs.map((t) => (
-        <button key={t.id} ref={(el) => { btns.current[t.id] = el; }} type="button" role="tab" id={`${base}-${t.id}-tab`} aria-controls={`${base}-${t.id}`}
-          aria-selected={active === t.id} tabIndex={active === t.id ? 0 : -1} onClick={() => set(t.id)}
-          className={`flex flex-1 items-center justify-center gap-1 rounded px-2 ${nested ? "py-0.5 text-[11px]" : "py-1 text-xs"} font-medium transition-colors ${active === t.id ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-          {t.label}{t.badge}
-        </button>
-      ))}
+    <div role="tablist" aria-label={label} onKeyDown={onKey}
+      className={nested
+        ? "flex gap-1 rounded-md border bg-muted p-0.5"
+        : "flex gap-1 rounded-lg border-2 border-primary/40 bg-primary/10 p-1 shadow-sm"}>
+      {tabs.map((t) => {
+        const on = active === t.id;
+        const tone = nested
+          ? on ? "border-primary bg-background text-primary font-semibold shadow-sm" : "border-transparent text-foreground/80 hover:bg-background/70 hover:text-foreground"
+          : on ? "border-primary bg-primary text-primary-foreground shadow-md" : "border-border bg-card text-foreground hover:border-primary hover:bg-primary/15";
+        return (
+          <button key={t.id} ref={(el) => { btns.current[t.id] = el; }} type="button" role="tab" id={`${base}-${t.id}-tab`} aria-controls={`${base}-${t.id}`}
+            aria-selected={on} tabIndex={on ? 0 : -1} onClick={() => set(t.id)}
+            className={`flex min-w-0 flex-1 items-center justify-center gap-1 whitespace-nowrap border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background ${nested ? "rounded px-1.5 py-1 text-xs font-medium" : "min-h-11 rounded-md px-1.5 text-sm font-bold"} ${tone}`}>
+            {t.label}{t.badge}
+          </button>
+        );
+      })}
     </div>
   );
   return (
