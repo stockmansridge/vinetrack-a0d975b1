@@ -35,6 +35,7 @@ import {
   formatRelative,
 } from "./_shared";
 import { PORTAL_APP_TYPE, appTypeLabel } from "@/lib/portalClientActivity";
+import { AppTypeBadge } from "@/components/admin/AppTypeBadge";
 import {
   groupPlatformsByUser,
   userUsedAppType,
@@ -143,9 +144,7 @@ function platformsDisplay(r: UserActivityRow): React.ReactNode {
     <div className="flex flex-col gap-1">
       {r.platforms.map((p) => (
         <div key={p.app_type} className="flex items-center gap-2 text-xs">
-          <span className="inline-flex items-center px-2 py-0.5 rounded border border-border bg-muted">
-            {appTypeLabel(p.app_type)}
-          </span>
+          <AppTypeBadge appType={p.app_type} />
           <span className="text-muted-foreground">
             {p.last_seen_at ? formatRelative(p.last_seen_at) : "—"}
             {p.browser_name ? ` · ${p.browser_name}${p.browser_version ? ` ${p.browser_version.split(".")[0]}` : ""}` : ""}
@@ -376,7 +375,8 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
     label: "Latest client",
     className: "whitespace-nowrap",
     sortable: true,
-    render: (r) => appTypeLabel(r.last_app_type),
+    render: (r) =>
+      r.last_app_type ? <AppTypeBadge appType={r.last_app_type} /> : appTypeLabel(r.last_app_type),
   },
   {
     key: "app_version",
