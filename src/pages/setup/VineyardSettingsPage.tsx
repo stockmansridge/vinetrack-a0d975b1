@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
+import ExternalResourcesCard from "@/components/people/ExternalResourcesCard";
 import { useVineyard } from "@/context/VineyardContext";
 import { useToast } from "@/hooks/use-toast";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
@@ -229,6 +230,8 @@ export default function VineyardSettingsPage() {
           </Button>
         </div>
       )}
+
+      {selectedVineyardId && <ExternalResourcesCard vineyardId={selectedVineyardId} role={currentRole ?? null} userId={user?.id ?? null} />}
 
       <PendingInvitationsSection
         title="Pending invitations"
