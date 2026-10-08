@@ -1,28 +1,32 @@
-# Team-plan billing audit (inspection only, nothing changed)
+# User Activity: why Portal users never show (findings, nothing changed)
 
-## Findings
+## What was traced
+- Page: `src/pages/admin/AdminUserActivityPage.tsx`. `fetchUserActivity()` calls one function on the shared VineTrack (mobile) database: `admin_list_user_login_activity`. There is no filtering by platform in the Portal; filters are only vineyard, role, status, last login and search.
+- Fields shown: Last login = `last_sign_in_at`; Last seen = `last_client_seen_at`; App type/version/build, OS, Device = `last_app_type`, `last_app_version`, `last_app_build`, `last_os_name/version`, `last_device_model`. Blank values render as "Not recorded". The older `app_platform/app_version/device_model` fields (support-request data) are received but not shown.
+- The function's SQL is not in this repo (it lives in Rork's mobile database). A read-only probe confirmed it exists and requires System Admin, so its body and join could not be read.
+- The same database has a function `record_my_client_activity` (found via a read-only name probe). This is what iOS/Android call to write app type, version, device, OS and last seen. Its parameters could not be read without signing in.
+- The Portal never calls `record_my_client_activity` or any other device/session write. A search of `src/`, `sql/`, `docs/` and `supabase/` found no telemetry write. The only "portal-web" marker is `app_version: "portal-web"` in `src/lib/supportRequestSubmit.ts`, and that is support-request data only.
+- Sign-in (`src/pages/Login.tsx`, `AuthCallback.tsx`, `AuthContext.tsx`) uses the mobile database's sign-in, so Portal sign-ins already update the shared `last_sign_in_at`.
 
-1. `supabase/functions/stripe-vinetrack-webhook/index.ts:122-151`: **wrong column, and it can force 3 seats.** `getTeamPlan()` asks `vinetrack_plans` for `seats_included`, then `included_seats`, then only `id`. It never asks for `included_user_licences`. When both of the first two columns are missing (error 42703), it falls back to the `id`-only query, and line 146 then hard-codes `?? 3`. So every new Team subscription row gets `seats_included = 3` (line 334), whatever the plan table says.
-2. Same file, lines 222-235: seat count. Every line item that isn't `STRIPE_PRICE_TEAM_EXTRA_USER` counts as "base". Then `seats_purchased = extraQty + max(0, baseQty - 1)`. If `STRIPE_PRICE_TEAM_EXTRA_USER` is unset, extra-user items are counted as base and still work out the same, but only by chance.
-3. Same file, around line 334: the seat snapshot is only written when the row is first inserted. Updates never refresh `seats_included`, so rows that already exist keep whatever value they were inserted with (possibly the fallback 3).
-4. Same file, lines 541-559: tax is only copied from Stripe's invoice into `tax_cents` (`invoice.tax` or the sum of `total_tax_amounts`). The Portal doesn't calculate any tax itself.
-5. `supabase/functions/create-vinetrack-team-checkout/index.ts:25,43,161`: uses `STRIPE_PRICE_TEAM`. Quantity is `max(1, body.quantity ?? 1)`, and the Portal never sends a quantity (`src/pages/BillingPage.tsx:326-329`), so it is always 1. There is no `automatic_tax` or `tax_rates` setting, so GST depends entirely on the Stripe price/account settings. The price amount is never set in code.
-6. `supabase/functions/update-vinetrack-team-seats/index.ts:40,45,114,130`: uses `STRIPE_PRICE_TEAM_EXTRA_USER`. Quantity is the target number of extra seats. It has no hard-coded seat or price numbers.
-7. `src/pages/BillingPage.tsx:917, 1089, 1171`: **hard-coded "$99/year ex GST"** for extra users in three on-screen messages. This is text only and not read from Stripe or the plan table.
-8. `src/pages/BillingPage.tsx:304`: included seats show from the subscription's `seats_included`, then the access record's `seats_included`, else 0. This number is shown at lines 812, 871 and 1088 and used in the total at 1117. It has no 3 fallback of its own, but it shows the webhook's snapshot (see finding 1).
-9. `supabase/functions/create-vinetrack-user-licence/index.ts:53,65`: the seat limit is `seats_included + seats_purchased` (missing values count as 0), so a webhook-forced 3 becomes the real limit.
-10. `supabase/functions/get-vinetrack-team-licences/index.ts:49` and `supabase/functions/get-vinetrack-billing-detail/index.ts:66`: these only read `seats_included` and `seats_purchased` back. They have no fallbacks.
-11. `src/components/admin/access/UserAccessDrawer.tsx:111`: the admin seat summary uses `max(seats_included, seats_purchased)` instead of adding them together, so it under-reports total seats. This is display only.
-12. `src/lib/vinetrackAccessQuery.ts:28` and `src/lib/accessEntitlementsQuery.ts:706,844`: these only pass `seats_included` through from the shared access functions. They have no defaults.
-13. `sql/041_vinetrack_subscription_status_constraint.sql`: changes status values only. No seat or price numbers.
+## Root cause (confirmed on the Portal side)
+The Portal never records client activity. So:
+- Portal users are not missing. Every account is listed (192 = all accounts returned by the function).
+- A Portal-only user shows a real Last login, but Last seen, App type, version, device and OS read "Not recorded".
+- A user who uses both mobile and Portal keeps their last mobile values. A Portal visit can update Last login, while Last seen and App type still show iOS/Android.
+- App type only ever shows ios/android because nothing writes "portal".
 
-## Not found
-- No annual base price is written anywhere in code. The base price comes only from the `STRIPE_PRICE_TEAM` Stripe price.
-- `included_user_licences` isn't mentioned anywhere in the Portal codebase (code, SQL or docs).
-- No other "3 included users" wording or code beyond finding 1.
+Not confirmed: whether the function stores only one latest row per user (which `last_*` naming suggests) and whether `record_my_client_activity` accepts an app type of "portal". Confirming this needs Rork or the SQL source.
 
-## Answers
-- Does any code still assume 3 included Team users? Yes: the webhook fallback (finding 1).
-- Does any code still assume $99 extra users? Yes: three text messages on the Billing page (finding 7).
-- Does the webhook read `vinetrack_plans.included_user_licences`? No.
-- Can a fallback force 3 seats? Yes, on every new Team subscription row whenever neither `seats_included` nor `included_seats` exists on `vinetrack_plans`.
+## Options
+1. **Portal-only, no SQL:** call the existing `record_my_client_activity` after sign-in and periodically while signed in, with app type "portal" and browser/OS details. This only works if the function accepts "portal". Because it stores only the latest client, this would overwrite the iOS/Android values with Portal. That loses the per-platform distinction, so it is **not recommended**.
+2. **Recommended minimal safe fix (needs SQL, Rork-owned):**
+   - Rork adds a per-platform activity table keyed by (user_id, app_type), plus an own-user upsert function that only uses `auth.uid()`. It accepts app_type in ios/android/portal and is server-timestamped, with no client-supplied times. Alternatively, Rork extends `record_my_client_activity` to write per-platform rows while keeping the current columns for released apps.
+   - `admin_list_user_login_activity` gains per-platform columns (last seen on iOS, Android and Portal, plus Portal browser/OS). Overall "Last seen" becomes the latest across platforms. The existing columns stay so older builds keep working.
+   - Portal: one small hook in the signed-in layout calls the upsert once per session start and at most every ~15 min while the tab is active. App type is "portal", the version is the build, and OS/browser come from the user agent. Last login stays the real sign-in time, never invented. The page then adds Portal columns/filters.
+3. **Historical limits:** past Portal usage cannot be rebuilt. Sign-in timestamps don't say which platform, and only the latest is kept. Portal activity will only appear from deployment onward. Earlier history should show "Not recorded", not a guess.
+
+## Is SQL / Rork required?
+Yes, for a correct fix with separate per-platform sessions (option 2). The function and its source table live in Rork's mobile database. Only the small Portal call and page columns are Portal work, and they should wait until Rork's contract lands.
+
+## Next step if approved
+Write a short contract for Rork (table, upsert function, new list columns). After that, implement the Portal hook and columns. No code was changed in this investigation.
