@@ -4,6 +4,7 @@
 // authoritative Yield estimate (latest completed Bunch Count trip per block
 // for the vintage, apportioned per planting) and are passed in per variety.
 import type { AllocationType, GrapeAllocation } from "@/lib/grapeAllocationsQuery";
+import { resolveBuiltinName } from "@/lib/varietyResolver";
 
 export interface AllocationFinancialLookup {
   pricePerTonne: number | null;
@@ -32,8 +33,30 @@ export interface AllocationTotals {
   contractedIncome: number | null;
 }
 
-export const varietyKeyOf = (v: string | null | undefined) =>
-  (v ?? "").trim().toLowerCase() || "__unspecified__";
+const UNSPECIFIED_KEY = "__unspecified__";
+
+/**
+ * Canonical grouping key. Documented built-in synonyms (varietyResolver alias
+ * map, e.g. "Pinot Grigio" / "pinot gris / grigio" → Pinot Gris) collapse to
+ * the canonical built-in; anything else groups only by exact case/space-
+ * insensitive text — no fuzzy merging of distinct varieties.
+ */
+export const varietyKeyOf = (v: string | null | undefined) => {
+  const builtin = resolveBuiltinName(v);
+  if (builtin) return builtin.toLowerCase();
+  return (v ?? "").trim().replace(/\s+/g, " ").toLowerCase() || UNSPECIFIED_KEY;
+};
+
+const titleCase = (s: string) => s.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+
+/** Display label for a key: canonical built-in name, else the best raw label. */
+export const varietyLabelOf = (key: string, raw?: string | null) => {
+  if (key === UNSPECIFIED_KEY) return "Unspecified variety";
+  const builtin = resolveBuiltinName(key);
+  if (builtin) return builtin;
+  const r = (raw ?? "").trim();
+  return r && r !== r.toLowerCase() ? r : titleCase(r || key);
+};
 
 const tonnesOf = (a: GrapeAllocation) =>
   typeof a.quantity_tonnes === "number" && Number.isFinite(a.quantity_tonnes)
@@ -70,15 +93,16 @@ export function buildAllocationRows(args: {
 
   // Every estimated variety appears even with no allocations yet.
   for (const [key, tonnes] of estimatedByVariety) {
-    const r = ensure(key, key === "__unspecified__" ? "Unspecified variety" : key);
+    const r = ensure(key, varietyLabelOf(key));
     r.estimatedTonnes = tonnes;
   }
 
   for (const a of allocations) {
     const key = varietyKeyOf(a.variety_name);
-    const label = (a.variety_name ?? "").trim() || "Unspecified variety";
-    const r = ensure(key, label);
-    if (r.variety === key) r.variety = label;
+    const r = ensure(key, varietyLabelOf(key, a.variety_name));
+    // Prefer a properly capitalised user label over a derived one for customs.
+    const better = varietyLabelOf(key, a.variety_name);
+    if (r.variety !== better && r.variety === r.variety.toLowerCase()) r.variety = better;
     const t = tonnesOf(a);
     if (a.allocation_type === ("own_use" satisfies AllocationType)) r.ownUseTonnes += t;
     else r.externalTonnes += t;
@@ -226,4 +250,28 @@ export function buildBlockBreakdown(args: {
     out.set(vk, Array.from(m.values()));
   }
   return out;
+}
+
+export interface BlockChildLabel {
+  label: string;
+  /** True when the Blocks-setup name is itself just the parent variety. */
+  nameIsVariety: boolean;
+}
+
+/**
+ * Child-row label: the block's own name from Blocks setup (paddocks.name —
+ * the only block identifier the shared schema has). Never derives a label
+ * from the variety; unknown ids show "Unknown block", blockless tonnes show
+ * "Unassigned block". Flags names that merely repeat the parent variety so
+ * the UI can make clear it is the block's name, not a variety row.
+ */
+export function blockChildLabel(
+  blockKey: string,
+  parentVarietyKey: string,
+  blockNames: Map<string, string>,
+): BlockChildLabel {
+  if (blockKey === UNASSIGNED_BLOCK_KEY) return { label: "Unassigned block", nameIsVariety: false };
+  const name = blockNames.get(blockKey.toLowerCase())?.trim();
+  if (!name) return { label: "Unknown block", nameIsVariety: false };
+  return { label: name, nameIsVariety: varietyKeyOf(name) === parentVarietyKey };
 }
