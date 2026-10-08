@@ -15,7 +15,7 @@ export interface MemberLabel {
 }
 
 export function useTeamLookup(vineyardId: string | null) {
-  const { data } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["team-lookup", vineyardId],
     enabled: !!vineyardId,
     queryFn: async (): Promise<TeamRow[]> => {
@@ -50,5 +50,11 @@ export function useTeamLookup(vineyardId: string | null) {
     return fallbackText?.trim() || null;
   };
 
-  return { lookup, resolve };
+  /** Members of THIS vineyard only (from vineyard_members via the RPC), sorted by name. */
+  const members = useMemo(
+    () => [...lookup.entries()].map(([userId, m]) => ({ userId, ...m })).sort((a, b) => a.name.localeCompare(b.name)),
+    [lookup],
+  );
+
+  return { lookup, resolve, members, isLoading, error };
 }

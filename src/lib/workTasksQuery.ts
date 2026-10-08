@@ -43,6 +43,12 @@ export interface WorkTask {
   is_finalized?: boolean | null;
   finalized_at?: string | null;
   finalized_by?: string | null;
+  /** Shared VineTrack schema — optional assignee (profiles.id). Never changed by completion. */
+  assigned_to?: string | null;
+  /** Shared VineTrack schema — user who actually completed the task (profiles.id). */
+  completed_by?: string | null;
+  /** Shared VineTrack schema — real instant the task was completed. */
+  completed_at?: string | null;
   /** SQL 119: authoritative production/costing vintage for this task,
    *  resolved server-side from the vineyard's season settings. All linked
    *  cost lines (labour, machinery, trips) report under this value —
@@ -230,6 +236,8 @@ export interface UpsertWorkTaskInput {
   area_ha?: number | null;
   duration_hours?: number | null;
   is_finalized?: boolean | null;
+  /** undefined = leave stored assignee untouched; null = unassign. */
+  assigned_to?: string | null;
   user_id?: string | null;
   current_sync_version?: number | null;
   /** SQL 188 — omit to leave the task's existing costing untouched. */
@@ -256,6 +264,7 @@ export async function createWorkTask(input: UpsertWorkTaskInput): Promise<WorkTa
     area_ha: input.area_ha ?? null,
     duration_hours: input.duration_hours ?? 0,
     is_finalized: input.is_finalized ?? false,
+    assigned_to: input.assigned_to ?? null,
     is_archived: false,
     deleted_at: null,
     client_updated_at: nowIso(),
@@ -293,6 +302,8 @@ export async function updateWorkTask(input: UpsertWorkTaskInput): Promise<WorkTa
     client_updated_at: nowIso(),
     sync_version: nextVersion,
     updated_by: input.user_id ?? null,
+    // Assignee only written when the caller supplied it; completion fields never.
+    ...(input.assigned_to !== undefined ? { assigned_to: input.assigned_to } : {}),
     ...pieceRatePayload(input),
   };
   const { data, error } = await supabase
