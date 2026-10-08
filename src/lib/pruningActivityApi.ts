@@ -74,6 +74,9 @@ export interface PruningActivity {
   vineyardId: string | null;
   date: string;
   worker: string;
+  /** Typed resource identity (shared schema); null when only free text is known. */
+  externalResourceId?: string | null;
+  workerUserId?: string | null;
   method: string;
   startTime: string | null;
   finishTime: string | null;
@@ -256,6 +259,8 @@ export function normaliseActivity(input: any): PruningActivity | null {
     vineyardId: (pick(a, ["vineyard_id"]) as string) ?? null,
     date,
     worker: str(pick(a, ["worker_or_crew", "worker", "crew"]) ?? "") || "—",
+    externalResourceId: (pick(a, ["external_resource_id"]) as string) ?? null,
+    workerUserId: (pick(a, ["worker_user_id"]) as string) ?? null,
     method: str(pick(a, ["method", "pruning_method"]) ?? "") || "—",
     startTime: (pick(a, ["start_time", "started_at"]) as string) ?? null,
     finishTime: (pick(a, ["finish_time", "finished_at"]) as string) ?? null,

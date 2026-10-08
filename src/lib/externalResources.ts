@@ -120,6 +120,26 @@ export function pruningResourceValue(a: { externalResourceId?: string | null; wo
   return t && t !== "—" ? { kind: "other", text: t } : { kind: "none" };
 }
 
+/**
+ * After a successful pruning save: only when the user explicitly changed the
+ * resource, call set_pruning_activity_resource. Untouched edits never clear an
+ * older saved association. Failure is reported (activity itself is saved) so
+ * the caller can show a warning and retry safely (the RPC is idempotent).
+ */
+export async function persistPruningResourceAfterSave(
+  activityId: string, value: ResourceValue, touched: boolean,
+  call: (id: string, v: ResourceValue) => Promise<void> = setPruningActivityResource,
+): Promise<{ status: "skipped" | "ok" | "failed"; error?: string }> {
+  if (!touched) return { status: "skipped" };
+  try { await call(activityId, value); return { status: "ok" }; }
+  catch (e: any) { return { status: "failed", error: e?.message ?? String(e) }; }
+}
+
+/** Legacy worker_or_crew snapshot text for the selected resource. */
+export function pruningWorkerSnapshot(v: ResourceValue, memberName: (id: string) => string | null, externals: ExternalResource[]) {
+  return resourceLabel(v, memberName, externals);
+}
+
 /** Persist typed pruning resource identity AFTER the pruning save RPC. */
 export async function setPruningActivityResource(activityId: string, v: ResourceValue): Promise<void> {
   const { data, error } = await db().rpc("set_pruning_activity_resource", {
