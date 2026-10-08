@@ -73,6 +73,12 @@ function useMediaQuery(query: string): boolean {
   return matches;
 }
 
+/** E-L Growth Stage record pins (not other Growth pins such as powdery/downy). */
+function isGrowthStagePin(p: any): boolean {
+  if (p?.growth_stage_code) return true;
+  return /^growth\s*stage/i.test(String(p?.button_name ?? p?.title ?? ""));
+}
+
 export default function PinsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
   const isMobile = useIsMobile();
@@ -91,6 +97,7 @@ export default function PinsPage() {
   const [statusFilter, setStatusFilter] = useState<PinStatusFilter>("active");
   const [categoryFilter, setCategoryFilter] = useState<PinCategoryId | "all">("all");
   const [exporting, setExporting] = useState(false);
+  const [showGrowthStages, setShowGrowthStages] = useState(false);
   const [locationFilter, setLocationFilter] = useState<"all" | "assigned" | "unassigned">("all");
   const catColours = usePinCategoryColours();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -114,10 +121,8 @@ export default function PinsPage() {
 
   const paddockIds = useMemo(() => paddocks.map((p) => p.id), [paddocks]);
 
-  const vintageFilter = useVintageFilter(
-    { table: "pins", dateColumn: "created_at" },
-    { defaultToAll: true },
-  );
+  // Defaults: current Vintage (when it has pins), Active pins, Growth Stage pins hidden.
+  const vintageFilter = useVintageFilter({ table: "pins", dateColumn: "created_at" });
   const vintageScopeValue = vintageFilter.scope;
 
   const { data: pinsResult, isLoading, error } = useQuery({
@@ -264,6 +269,8 @@ export default function PinsPage() {
 
   const filtered = useMemo(() => {
     let list = statusFiltered;
+    // Growth Stage (E-L) pins are hidden by default; other Growth pins (e.g. powdery) stay.
+    if (!showGrowthStages) list = list.filter((p: any) => !isGrowthStagePin(p));
     if (categoryFilter !== "all") {
       list = list.filter((p: any) => normalisePinCategoryId(p) === categoryFilter);
     }
@@ -283,7 +290,7 @@ export default function PinsPage() {
       const d = pinPlacementDisplay(placements.get(p.id));
       return matchesPinSearch(p, d.blockLabel, d.rowLabel, search);
     });
-  }, [statusFiltered, search, paddockFilter, categoryFilter, locationFilter, placements, rowFromNum, rowToNum]);
+  }, [statusFiltered, showGrowthStages, search, paddockFilter, categoryFilter, locationFilter, placements, rowFromNum, rowToNum]);
 
 
   const PRIORITY_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1 };
@@ -579,6 +586,15 @@ export default function PinsPage() {
             </Button>
           ))}
         </div>
+        <Button
+          size="sm"
+          variant={showGrowthStages ? "secondary" : "outline"}
+          className="h-8 px-3 text-xs"
+          aria-pressed={showGrowthStages}
+          onClick={() => setShowGrowthStages((v) => !v)}
+        >
+          Growth Stages: {showGrowthStages ? "On" : "Off"}
+        </Button>
       </div>
 
 
