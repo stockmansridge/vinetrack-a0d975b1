@@ -143,6 +143,9 @@ export default function ManualIssuesAppleMap({
       annsRef.current = next;
     }
 
+    // In pick mode, fit once only: dropping/moving the pin must keep the
+    // user's current zoom and position.
+    if (pickRef.current && lastFitRef.current !== null) return;
     const key = `${fitKey ?? ""}|m:${markers.length}|g:${polygons.length}`;
     if (lastFitRef.current === key) return;
     const pts: { lat: number; lng: number }[] = [];
