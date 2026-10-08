@@ -444,7 +444,7 @@ export default function AdminUserActivityPage() {
   const refetch = () => {
     void refetchBase();
     void platformsQ.refetch();
-  });
+  };
 
   const [search, setSearch] = useState("");
   const [vineyardFilter, setVineyardFilter] = useState("all");
