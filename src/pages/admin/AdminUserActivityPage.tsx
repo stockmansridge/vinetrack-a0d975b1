@@ -35,7 +35,11 @@ import {
   formatRelative,
 } from "./_shared";
 import { PORTAL_APP_TYPE, appTypeLabel } from "@/lib/portalClientActivity";
-import { activityRpcArgs } from "@/lib/userActivityQuery";
+import {
+  groupPlatformsByUser,
+  userUsedAppType,
+  type PlatformActivityRow,
+} from "@/lib/userActivityQuery";
 
 interface UserActivityRow {
   user_id: string;
@@ -123,10 +127,35 @@ function statusClass(s: string | null | undefined) {
   }
 }
 
-async function fetchUserActivity(appType: string): Promise<UserActivityRow[]> {
+async function fetchPlatformActivity(): Promise<PlatformActivityRow[]> {
+  const { data, error } = await (iosSupabase as any).rpc("admin_user_activity_platforms");
+  if (error) throw error;
+  return (data ?? []) as PlatformActivityRow[];
+}
+
+function platformsDisplay(r: UserActivityRow): React.ReactNode {
+  if (r.platforms === undefined) return <span className="text-muted-foreground">Unavailable</span>;
+  if (r.platforms.length === 0) return <span className="text-muted-foreground">Not recorded</span>;
+  return (
+    <div className="flex flex-col gap-1">
+      {r.platforms.map((p) => (
+        <div key={p.app_type} className="flex items-center gap-2 text-xs">
+          <span className="inline-flex items-center px-2 py-0.5 rounded border border-border bg-muted">
+            {appTypeLabel(p.app_type)}
+          </span>
+          <span className="text-muted-foreground">
+            {p.last_seen_at ? formatRelative(p.last_seen_at) : "—"}
+            {p.browser_name ? ` · ${p.browser_name}${p.browser_version ? ` ${p.browser_version.split(".")[0]}` : ""}` : ""}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+async function fetchUserActivity(): Promise<UserActivityRow[]> {
   const { data, error } = await (iosSupabase as any).rpc(
     "admin_list_user_login_activity",
-    activityRpcArgs(appType),
   );
   if (error) throw error;
   return (data ?? []) as UserActivityRow[];
@@ -333,6 +362,13 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
     render: (r) => lastSeenDisplay(r),
   },
   {
+    key: "platforms",
+    label: "Platforms used",
+    className: "whitespace-nowrap",
+    sortable: true,
+    render: (r) => platformsDisplay(r),
+  },
+  {
     key: "app_type",
     label: "Latest client",
     className: "whitespace-nowrap",
@@ -378,9 +414,15 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
 
 export default function AdminUserActivityPage() {
   const [appTypeFilter, setAppTypeFilter] = useState("all");
-  const { data = [], isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ["admin", "user-activity", appTypeFilter],
-    queryFn: () => fetchUserActivity(appTypeFilter),
+  const platformsQ = useQuery({
+    queryKey: ["admin", "user-activity-platforms"],
+    queryFn: fetchPlatformActivity,
+    staleTime: 30_000,
+  });
+  const platformsError = platformsQ.error;
+  const { data: baseData = [], isLoading, error, refetch: refetchBase, isFetching } = useQuery({
+    queryKey: ["admin", "user-activity"],
+    queryFn: fetchUserActivity,
     staleTime: 30_000,
   });
 
@@ -481,12 +523,13 @@ export default function AdminUserActivityPage() {
       if (loginFilter === "inactive90") {
         if (!r.last_sign_in_at || !isOlderThan(r.last_sign_in_at, 90)) return false;
       }
+      if (!platformsError && !userUsedAppType(r.platforms, appTypeFilter)) return false;
       if (!q) return true;
       return [r.display_name, r.email]
         .map((x) => (x ?? "").toLowerCase())
         .some((x) => x.includes(q));
     });
-  }, [data, search, vineyardFilter, roleFilter, statusFilter, loginFilter]);
+  }, [data, search, vineyardFilter, roleFilter, statusFilter, loginFilter, appTypeFilter, platformsError]);
 
   const { sorted, toggleSort, getSortDirection } = useSortableTable<UserActivityRow, ActivitySortKey>(filtered, {
     accessors: {
@@ -617,7 +660,7 @@ export default function AdminUserActivityPage() {
               </SelectContent>
             </Select>
           )}
-          <Select value={appTypeFilter} onValueChange={setAppTypeFilter}>
+          <Select value={appTypeFilter} onValueChange={setAppTypeFilter} disabled={!!platformsError}>
             <SelectTrigger className="h-9 w-48" aria-label="Client filter">
               <SelectValue placeholder="Client" />
             </SelectTrigger>
@@ -636,6 +679,12 @@ export default function AdminUserActivityPage() {
 
       <Card className="p-0 overflow-hidden">
         <AdminError error={error} />
+        {platformsError && (
+          <div role="alert" className="mb-3 rounded border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            Platform history couldn't be loaded, so "Platforms used" and the client filter are unavailable
+            (this does not mean nobody used the Portal). {(platformsError as Error).message}
+          </div>
+        )}
         {isLoading && (
           <div className="p-4 text-sm text-muted-foreground">Loading…</div>
         )}
