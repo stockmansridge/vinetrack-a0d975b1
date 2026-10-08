@@ -239,11 +239,16 @@ export default function BoundaryDrawMap({
 
   const setPoly = setPolygon ?? (() => {});
   const precise = readonly && precisionPreview;
+  // Boundary editing opts into the same Apple precision zoom; the Esri fallback stays at native zoom.
+  const preciseEdit = !readonly && precisionPreview && !!setPolygon;
 
   return (
     <div className="relative h-full w-full">
       {mode === "apple" && precise ? (
         <PrecisionRowPreview centre={centre} polygon={polygon} rows={rows} rowLabels={rowLabels}
+          existingPolygons={existingPolygons} fitNonce={fitNonce} />
+      ) : mode === "apple" && preciseEdit ? (
+        <PrecisionBoundaryEditor centre={centre} polygon={polygon} setPolygon={setPoly}
           existingPolygons={existingPolygons} fitNonce={fitNonce} />
       ) : mode === "apple" ? (
         <AppleDrawMap
@@ -310,6 +315,41 @@ function PrecisionRowPreview({ centre, polygon, rows, rowLabels, existingPolygon
   })), [rowLabels]);
   return <ContourAppleMap centre={centre} shapes={shapes} markers={markers} onMapClick={() => {}}
     fitPoints={polygon.length ? polygon : existingPolygons.flat()} fitNonce={fitNonce} controlsPosition="left" />;
+}
+
+// Editable boundary on the shared precision map: tap adds, drag moves, midpoint inserts, vertex tap deletes (≥4).
+function PrecisionBoundaryEditor({ centre, polygon, setPolygon, existingPolygons, fitNonce }: {
+  centre: LatLng; polygon: LatLng[]; setPolygon: (p: LatLng[]) => void;
+  existingPolygons: LatLng[][]; fitNonce: number;
+}) {
+  const polyRef = useRef(polygon); polyRef.current = polygon;
+  const setRef = useRef(setPolygon); setRef.current = setPolygon;
+  const [initialFit] = useState(() => (polygon.length ? polygon : existingPolygons.flat()));
+  const shapes = useMemo<CShape[]>(() => [
+    ...existingPolygons.map((points, i): CShape => ({ id: `existing-${i}`, kind: "polygon", points,
+      color: EXISTING_STROKE, width: 1, opacity: 0.7, fillOpacity: 0.18 })),
+    ...(polygon.length >= 2 ? [{ id: "boundary", kind: polygon.length >= 3 ? "polygon" : "polyline",
+      points: polygon, color: POLY_STROKE, width: 2.5, fillOpacity: 0.25 } as CShape] : []),
+  ], [existingPolygons, polygon]);
+  const markers = useMemo<CMarker[]>(() => {
+    const out: CMarker[] = polygon.map((p, i) => ({
+      id: `v-${i}`, point: p, size: 22, draggable: true,
+      html: `<div style="width:22px;height:22px;border-radius:9999px;background:${POLY_STROKE};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 2px #0008">${i + 1}</div>`,
+      onDragEnd: (q) => { const next = polyRef.current.slice(); next[i] = q; setRef.current(next); },
+      onClick: () => { if (polyRef.current.length >= 4) setRef.current(polyRef.current.filter((_, j) => j !== i)); },
+    }));
+    if (polygon.length >= 3) polygon.forEach((a, i) => {
+      const b = polygon[(i + 1) % polygon.length];
+      out.push({ id: `m-${i}`, point: { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 }, size: 14,
+        html: `<div style="width:12px;height:12px;border-radius:9999px;background:#fff;border:2px solid ${POLY_STROKE}"></div>`,
+        onClick: () => { const next = polyRef.current.slice(); next.splice(i + 1, 0, { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 }); setRef.current(next); },
+      });
+    });
+    return out;
+  }, [polygon]);
+  return <ContourAppleMap centre={centre} shapes={shapes} markers={markers}
+    onMapClick={(p) => setRef.current([...polyRef.current, p])}
+    fitPoints={polygon.length ? polygon : initialFit} fitNonce={fitNonce} controlsPosition="left" />;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
