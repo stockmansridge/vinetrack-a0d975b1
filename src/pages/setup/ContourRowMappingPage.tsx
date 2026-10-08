@@ -289,7 +289,7 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
   const renumber = guard(() => {
     if (!group) return;
     const plan = planRenumber(draft, group.id);
-    if (!plan.ok) { setIssues([{ level: "error", message: plan.error }]); return; }
+    if (plan.ok === false) { setIssues([{ level: "error", message: plan.error }]); return; }
     if (!plan.changed) { toast({ title: "Row numbers already up to date" }); return; }
     setDraft((d) => applyRenumber(d, group.id, plan)); setIssues([]);
     toast({ title: `Updated ${plan.changed} row number${plan.changed === 1 ? "" : "s"}`, description: "Shapes and edits unchanged. Press Save Draft to keep this." });
