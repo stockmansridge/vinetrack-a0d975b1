@@ -1484,7 +1484,7 @@ function WorkTaskDrawer({
                   error={membersError ?? externalsError}
                   memberName={memberName}
                   allowUnassigned
-                  quickAdd={{ canManage: canManageExternalResources(currentRole), userId: user?.id ?? null }}
+                  quickAdd={{ canManage: canManageExternalResources(drawerRole), userId: userId ?? null }}
                 />
               </Field>
             </Section>
@@ -1744,6 +1744,7 @@ function LabourLinesSection({
   userId: string | null;
   onChanged: (savedLine?: WorkTaskLabourLine) => void;
 }) {
+  const { currentRole: drawerRole } = useVineyard();
   const [adding, setAdding] = useState(false);
 
   if (!taskId) {

@@ -154,7 +154,7 @@ export default function PruningActivityDialog({
   const memberIdsQ = useQuery({ queryKey: ["vineyard_member_ids", vineyardId], enabled: !!vineyardId && open, queryFn: () => fetchVineyardMembersWithCategory(vineyardId) });
   const resourceMembers = useMemo(() => {
     const ids = new Set((memberIdsQ.data ?? []).map((m) => m.user_id));
-    return teamMembers.filter((m) => ids.has(m.userId));
+    return (teamMembers ?? []).filter((m) => ids.has(m.userId));
   }, [memberIdsQ.data, teamMembers]);
   const extQ = useExternalResources(open ? vineyardId : null);
   const { selectedVineyardId, currentRole } = useVineyard();
