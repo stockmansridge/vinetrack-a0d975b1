@@ -2316,6 +2316,7 @@ function MachineLineForm({
   onSave,
   onCancel,
   saving,
+  configFor,
 }: {
   form: MachineLineFormState;
   setForm: (f: MachineLineFormState | ((p: MachineLineFormState) => MachineLineFormState)) => void;
@@ -2323,9 +2324,23 @@ function MachineLineForm({
   onSave: () => void;
   onCancel: () => void;
   saving: boolean;
+  configFor: (f: MachineLineFormState) => MachineCostConfig;
 }) {
+  const config = configFor(form);
+  const auto = computeMachineLineAuto(form, config);
+  // Recompute non-overridden fields whenever inputs or config change.
   const update = (patch: Partial<MachineLineFormState>) =>
-    setForm((prev) => ({ ...prev, ...patch }));
+    setForm((prev) => {
+      const next = { ...prev, ...patch };
+      return applyAuto(next, configFor(next));
+    });
+  useEffect(() => {
+    setForm((prev) => {
+      const next = applyAuto(prev, config);
+      return next === prev ? prev : next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.litresPerHour, config.fuelPricePerLitre]);
 
   return (
     <div className="rounded border bg-background p-3 space-y-3">
@@ -2358,7 +2373,7 @@ function MachineLineForm({
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2">{/* inputs */}
         <div className="space-y-1">
           <Label className="text-xs">Work date *</Label>
           <Input
@@ -2405,51 +2420,65 @@ function MachineLineForm({
             onChange={(e) => update({ engine_hours_used: e.target.value })}
           />
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Fuel (L)</Label>
-          <Input
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            min="0"
-            value={form.fuel_litres}
-            onChange={(e) => update({ fuel_litres: e.target.value })}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Fuel cost</Label>
-          <Input
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            min="0"
-            value={form.fuel_cost}
-            onChange={(e) => update({ fuel_cost: e.target.value })}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Hourly machine rate</Label>
-          <Input
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            min="0"
-            value={form.hourly_machine_rate}
-            onChange={(e) => update({ hourly_machine_rate: e.target.value })}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Total machine cost</Label>
-          <Input
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            min="0"
-            value={form.total_machine_cost}
-            onChange={(e) => update({ total_machine_cost: e.target.value })}
-          />
-        </div>
+        {(
+          [
+            ["hourly_machine_rate", "Hourly machine rate"],
+            ["fuel_litres", "Fuel (L)"],
+            ["fuel_cost", "Fuel cost"],
+            ["total_machine_cost", "Machine charge"],
+          ] as const
+        ).map(([field, label]) => {
+          const isAuto = field !== "hourly_machine_rate";
+          const manual = isAuto && form.manual[field as AutoField];
+          return (
+            <div key={field} className="space-y-1">
+              <Label className="text-xs" htmlFor={`ml-${field}`}>
+                {label}
+                {isAuto && form[field] !== "" && (
+                  <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                    {manual ? "(override — clear to auto)" : "(auto)"}
+                  </span>
+                )}
+              </Label>
+              <Input
+                id={`ml-${field}`}
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                value={form[field]}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (!isAuto) return update({ [field]: v } as Partial<MachineLineFormState>);
+                  setForm((prev) => {
+                    const manualNow = v.trim() !== "";
+                    const next = {
+                      ...prev,
+                      [field]: v,
+                      manual: { ...prev.manual, [field]: manualNow },
+                    } as MachineLineFormState;
+                    return manualNow ? next : applyAuto(next, config);
+                  });
+                }}
+              />
+            </div>
+          );
+        })}
       </div>
+      {(config.litresPerHour != null || auto.missing.length > 0) && (
+        <div className="text-[11px] text-muted-foreground space-y-0.5">
+          {config.litresPerHour != null && (
+            <div>
+              Fuel use {config.litresPerHour} L/hr
+              {config.fuelPricePerLitre != null && <> · fuel price ${config.fuelPricePerLitre.toFixed(3)}/L</>}
+              {" · "}machine charge excludes fuel (set Fuel cost to 0 if the rate includes fuel).
+            </div>
+          )}
+          {auto.missing.map((m) => (
+            <div key={m} className="text-amber-600 dark:text-amber-400">⚠ {m}</div>
+          ))}
+        </div>
+      )}
 
       <div className="space-y-1">
         <Label className="text-xs">Notes</Label>
