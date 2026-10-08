@@ -976,7 +976,7 @@ export default function WorkTasksPage() {
               };
               return (
                 <TableRow key={t.id} className="cursor-pointer" onClick={() => setSelected(t)}>
-                  {(wtOrder as WtCol[]).map((id) => {
+                  {(wtDisplayOrder as WtCol[]).map((id) => {
                     if (id === "cost" && !canSeeCosts) return null;
                     return <Fragment key={id}>{cellMap[id]}</Fragment>;
                   })}
