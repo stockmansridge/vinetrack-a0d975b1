@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
+import { COMPLETED_BADGE_CLASS } from "@/lib/workTaskCompletion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -99,7 +100,7 @@ export function WorkTaskCompletionSection({ task, userId, onSaved, fmtDate, time
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-medium">
           Status
-          <Badge variant={completed ? "default" : "outline"}>{completed ? "Completed" : "To do"}</Badge>
+          {completed ? <Badge className={COMPLETED_BADGE_CLASS}>Completed</Badge> : <Badge variant="outline">To do</Badge>}
         </div>
         {completed ? (
           <Button size="sm" variant="outline" disabled={busy} onClick={() => reopen.mutate()}>

@@ -156,3 +156,6 @@ export function assignmentCellLabel(
   if (t.assigned_external_resource_id) return externalNameOf(t.assigned_external_resource_id) || "Unknown crew / contractor";
   return t.assigned_to ? nameOf(t.assigned_to) || "Unknown member" : "Unassigned";
 }
+
+/** Single shared bright, accessible green for every Work Task "Completed" badge (list + details). */
+export const COMPLETED_BADGE_CLASS = "border-transparent bg-success text-success-foreground hover:bg-success/90 font-semibold";
