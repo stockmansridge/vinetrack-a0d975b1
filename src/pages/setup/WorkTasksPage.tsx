@@ -2067,7 +2067,15 @@ interface MachineLineFormState {
   fuel_cost: string;
   hourly_machine_rate: string;
   total_machine_cost: string;
+  /** Fields the user has overridden; auto-costing never overwrites these. */
+  manual: Record<AutoField, boolean>;
 }
+
+const noManual = (): Record<AutoField, boolean> => ({
+  fuel_litres: false,
+  fuel_cost: false,
+  total_machine_cost: false,
+});
 
 const emptyForm = (): MachineLineFormState => ({
   equipment_source: "free_text",
@@ -2082,22 +2090,52 @@ const emptyForm = (): MachineLineFormState => ({
   fuel_cost: "",
   hourly_machine_rate: "",
   total_machine_cost: "",
+  manual: noManual(),
 });
 
-const formFromLine = (l: WorkTaskMachineLine): MachineLineFormState => ({
-  equipment_source: ((l.equipment_source as WorkTaskMachineEquipmentSource) ?? "free_text"),
-  equipment_ref_id: l.equipment_ref_id ?? null,
-  equipment_name_snapshot: l.equipment_name_snapshot ?? "",
-  work_date: l.work_date ?? new Date().toISOString().slice(0, 10),
-  duration_hours: l.duration_hours == null ? "" : String(l.duration_hours),
-  engine_hours_used: l.engine_hours_used == null ? "" : String(l.engine_hours_used),
-  entry_source: (l.entry_source ?? "manual"),
-  notes: l.notes ?? "",
-  fuel_litres: l.fuel_litres == null ? "" : String(l.fuel_litres),
-  fuel_cost: l.fuel_cost == null ? "" : String(l.fuel_cost),
-  hourly_machine_rate: l.hourly_machine_rate == null ? "" : String(l.hourly_machine_rate),
-  total_machine_cost: l.total_machine_cost == null ? "" : String(l.total_machine_cost),
-});
+const AUTO_FIELDS: AutoField[] = ["fuel_litres", "fuel_cost", "total_machine_cost"];
+
+/** Fill every non-overridden auto field from the current inputs/config. */
+export function applyAuto(f: MachineLineFormState, config: MachineCostConfig): MachineLineFormState {
+  const auto = computeMachineLineAuto(f, config);
+  let changed = false;
+  const next = { ...f };
+  for (const k of AUTO_FIELDS) {
+    if (f.manual[k]) continue;
+    const v = autoToString(auto[k]);
+    if (next[k] !== v) {
+      next[k] = v;
+      changed = true;
+    }
+  }
+  return changed ? next : f;
+}
+
+export const formFromLine = (
+  l: WorkTaskMachineLine,
+  config?: MachineCostConfig,
+): MachineLineFormState => {
+  const base: MachineLineFormState = {
+    equipment_source: ((l.equipment_source as WorkTaskMachineEquipmentSource) ?? "free_text"),
+    equipment_ref_id: l.equipment_ref_id ?? null,
+    equipment_name_snapshot: l.equipment_name_snapshot ?? "",
+    work_date: l.work_date ?? new Date().toISOString().slice(0, 10),
+    duration_hours: l.duration_hours == null ? "" : String(l.duration_hours),
+    engine_hours_used: l.engine_hours_used == null ? "" : String(l.engine_hours_used),
+    entry_source: (l.entry_source ?? "manual"),
+    notes: l.notes ?? "",
+    fuel_litres: l.fuel_litres == null ? "" : String(l.fuel_litres),
+    fuel_cost: l.fuel_cost == null ? "" : String(l.fuel_cost),
+    hourly_machine_rate: l.hourly_machine_rate == null ? "" : String(l.hourly_machine_rate),
+    total_machine_cost: l.total_machine_cost == null ? "" : String(l.total_machine_cost),
+    manual: noManual(),
+  };
+  if (!config) return base;
+  // Saved values that differ from auto are durable overrides.
+  const auto = computeMachineLineAuto(base, config);
+  for (const k of AUTO_FIELDS) base.manual[k] = isOverride(base[k], auto[k]);
+  return applyAuto(base, config);
+};
 
 function MachineWorkSection({
   workTaskId,
@@ -2124,13 +2162,31 @@ function MachineWorkSection({
   const [editingId, setEditingId] = useState<string | null>(null); // id, or "__new__"
   const [form, setForm] = useState<MachineLineFormState>(emptyForm());
   const groups = useMemo(() => buildMachinePickerGroups(lookups), [lookups]);
+  // Vineyard fuel price: weighted cost/L across fuel purchases (same source
+  // as GPS-trip fuel costing).
+  const { data: fuelPurchases } = useQuery({
+    queryKey: ["fuel_purchases", vineyardId, "all"],
+    enabled: !!vineyardId,
+    queryFn: () => fetchFuelPurchasesForVineyard(vineyardId!),
+  });
+  const fuelPricePerLitre = useMemo(
+    () => (fuelPurchases && fuelPurchases.length ? weightedFuelCostPerLitre(fuelPurchases) : null),
+    [fuelPurchases],
+  );
+  const configFor = (f: Pick<MachineLineFormState, "equipment_source" | "equipment_ref_id">): MachineCostConfig => ({
+    litresPerHour: equipmentLitresPerHour(f.equipment_source, f.equipment_ref_id, lookups),
+    fuelPricePerLitre,
+  });
 
   const startCreate = () => {
     setForm(emptyForm());
     setEditingId("__new__");
   };
   const startEdit = (l: WorkTaskMachineLine) => {
-    setForm(formFromLine(l));
+    setForm(formFromLine(l, configFor({
+      equipment_source: (l.equipment_source as WorkTaskMachineEquipmentSource) ?? "free_text",
+      equipment_ref_id: l.equipment_ref_id ?? null,
+    })));
     setEditingId(l.id);
   };
   const cancel = () => {
