@@ -153,7 +153,7 @@ import { useTeamLookup } from "@/hooks/useTeamLookup";
 import ResourcePicker from "@/components/people/ResourcePicker";
 import { useExternalResources } from "@/components/people/ExternalResourcesCard";
 import { COMPLETED_BADGE_CLASS } from "@/lib/workTaskCompletion";
-import { EL_TARGET_OPTIONS, elStageLabel, isElScheduled, scheduleBasisOf, scheduleCell, schedulePayload, validateSchedule, workTaskDateBounds, type ScheduleBasis } from "@/lib/workTaskSchedule";
+import { EL_TARGET_OPTIONS, elStageLabel, isElScheduled, matchesElRange, scheduleBasisOf, scheduleCell, schedulePayload, validateSchedule, workTaskDateBounds, type ScheduleBasis } from "@/lib/workTaskSchedule";
 import { canManageExternalResources, workTaskAssignmentFields, workTaskAssignmentValue, type ExternalResource, type ResourceValue } from "@/lib/externalResources";
 import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
 
@@ -289,6 +289,8 @@ export default function WorkTasksPage() {
   const [status, setStatus] = useState<string>(ANY);
   const [workerType, setWorkerType] = useState<string>(ANY);
   const [labourFilter, setLabourFilter] = useState<string>(ANY); // any|has|missing
+  const [elMin, setElMin] = useState<string>(ANY);
+  const [elMax, setElMax] = useState<string>(ANY);
   const [selected, setSelected] = useState<WorkTask | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createdTask, setCreatedTask] = useState<WorkTask | null>(null);
@@ -636,6 +638,11 @@ export default function WorkTasksPage() {
     }
     if (labourFilter === "has") list = list.filter((t) => (linesByTask.get(t.id)?.length ?? 0) > 0);
     if (labourFilter === "missing") list = list.filter((t) => (linesByTask.get(t.id)?.length ?? 0) === 0);
+    {
+      const lo = elMin === ANY ? null : Number(elMin);
+      const hi = elMax === ANY ? null : Number(elMax);
+      if (lo != null || hi != null) list = list.filter((t) => matchesElRange(t, lo, hi));
+    }
     if (filter.trim()) {
       const f = filter.toLowerCase();
       list = list.filter((t) =>
@@ -645,7 +652,7 @@ export default function WorkTasksPage() {
     }
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tasks, filter, from, to, paddockId, taskType, status, workerType, labourFilter, linesByTask, totalsByTask, taskPaddockIds]);
+  }, [tasks, filter, from, to, paddockId, taskType, status, workerType, labourFilter, elMin, elMax, linesByTask, totalsByTask, taskPaddockIds]);
 
   const seasonFiltered = useMemo(() => {
     if (effectiveSeason === "all") return filtered;
@@ -800,15 +807,15 @@ export default function WorkTasksPage() {
         <div>
           <h1 className="text-2xl font-semibold">Work Tasks</h1>
           <p className="text-sm text-muted-foreground">
-            Record vineyard activities that are not associated with a tracked field trip. This includes canopy management, wire lifting, shoot thinning, mowing, slashing, cultivation, weed control, planting, trellis work, bird-netting and general vineyard labour.
+            Plan and manage your vineyard work throughout the year. Record work missed during a Trip, track labour and machinery hours, and understand the costs of managing your vineyard.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={exportCsv}>
-            <Download className="h-4 w-4 mr-2" /> CSV
-          </Button>
+        <div className="flex flex-wrap gap-2">
           <Button size="sm" onClick={() => { setCreatedTask(null); setCreateOpen(true); }}>
             <Plus className="h-4 w-4 mr-2" /> New Work Task
+          </Button>
+          <Button variant="outline" size="sm" onClick={exportCsv}>
+            <Download className="h-4 w-4 mr-2" /> CSV
           </Button>
         </div>
       </div>
@@ -842,6 +849,29 @@ export default function WorkTasksPage() {
               {STATUS_OPTIONS.map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}
             </SelectContent>
           </Select>
+        </Filter>
+        <Filter label="E-L min">
+          <Select value={elMin} onValueChange={setElMin}>
+            <SelectTrigger className="w-44" aria-label="E-L range minimum"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY}>All</SelectItem>
+              {EL_TARGET_OPTIONS.map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </Filter>
+        <Filter label="E-L max">
+          <div className="flex items-center gap-1">
+            <Select value={elMax} onValueChange={setElMax}>
+              <SelectTrigger className="w-44" aria-label="E-L range maximum"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ANY}>All</SelectItem>
+                {EL_TARGET_OPTIONS.map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {(elMin !== ANY || elMax !== ANY) && (
+              <Button type="button" variant="ghost" size="sm" onClick={() => { setElMin(ANY); setElMax(ANY); }}>Reset</Button>
+            )}
+          </div>
         </Filter>
         <Filter label="Worker type">
           <Select value={workerType} onValueChange={setWorkerType}>
@@ -1471,32 +1501,33 @@ function WorkTaskDrawer({
                     onCreated={onSaved}
                   />
                 </Field>
-                <Field label="Schedule by">
-                  <div role="radiogroup" aria-label="Schedule by" className="flex gap-1">
-                    {([["date", "Work Date / Range"], ["el_stage", "E-L Growth Stage"]] as const).map(([k, l]) => (
-                      <Button key={k} type="button" size="sm" role="radio" aria-checked={scheduleBasis === k}
-                        variant={scheduleBasis === k ? "default" : "outline"} onClick={() => setScheduleBasis(k)}>{l}</Button>))}
-                  </div>
-                </Field>
-                {scheduleBasis === "date" ? (
-                  <Field label="Work Date">
-                    <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                <div className="col-span-2 min-w-0">
+                  <Field label="Schedule by">
+                    <div role="radiogroup" aria-label="Schedule by" className="flex flex-wrap gap-2">
+                      {([["date", "Work Date / Range"], ["el_stage", "E-L Growth Stage"]] as const).map(([k, l]) => (
+                        <Button key={k} type="button" size="sm" role="radio" aria-checked={scheduleBasis === k}
+                          variant={scheduleBasis === k ? "default" : "outline"} onClick={() => setScheduleBasis(k)}>{l}</Button>))}
+                    </div>
                   </Field>
-                ) : (
-                  <Field label="Target E-L stage">
-                    <Select value={targetEl != null ? String(targetEl) : ""} onValueChange={(v) => setTargetEl(Number(v))}>
-                      <SelectTrigger aria-label="Target E-L stage"><SelectValue placeholder="Choose E-L stage" /></SelectTrigger>
-                      <SelectContent>
-                        {EL_TARGET_OPTIONS.map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
-                        {targetEl != null && !EL_TARGET_OPTIONS.some((o) => o.value === targetEl) && <SelectItem value={String(targetEl)}>{elStageLabel(targetEl)}</SelectItem>}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground mt-1">No Work Date needed. The actual date is recorded when you press Complete. Switching here clears any planned Work Date on save.</p>
-                  </Field>
-                )}
-                <Field label={`Area ${areaUnit} (auto)`}>
-                  <Input type="number" value={areaHaDisplay} readOnly disabled placeholder="—" />
-                </Field>
+                </div>
+                <div className="col-span-2 min-w-0">
+                  {scheduleBasis === "date" ? (
+                    <Field label="Work Date">
+                      <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full sm:max-w-xs" />
+                    </Field>
+                  ) : (
+                    <Field label="Target E-L stage">
+                      <Select value={targetEl != null ? String(targetEl) : ""} onValueChange={(v) => setTargetEl(Number(v))}>
+                        <SelectTrigger aria-label="Target E-L stage" className="w-full sm:max-w-md"><SelectValue placeholder="Choose E-L stage" /></SelectTrigger>
+                        <SelectContent>
+                          {EL_TARGET_OPTIONS.map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
+                          {targetEl != null && !EL_TARGET_OPTIONS.some((o) => o.value === targetEl) && <SelectItem value={String(targetEl)}>{elStageLabel(targetEl)}</SelectItem>}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-1">No Work Date needed. The actual date is recorded when you press Complete. Switching here clears any planned Work Date on save.</p>
+                    </Field>
+                  )}
+                </div>
               </div>
               {paddockMissingArea && (
                 <p className="text-xs text-destructive">
