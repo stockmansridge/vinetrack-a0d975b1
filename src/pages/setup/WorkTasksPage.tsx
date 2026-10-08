@@ -135,6 +135,16 @@ import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import type { RegionFormatters } from "@/lib/regionFormatters";
 import { useVintage } from "@/lib/useVintage";
 import { isUserVineyardMachine } from "@/lib/equipmentTaxonomy";
+import {
+  computeMachineLineAuto,
+  autoToString,
+  isOverride,
+  equipmentLitresPerHour,
+  type AutoField,
+  type MachineCostConfig,
+} from "@/lib/machineLineCosting";
+import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
+import { weightedFuelCostPerLitre } from "@/lib/tripCosting";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 import { WorkTaskCompletionSection } from "@/components/work-tasks/WorkTaskCompletionSection";
 import { calendarDate, completionLabel, displayCompletedDate, isWorkTaskCompleted } from "@/lib/workTaskCompletion";
@@ -1972,8 +1982,9 @@ interface MachineLookups {
     name?: string | null;
     machine_type?: string | null;
     legacy_tractor_id?: string | null;
+    fuel_usage_l_per_hour?: number | null;
   }>;
-  tractors: ReadonlyArray<{ id: string; name?: string | null }>;
+  tractors: ReadonlyArray<{ id: string; name?: string | null; fuel_usage_l_per_hour?: number | null }>;
   sprayEquipment: ReadonlyArray<{ id: string; name?: string | null }>;
   equipmentItems: ReadonlyArray<{ id: string; name?: string | null }>;
 }
@@ -2067,7 +2078,15 @@ interface MachineLineFormState {
   fuel_cost: string;
   hourly_machine_rate: string;
   total_machine_cost: string;
+  /** Fields the user has overridden; auto-costing never overwrites these. */
+  manual: Record<AutoField, boolean>;
 }
+
+const noManual = (): Record<AutoField, boolean> => ({
+  fuel_litres: false,
+  fuel_cost: false,
+  total_machine_cost: false,
+});
 
 const emptyForm = (): MachineLineFormState => ({
   equipment_source: "free_text",
@@ -2082,22 +2101,52 @@ const emptyForm = (): MachineLineFormState => ({
   fuel_cost: "",
   hourly_machine_rate: "",
   total_machine_cost: "",
+  manual: noManual(),
 });
 
-const formFromLine = (l: WorkTaskMachineLine): MachineLineFormState => ({
-  equipment_source: ((l.equipment_source as WorkTaskMachineEquipmentSource) ?? "free_text"),
-  equipment_ref_id: l.equipment_ref_id ?? null,
-  equipment_name_snapshot: l.equipment_name_snapshot ?? "",
-  work_date: l.work_date ?? new Date().toISOString().slice(0, 10),
-  duration_hours: l.duration_hours == null ? "" : String(l.duration_hours),
-  engine_hours_used: l.engine_hours_used == null ? "" : String(l.engine_hours_used),
-  entry_source: (l.entry_source ?? "manual"),
-  notes: l.notes ?? "",
-  fuel_litres: l.fuel_litres == null ? "" : String(l.fuel_litres),
-  fuel_cost: l.fuel_cost == null ? "" : String(l.fuel_cost),
-  hourly_machine_rate: l.hourly_machine_rate == null ? "" : String(l.hourly_machine_rate),
-  total_machine_cost: l.total_machine_cost == null ? "" : String(l.total_machine_cost),
-});
+const AUTO_FIELDS: AutoField[] = ["fuel_litres", "fuel_cost", "total_machine_cost"];
+
+/** Fill every non-overridden auto field from the current inputs/config. */
+export function applyAuto(f: MachineLineFormState, config: MachineCostConfig): MachineLineFormState {
+  const auto = computeMachineLineAuto(f, config);
+  let changed = false;
+  const next = { ...f };
+  for (const k of AUTO_FIELDS) {
+    if (f.manual[k]) continue;
+    const v = autoToString(auto[k]);
+    if (next[k] !== v) {
+      next[k] = v;
+      changed = true;
+    }
+  }
+  return changed ? next : f;
+}
+
+export const formFromLine = (
+  l: WorkTaskMachineLine,
+  config?: MachineCostConfig,
+): MachineLineFormState => {
+  const base: MachineLineFormState = {
+    equipment_source: ((l.equipment_source as WorkTaskMachineEquipmentSource) ?? "free_text"),
+    equipment_ref_id: l.equipment_ref_id ?? null,
+    equipment_name_snapshot: l.equipment_name_snapshot ?? "",
+    work_date: l.work_date ?? new Date().toISOString().slice(0, 10),
+    duration_hours: l.duration_hours == null ? "" : String(l.duration_hours),
+    engine_hours_used: l.engine_hours_used == null ? "" : String(l.engine_hours_used),
+    entry_source: (l.entry_source ?? "manual"),
+    notes: l.notes ?? "",
+    fuel_litres: l.fuel_litres == null ? "" : String(l.fuel_litres),
+    fuel_cost: l.fuel_cost == null ? "" : String(l.fuel_cost),
+    hourly_machine_rate: l.hourly_machine_rate == null ? "" : String(l.hourly_machine_rate),
+    total_machine_cost: l.total_machine_cost == null ? "" : String(l.total_machine_cost),
+    manual: noManual(),
+  };
+  if (!config) return base;
+  // Saved values that differ from auto are durable overrides.
+  const auto = computeMachineLineAuto(base, config);
+  for (const k of AUTO_FIELDS) base.manual[k] = isOverride(base[k], auto[k]);
+  return applyAuto(base, config);
+};
 
 function MachineWorkSection({
   workTaskId,
@@ -2124,13 +2173,31 @@ function MachineWorkSection({
   const [editingId, setEditingId] = useState<string | null>(null); // id, or "__new__"
   const [form, setForm] = useState<MachineLineFormState>(emptyForm());
   const groups = useMemo(() => buildMachinePickerGroups(lookups), [lookups]);
+  // Vineyard fuel price: weighted cost/L across fuel purchases (same source
+  // as GPS-trip fuel costing).
+  const { data: fuelPurchases } = useQuery({
+    queryKey: ["fuel_purchases", vineyardId, "all"],
+    enabled: !!vineyardId,
+    queryFn: () => fetchFuelPurchasesForVineyard(vineyardId!),
+  });
+  const fuelPricePerLitre = useMemo(
+    () => (fuelPurchases && fuelPurchases.length ? weightedFuelCostPerLitre(fuelPurchases) : null),
+    [fuelPurchases],
+  );
+  const configFor = (f: Pick<MachineLineFormState, "equipment_source" | "equipment_ref_id">): MachineCostConfig => ({
+    litresPerHour: equipmentLitresPerHour(f.equipment_source, f.equipment_ref_id, lookups),
+    fuelPricePerLitre,
+  });
 
   const startCreate = () => {
     setForm(emptyForm());
     setEditingId("__new__");
   };
   const startEdit = (l: WorkTaskMachineLine) => {
-    setForm(formFromLine(l));
+    setForm(formFromLine(l, configFor({
+      equipment_source: (l.equipment_source as WorkTaskMachineEquipmentSource) ?? "free_text",
+      equipment_ref_id: l.equipment_ref_id ?? null,
+    })));
     setEditingId(l.id);
   };
   const cancel = () => {
@@ -2236,6 +2303,7 @@ function MachineWorkSection({
                     onSave={() => saveMutation.mutate()}
                     onCancel={cancel}
                     saving={saveMutation.isPending}
+                    configFor={configFor}
                   />
                 );
               }
@@ -2293,6 +2361,7 @@ function MachineWorkSection({
               onSave={() => saveMutation.mutate()}
               onCancel={cancel}
               saving={saveMutation.isPending}
+              configFor={configFor}
             />
           )}
         </div>
@@ -2316,6 +2385,7 @@ function MachineLineForm({
   onSave,
   onCancel,
   saving,
+  configFor,
 }: {
   form: MachineLineFormState;
   setForm: (f: MachineLineFormState | ((p: MachineLineFormState) => MachineLineFormState)) => void;
@@ -2323,9 +2393,23 @@ function MachineLineForm({
   onSave: () => void;
   onCancel: () => void;
   saving: boolean;
+  configFor: (f: MachineLineFormState) => MachineCostConfig;
 }) {
+  const config = configFor(form);
+  const auto = computeMachineLineAuto(form, config);
+  // Recompute non-overridden fields whenever inputs or config change.
   const update = (patch: Partial<MachineLineFormState>) =>
-    setForm((prev) => ({ ...prev, ...patch }));
+    setForm((prev) => {
+      const next = { ...prev, ...patch };
+      return applyAuto(next, configFor(next));
+    });
+  useEffect(() => {
+    setForm((prev) => {
+      const next = applyAuto(prev, config);
+      return next === prev ? prev : next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.litresPerHour, config.fuelPricePerLitre]);
 
   return (
     <div className="rounded border bg-background p-3 space-y-3">
@@ -2405,51 +2489,65 @@ function MachineLineForm({
             onChange={(e) => update({ engine_hours_used: e.target.value })}
           />
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Fuel (L)</Label>
-          <Input
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            min="0"
-            value={form.fuel_litres}
-            onChange={(e) => update({ fuel_litres: e.target.value })}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Fuel cost</Label>
-          <Input
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            min="0"
-            value={form.fuel_cost}
-            onChange={(e) => update({ fuel_cost: e.target.value })}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Hourly machine rate</Label>
-          <Input
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            min="0"
-            value={form.hourly_machine_rate}
-            onChange={(e) => update({ hourly_machine_rate: e.target.value })}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Total machine cost</Label>
-          <Input
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            min="0"
-            value={form.total_machine_cost}
-            onChange={(e) => update({ total_machine_cost: e.target.value })}
-          />
-        </div>
+        {(
+          [
+            ["hourly_machine_rate", "Hourly machine rate"],
+            ["fuel_litres", "Fuel (L)"],
+            ["fuel_cost", "Fuel cost"],
+            ["total_machine_cost", "Machine charge"],
+          ] as const
+        ).map(([field, label]) => {
+          const isAuto = field !== "hourly_machine_rate";
+          const manual = isAuto && form.manual[field as AutoField];
+          return (
+            <div key={field} className="space-y-1">
+              <Label className="text-xs" htmlFor={`ml-${field}`}>
+                {label}
+                {isAuto && form[field] !== "" && (
+                  <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                    {manual ? "(override — clear to auto)" : "(auto)"}
+                  </span>
+                )}
+              </Label>
+              <Input
+                id={`ml-${field}`}
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                value={form[field]}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (!isAuto) return update({ [field]: v } as Partial<MachineLineFormState>);
+                  setForm((prev) => {
+                    const manualNow = v.trim() !== "";
+                    const next = {
+                      ...prev,
+                      [field]: v,
+                      manual: { ...prev.manual, [field]: manualNow },
+                    } as MachineLineFormState;
+                    return manualNow ? next : applyAuto(next, config);
+                  });
+                }}
+              />
+            </div>
+          );
+        })}
       </div>
+      {(config.litresPerHour != null || auto.missing.length > 0) && (
+        <div className="text-[11px] text-muted-foreground space-y-0.5">
+          {config.litresPerHour != null && (
+            <div>
+              Fuel use {config.litresPerHour} L/hr
+              {config.fuelPricePerLitre != null && <> · fuel price ${config.fuelPricePerLitre.toFixed(3)}/L</>}
+              {" · "}machine charge excludes fuel (set Fuel cost to 0 if the rate includes fuel).
+            </div>
+          )}
+          {auto.missing.map((m) => (
+            <div key={m} className="text-amber-600 dark:text-amber-400">⚠ {m}</div>
+          ))}
+        </div>
+      )}
 
       <div className="space-y-1">
         <Label className="text-xs">Notes</Label>
