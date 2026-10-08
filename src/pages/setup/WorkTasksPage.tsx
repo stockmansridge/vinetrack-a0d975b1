@@ -135,6 +135,16 @@ import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import type { RegionFormatters } from "@/lib/regionFormatters";
 import { useVintage } from "@/lib/useVintage";
 import { isUserVineyardMachine } from "@/lib/equipmentTaxonomy";
+import {
+  computeMachineLineAuto,
+  autoToString,
+  isOverride,
+  equipmentLitresPerHour,
+  type AutoField,
+  type MachineCostConfig,
+} from "@/lib/machineLineCosting";
+import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
+import { weightedFuelCostPerLitre } from "@/lib/tripCosting";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 import { WorkTaskCompletionSection } from "@/components/work-tasks/WorkTaskCompletionSection";
 import { calendarDate, completionLabel, displayCompletedDate, isWorkTaskCompleted } from "@/lib/workTaskCompletion";
@@ -1972,8 +1982,9 @@ interface MachineLookups {
     name?: string | null;
     machine_type?: string | null;
     legacy_tractor_id?: string | null;
+    fuel_usage_l_per_hour?: number | null;
   }>;
-  tractors: ReadonlyArray<{ id: string; name?: string | null }>;
+  tractors: ReadonlyArray<{ id: string; name?: string | null; fuel_usage_l_per_hour?: number | null }>;
   sprayEquipment: ReadonlyArray<{ id: string; name?: string | null }>;
   equipmentItems: ReadonlyArray<{ id: string; name?: string | null }>;
 }
@@ -2292,6 +2303,7 @@ function MachineWorkSection({
                     onSave={() => saveMutation.mutate()}
                     onCancel={cancel}
                     saving={saveMutation.isPending}
+                    configFor={configFor}
                   />
                 );
               }
@@ -2349,6 +2361,7 @@ function MachineWorkSection({
               onSave={() => saveMutation.mutate()}
               onCancel={cancel}
               saving={saveMutation.isPending}
+              configFor={configFor}
             />
           )}
         </div>
