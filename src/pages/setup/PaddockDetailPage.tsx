@@ -76,6 +76,7 @@ import {
 
 import BoundaryDrawMap from "@/components/paddocks/BoundaryDrawMap";
 import RowMapWorkspace from "@/components/paddocks/RowMapWorkspace";
+import PanelTabs from "@/components/paddocks/PanelTabs";
 import VarietyAllocationEditor, {
   deserialiseAllocations,
   isAllocationsValid,
@@ -555,13 +556,18 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
 
         {/* Rows */}
         <TabsContent value="rows">
-          <RowMapWorkspace onFit={() => setRowsFitNonce((n) => n + 1)} settings={<>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Row setup</CardTitle>
-                <CardDescription>Same generator as iOS &amp; New Block.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
+          <RowMapWorkspace onFit={() => setRowsFitNonce((n) => n + 1)} settings={
+            <PanelTabs label="Row setup"
+              header={<div><div className="text-sm font-semibold">Row setup</div><p className="text-xs text-muted-foreground">Same generator as iOS &amp; New Block.</p></div>}
+              footer={canEdit ? (
+                <div className="flex justify-end">
+                  <Button onClick={onSaveRows} disabled={saving || rowOverrideError || generatedRows.length === 0} className="gap-1">
+                    <Save className="h-4 w-4" /> Save rows
+                  </Button>
+                </div>
+              ) : undefined}
+              tabs={[
+                { id: "layout", label: "Layout", content: <>
                 <NumField label="Row direction (°)" value={rowDirection} onChange={setRowDirection} step="0.5" disabled={!canEdit} />
                 <NumField label="Row width (m)" value={rowWidth} onChange={setRowWidth} step="0.1" disabled={!canEdit} />
                 <NumField label="Row offset (m)" value={rowOffset} onChange={setRowOffset} step="0.1" disabled={!canEdit} />
@@ -575,9 +581,24 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
                     </div>
                   </div>
                 </div>
+                </> },
+                { id: "vines", label: "Vine counts", content: <>
                 <NumField label="Vine spacing (m)" value={vineSpacing} onChange={setVineSpacing} step="0.1" disabled={!canEdit} />
                 <NumField label="Vine count override" value={vineCountOverride} onChange={setVineCountOverride} step="1" disabled={!canEdit} />
                 <NumField label="Total row length override (m)" hint="Optional. Overrides the calculated total length of all rows in this block." value={rowLengthOverride} onChange={setRowLengthOverride} step="1" disabled={!canEdit} />
+                <p className="text-xs text-muted-foreground">Per-row vine counts (optional). Blank uses the calculated estimate (row length ÷ vine spacing). Shared with iOS and Android.</p>
+              <div className="overflow-x-auto"><div className="min-w-[480px]">
+              <RowVineCountOverrides
+                rows={rowsToSave}
+                vineSpacingM={Number(vineSpacing) > 0 ? Number(vineSpacing) : null}
+                rowLengthOverrideM={Number(rowLengthOverride) > 0 ? Number(rowLengthOverride) : null}
+                values={rowOverrides}
+                onChange={setRowOverrides}
+                disabled={!canEdit}
+              />
+              </div></div>
+                </> },
+                { id: "summary", label: "Summary", content: <>
                 <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
                   <Metric label="Rows generated" value={String(generatedRows.length)} />
                   <Metric
@@ -593,44 +614,9 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
                     value={effectiveRowVineTotal > 0 ? effectiveRowVineTotal.toLocaleString() : "—"}
                   />
                 </div>
-                {canEdit && (
-                  <div className="flex justify-end pt-2">
-                    <Button onClick={onSaveRows} disabled={saving || rowOverrideError || generatedRows.length === 0} className="gap-1">
-                      <Save className="h-4 w-4" /> Save rows
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Vine counts per row</CardTitle>
-              <CardDescription>
-                Optional manual vine count for a single row. Blank uses the calculated estimate
-                (row length ÷ vine spacing). Shared with iOS and Android.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto"><div className="min-w-[480px]">
-              <RowVineCountOverrides
-                rows={rowsToSave}
-                vineSpacingM={Number(vineSpacing) > 0 ? Number(vineSpacing) : null}
-                rowLengthOverrideM={Number(rowLengthOverride) > 0 ? Number(rowLengthOverride) : null}
-                values={rowOverrides}
-                onChange={setRowOverrides}
-                disabled={!canEdit}
-              />
-              </div></div>
-              {canEdit && (
-                <div className="flex justify-end pt-3">
-                  <Button onClick={onSaveRows} disabled={saving || rowOverrideError} className="gap-1">
-                    <Save className="h-4 w-4" /> Save rows
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          </>}>
+                </> },
+              ]} />
+          }>
             <BoundaryDrawMap polygon={polygon} readonly rows={generatedRows}
               excludePaddockId={paddock.id} precisionPreview fitNonce={rowsFitNonce} />
           </RowMapWorkspace>

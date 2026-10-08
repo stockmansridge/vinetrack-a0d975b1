@@ -47,3 +47,10 @@
 - [x] Row setup maps: apply contour 1×/2×/4× overzoom to New Block Step 3 Rows and existing block Rows tab (Apple first; Esri fallback with tile overzoom).
 - [x] Map-dominant layout on New Rows, existing Rows and contour editor: full-width/height map, floating hide/show settings panel, Full screen + Escape, dialogs stay on top, narrow-screen panel.
 - [x] User Activity: Portal telemetry (portal-web/web) + client filter
+
+## Contour/row setup usability
+- [x] Draft-vs-active explainer, numbered steps, prominent Start trace
+- [x] Delete row (confirmed, by stable ids) and numbering-only Update row numbers
+- [x] First/last row number labels at row start (normal previews already; contour groups added)
+- [x] Tabbed floating settings: contour Groups/Setup/Row edit/Review; normal Rows Layout/Vine counts/Summary
+- [ ] Signed-in visual check as System Admin (not done)

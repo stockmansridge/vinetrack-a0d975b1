@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import BoundaryDrawMap from "@/components/paddocks/BoundaryDrawMap";
 import RowMapWorkspace from "@/components/paddocks/RowMapWorkspace";
+import PanelTabs from "@/components/paddocks/PanelTabs";
 
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
@@ -423,14 +424,16 @@ export default function NewPaddockPage() {
 
       {step === "rows" && (
         <RowMapWorkspace onFit={() => setRowsFitNonce((n) => n + 1)} settings={
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Row setup</CardTitle>
-              <CardDescription>
-                Geometry is generated using the same algorithm as the iOS app.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
+          <PanelTabs label="Row setup"
+            header={<div><div className="text-sm font-semibold">Row setup</div><p className="text-xs text-muted-foreground">Geometry is generated using the same algorithm as the iOS app.</p></div>}
+            footer={
+              <div className="flex justify-between gap-2">
+                <Button variant="ghost" onClick={() => setStep("boundary")}>Back</Button>
+                <Button onClick={() => setStep("varieties")} disabled={generated.length === 0}>Next: varieties</Button>
+              </div>
+            }
+            tabs={[
+              { id: "layout", label: "Layout", content: <>
               <StepperField label="Row direction (°)" value={rowDirection} onChange={setRowDirection} step={0.5} min={0} max={360} />
               <StepperField label="Row width (m)" value={rowWidth} onChange={setRowWidth} step={0.1} min={0.1} />
               <StepperField label="Row offset (m)" value={rowOffset} onChange={setRowOffset} step={0.1} />
@@ -444,22 +447,6 @@ export default function NewPaddockPage() {
                   </div>
                 </div>
               </div>
-              <NumberField label="Vine spacing (m)" value={vineSpacing} onChange={setVineSpacing} step="0.1" />
-              <details className="text-sm">
-                <summary className="cursor-pointer text-muted-foreground">Optional overrides</summary>
-                <div className="mt-3 space-y-3">
-                  <NumberField label="Vine count override" value={vineCountOverride} onChange={setVineCountOverride} step="1" />
-                  <NumberField label="Total row length override (m)" hint="Optional. Overrides the calculated total length of all rows in this block." value={rowLengthOverride} onChange={setRowLengthOverride} step="1" />
-                </div>
-              </details>
-
-              <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
-                <Metric label="Area" value={rf.area(areaHa, 2)} />
-                <Metric label="Rows generated" value={fmt(generated.length, 0)} />
-                <Metric label="Total row length" value={`${fmt(totalRowLengthM, 0)} m`} />
-                {effectiveVineCount != null && <Metric label="Estimated vines" value={fmt(effectiveVineCount, 0)} />}
-              </div>
-
               {contourAdmin && (
                 <div className="rounded-md border border-orange-500 p-3 text-sm space-y-2">
                   <label className="flex items-center gap-2 font-medium text-orange-600 dark:text-orange-400">
@@ -478,13 +465,27 @@ export default function NewPaddockPage() {
                   </p>
                 </div>
               )}
-
-              <div className="flex justify-between gap-2 pt-2">
-                <Button variant="ghost" onClick={() => setStep("boundary")}>Back</Button>
-                <Button onClick={() => setStep("varieties")} disabled={generated.length === 0}>Next: varieties</Button>
+              </> },
+              { id: "vines", label: "Vine counts", content: <>
+              <NumberField label="Vine spacing (m)" value={vineSpacing} onChange={setVineSpacing} step="0.1" />
+              <details className="text-sm">
+                <summary className="cursor-pointer text-muted-foreground">Optional overrides</summary>
+                <div className="mt-3 space-y-3">
+                  <NumberField label="Vine count override" value={vineCountOverride} onChange={setVineCountOverride} step="1" />
+                  <NumberField label="Total row length override (m)" hint="Optional. Overrides the calculated total length of all rows in this block." value={rowLengthOverride} onChange={setRowLengthOverride} step="1" />
+                </div>
+              </details>
+              </> },
+              { id: "summary", label: "Summary", content: <>
+              <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
+                <Metric label="Area" value={rf.area(areaHa, 2)} />
+                <Metric label="Rows generated" value={fmt(generated.length, 0)} />
+                <Metric label="Total row length" value={`${fmt(totalRowLengthM, 0)} m`} />
+                {effectiveVineCount != null && <Metric label="Estimated vines" value={fmt(effectiveVineCount, 0)} />}
               </div>
-            </CardContent>
-          </Card>
+
+              </> },
+            ]} />
         }>
           <PreviewMap polygon={polygon} rows={generated} fitNonce={rowsFitNonce} />
         </RowMapWorkspace>
