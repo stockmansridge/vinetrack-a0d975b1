@@ -1,3 +1,4 @@
+import { isGrowthStagePin } from "@/lib/pinsFilter";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
@@ -19,6 +20,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 interface Props {
   onUnavailable: (reason: string) => void;
   statusFilter?: "active" | "completed" | "all";
+  hideGrowthStages?: boolean;
 }
 
 interface Paddock {
@@ -39,7 +41,7 @@ function makePinElement(hex: string) {
   return el;
 }
 
-export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }: Props) {
+export default function ApplePinsMap({ onUnavailable, statusFilter = "active", hideGrowthStages = false }: Props) {
   const { selectedVineyardId } = useVineyard();
   const catColours = usePinCategoryColours();
   const isMobile = useIsMobile();
@@ -68,7 +70,10 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
     staleTime: 5 * 60_000,
   });
   const allPins = pinsResult?.pins ?? [];
-  const pins = useMemo(() => applyPinStatusFilter(allPins, statusFilter), [allPins, statusFilter]);
+  const pins = useMemo(() => {
+    const list = applyPinStatusFilter(allPins, statusFilter);
+    return hideGrowthStages ? list.filter((p: any) => !isGrowthStagePin(p)) : list;
+  }, [allPins, statusFilter, hideGrowthStages]);
 
   const paddockNameById = useMemo(() => {
     const m = new Map<string, string | null>();

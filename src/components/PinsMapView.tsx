@@ -1,77 +1,50 @@
 import { useEffect, useState } from "react";
 import ApplePinsMap from "@/components/ApplePinsMap";
-import PinsMap from "@/components/PinsMap";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { initMapKit } from "@/lib/mapkit";
-
-type Status = "checking" | "apple" | "fallback";
-type Forced = "auto" | "apple" | "osm";
 
 export type PinStatusFilter = "active" | "completed" | "all";
 
-export default function PinsMapView({ statusFilter = "active" }: { statusFilter?: PinStatusFilter } = {}) {
-  const [status, setStatus] = useState<Status>("checking");
+export default function PinsMapView({
+  statusFilter = "active",
+  hideGrowthStages = false,
+}: { statusFilter?: PinStatusFilter; hideGrowthStages?: boolean } = {}) {
+  const [status, setStatus] = useState<"checking" | "apple" | "error">("checking");
   const [reason, setReason] = useState<string | null>(null);
-  const [forced, setForced] = useState<Forced>("auto");
 
   useEffect(() => {
-    if (forced === "osm") {
-      setStatus("fallback");
-      return;
-    }
     let cancelled = false;
-    setStatus("checking");
     initMapKit()
       .then(() => !cancelled && setStatus("apple"))
       .catch((e: Error) => {
         if (cancelled) return;
         setReason(e?.message || "unknown");
-        setStatus(forced === "apple" ? "checking" : "fallback");
+        setStatus("error");
       });
     return () => {
       cancelled = true;
     };
-  }, [forced]);
+  }, []);
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="text-sm text-muted-foreground">Map provider</div>
-        <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-md border bg-background p-0.5">
-            {(["auto", "apple", "osm"] as const).map((f) => (
-              <Button
-                key={f}
-                size="sm"
-                variant={forced === f ? "secondary" : "ghost"}
-                className="h-7 px-3 text-xs"
-                onClick={() => setForced(f)}
-              >
-                {f === "auto" ? "Auto" : f === "apple" ? "Apple" : "OSM"}
-              </Button>
-            ))}
-          </div>
-          {status === "checking" && (
-            <Badge variant="outline" className="text-xs">Map: checking…</Badge>
-          )}
-          {status === "fallback" && reason && forced !== "osm" && (
-            <Badge variant="outline" className="text-xs" title={reason}>
-              Apple Maps unavailable — using fallback
-            </Badge>
-          )}
-        </div>
+        <div className="text-sm text-muted-foreground">Map provider: Apple Maps</div>
+        {status === "checking" && <Badge variant="outline" className="text-xs">Loading map…</Badge>}
       </div>
       {status === "apple" ? (
         <ApplePinsMap
           statusFilter={statusFilter}
+          hideGrowthStages={hideGrowthStages}
           onUnavailable={(r) => {
             setReason(r);
-            setStatus("fallback");
+            setStatus("error");
           }}
         />
-      ) : status === "fallback" ? (
-        <PinsMap statusFilter={statusFilter} />
+      ) : status === "error" ? (
+        <div className="h-[600px] rounded-md border flex items-center justify-center text-sm text-muted-foreground p-4 text-center" title={reason ?? undefined}>
+          Apple Maps couldn't load right now. Please refresh to try again.
+        </div>
       ) : (
         <div className="h-[600px] rounded-md bg-muted animate-pulse" />
       )}

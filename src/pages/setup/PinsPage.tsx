@@ -1,3 +1,4 @@
+import { isGrowthStagePin } from "@/lib/pinsFilter";
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
@@ -73,11 +74,6 @@ function useMediaQuery(query: string): boolean {
   return matches;
 }
 
-/** E-L Growth Stage record pins (not other Growth pins such as powdery/downy). */
-function isGrowthStagePin(p: any): boolean {
-  if (p?.growth_stage_code) return true;
-  return /^growth\s*stage/i.test(String(p?.button_name ?? p?.title ?? ""));
-}
 
 export default function PinsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
@@ -809,7 +805,7 @@ export default function PinsPage() {
       </TabsContent>
 
       <TabsContent value="map" className="mt-0">
-        <PinsMapView statusFilter={statusFilter} />
+        <PinsMapView statusFilter={statusFilter} hideGrowthStages={!showGrowthStages} />
       </TabsContent>
     </Tabs>
   );
