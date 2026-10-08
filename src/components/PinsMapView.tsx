@@ -28,10 +28,11 @@ export default function PinsMapView({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-sm text-muted-foreground">Map provider: Apple Maps</div>
-        {status === "checking" && <Badge variant="outline" className="text-xs">Loading map…</Badge>}
-      </div>
+      {status === "checking" && (
+        <div className="flex justify-end">
+          <Badge variant="outline" className="text-xs">Loading map…</Badge>
+        </div>
+      )}
       {status === "apple" ? (
         <ApplePinsMap
           statusFilter={statusFilter}
