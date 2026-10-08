@@ -65,3 +65,9 @@ export function matchesPinSearch(
   ];
   return haystack.some((v) => String(v ?? "").toLowerCase().includes(f));
 }
+
+/** E-L Growth Stage record pins (not other Growth pins such as powdery/downy). */
+export function isGrowthStagePin(p: any): boolean {
+  if (p?.growth_stage_code) return true;
+  return /^growth\s*stage/i.test(String(p?.button_name ?? p?.title ?? ""));
+}
