@@ -90,7 +90,7 @@ export function planChemicalImport(text: string, existing: SavedChemical[]): Che
     const changes: string[] = [];
     const cur = (match ?? {}) as Record<string, unknown>;
     const set = (field: keyof SavedChemicalInput, value: unknown) => {
-      (input as Record<string, unknown>)[field] = value;
+      (input as unknown as Record<string, unknown>)[field] = value;
       if ((cur[field] ?? null) !== (value ?? null) && !(cur[field] == null && value === "")) changes.push(field);
     };
     if (match && name !== match.name) changes.push("name");
