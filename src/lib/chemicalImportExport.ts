@@ -86,14 +86,17 @@ export function planChemicalImport(text: string, existing: SavedChemical[]): Che
       seen.add(match.id);
     }
 
-    const input: SavedChemicalInput = { name };
+    // Case/spacing-only differences keep the saved spelling.
+    const sameName = match && key(name, "") === key(match.name, "");
+    const finalName = sameName ? match!.name! : name;
+    const input: SavedChemicalInput = { name: finalName };
     const changes: string[] = [];
     const cur = (match ?? {}) as Record<string, unknown>;
     const set = (field: keyof SavedChemicalInput, value: unknown) => {
       (input as unknown as Record<string, unknown>)[field] = value;
       if ((cur[field] ?? null) !== (value ?? null) && !(cur[field] == null && value === "")) changes.push(field);
     };
-    if (match && name !== match.name) changes.push("name");
+    if (match && !sameName) changes.push("name");
 
     let bad = false;
     const texts: TextField[] = ["manufacturer", "active_ingredient", "chemical_group", "crop", "problem", "unit", "restrictions", "notes"];
