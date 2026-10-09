@@ -88,6 +88,7 @@ import { VineyardProductBadge } from "@/components/chemicals/VineyardProductBadg
 import { ChemicalLabelThumb, UsedForCell } from "@/components/chemicals/ChemicalListCells";
 import { useV3RevisionDisplay, v3RevisionIdOf, usedForOf, productLinkOf } from "@/lib/chemicalV3Display";
 import { Link } from "react-router-dom";
+import { ChemicalImportExport } from "@/components/chemicals/ChemicalImportExport";
 
 // The legacy free-text `chemical_group` column is no longer displayed — the
 // structured resistance group is the single visible authority. The value is
@@ -491,6 +492,9 @@ export default function SavedChemicalsPage() {
             {" "}Soft-deleted records are excluded.
           </p>
         </div>
+        {selectedVineyardId && (
+          <ChemicalImportExport vineyardId={selectedVineyardId} chemicals={chemicals} canImport={canEdit} />
+        )}
         <ChemicalSectionNav active="chemicals" onAddChemical={() => setSearchOpen(true)} />
       </div>
 
