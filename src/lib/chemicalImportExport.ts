@@ -97,7 +97,13 @@ export function planChemicalImport(text: string, existing: SavedChemical[]): Che
 
     let bad = false;
     const texts: TextField[] = ["manufacturer", "active_ingredient", "chemical_group", "crop", "problem", "unit", "restrictions", "notes"];
-    for (const f of texts) { const v = get(f); if (v) set(f, v); }
+    for (const f of texts) {
+      const v = get(f);
+      if (!v) continue;
+      // "Nufarm" vs "Nufarm Australia Pty Ltd" is the same maker — keep the saved spelling.
+      if (f === "manufacturer" && match && normaliseManufacturerName(v) === normaliseManufacturerName(match.manufacturer)) continue;
+      set(f, v);
+    }
     for (const f of ["label_url", "product_url"] as const) {
       const v = get(f);
       if (!v) continue;
