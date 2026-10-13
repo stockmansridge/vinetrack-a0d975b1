@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
+import { Link } from "react-router-dom";
+import { canAccessRoute } from "@/lib/rolePermissions";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -724,6 +726,11 @@ export default function YieldReportsPage() {
           <Button onClick={() => setRecordOpen(true)} disabled={!selectedVineyardId}>
             <Plus className="h-4 w-4 mr-1.5" /> Record Actual Yield
           </Button>
+          {canAccessRoute("/reports/wine-grape-levy", currentRole) && (
+            <Button variant="outline" asChild>
+              <Link to="/reports/wine-grape-levy">Prepare Wine Grape Levy</Link>
+            </Button>
+          )}
         </div>
       </div>
 

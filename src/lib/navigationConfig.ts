@@ -334,6 +334,13 @@ export const ACTIVITIES: NavActivity[] = [
         report: true,
         keywords: ["yield comparison", "vintage comparison"],
       },
+      {
+        id: "yield.wineGrapeLevy",
+        label: "Wine Grape Levy",
+        path: "/reports/wine-grape-levy",
+        report: true,
+        keywords: ["levy", "wine grapes levy", "levies online", "daff", "annual return"],
+      },
     ],
     crossLinks: [
       { label: "Pruning Yield Calculator", path: "/tools/yield-estimation" },

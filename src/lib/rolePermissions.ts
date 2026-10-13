@@ -16,6 +16,7 @@ export const FIELD_ROLES: Role[] = ["owner", "manager", "supervisor"];
 const ROUTE_ALLOW: Record<string, Role[]> = {
   // Owner/manager only — financials, team, admin setup
   "/reports/costs": ADMIN_ROLES,
+  "/reports/wine-grape-levy": ADMIN_ROLES,
   "/team": ADMIN_ROLES,
   "/billing": ["owner"],
   "/setup/vineyard": ADMIN_ROLES,
