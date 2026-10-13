@@ -6,7 +6,7 @@
 // harvest figures are only suggestions for the owner to reconcile.
 
 import {
-  pickingKey,
+
   supersedeActualYield,
   aggregatePickingRecords,
   type ActualYieldEntry,
@@ -183,7 +183,6 @@ export function buildLevySources(
   };
 }
 
-export { pickingKey };
 
 // ---------------------------------------------------------------------------
 // Worksheet inputs and conversions
