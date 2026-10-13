@@ -39,6 +39,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { canAccessRoute } from "@/lib/rolePermissions";
+import { isAustralianVineyard } from "@/lib/wineGrapeLevyAccess";
 
 export type NavGroup = "Overview" | "Vineyard" | "Work" | "Resources" | "Settings";
 
@@ -52,6 +53,8 @@ export interface NavViewer {
   };
   /** True when the signed-in user has at least one account-billing vineyard. */
   hasAccountBilling: boolean;
+  /** Selected vineyard profile country (vineyards.country), unresolved = null. */
+  vineyardCountry?: string | null;
   /** True while access information is still loading. */
   loading?: boolean;
 }
@@ -339,6 +342,7 @@ export const ACTIVITIES: NavActivity[] = [
         label: "Wine Grape Levy",
         path: "/reports/wine-grape-levy",
         report: true,
+        visible: (v) => isAustralianVineyard(v.vineyardCountry),
         keywords: ["levy", "wine grapes levy", "levies online", "daff", "annual return"],
       },
     ],

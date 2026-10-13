@@ -25,6 +25,7 @@ const viewer = (over: Partial<NavViewer> = {}): NavViewer => ({
   isSystemAdmin: false,
   irrigation: { records: true, reports: true, setup: true },
   hasAccountBilling: true,
+  vineyardCountry: "Australia",
   ...over,
 });
 

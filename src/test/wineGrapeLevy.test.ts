@@ -107,7 +107,7 @@ describe("permissions and navigation", () => {
   it("sits under Yield & Harvest and appears in reports for owners only", () => {
     expect(resolveLocation("/reports/wine-grape-levy").view?.label).toBe("Wine Grape Levy");
     expect(resolveLocation("/reports/wine-grape-levy").activity?.label).toBe("Yield & Harvest");
-    const v = (role: string): NavViewer => ({ role, isSystemAdmin: false, irrigation: { records: true, reports: true, setup: true }, hasAccountBilling: false });
+    const v = (role: string): NavViewer => ({ role, isSystemAdmin: false, irrigation: { records: true, reports: true, setup: true }, hasAccountBilling: false, vineyardCountry: "Australia" });
     expect(reportDestinations(v("owner")).some((d) => d.path === "/reports/wine-grape-levy")).toBe(true);
     expect(reportDestinations(v("supervisor")).some((d) => d.path === "/reports/wine-grape-levy")).toBe(false);
   });

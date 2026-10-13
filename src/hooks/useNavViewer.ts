@@ -12,7 +12,7 @@ import type { NavViewer } from "@/lib/navigationConfig";
  * eligibility helpers. It grants nothing — route guards still decide access.
  */
 export function useNavViewer(): NavViewer {
-  const { currentRole, selectedVineyardId } = useVineyard();
+  const { currentRole, selectedVineyardId, currentCountry } = useVineyard();
   const { isAdmin: isSystemAdmin, loading: adminLoading } = useIsSystemAdmin();
   const { capabilities, isLoading: irrigationLoading } =
     useIrrigationCapabilities(selectedVineyardId) as any;
@@ -21,6 +21,7 @@ export function useNavViewer(): NavViewer {
   return useMemo(
     () => ({
       role: currentRole,
+      vineyardCountry: currentCountry,
       isSystemAdmin: !!isSystemAdmin,
       irrigation: {
         records: !!capabilities?.can_view_irrigation_records,
@@ -32,6 +33,7 @@ export function useNavViewer(): NavViewer {
     }),
     [
       currentRole,
+      currentCountry,
       isSystemAdmin,
       adminLoading,
       capabilities?.can_view_irrigation_records,
