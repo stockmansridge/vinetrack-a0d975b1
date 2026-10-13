@@ -19,6 +19,8 @@ const DESCRIPTIONS: Record<string, string> = {
   "/reports/yield": "Yield analytics by block, variety and vintage, including price and revenue where permitted.",
   "/reports/yield-comparison": "Compare yields across vintages and blocks.",
   "/reports/irrigation": "Irrigation volumes and history reporting.",
+  "/reports/wine-grape-levy":
+    "Preparation worksheet for your annual Wine Grapes Levy return in Levies Online (Owners and Managers). VineTrack does not lodge or pay the levy.",
   "/reports/costs": "Vineyard cost reporting for Owners and Managers.",
   "/reports/documents": "Central launcher for Trip, Spray and Rainfall report PDFs/CSVs.",
 };
