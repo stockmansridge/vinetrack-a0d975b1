@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
 import { Link } from "react-router-dom";
+import { isAustralianVineyard } from "@/lib/wineGrapeLevyAccess";
 import { canAccessRoute } from "@/lib/rolePermissions";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -143,7 +144,7 @@ type AnyRow =
   | (PickedYieldRow & { __kind: "picked" });
 
 export default function YieldReportsPage() {
-  const { selectedVineyardId, currentRole } = useVineyard();
+  const { selectedVineyardId, currentRole, currentCountry } = useVineyard();
   // Portal-side mirror of the existing VineTrack role model. The RPC/RLS remains
   // the real security boundary — this only avoids showing an action that would fail.
   const canManageYields = currentRole === "owner" || currentRole === "manager";
@@ -726,7 +727,7 @@ export default function YieldReportsPage() {
           <Button onClick={() => setRecordOpen(true)} disabled={!selectedVineyardId}>
             <Plus className="h-4 w-4 mr-1.5" /> Record Actual Yield
           </Button>
-          {canAccessRoute("/reports/wine-grape-levy", currentRole) && (
+          {canAccessRoute("/reports/wine-grape-levy", currentRole) && isAustralianVineyard(currentCountry) && (
             <Button variant="outline" asChild>
               <Link to="/reports/wine-grape-levy">Prepare Wine Grape Levy</Link>
             </Button>

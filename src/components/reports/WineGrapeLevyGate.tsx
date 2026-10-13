@@ -6,7 +6,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { canAccessRoute } from "@/lib/rolePermissions";
-import { wineGrapeLevyAccess, type WineGrapeLevyAccess } from "@/lib/wineGrapeLevyAccess";
+import { isAustralianVineyard, wineGrapeLevyAccess, type WineGrapeLevyAccess } from "@/lib/wineGrapeLevyAccess";
 
 /** Presentational gate: children only mount when access is "allowed". */
 export function WineGrapeLevyGateView({
@@ -55,7 +55,7 @@ export function WineGrapeLevyGateView({
  */
 export function WineGrapeLevyGate({ children }: { children: ReactNode }) {
   const { selectedVineyardId, currentRole, currentCountry, loading } = useVineyard();
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["wine-grape-levy", "vineyard-country", selectedVineyardId],
     enabled: !!selectedVineyardId,
     queryFn: async (): Promise<string | null> => {
@@ -68,20 +68,23 @@ export function WineGrapeLevyGate({ children }: { children: ReactNode }) {
       return (data as { country?: string | null } | null)?.country ?? null;
     },
   });
-  // Both sources must agree on AU; membership country updates immediately on
-  // Vineyard Settings save, the fresh read guards stale support snapshots.
-  const country = !isError && data !== undefined && data === currentCountry ? data : isError ? null : data;
-  const freshLoading = loading || (!!selectedVineyardId && isLoading);
-  const access = wineGrapeLevyAccess({
-    role: currentRole,
-    country: selectedVineyardId ? (data === undefined ? null : currentCountry ?? country) : null,
-    loading: freshLoading,
-  });
-  // Require the fresh read to also resolve AU before allowing.
-  const final =
-    access === "allowed" && wineGrapeLevyAccess({ role: currentRole, country, loading: false }) !== "allowed"
-      ? wineGrapeLevyAccess({ role: currentRole, country, loading: false })
-      : access;
+  // Membership country updates as soon as Vineyard Settings saves; the fresh
+  // read guards stale support-session snapshots. Both must resolve to AU.
+  const final: WineGrapeLevyAccess | "error" = isError
+    ? "error"
+    : wineGrapeLevyAccess({
+        role: currentRole,
+        country: isAustralianVineyard(currentCountry) ? data : currentCountry,
+        loading: !selectedVineyardId || loading || isLoading || data === undefined,
+      });
+  if (final === "error") {
+    return (
+      <Card className="m-6 p-6 space-y-3">
+        <p className="text-sm">Couldn't check this vineyard's country.</p>
+        <Button variant="outline" onClick={() => refetch()}>Retry</Button>
+      </Card>
+    );
+  }
   return (
     <WineGrapeLevyGateView access={final} role={currentRole} key={selectedVineyardId ?? "none"}>
       <div key={selectedVineyardId ?? "none"}>{children}</div>

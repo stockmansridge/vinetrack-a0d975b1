@@ -71,6 +71,7 @@ import DocumentsPage from "./pages/reports/DocumentsPage";
 import GrowthStageRecordsPage from "./pages/reports/GrowthStageRecordsPage";
 import YieldReportsComparisonPage from "./pages/reports/YieldReportsPage";
 import WineGrapeLevyPage from "./pages/reports/WineGrapeLevyPage";
+import { WineGrapeLevyGate } from "./components/reports/WineGrapeLevyGate";
 import YieldAnalyticsPage from "./pages/reports/YieldAnalyticsPage";
 import YieldCalculatorPage from "./pages/tools/YieldCalculatorPage";
 import ResistancePlannerPage from "./pages/tools/ResistancePlannerPage";
@@ -257,7 +258,7 @@ const App = () => (
                     <Route path="/reports/growth-stage" element={<GrowthStageRecordsPage />} />
                     <Route path="/reports/yield" element={<YieldAnalyticsPage />} />
                     <Route path="/reports/yield-comparison" element={<YieldReportsComparisonPage />} />
-                    <Route path="/reports/wine-grape-levy" element={<WineGrapeLevyPage />} />
+                    <Route path="/reports/wine-grape-levy" element={<WineGrapeLevyGate><WineGrapeLevyPage /></WineGrapeLevyGate>} />
 
                     <Route path="/tools/irrigation" element={<IrrigationCalculatorPage />} />
                     <Route path="/tools/satellite-mapping" element={<SatelliteMappingPage />} />
