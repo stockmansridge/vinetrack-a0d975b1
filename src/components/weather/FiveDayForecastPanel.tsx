@@ -248,7 +248,7 @@ function TrendChart({
             tickFormatter={(value) => formatChartHourLabel(rows[Number(value)]?.time)}
           />
           <YAxis
-            width={kind === "wind" ? 74 : 48}
+            width={74}
             domain={domain ?? ["auto", "auto"]}
             tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
             tickFormatter={(value) => (kind === "temperature" ? rf.temperature(value, 0) : rf.wind(value, 0))}
