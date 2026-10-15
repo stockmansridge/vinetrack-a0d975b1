@@ -248,7 +248,7 @@ function TrendChart({
             tickFormatter={(value) => formatChartHourLabel(rows[Number(value)]?.time)}
           />
           <YAxis
-            width={48}
+            width={kind === "wind" ? 74 : 48}
             domain={domain ?? ["auto", "auto"]}
             tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
             tickFormatter={(value) => (kind === "temperature" ? rf.temperature(value, 0) : rf.wind(value, 0))}
@@ -582,7 +582,7 @@ export function FiveDayForecastPanel({ vineyardId, forecast, rf, freshnessLabel,
       </section>
 
       <MetricGrid
-        label="Wind"
+        label="Max wind"
         Icon={Wind}
         iconClass="bg-emerald-500/15 text-emerald-500"
         days={days}
