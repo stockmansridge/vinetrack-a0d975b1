@@ -1,0 +1,2 @@
+- TripDetailSheet.tsx is the only trip drawer: Trips and linked (non-manual) Spray Records both open it for the exact trip_id in the selected vineyard; Spray Records passes showLifecycleActions={false}; manual/unlinked records keep their own drawer; why: one map/worksheet/report UI and no extra delete rights.
+- Spray Report export fetches trips.path_points itself when callers pass none (sprayReportExport.ts); why: every entrypoint gets the same saved geometry.
