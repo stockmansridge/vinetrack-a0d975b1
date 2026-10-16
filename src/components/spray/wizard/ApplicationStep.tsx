@@ -143,7 +143,6 @@ export function ApplicationStep({ app, patch, update, canEdit, vineyardId, intel
         </div>
         {isFertigation && (
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Badge variant="outline">System Admin · in development</Badge>
             Spray target, blocks, equipment, canopy, water and resistance check don't apply and
             have been cleared.
           </p>
