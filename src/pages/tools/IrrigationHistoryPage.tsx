@@ -356,7 +356,7 @@ export default function IrrigationHistoryPage() {
   const [editing, setEditing] = useState<IrrigationSession | null>(null);
   const [reversing, setReversing] = useState<IrrigationSession | null>(null);
   const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
-  const fertApps = useFertigationApplications(selectedVineyardId, { includeReversed: true }, isSystemAdmin);
+  const fertApps = useFertigationApplications(selectedVineyardId, { includeReversed: true }, true);
   const fertBySession = useMemo(() => activeBySession(fertApps.data), [fertApps.data]);
   const [fertFor, setFertFor] = useState<{ session: IrrigationSession; app: FertigationApplication | null } | null>(null);
 

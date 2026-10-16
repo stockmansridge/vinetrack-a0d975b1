@@ -93,14 +93,14 @@ export default function IrrigationRecordPage() {
   // exactly as before: no queries, no card, no extra writes.
   const { isAdmin: isSystemAdmin, loading: adminLoading } = useIsSystemAdmin() as { isAdmin: boolean; loading?: boolean };
   const [searchParams] = useSearchParams();
-  const fertSteps = useFertigationProgramSteps(selectedVineyardId, isSystemAdmin);
+  const fertSteps = useFertigationProgramSteps(selectedVineyardId, true);
   // Direct visits start on "No fertigation"; a route step is applied only once validated.
   const fert = useFertigationDraft(fertSteps.data ?? [], null);
   const requestedStepId = requestedFertigationStepId(searchParams);
   const preselection = resolveFertigationPreselection({
     requestedId: requestedStepId,
-    isSystemAdmin,
-    adminLoading: !!adminLoading,
+    isSystemAdmin: true,
+    adminLoading: false,
     vineyardId: selectedVineyardId ?? null,
     steps: fertSteps.data,
     stepsLoading: fertSteps.isLoading,
@@ -117,7 +117,7 @@ export default function IrrigationRecordPage() {
   }, [preselection.status, preselection.status === "valid" ? preselection.step.id : null, selectedVineyardId]);
   const preselectedStep = preselection.status === "valid" && fert.stepId === preselection.step.id ? preselection.step : null;
   const upsertFert = useUpsertFertigation();
-  const fertigationOn = isSystemAdmin && fert.stepId !== NO_FERTIGATION && !!fert.step;
+  const fertigationOn = fert.stepId !== NO_FERTIGATION && !!fert.step;
   /** Set once the irrigation session is saved, so a Fertigation retry never re-records it. */
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [fertPending, setFertPending] = useState(false);

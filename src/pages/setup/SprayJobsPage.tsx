@@ -387,7 +387,7 @@ function JobsTable({
   // Development gate (defence in depth — RLS is the authority): only System
   // Admins ever see Fertigation Program Steps.
   const data = useMemo(
-    () => (rawData ?? []).filter((j) => isSystemAdmin || !isFertigationOperationType(j.operation_type)),
+    () => (rawData ?? []),
     [rawData, isSystemAdmin],
   );
 
