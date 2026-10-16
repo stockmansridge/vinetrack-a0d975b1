@@ -58,6 +58,9 @@ import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { ReportDateCell } from "@/components/reports/ReportDateCell";
 import { useVintageFilter } from "@/hooks/useVintageFilter";
 import { VintageSelect } from "@/components/VintageSelect";
+import TripDetailSheet from "@/components/trips/TripDetailSheet";
+import { fetchWorkTasksForVineyard, workTaskShortLabel } from "@/lib/workTasksQuery";
+import { fetchLinkedTripForSprayRecord, linkedSprayEntrypoint } from "@/lib/sprayRecordTripLink";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
@@ -119,6 +122,46 @@ export default function SprayRecordsPage() {
     () => ({ machines: machines ?? [], tractors: tractors ?? [], sprayEquipment: sprayEquipment ?? [] }),
     [machines, tractors, sprayEquipment],
   );
+
+  const { data: paddocksLite = [] } = useQuery({
+    queryKey: ["paddocks-lite", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList<{ id: string; name: string | null }>("paddocks", selectedVineyardId!),
+  });
+  const paddockNameById = useMemo(() => {
+    const m = new Map<string, string | null>();
+    paddocksLite.forEach((p) => m.set(p.id, p.name));
+    return m;
+  }, [paddocksLite]);
+  const { data: workTasksResult } = useQuery({
+    queryKey: ["spray-records-work-tasks", selectedVineyardId, paddocksLite.length],
+    enabled: !!selectedVineyardId && !!selected?.trip_id,
+    queryFn: () => fetchWorkTasksForVineyard(selectedVineyardId!, paddocksLite.map((p) => p.id)),
+  });
+  const workTaskLabelById = useMemo(() => {
+    const m = new Map<string, string>();
+    (workTasksResult?.tasks ?? []).forEach((t: any) => {
+      const lbl = workTaskShortLabel(t);
+      if (lbl) m.set(t.id, lbl);
+    });
+    return m;
+  }, [workTasksResult]);
+
+  // Linked (non-manual) spray records open the canonical Trip drawer for the
+  // exact trip_id within the selected vineyard. Manual records and records
+  // without a valid trip keep the dedicated Spray Record drawer.
+  const wantsTrip = !!selected?.trip_id && !isManualSpraySource(selected?.entry_source);
+  const linkedTripQuery = useQuery({
+    queryKey: ["spray-record-linked-trip", selectedVineyardId, selected?.trip_id ?? null],
+    enabled: !!selectedVineyardId && wantsTrip,
+    queryFn: () => fetchLinkedTripForSprayRecord(selected!.trip_id!, selectedVineyardId!),
+  });
+  const linkedTrip = linkedTripQuery.data ?? null;
+  const entry = linkedSprayEntrypoint({
+    record: selected,
+    tripLoading: wantsTrip && linkedTripQuery.isLoading,
+    trip: linkedTrip,
+  });
 
   const operationTypes = useMemo(() => {
     const s = new Set<string>();
@@ -306,8 +349,21 @@ export default function SprayRecordsPage() {
         </Table>
       </Card>
 
+      {entry === "trip" && linkedTrip ? (
+        <TripDetailSheet
+          trip={linkedTrip}
+          paddockNameById={paddockNameById}
+          workTaskLabelById={workTaskLabelById}
+          vineyardName={vineyardName}
+          vineyardId={selectedVineyardId}
+          open={!!selected}
+          onOpenChange={(o) => !o && setSelected(null)}
+          onTitleSaved={() => void linkedTripQuery.refetch()}
+          showLifecycleActions={false}
+        />
+      ) : (
       <SprayRecordSheet
-        record={selected}
+        record={entry === "pending" ? null : selected}
         vineyardName={vineyardName}
         formatters={formatters}
         lookups={lookups}
@@ -318,6 +374,7 @@ export default function SprayRecordsPage() {
           void refetch();
         }}
       />
+      )}
     </div>
   );
 }
