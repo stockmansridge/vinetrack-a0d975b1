@@ -21,7 +21,8 @@ import type { ResolvedRouteImage } from "./sprayReportRoute";
 import {
   chemicalTotals,
   costFieldLabel,
-  costValueKind,
+  formatCostValue,
+  formatEngineHours,
   formatActual,
   formatPlanned,
   formatTotalActual,
@@ -220,9 +221,9 @@ export function buildSprayReportPdf(
       ["Treated area", treated != null ? fmt.area(treated) : NR],
       ["Tractor", txt(payload.equipment.tractorName)],
       ["Spray unit", txt(payload.equipment.sprayUnitName)],
-      ["Start engine hours", txt(payload.equipment.startEngineHours)],
-      ["End engine hours", txt(payload.equipment.endEngineHours)],
-      ["Engine hours used", txt(payload.equipment.engineHoursUsed)],
+      ["Start engine hours", formatEngineHours(payload.equipment.startEngineHours)],
+      ["End engine hours", formatEngineHours(payload.equipment.endEngineHours)],
+      ["Engine hours used", formatEngineHours(payload.equipment.engineHoursUsed)],
     ],
     theme: "grid",
     styles: { fontSize: 9, cellPadding: 5, valign: "top" },
@@ -449,22 +450,7 @@ export function buildSprayReportPdf(
   if (payload.cost && typeof payload.cost === "object") {
     section("Estimated trip cost", 140);
     const costView = ctx.costOverlay ?? payload.cost;
-    const body = Object.entries(costView).map(([k, v]) => {
-      if (v == null) return [costFieldLabel(k), NR];
-      if (typeof v !== "number") return [costFieldLabel(k), String(v)];
-      switch (costValueKind(k)) {
-        case "currency":
-          return [costFieldLabel(k), fmt.currency(v)];
-        case "hours":
-          return [costFieldLabel(k), `${v.toFixed(2)} h`];
-        case "litres":
-          return [costFieldLabel(k), `${v.toFixed(1)} L`];
-        case "area":
-          return [costFieldLabel(k), fmt.area(v)];
-        default:
-          return [costFieldLabel(k), String(v)];
-      }
-    });
+    const body = Object.entries(costView).map(([k, v]) => [costFieldLabel(k), formatCostValue(k, v, fmt)]);
 
     autoTable(doc, {
       startY: y,

@@ -36,6 +36,9 @@ import {
   chemicalTotals,
   costFieldLabel,
   costValueKind,
+  formatCostValue,
+  formatEngineHours,
+  formatPlainNumber,
   formatActual,
   formatPlanned,
   formatTotalActual,
@@ -629,7 +632,7 @@ export default function SprayTripWorksheet({
                 placeholder={NOT_RECORDED}
               />
             ) : (
-              (p.equipment.startEngineHours ?? NOT_RECORDED)
+              formatEngineHours(p.equipment.startEngineHours)
             )
           }
         />
@@ -646,11 +649,11 @@ export default function SprayTripWorksheet({
                 placeholder={NOT_RECORDED}
               />
             ) : (
-              (p.equipment.endEngineHours ?? NOT_RECORDED)
+              formatEngineHours(p.equipment.endEngineHours)
             )
           }
         />
-        <Field label="Engine hours used" value={p.equipment.engineHoursUsed ?? NOT_RECORDED} />
+        <Field label="Engine hours used" value={formatEngineHours(p.equipment.engineHoursUsed)} />
         <Field
           label="Fuel consumption for this trip (L/hr)"
           value={
@@ -673,7 +676,7 @@ export default function SprayTripWorksheet({
                 </span>
               </span>
             ) : (
-              (p.equipment.fuelConsumptionLPerHour ?? NOT_RECORDED)
+              (p.equipment.fuelConsumptionLPerHour == null ? NOT_RECORDED : `${formatPlainNumber(p.equipment.fuelConsumptionLPerHour, 2)} L/hr`)
             )
           }
         />
@@ -1005,21 +1008,7 @@ export default function SprayTripWorksheet({
             <Field
               key={k}
               label={costFieldLabel(k)}
-              value={
-                v == null
-                  ? NOT_RECORDED
-                  : typeof v !== "number"
-                    ? String(v)
-                    : costValueKind(k) === "currency"
-                      ? formatters.currency(v)
-                      : costValueKind(k) === "hours"
-                        ? `${v.toFixed(2)} h`
-                        : costValueKind(k) === "litres"
-                          ? `${v.toFixed(1)} L`
-                          : costValueKind(k) === "area"
-                            ? formatters.area(v)
-                            : String(v)
-              }
+              value={formatCostValue(k, v, formatters)}
             />
           ))}
         </Block>

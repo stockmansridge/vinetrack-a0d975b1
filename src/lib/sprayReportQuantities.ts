@@ -293,3 +293,28 @@ export function hasRateDetail(payload: SprayReportPayloadV1): boolean {
     t.chemicals.some((c) => (c as any).ratePerUnit != null || (c as any).rateBasis != null),
   );
 }
+
+/** One display formatter for a canonical cost field, shared by PDF and worksheet. */
+export function formatCostValue(
+  key: string,
+  v: unknown,
+  fmt: { currency: (n: number) => string; area: (ha: number) => string },
+): string {
+  if (v == null) return NOT_RECORDED;
+  if (typeof v !== "number") return formatCostText(v);
+  if (!isFinite(v)) return NOT_RECORDED;
+  switch (costValueKind(key)) {
+    case "currency":
+      return fmt.currency(v);
+    case "hours":
+      return `${v.toFixed(2)} h`;
+    case "litresPerHour":
+      return `${formatPlainNumber(v, 2)} L/hr`;
+    case "litres":
+      return `${v.toFixed(1)} L`;
+    case "area":
+      return fmt.area(v);
+    default:
+      return formatPlainNumber(v, 3);
+  }
+}
