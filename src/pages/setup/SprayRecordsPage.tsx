@@ -367,7 +367,7 @@ export default function SprayRecordsPage() {
         vineyardName={vineyardName}
         formatters={formatters}
         lookups={lookups}
-        open={!!selected}
+        open={!!selected && entry !== "pending"}
         onOpenChange={(o) => !o && setSelected(null)}
         onDeleted={() => {
           setSelected(null);
