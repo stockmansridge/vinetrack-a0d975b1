@@ -1,3 +1,4 @@
+import { summarizeTankRecords } from "./sprayTankRecords";
 // Spray Report v1 renderer.
 //
 // The ONLY semantic input is `SprayReportPayloadV1`. Nothing here parses trip
@@ -280,6 +281,37 @@ export function buildSprayReportPdf(
     margin: { left: margin, right: margin, top: CONTINUATION_CONTENT_TOP, bottom: FOOTER_RESERVED },
   });
   y = (doc as any).lastAutoTable.finalY + 18;
+  {
+    const tr = summarizeTankRecords(payload);
+    if (tr.attributionNote) {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(9);
+      doc.setTextColor(110);
+      y -= 8;
+      writeLines([tr.attributionNote], 11, 0);
+      y += 8;
+      doc.setTextColor(0);
+    }
+    if (tr.tanks.length) {
+      section("Tank records", 100);
+      autoTable(doc, {
+        startY: y,
+        head: [["Tank", "Planned", "Recorded sessions", "Confirmed actuals", "Rows attributed"]],
+        body: tr.tanks.map((t) => [
+          `Tank ${t.tankNumber}`,
+          t.planned ? "Planned" : "Not planned",
+          t.sessions ? String(t.sessions) : NR,
+          t.actualConfirmed ? "Confirmed" : NR,
+          t.attributedRows ? String(t.attributedRows) : NR,
+        ]),
+        theme: "grid",
+        styles: { fontSize: 9, cellPadding: 4 },
+        headStyles: { fillColor: [60, 90, 60], textColor: 255 },
+        margin: { left: margin, right: margin, top: CONTINUATION_CONTENT_TOP, bottom: FOOTER_RESERVED },
+      });
+      y = (doc as any).lastAutoTable.finalY + 18;
+    }
+  }
 
   // Tanks and chemistry — one readable table per tank, water first, then a
   // canonical totals table. Amounts are converted from the frozen base units

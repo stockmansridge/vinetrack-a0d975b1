@@ -14,6 +14,7 @@ import { History, Loader2, Pencil, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { summarizeTankRecords } from "@/lib/sprayTankRecords";
 import {
   Select,
   SelectContent,
@@ -683,6 +684,44 @@ export default function SprayTripWorksheet({
       </Block>
 
 
+      {(() => {
+        const tr = summarizeTankRecords(p);
+        if (!tr.tanks.length) return null;
+        return (
+          <Block title="Tank records">
+            <p className="mb-2 text-xs text-muted-foreground">
+              Planned tanks come from the spray plan. Sessions and confirmed actuals
+              are only what was recorded; a planned tank is not proof it was used.
+            </p>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tank</TableHead>
+                  <TableHead>Planned</TableHead>
+                  <TableHead>Recorded sessions</TableHead>
+                  <TableHead>Confirmed actuals</TableHead>
+                  <TableHead>Rows attributed</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {tr.tanks.map((t) => (
+                  <TableRow key={t.tankNumber}>
+                    <TableCell className="font-medium">Tank {t.tankNumber}</TableCell>
+                    <TableCell>{t.planned ? "Planned" : "Not planned"}</TableCell>
+                    <TableCell>{t.sessions ? String(t.sessions) : NOT_RECORDED}</TableCell>
+                    <TableCell>{t.actualConfirmed ? "Confirmed" : NOT_RECORDED}</TableCell>
+                    <TableCell>{t.attributedRows ? String(t.attributedRows) : NOT_RECORDED}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {tr.attributionNote && (
+              <p className="mt-2 text-xs text-muted-foreground">{tr.attributionNote}</p>
+            )}
+          </Block>
+        );
+      })()}
+
       {p.tanks.map((t) => {
         const waterHistory = amendmentsForChemical(amendments, t.tankNumber, null);
         return (
@@ -838,6 +877,9 @@ export default function SprayTripWorksheet({
           </div>
         )}
         {rowNote && <p className="mb-2 text-xs text-muted-foreground">{rowNote}</p>}
+        {summarizeTankRecords(p).attributionNote && (
+          <p className="mb-2 text-xs text-muted-foreground">{summarizeTankRecords(p).attributionNote}</p>
+        )}
         <Table>
           <TableHeader>
             <TableRow>
