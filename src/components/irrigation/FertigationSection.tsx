@@ -220,7 +220,7 @@ export function FertigationCard({ children }: { children: React.ReactNode }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          Fertigation <Badge variant="outline">System Admin · in development</Badge>
+          Fertigation
         </CardTitle>
         <CardDescription>Optionally link a Fertigation Program Step to this irrigation.</CardDescription>
       </CardHeader>

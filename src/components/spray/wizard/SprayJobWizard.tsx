@@ -214,7 +214,6 @@ export function SprayJobWizard({
     if (app.operationType === "fertigation") {
       // Fertigation never needs equipment, carrier or a resistance check.
       const reasons = fertigationGateReasons({ name: app.name, isTemplate: app.isTemplate, products: app.products });
-      if (!isSystemAdmin) reasons.unshift("Fertigation is in development and limited to System Admins.");
       return { fatal: [], warnings: [], info: [], canSave: reasons.length === 0, blockingReasons: reasons };
     }
     return evaluateSaveGate({ application: app, calculation: calc });
@@ -288,7 +287,7 @@ export function SprayJobWizard({
     intelligenceById,
     vineyardId,
     canEdit,
-    fertigationEnabled: isSystemAdmin,
+    fertigationEnabled: true,
   };
 
   // A Program Step (`is_template = true`) is reusable configuration: it never

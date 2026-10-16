@@ -78,7 +78,7 @@ export function ProgramStepDetailDialog({
 
   const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
   const isFertigation = isFertigationProgramStep(job);
-  const fertigationVisible = isFertigation && isSystemAdmin;
+  const fertigationVisible = isFertigation;
   const history = useFertigationApplications(
     vineyardId,
     { programStepId: job.id, includeReversed: true },

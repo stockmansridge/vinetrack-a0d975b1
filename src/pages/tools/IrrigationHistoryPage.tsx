@@ -356,7 +356,7 @@ export default function IrrigationHistoryPage() {
   const [editing, setEditing] = useState<IrrigationSession | null>(null);
   const [reversing, setReversing] = useState<IrrigationSession | null>(null);
   const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
-  const fertApps = useFertigationApplications(selectedVineyardId, { includeReversed: true }, isSystemAdmin);
+  const fertApps = useFertigationApplications(selectedVineyardId, { includeReversed: true }, true);
   const fertBySession = useMemo(() => activeBySession(fertApps.data), [fertApps.data]);
   const [fertFor, setFertFor] = useState<{ session: IrrigationSession; app: FertigationApplication | null } | null>(null);
 
@@ -491,7 +491,7 @@ export default function IrrigationHistoryPage() {
                     </span>
                     {s.status === "reversed" && <Badge variant="outline">Reversed</Badge>}
                     {s.status === "corrected" && <Badge variant="secondary">Corrected</Badge>}
-                    {isSystemAdmin && fertBySession.has(s.id) && (
+                    {fertBySession.has(s.id) && (
                       <Badge variant="outline" className="text-xs">Fertigation</Badge>
                     )}
                   </div>
@@ -507,7 +507,7 @@ export default function IrrigationHistoryPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge className="tabular-nums">{formatLitres(s.total_volume_litres)}</Badge>
-                  {isSystemAdmin && s.status !== "reversed" && (
+                  {s.status !== "reversed" && (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -561,7 +561,7 @@ export default function IrrigationHistoryPage() {
 
               {s.notes && <p className="mt-2 text-sm text-muted-foreground">{s.notes}</p>}
 
-              {isSystemAdmin && fertBySession.get(s.id) && (
+              {fertBySession.get(s.id) && (
                 <SessionFertigationSummary app={fertBySession.get(s.id)!} />
               )}
 
@@ -622,7 +622,7 @@ export default function IrrigationHistoryPage() {
                 try {
                   await reverse.mutateAsync(reversing.id);
                   // The backend reverses any linked Fertigation application too.
-                  if (isSystemAdmin) fertApps.refetch();
+                  fertApps.refetch();
                   toast({ title: "Session reversed" });
                 } catch (e) {
                   toast({
