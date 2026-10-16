@@ -252,7 +252,7 @@ export const ACTIVITIES: NavActivity[] = [
       },
       {
         id: "spraying.records",
-        label: "Spray Record",
+        label: "Spray Records",
         path: "/spray-records",
         keywords: ["spray records", "spray diary", "register"],
       },
