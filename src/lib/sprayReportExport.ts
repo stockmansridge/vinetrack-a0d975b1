@@ -82,10 +82,19 @@ export async function downloadSprayReport(
   const { payload, error } = await fetchSprayReportV1(opts.tripId);
   if (!payload) return { ok: false, error: error ?? SPRAY_RECORD_UNAVAILABLE_MESSAGE };
 
+  // Geometry comes from the saved Trip whatever the entrypoint: use the
+  // caller's points when usable, otherwise read trips.path_points by exact
+  // trip id + the payload's vineyard. Absent geometry stays absent.
+  let points = extractPathPoints(opts.pathPoints);
+  if (points.length < 2) {
+    const fetched = await fetchTripPathPoints(opts.tripId, payload.identity.vineyardId).catch(() => null);
+    if (fetched != null) points = extractPathPoints(fetched);
+  }
+
   let routeImage = null;
   let routeWarning: string | null = null;
   try {
-    const resolved = await resolveSprayRoute(payload, extractPathPoints(opts.pathPoints));
+    const resolved = await resolveSprayRoute(payload, points);
     routeImage = resolved.image;
     routeWarning = resolved.warning;
   } catch {
@@ -111,4 +120,16 @@ export async function downloadSprayReport(
     costOverlay,
   });
   return { ok: true, filename };
+}
+
+/** Saved Trip geometry for a spray report, scoped to the trip's own vineyard. */
+export async function fetchTripPathPoints(tripId: string, vineyardId: string): Promise<unknown | null> {
+  const { data, error } = await (supabase as any)
+    .from("trips")
+    .select("path_points")
+    .eq("id", tripId)
+    .eq("vineyard_id", vineyardId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data.path_points ?? null;
 }
