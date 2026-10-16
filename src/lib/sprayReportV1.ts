@@ -33,9 +33,14 @@ export interface SprayReportIdentity {
   sprayRecordId: string;
   vineyardId: string;
   vineyardName: string;
+  /** Display reference; REFERENCE_NOT_RECORDED when the record has none. */
   reference: string;
+  /** False when the historical spray record carried no reference. */
+  referenceRecorded?: boolean;
   vineyardTimeZone: string;
 }
+
+export const REFERENCE_NOT_RECORDED = "Reference not recorded";
 
 export interface SprayReportTrip {
   startUtc: string | null;
@@ -376,11 +381,15 @@ export function parseSprayReportPayload(raw: unknown): SprayReportParseResult {
       "sprayRecordId",
       "vineyardId",
       "vineyardName",
-      "reference",
       "vineyardTimeZone",
     ]) {
       if (typeof id[k] !== "string" || !id[k]) errors.push(`identity.${k} is required`);
     }
+    // A legitimately blank historical reference ("" or null) is allowed and
+    // projected to an explicit display label below. A missing key or a
+    // non-string value is still rejected.
+    if (!("reference" in id) || !(id.reference === null || typeof id.reference === "string"))
+      errors.push("identity.reference is required");
   }
 
   const trip = raw.trip;
@@ -496,6 +505,14 @@ export function parseSprayReportPayload(raw: unknown): SprayReportParseResult {
   if (errors.length) return { payload: null, errors };
 
   const payload = raw as SprayReportPayloadV1;
+  // Read/export projection only: the recorded fact (blank) is kept in
+  // referenceRecorded=false; the label is truthful, never an invented name.
+  const recordedRef = typeof payload.identity.reference === "string" ? payload.identity.reference.trim() : "";
+  payload.identity = {
+    ...payload.identity,
+    reference: recordedRef || REFERENCE_NOT_RECORDED,
+    referenceRecorded: !!recordedRef,
+  };
   // Hourly weather is append-only and ordered by sampleSlot.
   payload.weather = [...payload.weather].sort((a, b) =>
     a.sampleSlot < b.sampleSlot ? -1 : a.sampleSlot > b.sampleSlot ? 1 : 0,
