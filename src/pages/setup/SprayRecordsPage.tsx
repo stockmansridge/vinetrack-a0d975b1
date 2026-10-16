@@ -559,7 +559,7 @@ function TanksSection({ record }: { record: any }) {
   const chem = readRecordChemistry(record);
   if (chem.tanks.length === 0) {
     return (
-      <Section title="Tanks">
+      <Section title="Planned tanks (frozen plan — not recorded actuals)">
         <span className="text-muted-foreground">No tank data recorded.</span>
       </Section>
     );
