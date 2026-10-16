@@ -632,7 +632,7 @@ export default function IrrigationRecordPage() {
               {FERTIGATION_STEP_UNAVAILABLE}
             </div>
           )}
-          {isSystemAdmin && (
+          {(
             <FertigationCard>
               {preselectedStep && (
                 <div className="mb-3 rounded-md border border-primary/40 bg-primary/5 px-3 py-2" data-testid="fertigation-applying">
