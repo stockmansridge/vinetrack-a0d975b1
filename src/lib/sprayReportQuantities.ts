@@ -226,16 +226,59 @@ export function rowSourceLabel(source: string | null | undefined): string {
 
 // ------------------------------------------------------------------ cost ---
 
-export type CostValueKind = "currency" | "hours" | "litres" | "area" | "number";
+export type CostValueKind = "currency" | "hours" | "litresPerHour" | "litres" | "area" | "number";
 
 /** Choose the unit for a cost field from its canonical key, not blindly $. */
 export function costValueKind(key: string): CostValueKind {
-  const k = key.toLowerCase();
+  const k = key.toLowerCase().replace(/[_\s-]/g, "");
+  // A per-hour fuel rate is a rate, not a duration ("6.8 h" was wrong).
+  if (/(litres?|liters?|fuel|l)per(hour|hr|h)$|lperh(r|our)?$|lph$/.test(k)) return "litresPerHour";
+  if (/(cost|price|charge|rate)per(hour|hr|h)$/.test(k)) return "currency";
   if (/hours?$|hrs?$/.test(k)) return "hours";
   if (/litres|liters|fuelused|volume/.test(k)) return "litres";
   if (/(area|hectare|ha)$/.test(k)) return "area";
   if (/cost|price|total|rate|amount|charge|spend/.test(k)) return "currency";
   return "number";
+}
+
+/** Display-only rounding that removes binary float noise (e.g. 1234.5000000001). */
+export function formatPlainNumber(v: number | null | undefined, maxDecimals = 2): string {
+  if (v == null || !isFinite(v)) return NOT_RECORDED;
+  return String(Number(v.toFixed(maxDecimals)));
+}
+
+/** Engine hours readout: at most 2 decimals, never raw float noise. */
+export function formatEngineHours(v: number | null | undefined): string {
+  return formatPlainNumber(v, 2);
+}
+
+/**
+ * Non-numeric cost values (status strings, reason objects, reason lists)
+ * rendered as readable text — never "[object Object]".
+ */
+export function formatCostText(v: unknown): string {
+  if (v == null || v === "") return NOT_RECORDED;
+  if (typeof v === "string") return v;
+  if (typeof v === "number") return formatPlainNumber(v, 3);
+  if (typeof v === "boolean") return v ? "Yes" : "No";
+  if (Array.isArray(v)) {
+    const parts = v.map((x) => formatCostText(x)).filter((s) => s && s !== NOT_RECORDED);
+    return parts.length ? parts.join("; ") : NOT_RECORDED;
+  }
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    for (const k of ["reason", "message", "label", "warning", "description"]) {
+      if (typeof o[k] === "string" && o[k]) {
+        const name = typeof o.name === "string" && o.name ? `${o.name}: ` : "";
+        return `${name}${o[k]}`;
+      }
+    }
+    const parts = Object.entries(o)
+      .filter(([, x]) => x != null && x !== "")
+      .map(([k, x]) => `${humanise(k)}: ${formatCostText(x)}`);
+    return parts.length ? parts.join(", ") : NOT_RECORDED;
+  }
+  return String(v);
 }
 
 export function costFieldLabel(key: string): string {
