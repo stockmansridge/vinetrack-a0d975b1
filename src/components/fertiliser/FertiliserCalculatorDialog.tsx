@@ -467,7 +467,7 @@ function FertiliserCalculatorDialogForm({
   const calc = useMemo(
     () =>
       computeCalculation({
-        mode,
+        mode: calcMode,
         applicationRate: rateCanon,
         packSize: packSize === "" ? null : numOr(packSize, 0),
         pricePerPack: pricePerPack === "" ? null : numOr(pricePerPack, 0),
