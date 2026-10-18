@@ -110,3 +110,12 @@ Still open:
 3. ChatGPT implements and verifies the migration (additive only).
 4. Lovable ships the §2 unsupported-mode guard on Portal (can ship earlier — it is a bug fix).
 5. Rork + Lovable implement behind gates; cross-platform testing; gates lifted together.
+
+## 11. Lovable read-only integration audit (18 Oct 2026)
+
+Method: column-by-column probes against the live VineTrack database API (read-only; no writes, no SQL executed by Lovable). Results:
+
+- `fertiliser_records`: all twelve v0.1/proposed nutrient columns present (§4), plus `nutrient_contract_version` and `nutrient_declared_as`. No `density_source`/`density_reference` columns exist.
+- `product_nutrient_analysis`: table EXISTS but is not readable by `anon`/`authenticated` (42501). Column shape unverified — blocker for the Portal product analysis editor until ChatGPT confirms grants/RLS and publishes the column list.
+- `saved_chemicals`: no nutrient-list/jsonb column added there (probed — absent); the analysis list lives only in the new table.
+- Portal guard regression tests re-run after the migration: 16/16 passed (`fertiliserUnsupportedMode.test.tsx`, `fertiliserPersistence.test.ts`). Per-hectare/per-vine paths and the unsupported-mode read-only guard are unaffected by the additive columns (Portal selects columns explicitly, never `select=*`, so new columns are ignored until used).
