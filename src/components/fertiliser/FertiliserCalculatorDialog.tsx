@@ -488,11 +488,11 @@ function FertiliserCalculatorDialogForm({
                   const r = rateCanon;
                   if (selectedBlocks.length) {
                     return selectedBlocks.reduce(
-                      (s, b) => s + (mode === "perHectare" ? r * b.areaHa : (r * b.vineCount) / 1000),
+                      (s, b) => s + (calcMode === "perHectare" ? r * b.areaHa : (r * b.vineCount) / 1000),
                       0,
                     );
                   }
-                  return mode === "perHectare" ? r * manualAreaHa : (r * numOr(manualVines)) / 1000;
+                  return calcMode === "perHectare" ? r * manualAreaHa : (r * numOr(manualVines)) / 1000;
                 })(),
                 productUnit,
               ),
