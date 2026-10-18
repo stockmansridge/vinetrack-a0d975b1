@@ -209,8 +209,18 @@ function FertiliserCalculatorDialogForm({
   const [productSearch, setProductSearch] = useState("");
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [form, setForm] = useState<FertiliserForm>("solid");
-  const [mode, setMode] = useState<FertiliserCalculationMode>("perHectare");
+  // "nutrientTarget" is a System Admin-only PREVIEW mode: it never saves.
+  const [mode, setMode] = useState<FertiliserCalculationMode | "nutrientTarget">("perHectare");
   const [applicationRate, setApplicationRate] = useState<string>("");
+  // Target Nutrient (Preview) state — local only, never persisted.
+  const [analysisEntries, setAnalysisEntries] = useState<NutrientAnalysisEntry[]>([]);
+  const [selectedNutrientIdx, setSelectedNutrientIdx] = useState<number>(0);
+  const [manualNutrientName, setManualNutrientName] = useState("");
+  const [manualPercent, setManualPercent] = useState<string>("");
+  const [useManualPercent, setUseManualPercent] = useState(false);
+  const [targetUnit, setTargetUnit] = useState<TargetRateUnit>("g/vine");
+  const [targetRate, setTargetRate] = useState<string>("");
+  const [densityInput, setDensityInput] = useState<string>("");
   const [manualArea, setManualArea] = useState<string>("");
   const [manualVines, setManualVines] = useState<string>("");
   const [packSize, setPackSize] = useState<string>("");
