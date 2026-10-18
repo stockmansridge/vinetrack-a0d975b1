@@ -102,19 +102,18 @@ describe("Target Nutrient (Preview) gating", () => {
     expect(screen.getByLabelText("Total product result").textContent).toBe("37.5 kg");
   });
 
-  it("blocks unknown legacy bases and oxide values for actual nutrient targets", async () => {
+  it("manual elemental N clears stale oxide without verifying saved analysis", async () => {
     h.products = [{ id: "legacy", name: "Legacy product", nitrogen_percent: 16, analysis_basis: "oxide", product_form: "solid", product_category: "granularFertiliser" }];
     await startTarget();
     fireEvent.click(await screen.findByRole("button", { name: /Legacy product/ }));
     expect(screen.getByLabelText("Nutrient percent")).toHaveProperty("value", "");
-    fireEvent.change(screen.getByLabelText("Nutrient percent"), { target: { value: "16" } });
     fireEvent.change(screen.getByLabelText("Target quantity"), { target: { value: "2" } });
     expect(screen.getByLabelText("Product rate result").textContent).toBe("—");
-    await choose("Analysis basis", /Oxide/);
-    await choose("Concentration basis", /w\/w/);
-    expect(screen.getByLabelText("Product rate result").textContent).toBe("—");
-    await choose("Analysis basis", /Elemental/);
+    fireEvent.change(screen.getByLabelText("Nutrient percent"), { target: { value: "16" } });
     expect(screen.getByLabelText("Product rate result").textContent).toBe("12.5 g/vine");
+    expect(screen.getByLabelText("Total product result").textContent).toBe("—");
+    expect(screen.queryByRole("combobox", { name: "Nutrient label notation" })).toBeNull();
+    expect(h.products[0].analysis_basis).toBe("oxide");
     fireEvent.change(screen.getByLabelText("Nutrient percent"), { target: { value: "140" } });
     expect(screen.getByLabelText("Product rate result").textContent).toBe("—");
     expect(h.saves).toEqual([]);
@@ -129,6 +128,9 @@ describe("Target Nutrient (Preview) gating", () => {
     fireEvent.click(screen.getByRole("option", { name: "Liquid" }));
     fireEvent.change(screen.getByLabelText("Nutrient percent"), { target: { value: "16" } });
     fireEvent.change(screen.getByLabelText("Target quantity"), { target: { value: "2" } });
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("—");
+    expect(screen.queryByLabelText("Product density")).toBeNull();
+    await choose("Concentration basis", /w\/w/);
     fireEvent.change(screen.getByLabelText("Product density"), { target: { value: "1.25" } });
     expect(screen.getByLabelText("Product rate result").textContent).toBe("—");
     fireEvent.change(screen.getByLabelText("Density source"), { target: { value: "Technical sheet" } });
@@ -179,6 +181,8 @@ describe("Target Nutrient (Preview) gating", () => {
     fireEvent.change(screen.getByLabelText("Vine count"), { target: { value: "1000" } });
     expect(screen.getByLabelText("Product rate result").textContent).toBe("12.5 g/vine");
     await choose("Target nutrient", /K — Potassium/);
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("—");
+    await choose("Nutrient label notation", /K — actual nutrient/);
     expect(screen.getByLabelText("Nutrient percent")).toHaveProperty("value", "16");
     expect(screen.getByLabelText("Target quantity")).toHaveProperty("value", "2");
     expect(screen.getByLabelText("Product rate result").textContent).toBe("12.5 g/vine");
@@ -191,18 +195,50 @@ describe("Target Nutrient (Preview) gating", () => {
     expect(results.compareDocumentPosition(blocks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("explains analysis and concentration basis under the Analysis details toggle", async () => {
+  it("keeps basis help beside percentage without an Analysis Details panel", async () => {
     await startTarget();
-    fireEvent.click(screen.getByText("Analysis details"));
+    expect(screen.queryByText(/Analysis details/i)).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Concentration basis" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Nutrient label notation" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "About product nutrient percentage" }));
     expect(screen.getByText(/grams of nutrient per 100 grams of product/)).toBeTruthy();
-    expect(screen.getByText(/grams of nutrient per 100 mL of product/)).toBeTruthy();
-    expect(screen.getByText(/P₂O₅, K₂O/)).toBeTruthy();
-    expect(screen.getByText(/never converts between them/)).toBeTruthy();
-    expect(screen.getByLabelText("About concentration basis")).toBeTruthy();
-    expect(screen.getByLabelText("About analysis basis")).toBeTruthy();
-    // Manual mode: both basis selectors are explicitly choosable.
-    expect(screen.getByRole("combobox", { name: "Concentration basis" })).toBeTruthy();
-    expect(screen.getByRole("combobox", { name: "Analysis basis" })).toBeTruthy();
+    expect(screen.getByText(/does not convert them to elemental percentages/)).toBeTruthy();
+  });
+
+  it("asks P versus P₂O₅ contextually and clears oxide when switching to N", async () => {
+    await startTarget();
+    fireEvent.change(screen.getByLabelText("Nutrient percent"), { target: { value: "16" } });
+    fireEvent.change(screen.getByLabelText("Target quantity"), { target: { value: "2" } });
+    await choose("Target nutrient", /P — Phosphorus/);
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("—");
+    await choose("Nutrient label notation", /P₂O₅/);
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("—");
+    await choose("Nutrient label notation", /P — actual nutrient/);
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("12.5 g/vine");
+    await choose("Nutrient label notation", /P₂O₅/);
+    await choose("Target nutrient", /N — Nitrogen/);
+    expect(screen.getByLabelText("Nutrient percent")).toHaveProperty("value", "16");
+    expect(screen.getByLabelText("Target quantity")).toHaveProperty("value", "2");
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("12.5 g/vine");
+    expect(screen.getByLabelText("Total product result").textContent).toBe("—");
+  });
+
+  it("w/v calculates volume immediately and only shows total after counts", async () => {
+    await startTarget();
+    fireEvent.click(screen.getByRole("button", { name: "Manual entry" }));
+    const form = screen.getAllByRole("combobox")[0];
+    fireEvent.pointerDown(form); fireEvent.keyDown(form, { key: "ArrowDown" });
+    await waitFor(() => screen.getByRole("listbox"));
+    fireEvent.click(screen.getByRole("option", { name: "Liquid" }));
+    fireEvent.change(screen.getByLabelText("Nutrient percent"), { target: { value: "16" } });
+    fireEvent.change(screen.getByLabelText("Target quantity"), { target: { value: "2" } });
+    await choose("Concentration basis", /w\/v/);
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("12.5 mL/vine");
+    expect(screen.queryByLabelText("Product density")).toBeNull();
+    expect(screen.getByLabelText("Total product result").textContent).toBe("—");
+    fireEvent.change(screen.getByLabelText("Vine count"), { target: { value: "1000" } });
+    expect(screen.getByLabelText("Total product result").textContent).toBe("12.5 L");
+    expect(h.saves).toEqual([]);
   });
 
   it("shows an empty editable percentage when no analysis exists — never 0% declared", async () => {

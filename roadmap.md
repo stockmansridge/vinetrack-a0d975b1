@@ -1,5 +1,6 @@
 # Roadmap
 
+- [x] Remove Analysis Details; contextual label/liquid questions, preserve inputs and validate nitrogen/live results (99 tests passed).
 - [x] Simplify Target Nutrient preview; validate immediate calculations, known-basis safety and existing modes (92 tests passed).
 - [ ] Signed-in Target Nutrient phone visual check — blocked by unavailable vineyard-account session; browser reaches Sign In.
 
