@@ -315,7 +315,7 @@ export default function FertiliserCalculatorPage() {
                       <td className="py-2 pr-3">
                         <div className="font-medium">{r.product_name || "—"}</div>
                         <div className="text-xs text-muted-foreground">
-                          {r.form} · {r.calculation_mode === "perVine" ? "Per vine" : "Per hectare"}
+                          {r.form} · {calculationModeLabel(r.calculation_mode)}
                         </div>
                       </td>
                       <td className="py-2 pr-3 max-w-[220px]">
@@ -325,8 +325,15 @@ export default function FertiliserCalculatorPage() {
                       </td>
                       <td className="py-2 pr-3 text-right tabular-nums whitespace-nowrap">
                         {(() => {
+                          // Unsupported modes: show the stored rate + unit
+                          // verbatim, never reinterpreted as per-hectare.
+                          if (!isSupportedCalculationMode(r.calculation_mode)) {
+                            return r.application_rate == null
+                              ? "—"
+                              : `${Number(r.application_rate).toLocaleString()} ${r.application_rate_unit ?? ""}`.trim();
+                          }
                           const f = r.form === "liquid" ? "liquid" : "solid";
-                          const m = r.calculation_mode === "perVine" ? "perVine" : "perHectare";
+                          const m = r.calculation_mode;
                           return `${Number(rateToDisplay(Number(r.application_rate), m, f, region).toFixed(3)).toLocaleString()} ${rateLabel(m, f, region)}`;
                         })()}
                       </td>
