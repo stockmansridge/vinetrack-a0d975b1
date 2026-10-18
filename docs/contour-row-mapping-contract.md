@@ -141,3 +141,13 @@ explicit `canonicalRowId`, coordinated with iOS/Android and SQL row-identity gua
 
 - **Delete row** removes one logical draft row (all parts) by stable group id + row id. Other rows keep ids, numbers and geometry. Regenerating recreates rows from the trace and left/right counts, so a deleted row returns unless counts are lowered; the Portal confirms before replacing any drafted group.
 - **Update row numbers** changes only `number` on the rows present in a group: start at the group's Starting row number, ordered by `offsetIndex` (left → right; rows without one, i.e. imported, follow their stored order after offset rows), reversed when numbering descends. Gaps close up. All candidates are validated first (integer 1..100000, no collision with other groups); ids, parts, provenance, source and canonical links are preserved. Draft format v1 and the save API are unchanged.
+
+## Contour-first block setup (Portal, Phase 1)
+
+- New Block asks System Admins "Does this block use straight rows or contour rows?" (Straight is the default; non-admins see today's flow). The choice is kept across steps and reset on user/vineyard change.
+- Contour in Phase 1 still saves the generated straight rows (the block's active rows), then opens the draft editor. "Finish as contour block (no straight rows)" is shown disabled: no empty `rows`, no placeholder rows, no draft polylines in `paddocks.rows`.
+- Operational row layout is derived only from block data (`src/lib/rowLayoutMode.ts`, always "straight" today); a saved draft never changes it.
+- Phase 2 (Rork, blocked): a pending-configuration lifecycle (e.g. `paddocks.configuration_status` 'active' | 'pending_rows', excluded server-side from operational reads and mobile sync; sql/253 allowing empty rows only while pending) before a true contour-first save is enabled.
+
+## Block freshness
+Before every Save Draft the block is re-read (scoped to the selected vineyard) and compared canonically: boundary points, row ids, row id→number, and row id→start/end (rounded 1e-9, property-order independent). Any change stops the save; "Recheck against current block" adopts the current block without touching edits or links. The save RPC does not lock the block, so a change at the exact save moment can still be missed.
