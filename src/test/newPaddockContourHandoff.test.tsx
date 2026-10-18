@@ -202,7 +202,7 @@ describe("New Block row layout question", () => {
       fireEvent.click(screen.getByRole("button", { name: "Save block" }));
       await waitFor(() => expect(h.insert).toHaveBeenCalledTimes(1));
       const p = h.insert.mock.calls[0][0]; const r = Array.isArray(p) ? p[0] : p; u.unmount();
-      const strip = (x: any) => ({ ...x, id: "-", rows: x.rows.map((q: any) => ({ number: q.number, s: [q.startPoint.latitude, q.startPoint.longitude], e: [q.endPoint.latitude, q.endPoint.longitude] })), polygon_points: x.polygon_points.map((q: any) => [q.latitude, q.longitude]) });
+      const strip = (x: any) => ({ ...x, id: "-", client_updated_at: "-", rows: x.rows.map((q: any) => ({ number: q.number, s: [q.startPoint.latitude, q.startPoint.longitude], e: [q.endPoint.latitude, q.endPoint.longitude] })), polygon_points: x.polygon_points.map((q: any) => [q.latitude, q.longitude]) });
       return strip(r);
     };
     const a = await run(); h.admin = { isAdmin: false, loading: false }; const b = await run();
