@@ -520,6 +520,7 @@ export function Editor({ paddock: initialPaddock, scope: scopeProp, load, copyKe
     onDragEnd: (x) => updateRow(selRow.id, (r) => moveVertex(r, pi, qi, x)),
   })));
   const blocking = hasErrors(geoIssues) || shapeErrors.length > 0;
+  const numbering = useMemo(() => compareNumbering(allRows.map((r) => r.number), legacyRows.map((r) => r.number).filter((n): n is number => typeof n === "number")), [allRows, legacyRows]);
   // Selecting a different row opens Row edit (not repeated for point clicks on the same row).
   // Explicit row pick (map row line / table row) always reopens the panel on Row edit; vertex handles don't.
   function pickRow(gid: string, rowId: string) {
@@ -658,6 +659,17 @@ export function Editor({ paddock: initialPaddock, scope: scopeProp, load, copyKe
               </CardContent></Card>
           )}
 
+          {numbering.draftCount > 0 && (
+            <Card data-testid="numbering-compare"><CardHeader className="pb-2"><CardTitle className="text-base">Draft vs operational row numbers</CardTitle></CardHeader>
+              <CardContent className="space-y-1 text-xs">
+                <p>Draft: <b>{numbering.draftCount}</b> rows · Block Setup (operational): <b>{numbering.operationalCount}</b> rows</p>
+                {numbering.same ? <p>The draft uses the same row numbers as the block.</p> : <>
+                  {numbering.onlyInDraft.length > 0 && <p>Only in draft: {fmtNums(numbering.onlyInDraft)}</p>}
+                  {numbering.onlyOperational.length > 0 && <p>Only in Block Setup: {fmtNums(numbering.onlyOperational)}</p>}
+                </>}
+                <p className="text-muted-foreground flex gap-1"><Info className="h-3.5 w-3.5 shrink-0 mt-0.5" /> For information only — differences are expected until contour rows are activated. Saving this draft never renumbers or changes the block's operational rows.</p>
+              </CardContent></Card>
+          )}
           <Card><CardHeader className="pb-2"><CardTitle className="text-base">Draft measurements</CardTitle></CardHeader>
             <CardContent className="space-y-2 text-sm">
               <p className="text-xs text-muted-foreground flex gap-1"><Info className="h-3.5 w-3.5 shrink-0 mt-0.5" /> Draft preview only. Vine, post and irrigation figures still come from Block Setup.</p>
@@ -775,6 +787,7 @@ function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, sel
           </div>
     </> }] : []),
     { id: "rows", label: "Rows", content: <>
+        {imported && <p className="text-[11px] text-muted-foreground flex gap-1" data-testid="imported-checks-note"><Info className="h-3.5 w-3.5 shrink-0 mt-0.5" /> Imported GeoJSON/KML rows are checked against the block boundary and for crossings, overlaps and repeated points (each part separately). This group's working area and cut-outs are not applied to imported rows.</p>}
         {!imported && <>
           <div className="grid grid-cols-2 gap-2">
             <NumberStepper label="Row spacing (m)" value={g.spacingM} min={LIMITS.minSpacingM} max={LIMITS.maxSpacingM} step={0.1} disabled={locked} onChange={(n) => update((x) => ({ ...x, spacingM: n }))} />
@@ -850,3 +863,5 @@ function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, sel
     </div>
   );
 }
+
+function fmtNums(ns: number[]) { return ns.length > 12 ? `${ns.slice(0, 12).join(", ")} … (+${ns.length - 12} more)` : ns.join(", "); }
