@@ -352,6 +352,12 @@ function FertiliserCalculatorDialogForm({
     setPackSize(p.pack_size == null ? "" : String(p.pack_size));
     // Legacy saved_chemicals.price_per_pack is never a cost authority.
     setPricePerPack("");
+    // Target Nutrient (Preview): seed the local analysis from legacy N/P/K
+    // and the density from the saved product. Local only — never written back.
+    setAnalysisEntries(seedAnalysisFromLegacyProduct(p));
+    setSelectedNutrientIdx(0);
+    setUseManualPercent(false);
+    setDensityInput(p.density != null && p.density > 0 ? String(p.density) : "");
   };
 
   const onManualEntry = () => {
