@@ -1,6 +1,6 @@
-# Target Nutrient Application — Shared Contract v0.1 (DRAFT for review)
+# Target Nutrient Application — Shared Contract v0.2 (DB foundation applied)
 
-Status: DRAFT — not approved, not implemented anywhere. Owners: ChatGPT (database), Rork (iOS/Android), Lovable (Portal). No platform implements against this document until all three sign off and the database migration is applied and verified by ChatGPT.
+Status: database foundation APPLIED and verified by ChatGPT (migration `target_nutrient_additive_contract_foundation`); Portal and mobile implementation NOT started; feature gated off everywhere. Owners: ChatGPT (database), Rork (iOS/Android), Lovable (Portal). §3/§4 below now describe the LIVE schema, audited read-only by Lovable on 18 Oct 2026.
 
 ## 1. Purpose
 
