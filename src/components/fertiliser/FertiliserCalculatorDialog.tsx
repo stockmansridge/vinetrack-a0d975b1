@@ -72,6 +72,15 @@ import {
   fetchWorkTaskPaddocksForVineyard,
   syncWorkTaskPaddocks,
 } from "@/lib/workTasksQuery";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import {
+  computeTargetNutrient,
+  seedAnalysisFromLegacyProduct,
+  NUTRIENT_DISPLAY,
+  type NutrientAnalysisEntry,
+  type TargetRateUnit,
+} from "@/lib/targetNutrient";
+import { NutrientAnalysisEditor } from "@/components/fertiliser/NutrientAnalysisEditor";
 
 interface PaddockOption {
   id: string;
