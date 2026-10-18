@@ -22,6 +22,7 @@ import { ArrowLeft, Save, AlertTriangle, Trash2, Pencil, Info, Archive, LayoutDa
 import { fetchOne } from "@/lib/queries";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { loadDraft as loadContourDraft } from "@/lib/contourRows/draftApi";
+import { operationalLayoutFor, OPERATIONAL_LAYOUT_LABEL } from "@/lib/rowLayoutMode";
 import {
   archivePaddock,
   fetchLinkedRecordCounts,
@@ -563,6 +564,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
               header={<div><div className="text-sm font-semibold">Row setup</div><p className="text-xs text-muted-foreground">Same generator as iOS &amp; New Block.</p></div>}
               footer={canEdit ? (
                 <div className="space-y-2">
+                  <RowLayoutStatus paddock={paddock} />
                   <ContourDraftRegenNotice paddockId={paddock.id} vineyardId={paddock.vineyard_id} />
                   <div className="flex justify-end">
                     <Button onClick={onSaveRows} disabled={saving || rowOverrideError || generatedRows.length === 0} className="gap-1">
@@ -994,6 +996,28 @@ function CountLine({ label, n }: { label: string; n: number }) {
   return <li>{label}: <span className="font-medium">{n}</span></li>;
 }
 
+
+/** Operational layout (from block data only) + System Admin-only contour draft status. */
+export function RowLayoutStatus({ paddock }: { paddock: any }) {
+  const { isAdmin } = useIsSystemAdmin();
+  const op = operationalLayoutFor(paddock);
+  const q = useQuery({
+    queryKey: ["contour-draft-exists", paddock.vineyard_id, paddock.id], enabled: isAdmin && !!paddock.vineyard_id, retry: false,
+    queryFn: () => loadContourDraft({ vineyardId: paddock.vineyard_id, paddockId: paddock.id }),
+  });
+  const d = q.data;
+  return (
+    <div className="rounded-md border p-2 text-xs space-y-1" data-testid="row-layout-status">
+      <div>Operational row layout: <b>{OPERATIONAL_LAYOUT_LABEL[op.layout]}</b> · {op.rowCount} rows</div>
+      {isAdmin && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span>Contour draft: <b>{q.isLoading ? "Checking…" : q.error ? "Couldn't check" : d?.status === "loaded" ? `Saved · revision ${d.draft.revision} (not active)` : "None"}</b></span>
+          <Link className="underline text-orange-600 dark:text-orange-400" to={`/setup/paddocks/${paddock.id}/contour-rows`}>Open contour mapping (Beta)</Link>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** System Admin-only notice: straight saves don't touch a saved contour draft. Read-only. */
 export function ContourDraftRegenNotice({ paddockId, vineyardId }: { paddockId: string; vineyardId: string }) {

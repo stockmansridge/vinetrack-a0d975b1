@@ -537,7 +537,8 @@ export function Editor({ paddock: initialPaddock, scope: scopeProp, load, copyKe
                 <h1 className="text-lg font-semibold tracking-tight text-orange-600 dark:text-orange-400">Contour Row Mapping (Beta)</h1>
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span>{paddock.name}</span>
-          <Badge variant="outline">Draft mapping — for review</Badge>
+          <Badge variant="outline">Draft mapping — not active</Badge>
+          <Badge variant="outline" data-testid="operational-chip">Operational rows: Straight ({legacyRows.length} rows)</Badge>
           {busy === "saving" ? <Badge variant="secondary">Saving… editing paused</Badge>
             : dirty ? <Badge variant="secondary">Unsaved changes</Badge>
             : base.draftId ? <Badge variant="secondary">Saved · revision {base.revision}</Badge> : <Badge variant="secondary">Not yet saved</Badge>}
