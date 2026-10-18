@@ -378,8 +378,8 @@ function FertiliserCalculatorDialogForm({
   const onManualEntry = () => {
     setManualMode(true);
     setAnalysisEntries([]);
-    setManualPercent("");
-    setUseManualPercent(false);
+    // Keep any typed percentage/target — switching product entry mode must
+    // not erase valid input.
     setConcentrationBasis("w/w");
     setAnalysisBasis("elemental");
     setDensityInput("");
@@ -892,7 +892,8 @@ function FertiliserCalculatorDialogForm({
                 <div>
                   <Label className="text-xs">Nutrient</Label>
                   <Select value={nutrientKey} onValueChange={(key) => {
-                    setNutrientKey(key); setUseManualPercent(false); setManualPercent("");
+                    // Never wipe a typed percentage/target when the nutrient changes.
+                    setNutrientKey(key);
                   }}>
                     <SelectTrigger aria-label="Target nutrient"><SelectValue /></SelectTrigger>
                     <SelectContent>
