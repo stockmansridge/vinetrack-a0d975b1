@@ -147,13 +147,19 @@ describe("snapshot + seeding", () => {
     expect(NUTRIENT_CONTRACT_VERSION).toBe("1");
   });
 
-  it("seeds local analysis from legacy N/P/K product fields", () => {
+  it("never assumes legacy percentages are w/w", () => {
+    expect(seedAnalysisFromLegacyProduct({ nitrogen_percent: 16, phosphorus_percent: null, potassium_percent: null, analysis_basis: "elemental" })).toEqual([]);
+  });
+
+  it("seeds local analysis only with known bases", () => {
     const entries = seedAnalysisFromLegacyProduct({
       nitrogen_percent: 16, phosphorus_percent: null, potassium_percent: 10,
       analysis_basis: "oxide",
+      concentration_basis: "w/v",
     });
     expect(entries.map((e) => e.nutrientKey)).toEqual(["N", "K"]);
     expect(entries[0].analysisBasis).toBe("oxide");
+    expect(entries[0].concentrationBasis).toBe("w/v");
     expect(entries[0].sourceKind).toBe("product_analysis");
     expect(entries[0].isPrimary).toBe(true);
   });

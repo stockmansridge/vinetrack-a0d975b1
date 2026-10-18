@@ -1,5 +1,8 @@
 # Roadmap
 
+- [x] Simplify Target Nutrient preview; validate immediate calculations, known-basis safety and existing modes (92 tests passed).
+- [ ] Signed-in Target Nutrient phone visual check — blocked by unavailable vineyard-account session; browser reaches Sign In.
+
 - [x] Complete paused trips — add "Complete Trip" action (owner/manager/supervisor) on Trips page
 - [x] Make Pins / Repairs / Observations and Field Trips detail sheets 50% width like Work Tasks
 - [x] Verify build passes
