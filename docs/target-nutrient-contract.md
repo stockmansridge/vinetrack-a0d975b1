@@ -33,7 +33,7 @@ product_nutrient_analysis (new table, or jsonb column on saved_chemicals — Cha
 
 Rules:
 - Elemental vs oxide basis is stored per nutrient and shown next to every percentage. Conversion between oxide and elemental forms is NOT performed automatically in v1; the percentage is used as declared, and the basis label travels with it everywhere it is displayed.
-- `w/v` concentrations REQUIRE a verified product density (kg/L). If a liquid product lacks density and the selected nutrient is declared `w/v`, the calculator blocks the calculation and says why. `w/w` on liquids also requires density to convert kg of nutrient to litres of product.
+- `w/v` concentrations do NOT require density: the percentage already expresses nutrient mass per product volume (e.g. 16% w/v = 16 g nutrient per 100 mL product, so a 2 g nutrient target needs 12.5 mL product). Density (kg/L) IS required when converting a `% w/w` concentration on a liquid product into a volume-based application quantity; if that density is missing, the calculator blocks the calculation and says why.
 - `other:<slug>` supports grower-defined nutrients; `display_name` is mandatory for those.
 
 ## 4. Record payload (what a saved nutrientTarget record must carry)
