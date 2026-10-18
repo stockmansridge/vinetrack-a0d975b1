@@ -867,6 +867,130 @@ function FertiliserCalculatorDialogForm({
             )}
           </section>
 
+          {/* Target Nutrient (Preview) — System Admin only, never saved */}
+          {isTargetMode && (
+            <section
+              className="rounded-lg border-2 border-amber-500/50 bg-amber-500/5 p-4 space-y-3"
+              aria-label="Target nutrient settings"
+            >
+              <div className="flex items-center gap-2 flex-wrap">
+                <Label className="text-sm font-semibold">Target nutrient</Label>
+                <Badge variant="outline" className="text-xs border-amber-500/60 text-amber-700 dark:text-amber-400">
+                  Preview — System Admin only · not saved
+                </Badge>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-4">
+                <div className="sm:col-span-2">
+                  <Label className="text-xs">Nutrient</Label>
+                  {analysisEntries.length > 0 && !useManualPercent ? (
+                    <Select
+                      value={String(selectedNutrientIdx)}
+                      onValueChange={(v) => setSelectedNutrientIdx(Number(v))}
+                    >
+                      <SelectTrigger aria-label="Target nutrient">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {analysisEntries.map((e, i) => (
+                          <SelectItem key={i} value={String(i)}>
+                            {e.displayName || e.nutrientKey} — {e.percent}% {e.analysisBasis} {e.concentrationBasis}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      placeholder="Nutrient name (e.g. Nitrogen)"
+                      value={manualNutrientName}
+                      onChange={(e) => setManualNutrientName(e.target.value)}
+                      aria-label="Target nutrient name"
+                    />
+                  )}
+                </div>
+                <div>
+                  <Label className="text-xs">
+                    Declared %{" "}
+                    <span className="text-muted-foreground font-normal">
+                      ({targetPctSource === "product_analysis" ? "from product analysis" : "manual entry"})
+                    </span>
+                  </Label>
+                  {useManualPercent || !selectedEntry ? (
+                    <Input
+                      inputMode="decimal"
+                      value={manualPercent}
+                      onChange={(e) => setManualPercent(e.target.value)}
+                      placeholder="e.g. 16"
+                      aria-label="Nutrient percent"
+                    />
+                  ) : (
+                    <div className="h-10 flex items-center text-sm font-medium tabular-nums">
+                      {selectedEntry.percent}% {selectedEntry.analysisBasis} · {selectedEntry.concentrationBasis}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-end pb-1">
+                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+                    <Checkbox
+                      checked={useManualPercent}
+                      onCheckedChange={(v) => setUseManualPercent(!!v)}
+                      aria-label="Enter percentage manually"
+                    />
+                    Enter % manually
+                  </label>
+                </div>
+                <div className="sm:col-span-2">
+                  <Label className="text-xs">Target basis</Label>
+                  <Select value={targetUnit} onValueChange={(v) => setTargetUnit(v as TargetRateUnit)}>
+                    <SelectTrigger aria-label="Target basis"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="g/vine">g nutrient / vine</SelectItem>
+                      <SelectItem value="kg/ha">kg nutrient / ha</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Target quantity ({targetUnit})</Label>
+                  <Input
+                    inputMode="decimal"
+                    value={targetRate}
+                    onChange={(e) => setTargetRate(e.target.value)}
+                    placeholder="e.g. 2"
+                    aria-label="Target quantity"
+                  />
+                </div>
+                {form === "liquid" && targetConcBasis === "w/w" && (
+                  <div>
+                    <Label className="text-xs">Density (kg/L)</Label>
+                    <Input
+                      inputMode="decimal"
+                      value={densityInput}
+                      onChange={(e) => setDensityInput(e.target.value)}
+                      placeholder="required for litres"
+                      aria-label="Product density"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {selectedEntry && !useManualPercent && (
+                <div className="text-xs text-muted-foreground">
+                  Basis: {selectedEntry.analysisBasis === "oxide" ? "oxide (used as declared — no elemental conversion)" : "elemental"} ·{" "}
+                  {selectedEntry.concentrationBasis === "w/v"
+                    ? "weight/volume — no density needed"
+                    : form === "liquid"
+                      ? "weight/weight on a liquid — density required for a volume result"
+                      : "weight/weight"}
+                </div>
+              )}
+
+              <div className="border-t pt-3 space-y-2">
+                <Label className="text-xs font-semibold">Product analysis (local preview)</Label>
+                <NutrientAnalysisEditor entries={analysisEntries} onChange={setAnalysisEntries} />
+              </div>
+            </section>
+          )}
+
           {/* Blocks */}
           <section className="rounded-lg border-2 border-border bg-card shadow-sm p-4 space-y-2">
             <Label className="text-sm font-semibold">Blocks (optional)</Label>
