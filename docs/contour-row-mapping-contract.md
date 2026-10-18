@@ -5,6 +5,8 @@ write `paddocks.rows`, `row_direction`, `row_width`, `row_count`,
 `polygon_points`, `row_length_override`, vine overrides or any operational input.
 Activation into real rows is a later phase.
 
+The selected future design is [Portal-only contour-first staging and activation](contour-rows-portal-only-activation-design.md). It supersedes the public pending-configuration alternative below: private staging only, all contour authoring/review/activation UI in Portal, and essential mobile read-only/fail-closed compatibility only. Nothing in that design activates this draft pilot.
+
 ## Storage
 Defined in `sql/contour_row_mapping_round1_applied.sql`, **applied** to the shared
 VineTrack database on 2026-10-07 as migration `contour_row_mapping_round1`
