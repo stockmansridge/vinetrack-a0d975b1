@@ -840,6 +840,7 @@ function FertiliserCalculatorDialogForm({
                 <div className="h-10 flex items-center text-sm">{STATUS_TEXT[status] ?? status}</div>
               </div>
             )}
+            {!isTargetMode && (
             <div className="sm:col-span-2">
               <Label className="text-xs">Application rate ({displayRateUnit})</Label>
               <div className="flex gap-2 items-center">
@@ -847,6 +848,7 @@ function FertiliserCalculatorDialogForm({
                 <span className="text-sm text-muted-foreground w-20" aria-label="Rate unit">{displayRateUnit}</span>
               </div>
             </div>
+            )}
             <div>
               <Label className="text-xs">Pack size ({productUnit})</Label>
               <Input
