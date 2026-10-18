@@ -64,6 +64,62 @@ async function openModeMenu() {
 describe("Target Nutrient (Preview) gating", () => {
   beforeEach(() => { h.isAdmin = false; h.saves = []; });
 
+  async function startTarget() {
+    h.isAdmin = true;
+    renderDialog();
+    await openModeMenu();
+    fireEvent.click(screen.getByRole("option", { name: /Target Nutrient \(Preview\)/i }));
+  }
+
+  async function choose(label: string, name: RegExp) {
+    const trigger = screen.getByRole("combobox", { name: label });
+    fireEvent.pointerDown(trigger);
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    await waitFor(() => screen.getByRole("listbox"));
+    fireEvent.click(screen.getByRole("option", { name }));
+  }
+
+  it("immediately recalculates editable percentages with manual counts and blocks", async () => {
+    await startTarget();
+    fireEvent.change(screen.getByLabelText("Nutrient percent"), { target: { value: "16" } });
+    fireEvent.change(screen.getByLabelText("Target quantity"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Vine count"), { target: { value: "1000" } });
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("12.5 g/vine");
+    expect(screen.getByLabelText("Total product result").textContent).toBe("12.5 kg");
+    fireEvent.change(screen.getByLabelText("Nutrient percent"), { target: { value: "20" } });
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("10 g/vine");
+    fireEvent.click(screen.getByLabelText("Select Block A"));
+    expect(screen.getByLabelText("Total product result").textContent).toBe("40 kg");
+    expect(h.saves).toEqual([]);
+  });
+
+  it("uses existing manual area for kg actual nutrient/ha", async () => {
+    await startTarget();
+    await choose("Target basis", /kg \/ hectare/);
+    fireEvent.change(screen.getByLabelText("Nutrient percent"), { target: { value: "16" } });
+    fireEvent.change(screen.getByLabelText("Target quantity"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Treated area ha"), { target: { value: "3" } });
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("12.5 kg/ha");
+    expect(screen.getByLabelText("Total product result").textContent).toBe("37.5 kg");
+  });
+
+  it("requires documented density for w/w liquids, not w/v", async () => {
+    await startTarget();
+    fireEvent.click(screen.getByRole("button", { name: "Manual entry" }));
+    const form = screen.getAllByRole("combobox")[0];
+    fireEvent.pointerDown(form); fireEvent.keyDown(form, { key: "ArrowDown" });
+    await waitFor(() => screen.getByRole("listbox"));
+    fireEvent.click(screen.getByRole("option", { name: "Liquid" }));
+    fireEvent.change(screen.getByLabelText("Nutrient percent"), { target: { value: "16" } });
+    fireEvent.change(screen.getByLabelText("Target quantity"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Product density"), { target: { value: "1.25" } });
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("—");
+    fireEvent.change(screen.getByLabelText("Density source"), { target: { value: "Technical sheet" } });
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("10 mL/vine");
+    await choose("Concentration basis", /w\/v/);
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("12.5 mL/vine");
+  });
+
   it("does not offer the mode to ordinary users", async () => {
     renderDialog();
     await openModeMenu();
