@@ -98,7 +98,7 @@ describe("New Block contour handoff", () => {
     goStep(/^4\./); goStep(/^3\./);
     expect(toggle()!.checked).toBe(true);
     goStep(/^8\./);
-    expect(screen.getByRole("button", { name: "Save block & open contour mapping" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save with straight rows & open contour mapping" })).toBeTruthy();
     expect(h.insert).not.toHaveBeenCalled();
   });
 
