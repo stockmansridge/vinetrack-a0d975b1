@@ -426,8 +426,8 @@ function FertiliserCalculatorDialogForm({
 
   const checkedBlocks = useMemo(() => blocks.filter((b) => b.selected), [blocks]);
   const vineResolution = useMemo(
-    () => resolveVineBasis(checkedBlocks, mode, vineBasis, snapshotIds),
-    [checkedBlocks, mode, vineBasis, snapshotIds],
+    () => resolveVineBasis(checkedBlocks, calcMode, vineBasis, snapshotIds),
+    [checkedBlocks, calcMode, vineBasis, snapshotIds],
   );
   // Blocks as they drive the calculation (Per Vine counts come from the basis).
   const selectedBlocks = useMemo(
