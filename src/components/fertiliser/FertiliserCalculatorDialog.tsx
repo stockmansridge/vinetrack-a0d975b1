@@ -536,8 +536,35 @@ function FertiliserCalculatorDialogForm({
     ? compareInventory(inventoryQ.data.quantity, inventoryQ.data.unit, calc.totalProductRequired, productUnit)
     : null;
 
-  const hasQuantity = selectedBlocks.length > 0 || (mode === "perHectare" ? manualAreaHa > 0 : numOr(manualVines) > 0);
+  const hasQuantity = selectedBlocks.length > 0 || (calcMode === "perHectare" ? manualAreaHa > 0 : numOr(manualVines) > 0);
+
+  // Target Nutrient (Preview) result — display-only, built from the same
+  // totals the existing pipeline produced so blocks/vine basis stay shared.
+  const targetResult = useMemo(() => {
+    if (!isTargetMode) return null;
+    return computeTargetNutrient({
+      form,
+      targetRateUnit: targetUnit,
+      targetRate: targetRateVal,
+      nutrientPercent: targetPct,
+      nutrientPercentSource: targetPctSource,
+      analysisBasis: targetAnalysisBasis,
+      concentrationBasis: targetConcBasis,
+      densityKgPerL,
+      totalAreaHa: calc.totalAreaHa,
+      totalVines: calc.totalVines,
+      otherNutrients: analysisEntries.filter((_, i) => i !== selectedNutrientIdx),
+    });
+  }, [
+    isTargetMode, form, targetUnit, targetRateVal, targetPct, targetPctSource,
+    targetAnalysisBasis, targetConcBasis, densityKgPerL,
+    calc.totalAreaHa, calc.totalVines, analysisEntries, selectedNutrientIdx,
+  ]);
+
+  // Preview mode never submits: Save / Mark Completed stay disabled and the
+  // mutation itself refuses, so a nutrientTarget record can never be written.
   const canSubmit =
+    !isTargetMode &&
     productName.trim().length > 0 &&
     hasQuantity &&
     rateCanon > 0 &&
@@ -545,6 +572,9 @@ function FertiliserCalculatorDialogForm({
 
   const saveMut = useMutation({
     mutationFn: async (recordStatus: FertiliserRecordStatus) => {
+      if (mode === "nutrientTarget") {
+        throw new Error("Target Nutrient is a preview — records cannot be saved yet.");
+      }
       setSavingStatus(recordStatus);
       const savedRecordId = recordId;
       const savePayload = {
