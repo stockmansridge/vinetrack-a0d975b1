@@ -23,7 +23,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { FlaskConical, Plus, Trash2, Copy, Pencil, Download } from "lucide-react";
-import { ALL_STATUSES, STATUS_LABEL, type FertiliserRecordStatus } from "@/lib/fertiliserCalc";
+import {
+  ALL_STATUSES,
+  STATUS_LABEL,
+  calculationModeLabel,
+  isSupportedCalculationMode,
+  type FertiliserRecordStatus,
+} from "@/lib/fertiliserCalc";
 import {
   fetchFertiliserRecords,
   fetchFertiliserAllocations,
