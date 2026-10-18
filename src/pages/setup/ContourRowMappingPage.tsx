@@ -313,8 +313,38 @@ export function Editor({ paddock: initialPaddock, scope: scopeProp, load, copyKe
   const step = !group ? 1 : group.mode !== "imported" && (group.referenceTrace.length < 2 || tool === "trace") ? 2
     : !group.rows.length ? 3 : dirty ? 4 : 0;
 
+  // Background freshness check (window focus): only flags, never replaces the snapshot.
+  const scopeIds = useRef({ v: scopeProp.vineyardId, p: scopeProp.paddockId });
+  useEffect(() => {
+    const onFocus = async () => {
+      if (busyRef.current) return;
+      try {
+        const fresh = await fetchBlock(scopeIds.current.v, scopeIds.current.p);
+        const diff = diffBlock(blockSnapshot(paddock), blockSnapshot(fresh));
+        if (blockChanged(diff)) setStaleBlock({ fresh, diff });
+      } catch { /* best-effort; Save Draft re-checks authoritatively */ }
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [fetchBlock, paddock]);
+
+  /** Explicit recovery: adopt the current block as the validation snapshot. Edits and links are kept. */
+  const recheckBlock = async () => {
+    if (busyRef.current) return;
+    setRechecking(true);
+    try {
+      const fresh = staleBlock?.fresh ?? await fetchBlock(scopeProp.vineyardId, scopeProp.paddockId);
+      const latest = await fetchBlock(scopeProp.vineyardId, scopeProp.paddockId).catch(() => fresh);
+      setPaddock(latest); setStaleBlock(null); setSaveError(null);
+      toast({ title: "Rechecked against the current block", description: "Your draft edits are unchanged. Review any problems before saving." });
+    } catch (e) {
+      setSaveError((e as Error).message);
+    } finally { setRechecking(false); }
+  };
+
   const doSave = async () => {
     if (busyRef.current || setupRequired) return;
+    if (staleBlock) { setSaveError("The block changed since this draft was checked. Press “Recheck against current block” first."); return; }
     const errs = [...validateDraftShape(draft, scope), ...checkDraftGeometry(draft, boundary).filter((i) => i.level === "error").map((i) => i.message)];
     if (errs.length) { setSaveError(`Fix these first: ${errs.slice(0, 5).join(" ")}`); return; }
     const json = JSON.stringify(draft);
@@ -323,6 +353,19 @@ export function Editor({ paddock: initialPaddock, scope: scopeProp, load, copyKe
       attempt.current = { json, id: generateUuid(), revision: base.revision, draftId: base.draftId };
     const snap = attempt.current!;
     setBusy("saving"); setSaveError(null);
+    // Authoritative pre-save block read: stop if boundary or operational row ids moved.
+    try {
+      const fresh = await fetchBlock(scope.vineyardId, scope.paddockId);
+      const diff = diffBlock(blockSnapshot(paddock), blockSnapshot(fresh));
+      if (blockChanged(diff)) {
+        setStaleBlock({ fresh, diff });
+        setSaveError("The block changed since this draft was checked, so it wasn't saved. Press “Recheck against current block”, review the result, then save again.");
+        setBusy(null); return;
+      }
+    } catch (e) {
+      setSaveError(e instanceof BlockFreshnessError ? e.message : "Couldn't confirm the block is up to date. Nothing was saved — try again.");
+      setBusy(null); return;
+    }
     try {
       const s = await saveDraft(scope, { draftId: snap.draftId, revision: snap.revision }, snap.id, JSON.parse(snap.json));
       if (copyKey) reconcileSaved(copyKey, snap.json, { draftId: s.draftId, revision: s.revision });
