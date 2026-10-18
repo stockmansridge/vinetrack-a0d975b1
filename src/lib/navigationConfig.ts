@@ -277,7 +277,7 @@ export const ACTIVITIES: NavActivity[] = [
       },
       {
         id: "spraying.fertiliser",
-        label: "Fertiliser",
+        label: "Fertiliser Calculator",
         path: "/tools/fertiliser-calculator",
         keywords: ["fertiliser calculator", "fertilizer", "nutrition", "npk", "fertigation"],
       },
