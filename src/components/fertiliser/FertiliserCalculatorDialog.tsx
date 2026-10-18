@@ -888,7 +888,7 @@ function FertiliserCalculatorDialogForm({
           </section>
 
           {isTargetMode && (
-            <section className="border-t pt-4 space-y-3" aria-label="Target nutrient settings">
+            <section className="rounded-lg border-2 border-border bg-card shadow-sm p-4 space-y-3" aria-label="Target nutrient settings">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">Nutrient</Label>
