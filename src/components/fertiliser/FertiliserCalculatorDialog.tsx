@@ -72,6 +72,15 @@ import {
   fetchWorkTaskPaddocksForVineyard,
   syncWorkTaskPaddocks,
 } from "@/lib/workTasksQuery";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import {
+  computeTargetNutrient,
+  seedAnalysisFromLegacyProduct,
+  NUTRIENT_DISPLAY,
+  type NutrientAnalysisEntry,
+  type TargetRateUnit,
+} from "@/lib/targetNutrient";
+import { NutrientAnalysisEditor } from "@/components/fertiliser/NutrientAnalysisEditor";
 
 interface PaddockOption {
   id: string;
@@ -187,6 +196,7 @@ function FertiliserCalculatorDialogForm({
 }: Props) {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { isAdmin } = useIsSystemAdmin();
   const showCosts = canSeeCosts(role);
   const productsQ = useProducts(vineyardId);
   const region = useRegionFormatters();
@@ -200,8 +210,18 @@ function FertiliserCalculatorDialogForm({
   const [productSearch, setProductSearch] = useState("");
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [form, setForm] = useState<FertiliserForm>("solid");
-  const [mode, setMode] = useState<FertiliserCalculationMode>("perHectare");
+  // "nutrientTarget" is a System Admin-only PREVIEW mode: it never saves.
+  const [mode, setMode] = useState<FertiliserCalculationMode | "nutrientTarget">("perHectare");
   const [applicationRate, setApplicationRate] = useState<string>("");
+  // Target Nutrient (Preview) state — local only, never persisted.
+  const [analysisEntries, setAnalysisEntries] = useState<NutrientAnalysisEntry[]>([]);
+  const [selectedNutrientIdx, setSelectedNutrientIdx] = useState<number>(0);
+  const [manualNutrientName, setManualNutrientName] = useState("");
+  const [manualPercent, setManualPercent] = useState<string>("");
+  const [useManualPercent, setUseManualPercent] = useState(false);
+  const [targetUnit, setTargetUnit] = useState<TargetRateUnit>("g/vine");
+  const [targetRate, setTargetRate] = useState<string>("");
+  const [densityInput, setDensityInput] = useState<string>("");
   const [manualArea, setManualArea] = useState<string>("");
   const [manualVines, setManualVines] = useState<string>("");
   const [packSize, setPackSize] = useState<string>("");
@@ -278,6 +298,15 @@ function FertiliserCalculatorDialogForm({
       setManualVines("");
       setStatus("planned");
     }
+    // Target Nutrient (Preview) reset.
+    setAnalysisEntries([]);
+    setSelectedNutrientIdx(0);
+    setManualNutrientName("");
+    setManualPercent("");
+    setUseManualPercent(false);
+    setTargetUnit("g/vine");
+    setTargetRate("");
+    setDensityInput("");
     setCreateTask(false);
     setPendingTaskId(null);
     setPendingLabourLineId(null);
@@ -324,6 +353,12 @@ function FertiliserCalculatorDialogForm({
     setPackSize(p.pack_size == null ? "" : String(p.pack_size));
     // Legacy saved_chemicals.price_per_pack is never a cost authority.
     setPricePerPack("");
+    // Target Nutrient (Preview): seed the local analysis from legacy N/P/K
+    // and the density from the saved product. Local only — never written back.
+    setAnalysisEntries(seedAnalysisFromLegacyProduct(p));
+    setSelectedNutrientIdx(0);
+    setUseManualPercent(false);
+    setDensityInput(p.density != null && p.density > 0 ? String(p.density) : "");
   };
 
   const onManualEntry = () => {
@@ -334,22 +369,65 @@ function FertiliserCalculatorDialogForm({
     setPricePerPack("");
   };
 
+  // Target Nutrient (Preview): derive the product rate from the nutrient
+  // target, then reuse the existing perVine/perHectare pipeline for totals,
+  // packs, costs and inventory. Never saved.
+  const isTargetMode = mode === "nutrientTarget";
+  const calcMode: FertiliserCalculationMode = isTargetMode
+    ? targetUnit === "g/vine"
+      ? "perVine"
+      : "perHectare"
+    : mode;
+  const selectedEntry: NutrientAnalysisEntry | null =
+    analysisEntries[selectedNutrientIdx] ?? null;
+  const targetPct = useManualPercent || !selectedEntry ? numOr(manualPercent) : selectedEntry.percent;
+  const targetPctSource: "product_analysis" | "manual" =
+    useManualPercent || !selectedEntry
+      ? "manual"
+      : selectedEntry.sourceKind === "product_analysis"
+        ? "product_analysis"
+        : "manual";
+  const targetConcBasis = selectedEntry?.concentrationBasis ?? "w/w";
+  const targetAnalysisBasis = selectedEntry?.analysisBasis ?? "elemental";
+  const densityKgPerL = densityInput === "" ? null : numOr(densityInput);
+  const targetRateVal = numOr(targetRate);
+  // Per-unit product rate (canonical: g/vine or mL/vine; kg/ha or L/ha).
+  const targetFraction = targetPct > 0 && targetPct <= 100 ? targetPct / 100 : 0;
+  const targetVolumeAvailable =
+    form === "liquid" && (targetConcBasis === "w/v" || (densityKgPerL != null && densityKgPerL > 0));
+  const targetRateCanon = (() => {
+    if (!isTargetMode || targetFraction <= 0 || targetRateVal <= 0) return 0;
+    const perUnit = targetRateVal / targetFraction; // g/vine or kg/ha of product (mass basis)
+    if (form === "liquid") {
+      if (targetConcBasis === "w/v") return perUnit; // numerically mL/vine or L/ha
+      if (densityKgPerL != null && densityKgPerL > 0) return perUnit / densityKgPerL;
+      return 0; // blocked — density required
+    }
+    return perUnit;
+  })();
+  // When a w/w liquid lacks density the product quantity is a MASS — report in
+  // kg by treating the pipeline form as solid so units stay honest.
+  const effectiveForm: FertiliserForm =
+    isTargetMode && form === "liquid" && !targetVolumeAvailable ? "solid" : form;
+
   // Units are authoritative: derived from form + mode, never typed.
-  const applicationRateUnit = defaultRateUnit(mode, form);
-  const productUnit = defaultProductUnit(form);
+  const applicationRateUnit = defaultRateUnit(calcMode, effectiveForm);
+  const productUnit = defaultProductUnit(effectiveForm);
   // Inputs are in the vineyard's display units; everything below works canonically.
-  const rateCanon = rateToCanonical(numOr(applicationRate), mode, form, region);
+  const rateCanon = isTargetMode
+    ? targetRateCanon
+    : rateToCanonical(numOr(applicationRate), calcMode, effectiveForm, region);
   const manualAreaHa = areaToCanonical(numOr(manualArea), region);
-  const displayRateUnit = rateLabel(mode, form, region);
-  const displayQtyUnit = quantityLabel(form, region);
-  const qty = (v: number) => `${Number(quantityToDisplay(v, form, region).toFixed(3)).toLocaleString()} ${displayQtyUnit}`;
+  const displayRateUnit = rateLabel(calcMode, effectiveForm, region);
+  const displayQtyUnit = quantityLabel(effectiveForm, region);
+  const qty = (v: number) => `${Number(quantityToDisplay(v, effectiveForm, region).toFixed(3)).toLocaleString()} ${displayQtyUnit}`;
   const selectedProduct = (productsQ.data ?? []).find((p) => p.id === productId) ?? null;
   const isSavedProduct = !!productId;
 
   const checkedBlocks = useMemo(() => blocks.filter((b) => b.selected), [blocks]);
   const vineResolution = useMemo(
-    () => resolveVineBasis(checkedBlocks, mode, vineBasis, snapshotIds),
-    [checkedBlocks, mode, vineBasis, snapshotIds],
+    () => resolveVineBasis(checkedBlocks, calcMode, vineBasis, snapshotIds),
+    [checkedBlocks, calcMode, vineBasis, snapshotIds],
   );
   // Blocks as they drive the calculation (Per Vine counts come from the basis).
   const selectedBlocks = useMemo(
@@ -389,7 +467,7 @@ function FertiliserCalculatorDialogForm({
   const calc = useMemo(
     () =>
       computeCalculation({
-        mode,
+        mode: calcMode,
         applicationRate: rateCanon,
         packSize: packSize === "" ? null : numOr(packSize, 0),
         pricePerPack: pricePerPack === "" ? null : numOr(pricePerPack, 0),
@@ -410,11 +488,11 @@ function FertiliserCalculatorDialogForm({
                   const r = rateCanon;
                   if (selectedBlocks.length) {
                     return selectedBlocks.reduce(
-                      (s, b) => s + (mode === "perHectare" ? r * b.areaHa : (r * b.vineCount) / 1000),
+                      (s, b) => s + (calcMode === "perHectare" ? r * b.areaHa : (r * b.vineCount) / 1000),
                       0,
                     );
                   }
-                  return mode === "perHectare" ? r * manualAreaHa : (r * numOr(manualVines)) / 1000;
+                  return calcMode === "perHectare" ? r * manualAreaHa : (r * numOr(manualVines)) / 1000;
                 })(),
                 productUnit,
               ),
@@ -429,7 +507,7 @@ function FertiliserCalculatorDialogForm({
       isSavedProduct,
       seasonRow,
       productUnit,
-      mode,
+      calcMode,
       applicationRate,
       packSize,
       pricePerPack,
@@ -458,8 +536,35 @@ function FertiliserCalculatorDialogForm({
     ? compareInventory(inventoryQ.data.quantity, inventoryQ.data.unit, calc.totalProductRequired, productUnit)
     : null;
 
-  const hasQuantity = selectedBlocks.length > 0 || (mode === "perHectare" ? manualAreaHa > 0 : numOr(manualVines) > 0);
+  const hasQuantity = selectedBlocks.length > 0 || (calcMode === "perHectare" ? manualAreaHa > 0 : numOr(manualVines) > 0);
+
+  // Target Nutrient (Preview) result — display-only, built from the same
+  // totals the existing pipeline produced so blocks/vine basis stay shared.
+  const targetResult = useMemo(() => {
+    if (!isTargetMode) return null;
+    return computeTargetNutrient({
+      form,
+      targetRateUnit: targetUnit,
+      targetRate: targetRateVal,
+      nutrientPercent: targetPct,
+      nutrientPercentSource: targetPctSource,
+      analysisBasis: targetAnalysisBasis,
+      concentrationBasis: targetConcBasis,
+      densityKgPerL,
+      totalAreaHa: calc.totalAreaHa,
+      totalVines: calc.totalVines,
+      otherNutrients: analysisEntries.filter((_, i) => i !== selectedNutrientIdx),
+    });
+  }, [
+    isTargetMode, form, targetUnit, targetRateVal, targetPct, targetPctSource,
+    targetAnalysisBasis, targetConcBasis, densityKgPerL,
+    calc.totalAreaHa, calc.totalVines, analysisEntries, selectedNutrientIdx,
+  ]);
+
+  // Preview mode never submits: Save / Mark Completed stay disabled and the
+  // mutation itself refuses, so a nutrientTarget record can never be written.
   const canSubmit =
+    !isTargetMode &&
     productName.trim().length > 0 &&
     hasQuantity &&
     rateCanon > 0 &&
@@ -467,6 +572,9 @@ function FertiliserCalculatorDialogForm({
 
   const saveMut = useMutation({
     mutationFn: async (recordStatus: FertiliserRecordStatus) => {
+      if (mode === "nutrientTarget") {
+        throw new Error("Target Nutrient is a preview — records cannot be saved yet.");
+      }
       setSavingStatus(recordStatus);
       const savedRecordId = recordId;
       const savePayload = {
@@ -480,7 +588,7 @@ function FertiliserCalculatorDialogForm({
         application_date: effectiveDate,
         vine_count_basis: VINE_COUNT_BASIS_PERSISTED
           ? vineCountBasisForSave({
-              mode, selectedBlockCount: selectedBlocks.length, basis: vineBasis,
+              mode: calcMode, selectedBlockCount: selectedBlocks.length, basis: vineBasis,
               isEdit: !!existing, sourceBasis: duplicateFrom?.record?.vine_count_basis ?? null,
             })
           : undefined,
@@ -704,11 +812,21 @@ function FertiliserCalculatorDialogForm({
           <section className="rounded-lg border-2 border-border bg-card shadow-sm p-4 grid gap-3 sm:grid-cols-4">
             <div className="sm:col-span-2">
               <Label className="text-xs">Calculation mode</Label>
-              <Select value={mode} onValueChange={(v) => setMode(v as FertiliserCalculationMode)}>
+              <Select
+                value={mode}
+                onValueChange={(v) => {
+                  // The preview mode is System Admin-only; never selectable otherwise.
+                  if (v === "nutrientTarget" && !isAdmin) return;
+                  setMode(v as FertiliserCalculationMode | "nutrientTarget");
+                }}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="perHectare">Per hectare</SelectItem>
                   <SelectItem value="perVine">Per vine</SelectItem>
+                  {isAdmin && (
+                    <SelectItem value="nutrientTarget">Target Nutrient (Preview)</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -722,6 +840,7 @@ function FertiliserCalculatorDialogForm({
                 <div className="h-10 flex items-center text-sm">{STATUS_TEXT[status] ?? status}</div>
               </div>
             )}
+            {!isTargetMode && (
             <div className="sm:col-span-2">
               <Label className="text-xs">Application rate ({displayRateUnit})</Label>
               <div className="flex gap-2 items-center">
@@ -729,6 +848,7 @@ function FertiliserCalculatorDialogForm({
                 <span className="text-sm text-muted-foreground w-20" aria-label="Rate unit">{displayRateUnit}</span>
               </div>
             </div>
+            )}
             <div>
               <Label className="text-xs">Pack size ({productUnit})</Label>
               <Input
@@ -747,10 +867,134 @@ function FertiliserCalculatorDialogForm({
             )}
           </section>
 
+          {/* Target Nutrient (Preview) — System Admin only, never saved */}
+          {isTargetMode && (
+            <section
+              className="rounded-lg border-2 border-amber-500/50 bg-amber-500/5 p-4 space-y-3"
+              aria-label="Target nutrient settings"
+            >
+              <div className="flex items-center gap-2 flex-wrap">
+                <Label className="text-sm font-semibold">Target nutrient</Label>
+                <Badge variant="outline" className="text-xs border-amber-500/60 text-amber-700 dark:text-amber-400">
+                  Preview — System Admin only · not saved
+                </Badge>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-4">
+                <div className="sm:col-span-2">
+                  <Label className="text-xs">Nutrient</Label>
+                  {analysisEntries.length > 0 && !useManualPercent ? (
+                    <Select
+                      value={String(selectedNutrientIdx)}
+                      onValueChange={(v) => setSelectedNutrientIdx(Number(v))}
+                    >
+                      <SelectTrigger aria-label="Target nutrient">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {analysisEntries.map((e, i) => (
+                          <SelectItem key={i} value={String(i)}>
+                            {e.displayName || e.nutrientKey} — {e.percent}% {e.analysisBasis} {e.concentrationBasis}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      placeholder="Nutrient name (e.g. Nitrogen)"
+                      value={manualNutrientName}
+                      onChange={(e) => setManualNutrientName(e.target.value)}
+                      aria-label="Target nutrient name"
+                    />
+                  )}
+                </div>
+                <div>
+                  <Label className="text-xs">
+                    Declared %{" "}
+                    <span className="text-muted-foreground font-normal">
+                      ({targetPctSource === "product_analysis" ? "from product analysis" : "manual entry"})
+                    </span>
+                  </Label>
+                  {useManualPercent || !selectedEntry ? (
+                    <Input
+                      inputMode="decimal"
+                      value={manualPercent}
+                      onChange={(e) => setManualPercent(e.target.value)}
+                      placeholder="e.g. 16"
+                      aria-label="Nutrient percent"
+                    />
+                  ) : (
+                    <div className="h-10 flex items-center text-sm font-medium tabular-nums">
+                      {selectedEntry.percent}% {selectedEntry.analysisBasis} · {selectedEntry.concentrationBasis}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-end pb-1">
+                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+                    <Checkbox
+                      checked={useManualPercent}
+                      onCheckedChange={(v) => setUseManualPercent(!!v)}
+                      aria-label="Enter percentage manually"
+                    />
+                    Enter % manually
+                  </label>
+                </div>
+                <div className="sm:col-span-2">
+                  <Label className="text-xs">Target basis</Label>
+                  <Select value={targetUnit} onValueChange={(v) => setTargetUnit(v as TargetRateUnit)}>
+                    <SelectTrigger aria-label="Target basis"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="g/vine">g nutrient / vine</SelectItem>
+                      <SelectItem value="kg/ha">kg nutrient / ha</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Target quantity ({targetUnit})</Label>
+                  <Input
+                    inputMode="decimal"
+                    value={targetRate}
+                    onChange={(e) => setTargetRate(e.target.value)}
+                    placeholder="e.g. 2"
+                    aria-label="Target quantity"
+                  />
+                </div>
+                {form === "liquid" && targetConcBasis === "w/w" && (
+                  <div>
+                    <Label className="text-xs">Density (kg/L)</Label>
+                    <Input
+                      inputMode="decimal"
+                      value={densityInput}
+                      onChange={(e) => setDensityInput(e.target.value)}
+                      placeholder="required for litres"
+                      aria-label="Product density"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {selectedEntry && !useManualPercent && (
+                <div className="text-xs text-muted-foreground">
+                  Basis: {selectedEntry.analysisBasis === "oxide" ? "oxide (used as declared — no elemental conversion)" : "elemental"} ·{" "}
+                  {selectedEntry.concentrationBasis === "w/v"
+                    ? "weight/volume — no density needed"
+                    : form === "liquid"
+                      ? "weight/weight on a liquid — density required for a volume result"
+                      : "weight/weight"}
+                </div>
+              )}
+
+              <div className="border-t pt-3 space-y-2">
+                <Label className="text-xs font-semibold">Product analysis (local preview)</Label>
+                <NutrientAnalysisEditor entries={analysisEntries} onChange={setAnalysisEntries} />
+              </div>
+            </section>
+          )}
+
           {/* Blocks */}
           <section className="rounded-lg border-2 border-border bg-card shadow-sm p-4 space-y-2">
             <Label className="text-sm font-semibold">Blocks (optional)</Label>
-            {mode === "perVine" && checkedBlocks.length > 0 && (
+            {calcMode === "perVine" && checkedBlocks.length > 0 && (
               <div className="rounded-md border bg-muted/40 p-3 space-y-2" role="radiogroup" aria-label="Vine count basis">
                 <div className="text-sm font-semibold">Vine count basis</div>
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -809,7 +1053,7 @@ function FertiliserCalculatorDialogForm({
                     }}
                     aria-label={`${b.name} area ${areaLabel(region)}`}
                   />
-                  {mode === "perVine" && b.selected ? (
+                  {calcMode === "perVine" && b.selected ? (
                     <div className="text-xs tabular-nums" aria-label={`${b.name} vine count`}>
                       <div className="font-medium">
                         {(selectedBlocks.find((x) => x.id === b.id)?.vineCount ?? 0).toLocaleString()} vines
@@ -845,9 +1089,9 @@ function FertiliserCalculatorDialogForm({
             {selectedBlocks.length === 0 && (
               <div className="grid gap-2 sm:grid-cols-2 border-t pt-2">
                 <div className="sm:col-span-2 text-xs text-muted-foreground">
-                  No blocks selected — enter the treated {mode === "perHectare" ? "area" : "vine count"} to calculate. The record will be saved without block allocations.
+                  No blocks selected — enter the treated {calcMode === "perHectare" ? "area" : "vine count"} to calculate. The record will be saved without block allocations.
                 </div>
-                {mode === "perHectare" ? (
+                {calcMode === "perHectare" ? (
                   <div>
                     <Label className="text-xs">Treated area ({areaLabel(region)})</Label>
                     <Input inputMode="decimal" value={manualArea} onChange={(e) => setManualArea(e.target.value)} aria-label={`Treated area ${areaLabel(region)}`} />
@@ -877,6 +1121,68 @@ function FertiliserCalculatorDialogForm({
               />
               <Stat label="Packs to open" value={packs ? String(packs.packsToOpen) : "—"} />
             </div>
+
+            {isTargetMode && targetResult && (
+              <div className="border-t pt-3 space-y-3" aria-label="Target nutrient results">
+                <Label className="text-sm font-semibold">Target nutrient result</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                  <Stat
+                    label={targetUnit === "g/vine" ? "Product per vine" : "Product per hectare"}
+                    value={
+                      (targetUnit === "g/vine" ? targetResult.productPerVine : targetResult.productPerHa) == null
+                        ? "—"
+                        : `${(targetUnit === "g/vine" ? targetResult.productPerVine : targetResult.productPerHa)!.toLocaleString()} ${
+                            targetUnit === "g/vine" ? targetResult.productPerVineUnit : targetResult.productPerHaUnit
+                          }`
+                    }
+                  />
+                  <Stat
+                    label="Total product required"
+                    value={`${targetResult.totalProductRequired.toLocaleString()} ${targetResult.productUnit}`}
+                  />
+                  <Stat
+                    label={`Total ${selectedEntry?.displayName || manualNutrientName || "nutrient"} delivered`}
+                    value={`${targetResult.totalNutrientKg.toLocaleString()} kg`}
+                  />
+                  <Stat
+                    label="Percentage used"
+                    value={`${targetPct > 0 ? targetPct : "—"}% ${targetAnalysisBasis} · ${targetConcBasis} (${targetPctSource === "product_analysis" ? "product analysis" : "manual"})`}
+                  />
+                </div>
+                {targetResult.issues.map((m) => (
+                  <div key={m} role="alert" className="text-xs text-destructive">{m}</div>
+                ))}
+                {targetResult.others.length > 0 && (
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">Other nutrients also applied (informational)</Label>
+                    <div className="rounded border divide-y text-xs">
+                      {targetResult.others.map((o) => (
+                        <div key={o.nutrientKey} className="flex items-center justify-between gap-2 p-2">
+                          <span>
+                            {o.displayName} <span className="text-muted-foreground">({o.analysisBasis})</span>
+                          </span>
+                          <span className="tabular-nums text-right">
+                            {o.totalKg != null ? (
+                              <>
+                                {o.totalKg.toLocaleString()} kg total
+                                {o.perVineG != null && ` · ${o.perVineG.toLocaleString()} g/vine`}
+                                {o.perHaKg != null && ` · ${o.perHaKg.toLocaleString()} kg/ha`}
+                              </>
+                            ) : (
+                              <span className="text-muted-foreground">{o.note ?? "Unavailable"}</span>
+                            )}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="text-xs text-muted-foreground">
+                  Preview only — Target Nutrient records cannot be saved yet. Percentages are used exactly as
+                  declared; oxide-labelled values are never silently treated as elemental.
+                </div>
+              </div>
+            )}
 
             {isSavedProduct && (
               <div className="border-t pt-3 space-y-1">
@@ -992,6 +1298,11 @@ function FertiliserCalculatorDialogForm({
         </div>
 
         <DialogFooter className="gap-2">
+          {isTargetMode && (
+            <span className="text-xs text-muted-foreground mr-auto self-center">
+              Preview mode — saving is disabled until cross-platform testing passes.
+            </span>
+          )}
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           {existing ? (
             <>

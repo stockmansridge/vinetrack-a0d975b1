@@ -18,17 +18,22 @@ Extend the Fertiliser Calculator with a `nutrientTarget` calculation mode that w
 
 Today's saved product stores only `nitrogen_percent`, `phosphorus_percent`, `potassium_percent`, plus `analysis_basis` and density. That cannot express Ca, Mg, S, micronutrients, or custom nutrients.
 
-Live schema (audited 18 Oct 2026): a NEW TABLE `public.product_nutrient_analysis` exists. Its column list could not be enumerated read-only — the migration did not GRANT SELECT to `anon`/`authenticated`, so every probe returns `42501` (permission denied) before column resolution. The columns below are the agreed contract shape; ChatGPT to confirm the actual column names/types and the intended GRANT/RLS posture before Portal implementation:
+Live schema (confirmed by ChatGPT, 18 Oct 2026): a NEW TABLE `public.product_nutrient_analysis` in the shared VineTrackv2 database, with authenticated SELECT/INSERT/UPDATE grants subject to vineyard RLS; anonymous access intentionally unavailable. Columns:
 
 ```
-product_nutrient_analysis (new table — EXISTS, not yet readable by app roles)
-  product_id        uuid  -> saved_chemicals.id
-  nutrient_key      text  -- canonical key, e.g. "N","P","K","Ca","Mg","S","Fe","Mn","Zn","Cu","B","Mo","Cl","Si","Co", or "other:<slug>"
-  display_name      text  -- e.g. "Zinc", or the grower's custom name for other:*
-  percent           numeric NOT NULL CHECK (percent > 0 AND percent <= 100)
-  analysis_basis    text  -- "elemental" | "oxide" (e.g. K as K2O, P as P2O5)
+product_nutrient_analysis
+  id                 uuid
+  product_id         uuid  -> saved_chemicals.id
+  nutrient_key       text  -- canonical key, e.g. "N","P","K","Ca","Mg","S","Fe","Mn","Zn","Cu","B","Mo","Cl","Si","Co", or "other:<slug>"
+  display_name       text  -- e.g. "Zinc", or the grower's custom name for other:*
+  declared_as        text  -- how the nutrient was declared on the label
+  percent            numeric
+  analysis_basis     text  -- "elemental" | "oxide" (e.g. K as K2O, P as P2O5)
   concentration_basis text -- "w/w" (weight/weight) | "w/v" (weight/volume; no density needed — already mass per product volume)
-  is_primary        boolean
+  source_kind        text  -- declared analysis vs manual estimate
+  source_reference   text  -- provenance (e.g. label reference)
+  is_primary         boolean
+  created_at / updated_at / deleted_at  (soft delete)
 ```
 
 Rules:
@@ -56,7 +61,11 @@ nutrient_contract_version text      -- contract version the record was written a
 nutrient_declared_as    text        -- how the nutrient was declared (e.g. elemental/oxide form label) [CONFIRMED]
 ```
 
-Differences from the v0.1 proposal: `nutrient_contract_version` and `nutrient_declared_as` were ADDED; there are NO separate `density_source` / `density_reference` columns (probed — absent). If density provenance is required, it must live inside `product_analysis_snapshot` or be added later. Column nullability/defaults/check constraints could not be verified read-only (need a GRANT or ChatGPT's migration source); snapshot jsonb internal format likewise unverified — ChatGPT to publish the exact snapshot shape before Portal writes any record.
+Schema clarifications from ChatGPT (18 Oct 2026), superseding the Lovable probe audit:
+
+- The table has 14 new nullable fields in total, INCLUDING `product_density_source` and `product_density_reference` — the earlier probe incorrectly reported these as missing. Record-level density fields are authoritative for calculations requiring density.
+- `nutrient_contract_version` must be written as `1`.
+- `product_analysis_snapshot` must be a JSON object `{ "schema_version": 1, "nutrients": [...] }`; each nutrient entry retains its declared identity, percentage, elemental/oxide basis, concentration basis and provenance (source_kind / source_reference). The Portal's `buildProductAnalysisSnapshot` in `src/lib/targetNutrient.ts` produces exactly this shape.
 
 - The snapshot is authoritative for historical display: if the product's analysis is later edited, saved records still show what was used.
 - `application_rate` / `application_rate_unit` keep their existing meaning (derived product rate) so existing cost/pack/inventory math is unchanged.
@@ -99,9 +108,19 @@ Verified against current source:
 Resolved by the applied migration: new TABLE (not jsonb) chosen; `fertiliser_records` column names confirmed as in §4.
 
 Still open:
-- ChatGPT: publish the exact `product_nutrient_analysis` column list, nullability, checks and GRANT/RLS posture (currently unreadable by app roles — Portal cannot implement the product analysis editor until SELECT/INSERT/UPDATE grants + RLS exist); publish the exact `product_analysis_snapshot` jsonb shape and the `nutrient_contract_version` value to write (proposal: `"1"`); confirm whether density provenance lives in the snapshot; whether oxide↔elemental conversion factors belong in the DB later.
 - Rork: confirm current iOS/Android behaviour when reading an unknown `calculation_mode`; confirm offline persistence can store the snapshot jsonb; confirm the mode gate mechanism.
-- All: agreed canonical nutrient key list and display names (proposal in §3).
+- All: agreed canonical nutrient key list and display names (proposal in §3); whether oxide↔elemental conversion factors belong in the DB later.
+
+Resolved by ChatGPT's clarification (18 Oct 2026): `product_nutrient_analysis` column list + grants (authenticated SELECT/INSERT/UPDATE under vineyard RLS; anon intentionally blocked); the 14 new `fertiliser_records` fields including `product_density_source` / `product_density_reference`; `nutrient_contract_version = 1`; snapshot shape `{schema_version: 1, nutrients: [...]}`.
+
+## 9a. Portal implementation status (Lovable, 18 Oct 2026)
+
+- Target Nutrient (Preview) mode IMPLEMENTED in the Fertiliser Calculator, gated to System Admins only (`useIsSystemAdmin` in `FertiliserCalculatorDialog.tsx`); ordinary users never see the mode.
+- Math in `src/lib/targetNutrient.ts` (`computeTargetNutrient`): contract examples verified by test (16% N @ 2 g/vine → 12.5 g; 20% Ca @ 2 g/vine → 10 g; 16% w/v @ 2 g/vine → 12.5 mL); w/w liquids without density keep an honest kg result and block volume with an explanation; oxide labels never silently treated as elemental; "other nutrients also applied" honours each nutrient's own basis.
+- Reusable `NutrientAnalysisEditor` (`src/components/fertiliser/NutrientAnalysisEditor.tsx`) — LOCAL ONLY: analyses are not written to `product_nutrient_analysis` yet (authenticated access untested against the live table).
+- No `nutrientTarget` records are saved: Save / Mark Completed are disabled in preview and the save mutation refuses the mode. The unsupported-mode read-only guard remains the only path for persisted nutrientTarget records.
+- Tests: `src/test/targetNutrient.test.ts` (12), `src/test/targetNutrientPreview.test.tsx` (4); all fertiliser suites pass (42 tests).
+- Remaining before enabling product-analysis saving: authenticated read/write test of `product_nutrient_analysis` against VineTrackv2, then wiring the editor's persistence. Remaining before record saving: Rork confirmations (§9) and cross-platform testing.
 
 ## 10. Sequence
 
