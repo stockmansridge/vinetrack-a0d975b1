@@ -61,7 +61,11 @@ nutrient_contract_version text      -- contract version the record was written a
 nutrient_declared_as    text        -- how the nutrient was declared (e.g. elemental/oxide form label) [CONFIRMED]
 ```
 
-Differences from the v0.1 proposal: `nutrient_contract_version` and `nutrient_declared_as` were ADDED; there are NO separate `density_source` / `density_reference` columns (probed — absent). If density provenance is required, it must live inside `product_analysis_snapshot` or be added later. Column nullability/defaults/check constraints could not be verified read-only (need a GRANT or ChatGPT's migration source); snapshot jsonb internal format likewise unverified — ChatGPT to publish the exact snapshot shape before Portal writes any record.
+Schema clarifications from ChatGPT (18 Oct 2026), superseding the Lovable probe audit:
+
+- The table has 14 new nullable fields in total, INCLUDING `product_density_source` and `product_density_reference` — the earlier probe incorrectly reported these as missing. Record-level density fields are authoritative for calculations requiring density.
+- `nutrient_contract_version` must be written as `1`.
+- `product_analysis_snapshot` must be a JSON object `{ "schema_version": 1, "nutrients": [...] }`; each nutrient entry retains its declared identity, percentage, elemental/oxide basis, concentration basis and provenance (source_kind / source_reference). The Portal's `buildProductAnalysisSnapshot` in `src/lib/targetNutrient.ts` produces exactly this shape.
 
 - The snapshot is authoritative for historical display: if the product's analysis is later edited, saved records still show what was used.
 - `application_rate` / `application_rate_unit` keep their existing meaning (derived product rate) so existing cost/pack/inventory math is unchanged.
