@@ -562,10 +562,13 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
             <PanelTabs label="Row setup"
               header={<div><div className="text-sm font-semibold">Row setup</div><p className="text-xs text-muted-foreground">Same generator as iOS &amp; New Block.</p></div>}
               footer={canEdit ? (
-                <div className="flex justify-end">
-                  <Button onClick={onSaveRows} disabled={saving || rowOverrideError || generatedRows.length === 0} className="gap-1">
-                    <Save className="h-4 w-4" /> Save rows
-                  </Button>
+                <div className="space-y-2">
+                  <ContourDraftRegenNotice paddockId={paddock.id} vineyardId={paddock.vineyard_id} />
+                  <div className="flex justify-end">
+                    <Button onClick={onSaveRows} disabled={saving || rowOverrideError || generatedRows.length === 0} className="gap-1">
+                      <Save className="h-4 w-4" /> Save rows
+                    </Button>
+                  </div>
                 </div>
               ) : undefined}
               tabs={[
