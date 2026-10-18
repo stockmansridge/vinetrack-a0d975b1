@@ -369,11 +369,54 @@ function FertiliserCalculatorDialogForm({
     setPricePerPack("");
   };
 
+  // Target Nutrient (Preview): derive the product rate from the nutrient
+  // target, then reuse the existing perVine/perHectare pipeline for totals,
+  // packs, costs and inventory. Never saved.
+  const isTargetMode = mode === "nutrientTarget";
+  const calcMode: FertiliserCalculationMode = isTargetMode
+    ? targetUnit === "g/vine"
+      ? "perVine"
+      : "perHectare"
+    : mode;
+  const selectedEntry: NutrientAnalysisEntry | null =
+    analysisEntries[selectedNutrientIdx] ?? null;
+  const targetPct = useManualPercent || !selectedEntry ? numOr(manualPercent) : selectedEntry.percent;
+  const targetPctSource: "product_analysis" | "manual" =
+    useManualPercent || !selectedEntry
+      ? "manual"
+      : selectedEntry.sourceKind === "product_analysis"
+        ? "product_analysis"
+        : "manual";
+  const targetConcBasis = selectedEntry?.concentrationBasis ?? "w/w";
+  const targetAnalysisBasis = selectedEntry?.analysisBasis ?? "elemental";
+  const densityKgPerL = densityInput === "" ? null : numOr(densityInput);
+  const targetRateVal = numOr(targetRate);
+  // Per-unit product rate (canonical: g/vine or mL/vine; kg/ha or L/ha).
+  const targetFraction = targetPct > 0 && targetPct <= 100 ? targetPct / 100 : 0;
+  const targetVolumeAvailable =
+    form === "liquid" && (targetConcBasis === "w/v" || (densityKgPerL != null && densityKgPerL > 0));
+  const targetRateCanon = (() => {
+    if (!isTargetMode || targetFraction <= 0 || targetRateVal <= 0) return 0;
+    const perUnit = targetRateVal / targetFraction; // g/vine or kg/ha of product (mass basis)
+    if (form === "liquid") {
+      if (targetConcBasis === "w/v") return perUnit; // numerically mL/vine or L/ha
+      if (densityKgPerL != null && densityKgPerL > 0) return perUnit / densityKgPerL;
+      return 0; // blocked — density required
+    }
+    return perUnit;
+  })();
+  // When a w/w liquid lacks density the product quantity is a MASS — report in
+  // kg by treating the pipeline form as solid so units stay honest.
+  const effectiveForm: FertiliserForm =
+    isTargetMode && form === "liquid" && !targetVolumeAvailable ? "solid" : form;
+
   // Units are authoritative: derived from form + mode, never typed.
-  const applicationRateUnit = defaultRateUnit(mode, form);
-  const productUnit = defaultProductUnit(form);
+  const applicationRateUnit = defaultRateUnit(calcMode, effectiveForm);
+  const productUnit = defaultProductUnit(effectiveForm);
   // Inputs are in the vineyard's display units; everything below works canonically.
-  const rateCanon = rateToCanonical(numOr(applicationRate), mode, form, region);
+  const rateCanon = isTargetMode
+    ? targetRateCanon
+    : rateToCanonical(numOr(applicationRate), calcMode, effectiveForm, region);
   const manualAreaHa = areaToCanonical(numOr(manualArea), region);
   const displayRateUnit = rateLabel(mode, form, region);
   const displayQtyUnit = quantityLabel(form, region);
