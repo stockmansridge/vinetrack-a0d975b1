@@ -64,7 +64,7 @@ product_analysis_snapshot jsonb NOT NULL     -- full declared analysis of the pr
 product_required = target_nutrient_quantity / (nutrient_percent / 100)
 ```
 
-- per-vine target: total nutrient = target_rate (g/vine) × vines ÷ 1000 → kg nutrient; product kg = nutrient kg ÷ (percent/100). Liquids: ÷ density → litres.
+- per-vine target: total nutrient = target_rate (g/vine) × vines ÷ 1000 → kg nutrient; product kg = nutrient kg ÷ (percent/100). Liquids declared w/v convert directly to volume (percent = g per 100 mL); liquids declared w/w convert via density (kg/L).
 - per-hectare target: total nutrient = target_rate (kg/ha) × area_ha; same conversion.
 - Multi-nutrient display: for every OTHER nutrient in the product's declared analysis, show the amount that would also be applied (product_required × that nutrient's percent/100, honouring each nutrient's own basis). Informational only; never saved as separate records.
 - Pack count, cost (SQL 264 season prices only), inventory comparison, work-task linking, and allocation reconciliation reuse the existing per-hectare/per-vine machinery unchanged.
@@ -88,7 +88,7 @@ Verified against current source:
 2. **Type union:** `FertiliserCalculationMode` in `src/lib/fertiliserCalc.ts:15` is only `"perHectare" | "perVine"`; the query layer (`fertiliserRecordsQuery.ts:26`) already types it as `string`, so no DB read breaks — the narrowing happens only in UI.
 3. **Product model gap:** Portal's saved-product form stores N/P/K + `analysis_basis` + density only; no place for the full analysis list. Portal UI work waits for the approved schema.
 4. **Costs/inventory:** Portal already resolves product cost via SQL 264 season prices and inventory via the Chemical Inventory summary RPC — both are mode-agnostic and reusable as-is.
-5. **Safeguards Portal will need when implementing:** (a) unsupported-mode read-only guard (the §2 fix); (b) density-required blocker for w/v; (c) basis labels (elemental/oxide, w/w vs w/v) shown wherever a percentage appears; (d) snapshot written at save and preferred over live product data on display; (e) gate flag defaulting off.
+5. **Safeguards Portal will need when implementing:** (a) unsupported-mode read-only guard (the §2 fix); (b) density-required blocker for w/w liquids converted to volume (w/v needs no density); (c) basis labels (elemental/oxide, w/w vs w/v) shown wherever a percentage appears; (d) snapshot written at save and preferred over live product data on display; (e) gate flag defaulting off.
 
 ## 9. Open questions for reviewers
 
