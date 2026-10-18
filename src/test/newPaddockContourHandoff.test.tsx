@@ -98,7 +98,7 @@ describe("New Block contour handoff", () => {
     goStep(/^4\./); goStep(/^3\./);
     expect(toggle()!.checked).toBe(true);
     goStep(/^8\./);
-    expect(screen.getByRole("button", { name: "Save block & open contour mapping" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save with straight rows & open contour mapping" })).toBeTruthy();
     expect(h.insert).not.toHaveBeenCalled();
   });
 
@@ -161,5 +161,51 @@ describe("New Block contour handoff", () => {
     const { rerenderPage } = renderPage(); toRows(); fireEvent.click(toggle()!);
     h.user = "u2"; rerenderPage();
     expect(toggle()!.checked).toBe(false);
+  });
+});
+
+describe("New Block row layout question", () => {
+  it("admins see the question; Contour persists across steps and shows the disabled contour-first finish", () => {
+    renderPage();
+    expect(screen.getByText("Does this block use straight rows or contour rows?")).toBeTruthy();
+    expect((screen.getByLabelText("Straight rows") as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByLabelText("Contour rows"));
+    toRows();
+    expect(screen.getByTestId("contour-first-notice")).toBeTruthy();
+    expect((screen.getByRole("button", { name: /Finish as contour block/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(toggle()!.checked).toBe(true);
+    goStep(/^1\./);
+    expect((screen.getByLabelText("Contour rows") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("non-admins never see the question", () => {
+    h.admin = { isAdmin: false, loading: false };
+    renderPage();
+    expect(screen.queryByText("Does this block use straight rows or contour rows?")).toBeNull();
+  });
+
+  it("contour choice never inserts empty or placeholder-free rows: insert carries generated straight rows", async () => {
+    renderPage();
+    fireEvent.click(screen.getByLabelText("Contour rows"));
+    toRows(); goStep(/^8\./);
+    fireEvent.click(screen.getByRole("button", { name: /open contour mapping/ }));
+    await waitFor(() => expect(h.insert).toHaveBeenCalledTimes(1));
+    const payload = (h.insert.mock.calls[0][0] as any[] | any);
+    const row = Array.isArray(payload) ? payload[0] : payload;
+    expect(Array.isArray(row.rows) && row.rows.length > 0).toBe(true);
+    expect(row.rows.every((r: any) => r.startPoint && r.endPoint && !("parts" in r))).toBe(true);
+  });
+
+  it("straight insert is identical whether or not the user is an admin", async () => {
+    const run = async () => {
+      h.insert.mockClear(); const u = renderPage(); toRows(); goStep(/^8\./);
+      fireEvent.click(screen.getByRole("button", { name: "Save block" }));
+      await waitFor(() => expect(h.insert).toHaveBeenCalledTimes(1));
+      const p = h.insert.mock.calls[0][0]; const r = Array.isArray(p) ? p[0] : p; u.unmount();
+      const strip = (x: any) => ({ ...x, id: "-", client_updated_at: "-", rows: x.rows.map((q: any) => ({ number: q.number, s: [q.startPoint.latitude, q.startPoint.longitude], e: [q.endPoint.latitude, q.endPoint.longitude] })), polygon_points: x.polygon_points.map((q: any) => [q.latitude, q.longitude]) });
+      return strip(r);
+    };
+    const a = await run(); h.admin = { isAdmin: false, loading: false }; const b = await run();
+    expect(b).toEqual(a);
   });
 });

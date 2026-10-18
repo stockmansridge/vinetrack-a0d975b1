@@ -396,6 +396,20 @@ export default function NewPaddockPage() {
             <CardDescription>Give the block a name. Planting year is optional.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
+            {contourAdmin && (
+              <fieldset className="sm:col-span-2 space-y-2 rounded-md border p-3" aria-label="Row layout">
+                <legend className="px-1 text-sm font-medium">Does this block use straight rows or contour rows?</legend>
+                <label className="flex items-start gap-2 text-sm">
+                  <input type="radio" name="row-layout" aria-label="Straight rows" checked={!openContourAfterSave} onChange={() => setContourChoiceScope(null)} />
+                  <span><b>Straight rows</b> <span className="text-muted-foreground">— rows run in straight lines across the block. (Default)</span></span>
+                </label>
+                <label className="flex items-start gap-2 text-sm">
+                  <input type="radio" name="row-layout" aria-label="Contour rows" checked={openContourAfterSave} onChange={() => setContourChoiceScope(scopeKey)} />
+                  <span><b>Contour rows</b> <Badge variant="outline" className="ml-1">Beta · System Admin only</Badge>
+                    <span className="block text-muted-foreground">Rows follow the land. You'll trace, generate or import curved rows in the Contour Row Mapping editor.</span></span>
+                </label>
+              </fieldset>
+            )}
             <div className="space-y-2">
               <Label htmlFor="name">Name *</Label>
               <Input id="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />
@@ -447,6 +461,17 @@ export default function NewPaddockPage() {
                   </div>
                 </div>
               </div>
+              {openContourAfterSave && (
+                <div className="rounded-md border border-orange-500 p-3 text-sm space-y-2" data-testid="contour-first-notice">
+                  <p className="font-medium text-orange-600 dark:text-orange-400">Contour rows selected</p>
+                  <p className="text-xs">Contour-first blocks can't be saved yet. VineTrack's phones and reports still need straight rows for every active block. You can either:</p>
+                  <ol className="list-decimal pl-5 text-xs space-y-1">
+                    <li>Set up temporary straight rows here and map contours afterwards — the contour draft stays separate and doesn't change these rows, or</li>
+                    <li>Go back to Details and choose Straight rows.</li>
+                  </ol>
+                  <Button type="button" size="sm" variant="outline" disabled className="w-full">Finish as contour block (no straight rows) — needs a VineTrack update, coming later</Button>
+                </div>
+              )}
               {contourAdmin && (
                 <div className="rounded-md border border-orange-500 p-3 text-sm space-y-2">
                   <label className="flex items-center gap-2 font-medium text-orange-600 dark:text-orange-400">
@@ -663,7 +688,7 @@ export default function NewPaddockPage() {
 
             {openContourAfterSave && (
               <div className="rounded-md border border-orange-500 p-3 text-sm text-orange-600 dark:text-orange-400">
-                Contour Row Mapping (Beta) will open after this block is saved. Operational rows are saved as set up in Rows.
+                Contour rows selected: the block is saved with the straight rows set up in Rows (its active rows), then Contour Row Mapping (Beta) opens to draft the contour layout. The draft isn't active.
               </div>
             )}
 
@@ -673,7 +698,7 @@ export default function NewPaddockPage() {
                 onClick={onSavePressed}
                 disabled={!isValid || saving}
               >
-                {saving ? "Saving…" : openContourAfterSave ? "Save block & open contour mapping" : "Save block"}
+                {saving ? "Saving…" : openContourAfterSave ? "Save with straight rows & open contour mapping" : "Save block"}
               </Button>
             </div>
           </CardContent>

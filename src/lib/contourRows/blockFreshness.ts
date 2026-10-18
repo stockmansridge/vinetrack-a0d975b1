@@ -7,20 +7,45 @@
 import { fetchOne } from "@/lib/queries";
 import { parsePolygonPoints, parseRows } from "@/lib/paddockGeometry";
 
-export interface BlockSnapshot { boundaryKey: string; rowIdsKey: string }
-export interface BlockDiff { boundaryChanged: boolean; rowsChanged: boolean }
+export interface BlockSnapshot { boundaryKey: string; rowIdsKey: string; rowNumbersKey: string; rowGeometryKey: string }
+export interface BlockDiff { boundaryChanged: boolean; rowIdentityChanged: boolean; rowNumbersChanged: boolean; rowGeometryChanged: boolean; /** any row change */ rowsChanged: boolean }
 
+const r9 = (n: number | undefined) => (typeof n === "number" && Number.isFinite(n) ? Math.round(n * 1e9) / 1e9 : null);
+
+/** Canonical, property-order-independent snapshot of the block's operational inputs. */
 export function blockSnapshot(paddock: any): BlockSnapshot {
-  const b = parsePolygonPoints(paddock?.polygon_points).map((p) => [p.lat, p.lng]);
-  const ids = parseRows(paddock?.rows).map((r) => r.id ?? "").sort();
-  return { boundaryKey: JSON.stringify(b), rowIdsKey: JSON.stringify(ids) };
+  const b = parsePolygonPoints(paddock?.polygon_points).map((p) => [r9(p.lat), r9(p.lng)]);
+  const rows = parseRows(paddock?.rows).map((r) => ({
+    id: r.id ?? "", n: typeof r.number === "number" ? r.number : null,
+    g: [r9(r.start?.lat), r9(r.start?.lng), r9(r.end?.lat), r9(r.end?.lng)],
+  })).sort((a, c) => (a.id < c.id ? -1 : a.id > c.id ? 1 : (a.n ?? 0) - (c.n ?? 0)));
+  return {
+    boundaryKey: JSON.stringify(b),
+    rowIdsKey: JSON.stringify(rows.map((r) => r.id)),
+    rowNumbersKey: JSON.stringify(rows.map((r) => [r.id, r.n])),
+    rowGeometryKey: JSON.stringify(rows.map((r) => [r.id, r.g])),
+  };
 }
 
 export function diffBlock(a: BlockSnapshot, b: BlockSnapshot): BlockDiff {
-  return { boundaryChanged: a.boundaryKey !== b.boundaryKey, rowsChanged: a.rowIdsKey !== b.rowIdsKey };
+  const rowIdentityChanged = a.rowIdsKey !== b.rowIdsKey;
+  const rowNumbersChanged = a.rowNumbersKey !== b.rowNumbersKey;
+  const rowGeometryChanged = a.rowGeometryKey !== b.rowGeometryKey;
+  return { boundaryChanged: a.boundaryKey !== b.boundaryKey, rowIdentityChanged, rowNumbersChanged, rowGeometryChanged,
+    rowsChanged: rowIdentityChanged || rowNumbersChanged || rowGeometryChanged };
 }
 
 export const blockChanged = (d: BlockDiff) => d.boundaryChanged || d.rowsChanged;
+
+/** Plain-language list of what changed. */
+export function describeBlockChange(d: BlockDiff): string[] {
+  const out: string[] = [];
+  if (d.boundaryChanged) out.push("The block boundary was changed");
+  if (d.rowIdentityChanged) out.push("Operational rows were added or removed");
+  if (d.rowNumbersChanged && !d.rowIdentityChanged) out.push("Operational row numbers were changed");
+  if (d.rowGeometryChanged && !d.rowIdentityChanged) out.push("Operational row positions were changed");
+  return out;
+}
 
 export class BlockFreshnessError extends Error {
   constructor(public kind: "network" | "scope", message: string) { super(message); }
