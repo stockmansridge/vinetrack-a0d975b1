@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { deriveMetrics } from "@/lib/paddockGeometry";
+import { Info } from "lucide-react";
 import {
   actualVineCount, assumedFullVineCount, resolveVineBasis, VINE_COUNT_BASIS_PERSISTED, vineCountBasisForSave,
   type ActualVineSource, type AssumedFullUnavailable, type DialogVineBasis,
