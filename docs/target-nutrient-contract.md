@@ -108,9 +108,19 @@ Verified against current source:
 Resolved by the applied migration: new TABLE (not jsonb) chosen; `fertiliser_records` column names confirmed as in §4.
 
 Still open:
-- ChatGPT: publish the exact `product_nutrient_analysis` column list, nullability, checks and GRANT/RLS posture (currently unreadable by app roles — Portal cannot implement the product analysis editor until SELECT/INSERT/UPDATE grants + RLS exist); publish the exact `product_analysis_snapshot` jsonb shape and the `nutrient_contract_version` value to write (proposal: `"1"`); confirm whether density provenance lives in the snapshot; whether oxide↔elemental conversion factors belong in the DB later.
 - Rork: confirm current iOS/Android behaviour when reading an unknown `calculation_mode`; confirm offline persistence can store the snapshot jsonb; confirm the mode gate mechanism.
-- All: agreed canonical nutrient key list and display names (proposal in §3).
+- All: agreed canonical nutrient key list and display names (proposal in §3); whether oxide↔elemental conversion factors belong in the DB later.
+
+Resolved by ChatGPT's clarification (18 Oct 2026): `product_nutrient_analysis` column list + grants (authenticated SELECT/INSERT/UPDATE under vineyard RLS; anon intentionally blocked); the 14 new `fertiliser_records` fields including `product_density_source` / `product_density_reference`; `nutrient_contract_version = 1`; snapshot shape `{schema_version: 1, nutrients: [...]}`.
+
+## 9a. Portal implementation status (Lovable, 18 Oct 2026)
+
+- Target Nutrient (Preview) mode IMPLEMENTED in the Fertiliser Calculator, gated to System Admins only (`useIsSystemAdmin` in `FertiliserCalculatorDialog.tsx`); ordinary users never see the mode.
+- Math in `src/lib/targetNutrient.ts` (`computeTargetNutrient`): contract examples verified by test (16% N @ 2 g/vine → 12.5 g; 20% Ca @ 2 g/vine → 10 g; 16% w/v @ 2 g/vine → 12.5 mL); w/w liquids without density keep an honest kg result and block volume with an explanation; oxide labels never silently treated as elemental; "other nutrients also applied" honours each nutrient's own basis.
+- Reusable `NutrientAnalysisEditor` (`src/components/fertiliser/NutrientAnalysisEditor.tsx`) — LOCAL ONLY: analyses are not written to `product_nutrient_analysis` yet (authenticated access untested against the live table).
+- No `nutrientTarget` records are saved: Save / Mark Completed are disabled in preview and the save mutation refuses the mode. The unsupported-mode read-only guard remains the only path for persisted nutrientTarget records.
+- Tests: `src/test/targetNutrient.test.ts` (12), `src/test/targetNutrientPreview.test.tsx` (4); all fertiliser suites pass (42 tests).
+- Remaining before enabling product-analysis saving: authenticated read/write test of `product_nutrient_analysis` against VineTrackv2, then wiring the editor's persistence. Remaining before record saving: Rork confirmations (§9) and cross-platform testing.
 
 ## 10. Sequence
 
