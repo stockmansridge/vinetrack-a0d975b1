@@ -21,6 +21,7 @@ import { ArrowLeft, Save, AlertTriangle, Trash2, Pencil, Info, Archive, LayoutDa
 
 import { fetchOne } from "@/lib/queries";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import { loadDraft as loadContourDraft } from "@/lib/contourRows/draftApi";
 import {
   archivePaddock,
   fetchLinkedRecordCounts,
