@@ -297,6 +297,15 @@ function FertiliserCalculatorDialogForm({
       setManualVines("");
       setStatus("planned");
     }
+    // Target Nutrient (Preview) reset.
+    setAnalysisEntries([]);
+    setSelectedNutrientIdx(0);
+    setManualNutrientName("");
+    setManualPercent("");
+    setUseManualPercent(false);
+    setTargetUnit("g/vine");
+    setTargetRate("");
+    setDensityInput("");
     setCreateTask(false);
     setPendingTaskId(null);
     setPendingLabourLineId(null);
