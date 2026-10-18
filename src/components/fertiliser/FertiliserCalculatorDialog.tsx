@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { Info } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   actualVineCount, assumedFullVineCount, resolveVineBasis, VINE_COUNT_BASIS_PERSISTED, vineCountBasisForSave,
   type ActualVineSource, type AssumedFullUnavailable, type DialogVineBasis,
@@ -85,6 +86,8 @@ import {
   type TargetRateUnit,
 } from "@/lib/targetNutrient";
 
+
+const OXIDE_LABELS: Record<string, string> = { P: "P₂O₅", K: "K₂O", Ca: "CaO", Mg: "MgO", S: "SO₃", Si: "SiO₂", B: "B₂O₃", Fe: "Fe₂O₃", Mn: "MnO", Zn: "ZnO", Cu: "CuO", Mo: "MoO₃", Co: "CoO" };
 
 interface PaddockOption {
   id: string;
@@ -381,8 +384,8 @@ function FertiliserCalculatorDialogForm({
     setAnalysisEntries([]);
     // Keep any typed percentage/target — switching product entry mode must
     // not erase valid input.
-    setConcentrationBasis("w/w");
-    setAnalysisBasis("elemental");
+    setConcentrationBasis(form === "liquid" ? "unknown" : "w/w");
+    setAnalysisBasis(OXIDE_LABELS[nutrientKey] || nutrientKey === "other" ? "unknown" : "elemental");
     setDensityInput("");
     setDensityReference("");
     setProductId(null);
@@ -403,8 +406,10 @@ function FertiliserCalculatorDialogForm({
   const selectedEntry = analysisEntries.find((e) => e.nutrientKey === nutrientKey) ?? null;
   const targetPct = useManualPercent || !selectedEntry ? numOr(manualPercent) : selectedEntry.percent;
   const targetPctSource = !useManualPercent && selectedEntry ? selectedEntry.sourceKind : "manual";
-  const targetConcBasis = selectedEntry?.concentrationBasis ?? concentrationBasis;
-  const targetAnalysisBasis = selectedEntry?.analysisBasis ?? analysisBasis;
+  const activeEntry = useManualPercent ? null : selectedEntry;
+  const targetConcBasis = activeEntry?.concentrationBasis ?? concentrationBasis;
+  const targetAnalysisBasis = activeEntry?.analysisBasis ?? analysisBasis;
+  const oxideLabel = OXIDE_LABELS[nutrientKey];
   const densityKgPerL = densityReference.trim() && numOr(densityInput) > 0 ? numOr(densityInput) : null;
   const targetRateVal = numOr(targetRate);
   const targetBlocker = targetAnalysisBasis !== "elemental"
@@ -577,7 +582,8 @@ function FertiliserCalculatorDialogForm({
     calc.totalAreaHa, calc.totalVines, analysisEntries, nutrientKey,
   ]);
 
-  const targetReady = !targetBlocker && targetResult?.issues.length === 0 && vineResolution.issues.length === 0;
+  const targetReady = !targetBlocker && targetResult?.issues.length === 0;
+  const targetTotalsReady = targetReady && hasQuantity && vineResolution.issues.length === 0;
 
   // Preview mode never submits: Save / Mark Completed stay disabled and the
   // mutation itself refuses, so a nutrientTarget record can never be written.
@@ -814,7 +820,14 @@ function FertiliserCalculatorDialogForm({
                 </div>
                 <div>
                   <Label className="text-xs">Form</Label>
-                  <Select value={form} onValueChange={(v) => setForm(v as FertiliserForm)}>
+                  <Select value={form} onValueChange={(v) => {
+                    setForm(v as FertiliserForm);
+                    if (isTargetMode) {
+                      setConcentrationBasis(v === "liquid" ? "unknown" : "w/w");
+                      setDensityInput("");
+                      setDensityReference("");
+                    }
+                  }}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="solid">Solid</SelectItem>
@@ -893,7 +906,16 @@ function FertiliserCalculatorDialogForm({
                 <div>
                   <Label className="text-xs">Nutrient</Label>
                   <Select value={nutrientKey} onValueChange={(key) => {
-                    // Never wipe a typed percentage/target when the nutrient changes.
+                    // Retain the displayed percentage, but never carry an oxide identity
+                    // from one nutrient into another. Saved entries remain unmodified.
+                    if (useManualPercent || !selectedEntry) {
+                      setAnalysisBasis(OXIDE_LABELS[key] || key === "other" ? "unknown" : "elemental");
+                      if (form === "solid" && useManualPercent) setConcentrationBasis("w/w");
+                    } else {
+                      setManualPercent(String(selectedEntry.percent));
+                      setAnalysisBasis("unknown");
+                      setConcentrationBasis("unknown");
+                    }
                     setNutrientKey(key);
                   }}>
                     <SelectTrigger aria-label="Target nutrient"><SelectValue /></SelectTrigger>
@@ -905,8 +927,25 @@ function FertiliserCalculatorDialogForm({
                   {nutrientKey === "other" && <Input className="mt-2" aria-label="Target nutrient name" placeholder="Nutrient name" value={manualNutrientName} onChange={(e) => setManualNutrientName(e.target.value)} />}
                 </div>
                 <div>
-                  <Label className="text-xs">Product nutrient (%)</Label>
-                  <Input inputMode="decimal" aria-label="Nutrient percent" placeholder="16" value={!useManualPercent && selectedEntry ? selectedEntry.percent : manualPercent} onChange={(e) => { setManualPercent(e.target.value); setUseManualPercent(true); }} />
+                  <div className="flex items-center gap-1">
+                    <Label className="text-xs">Product nutrient (%)</Label>
+                    <Popover>
+                      <PopoverTrigger asChild><Button type="button" variant="ghost" size="icon" className="h-6 w-6" aria-label="About product nutrient percentage"><Info className="h-3.5 w-3.5" /></Button></PopoverTrigger>
+                      <PopoverContent className="text-sm space-y-2">
+                        <p>Elemental means the actual nutrient (e.g. P). Oxide labels (e.g. P₂O₅ or K₂O) are different; this preview does not convert them to elemental percentages.</p>
+                        <p>w/w means grams of nutrient per 100 grams of product. w/v means grams of nutrient per 100 mL of product.</p>
+                        <p>Manually entered elemental percentages on solids use w/w. Liquids need their label concentration basis; w/w liquids also need documented density to show volume.</p>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <Input inputMode="decimal" aria-label="Nutrient percent" placeholder="16" value={!useManualPercent && selectedEntry ? selectedEntry.percent : manualPercent} onChange={(e) => {
+                    setManualPercent(e.target.value);
+                    setUseManualPercent(true);
+                    // Explicit manual elemental N on a solid is mass/mass,
+                    // not a verification of the saved product's legacy analysis.
+                    if (nutrientKey === "N") setAnalysisBasis("elemental");
+                    if (form === "solid") setConcentrationBasis("w/w");
+                  }} />
                   <div className="text-xs text-muted-foreground mt-1">{!useManualPercent && selectedEntry ? "From the saved product analysis — editable" : "Manual entry — from the product label"}</div>
                 </div>
                 <div>
@@ -928,60 +967,38 @@ function FertiliserCalculatorDialogForm({
                   <div><Label className="text-xs">Density source</Label><Input aria-label="Density source" value={densityReference} onChange={(e) => setDensityReference(e.target.value)} placeholder="Label / technical sheet" /></div>
                 </>}
               </div>
-              {/* Basis selectors live under an unobtrusive toggle, with plain-language help. */}
-              <details
-                className="rounded-md border p-3 space-y-3"
-                open={form === "liquid" || targetConcBasis === "unknown" || targetAnalysisBasis !== "elemental"}
-                aria-label="Analysis details"
-              >
-                <summary className="cursor-pointer text-sm font-medium">Analysis details</summary>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  <div>
-                    <Label className="text-xs flex items-center gap-1">
-                      Concentration basis (product label)
-                      <Info
-                        className="h-3.5 w-3.5 text-muted-foreground"
-                        aria-label="About concentration basis"
-                        aria-hidden={false}
-                      />
-                    </Label>
-                    <Select value={targetConcBasis} onValueChange={(v) => setConcentrationBasis(v as ConcentrationBasis)}>
-                      <SelectTrigger aria-label="Concentration basis"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="unknown" disabled>Confirm from label</SelectItem>
-                        <SelectItem value="w/w">w/w — weight / weight</SelectItem>
-                        {form === "liquid" && <SelectItem value="w/v">w/v — weight / volume</SelectItem>}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      w/w means grams of nutrient per 100 grams of product. w/v means grams of nutrient per 100 mL of product.
-                      A w/v liquid calculates litres directly — no density needed. A w/w liquid needs a verified density (kg/L) before litres can be shown.
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-xs flex items-center gap-1">
-                      Analysis basis (product label)
-                      <Info
-                        className="h-3.5 w-3.5 text-muted-foreground"
-                        aria-label="About analysis basis"
-                        aria-hidden={false}
-                      />
-                    </Label>
-                    <Select value={targetAnalysisBasis} onValueChange={(v) => setAnalysisBasis(v as AnalysisBasis)}>
-                      <SelectTrigger aria-label="Analysis basis"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="unknown" disabled>Confirm from label</SelectItem>
-                        <SelectItem value="elemental">Elemental — actual nutrient</SelectItem>
-                        <SelectItem value="oxide">Oxide — conversion unavailable</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Elemental is the actual nutrient (P, K). Oxide is a label convention (P₂O₅, K₂O).
-                      This preview never converts between them — enter the percentage exactly as the label declares it and pick the matching basis.
-                    </p>
-                  </div>
-                </div>
-              </details>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {(oxideLabel || nutrientKey === "other" || targetAnalysisBasis !== "elemental") && <div>
+                  <Label className="text-xs">Percentage declared as (label)</Label>
+                  <Select value={targetAnalysisBasis} onValueChange={(v) => {
+                    if (selectedEntry && !useManualPercent) setManualPercent(String(selectedEntry.percent));
+                    setUseManualPercent(true);
+                    setAnalysisBasis(v as AnalysisBasis);
+                  }}>
+                    <SelectTrigger aria-label="Nutrient label notation"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unknown" disabled>Confirm from label</SelectItem>
+                      <SelectItem value="elemental">{nutrientKey === "other" ? manualNutrientName || "Actual element" : nutrientKey} — actual nutrient</SelectItem>
+                      <SelectItem value="oxide">{oxideLabel ?? "Oxide-labelled"} — conversion unavailable</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>}
+                {(form === "liquid" || targetConcBasis === "unknown" || targetConcBasis === "w/v") && <div>
+                  <Label className="text-xs">Concentration basis (label)</Label>
+                  <Select value={targetConcBasis} onValueChange={(v) => {
+                    if (selectedEntry && !useManualPercent) setManualPercent(String(selectedEntry.percent));
+                    setUseManualPercent(true);
+                    setConcentrationBasis(v as ConcentrationBasis);
+                  }}>
+                    <SelectTrigger aria-label="Concentration basis"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unknown" disabled>Confirm from label</SelectItem>
+                      <SelectItem value="w/w">w/w — weight / weight</SelectItem>
+                      {form === "liquid" && <SelectItem value="w/v">w/v — weight / volume</SelectItem>}
+                    </SelectContent>
+                  </Select>
+                </div>}
+              </div>
             </section>
           )}
 
@@ -995,8 +1012,8 @@ function FertiliserCalculatorDialogForm({
               <div><div className="text-sm text-muted-foreground">Product per {targetUnit === "g/vine" ? "vine" : "hectare"}</div>
                 <div className="text-3xl font-semibold tabular-nums break-words" aria-label="Product rate result">{targetReady ? `${targetUnit === "g/vine" ? targetResult?.productPerVine?.toLocaleString() : targetResult?.productPerHa?.toLocaleString()} ${targetUnit === "g/vine" ? targetResult?.productPerVineUnit : targetResult?.productPerHaUnit}` : "—"}</div>
               </div>
-              <div><div className="text-sm text-muted-foreground">Total product required</div><div className="text-2xl font-semibold tabular-nums break-words" aria-label="Total product result">{targetReady && hasQuantity ? `${targetResult?.totalProductRequired.toLocaleString()} ${targetResult?.productUnit}` : "—"}</div></div>
-              {targetReady && targetResult && (
+              <div><div className="text-sm text-muted-foreground">Total product required</div><div className="text-2xl font-semibold tabular-nums break-words" aria-label="Total product result">{targetTotalsReady ? `${targetResult?.totalProductRequired.toLocaleString()} ${targetResult?.productUnit}` : "—"}</div></div>
+              {targetTotalsReady && targetResult && (
                 <div className="text-sm text-muted-foreground tabular-nums">
                   Total nutrient delivered: {targetResult.totalNutrientKg.toLocaleString()} kg
                 </div>
