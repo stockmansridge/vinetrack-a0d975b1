@@ -1,5 +1,5 @@
 // Target Nutrient (Preview) UI gating + safety:
-// - The mode is selectable ONLY by System Admins.
+// - The mode is selectable by all existing calculator roles, without System Admin status.
 // - Preview never saves: no Save/Mark Completed, mutation refuses.
 // - Persisted nutrientTarget records still hit the read-only guard.
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -42,12 +42,12 @@ const PADDOCKS = [
   { id: "p1", name: "Block A", areaHa: 2, vineCount: 4000, actualVineCount: 4000, actualVineCountSource: "manual" as any, assumedFullVineCount: 4000, assumedFullReason: null },
 ];
 
-function renderDialog() {
+function renderDialog(role = "owner") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <FertiliserCalculatorDialog open onOpenChange={() => {}} vineyardId="v1" paddocks={PADDOCKS} role="owner" />
+        <FertiliserCalculatorDialog open onOpenChange={() => {}} vineyardId="v1" paddocks={PADDOCKS} role={role} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -139,10 +139,18 @@ describe("Target Nutrient (Preview) gating", () => {
     expect(screen.getByLabelText("Product rate result").textContent).toBe("12.5 mL/vine");
   });
 
-  it("does not offer the mode to ordinary users", async () => {
-    renderDialog();
+  it.each(["owner", "manager", "supervisor", "operator"])("allows a non-admin %s to calculate without saving", async (role) => {
+    renderDialog(role);
     await openModeMenu();
-    expect(screen.queryByRole("option", { name: /Target Nutrient/i })).toBeNull();
+    fireEvent.click(screen.getByRole("option", { name: /Target Nutrient/i }));
+    fireEvent.change(screen.getByLabelText("Nutrient percent"), { target: { value: "16" } });
+    fireEvent.change(screen.getByLabelText("Target quantity"), { target: { value: "2" } });
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("12.5 g/vine");
+    for (const label of ["Save as Planned", "Record as Completed", "Save changes", "Mark Completed"]) {
+      const btn = screen.queryByRole("button", { name: label });
+      if (btn) expect(btn).toHaveProperty("disabled", true);
+    }
+    expect(h.saves).toEqual([]);
   });
 
   it("offers the mode to System Admins and shows the preview panel", async () => {
