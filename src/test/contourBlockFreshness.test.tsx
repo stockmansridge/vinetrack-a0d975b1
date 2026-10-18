@@ -14,7 +14,7 @@ const saveDraft = vi.fn(async (_s: any, _b: any, saveId: string, payload: any) =
 vi.mock("@/lib/contourRows/draftApi", async (orig) => ({ ...(await orig<any>()), saveDraft: (...a: any[]) => (saveDraft as any)(...a) }));
 
 import { Editor } from "@/pages/setup/ContourRowMappingPage";
-import { blockSnapshot, diffBlock, compareNumbering, fetchCurrentBlock, BlockFreshnessError } from "@/lib/contourRows/blockFreshness";
+import { blockSnapshot, diffBlock, blockChanged, compareNumbering, fetchCurrentBlock, BlockFreshnessError } from "@/lib/contourRows/blockFreshness";
 import { checkDraftGeometry } from "@/lib/contourRows/checks";
 import { newDraft, newGroup } from "@/lib/contourRows/draft";
 
@@ -29,12 +29,28 @@ const mount = (fetchBlock: any) => render(<MemoryRouter><Editor paddock={paddock
 
 beforeEach(() => { cleanup(); saveDraft.mockClear(); });
 
-describe("block snapshot diff", () => {
-  it("detects boundary and row-id changes independently", () => {
-    const a = blockSnapshot(paddock);
-    expect(diffBlock(a, blockSnapshot({ ...paddock }))).toEqual({ boundaryChanged: false, rowsChanged: false });
+describe("block snapshot diff (canonical)", () => {
+  const a = blockSnapshot(paddock);
+  it("unchanged data and reordered properties are unchanged", () => {
+    expect(blockChanged(diffBlock(a, blockSnapshot({ ...paddock })))).toBe(false);
+    const reordered = { ...paddock, polygon_points: poly.map((p) => ({ longitude: p.longitude, latitude: p.latitude })),
+      rows: [{ endPoint: { longitude: 138.7008, latitude: -34.5004 }, number: 1, startPoint: { longitude: 138.7005, latitude: -34.5005 }, id: R1 }] };
+    expect(blockChanged(diffBlock(a, blockSnapshot(reordered)))).toBe(false);
+  });
+  it("boundary change", () => {
     expect(diffBlock(a, blockSnapshot({ ...paddock, polygon_points: [...poly, { latitude: -34.501, longitude: 138.7 }] })).boundaryChanged).toBe(true);
-    expect(diffBlock(a, blockSnapshot({ ...paddock, rows: [row(R2, 1)] }))).toEqual({ boundaryChanged: false, rowsChanged: true });
+  });
+  it("same ids, changed coordinates → geometry change", () => {
+    const d = diffBlock(a, blockSnapshot({ ...paddock, rows: [{ ...row(R1, 1), endPoint: { latitude: -34.5004, longitude: 138.7009 } }] }));
+    expect(d).toMatchObject({ rowIdentityChanged: false, rowNumbersChanged: false, rowGeometryChanged: true, boundaryChanged: false });
+  });
+  it("same ids, changed number → numbering change", () => {
+    const d = diffBlock(a, blockSnapshot({ ...paddock, rows: [row(R1, 2)] }));
+    expect(d).toMatchObject({ rowIdentityChanged: false, rowNumbersChanged: true, rowGeometryChanged: false });
+  });
+  it("added/removed id → identity change", () => {
+    expect(diffBlock(a, blockSnapshot({ ...paddock, rows: [row(R1, 1), row(R2, 2)] })).rowIdentityChanged).toBe(true);
+    expect(diffBlock(a, blockSnapshot({ ...paddock, rows: [] })).rowIdentityChanged).toBe(true);
   });
 });
 
@@ -59,7 +75,7 @@ describe("pre-save freshness (F1)", () => {
     mount(fetchBlock);
     fireEvent.click(screen.getByText("Add row group"));
     fireEvent.click(screen.getByText("Save Draft"));
-    await screen.findByText(/operational rows were changed/);
+    await screen.findByText(/added or removed/);
     expect(saveDraft).not.toHaveBeenCalled();
   });
 
@@ -72,6 +88,15 @@ describe("pre-save freshness (F1)", () => {
     expect(saveDraft).not.toHaveBeenCalled();
     expect(screen.getAllByText("Row group 1").length).toBeGreaterThan(0);
     expect(screen.getByText("Unsaved changes")).toBeTruthy();
+  });
+
+  it("same ids with renumbered rows stops the save and keeps edits", async () => {
+    mount(vi.fn(async () => ({ ...paddock, rows: [row(R1, 7)] })));
+    fireEvent.click(screen.getByText("Add row group"));
+    fireEvent.click(screen.getByText("Save Draft"));
+    await screen.findByText(/row numbers were changed/);
+    expect(saveDraft).not.toHaveBeenCalled();
+    expect(screen.getAllByText("Row group 1").length).toBeGreaterThan(0);
   });
 
   it("unchanged block saves normally", async () => {
