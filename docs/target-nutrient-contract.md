@@ -12,7 +12,7 @@ Extend the Fertiliser Calculator with a `nutrientTarget` calculation mode that w
 
 - The live database enum already permits `fertiliser_records.calculation_mode ∈ {perHectare, perVine, nutrientTarget, fertigation}` (SQL 110/111). Records in these modes can exist today.
 - Any platform that does not understand a stored `calculation_mode` MUST display the record read-only with a clear "mode not supported by this version" notice, showing the stored values verbatim. It MUST NOT reopen the record in an editable calculator under a different mode, MUST NOT overwrite `calculation_mode` on save, and MUST NOT drop fields it does not understand.
-- Known current violation (Portal, to be fixed as a standalone bug fix independent of this feature): `FertiliserCalculatorPage.tsx:312,323` and `FertiliserCalculatorDialog.tsx:246,249` treat every non-`perVine` mode as `perHectare`. Until fixed, a `nutrientTarget` record created on mobile would be displayed and reopened as per-hectare on Portal.
+- Portal guard: IMPLEMENTED (standalone bug fix, shipped ahead of this feature). Unsupported-mode records stay listed with their real mode label, show stored rate/total/units verbatim, open only in a separate read-only dialog that never mounts the calculator pipeline, and cannot be edited, duplicated, deleted or saved from the Portal. See `isSupportedCalculationMode` / `calculationModeLabel` / `UNSUPPORTED_MODE_NOTICE` in `src/lib/fertiliserCalc.ts`, the guards in `FertiliserCalculatorPage.tsx`, and `UnsupportedFertiliserRecordDialog` in `FertiliserCalculatorDialog.tsx`. Regression tests: `src/test/fertiliserUnsupportedMode.test.tsx`.
 
 ## 3. Product analysis model (full analysis list)
 
@@ -27,7 +27,7 @@ product_nutrient_analysis (new table, or jsonb column on saved_chemicals — Cha
   display_name      text  -- e.g. "Zinc", or the grower's custom name for other:*
   percent           numeric NOT NULL CHECK (percent > 0 AND percent <= 100)
   analysis_basis    text  -- "elemental" | "oxide" (e.g. K as K2O, P as P2O5)
-  concentration_basis text -- "w/w" (weight/weight, solids) | "w/v" (weight/volume, liquids; requires density)
+  concentration_basis text -- "w/w" (weight/weight) | "w/v" (weight/volume; no density needed — already mass per product volume)
   is_primary        boolean
 ```
 
@@ -78,7 +78,7 @@ product_required = target_nutrient_quantity / (nutrient_percent / 100)
 
 ## 7. Roles and permissions
 
-Unchanged from the existing fertiliser matrix: owner/manager/supervisor write, operator read, costs visible to owner/manager only. Product analysis editing follows the existing saved-chemical permissions (owner/manager).
+Unchanged from the existing fertiliser matrix, verified against Portal source (`fertiliserPermissions` in `FertiliserCalculatorPage.tsx`) and the live database rules noted in `fertiliserRecordsQuery.ts` (SQL 110/111): owner/manager/supervisor/**operator** may create and update records; soft delete is owner/manager/supervisor only; costs are visible to owner/manager only; product (saved chemical) management is owner/manager only. The `nutrientTarget` mode inherits this matrix exactly — no permission changes are part of this feature.
 
 ## 8. Portal compatibility review (Lovable, this turn — no code changed)
 
