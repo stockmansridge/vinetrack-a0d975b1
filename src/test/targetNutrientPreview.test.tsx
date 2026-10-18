@@ -164,6 +164,54 @@ describe("Target Nutrient (Preview) gating", () => {
     expect(h.saves).toEqual([]);
   });
 
+  it("has no duplicate nutrient editor — one nutrient input, no Add nutrient", async () => {
+    await startTarget();
+    expect(screen.queryByRole("button", { name: /Add nutrient/i })).toBeNull();
+    expect(screen.queryByText(/Product analysis \(local preview\)/i)).toBeNull();
+    expect(screen.getAllByLabelText("Nutrient percent")).toHaveLength(1);
+    expect(screen.getAllByRole("combobox", { name: "Target nutrient" })).toHaveLength(1);
+  });
+
+  it("keeps a typed percentage and target when the nutrient changes", async () => {
+    await startTarget();
+    fireEvent.change(screen.getByLabelText("Nutrient percent"), { target: { value: "16" } });
+    fireEvent.change(screen.getByLabelText("Target quantity"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Vine count"), { target: { value: "1000" } });
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("12.5 g/vine");
+    await choose("Target nutrient", /K — Potassium/);
+    expect(screen.getByLabelText("Nutrient percent")).toHaveProperty("value", "16");
+    expect(screen.getByLabelText("Target quantity")).toHaveProperty("value", "2");
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("12.5 g/vine");
+  });
+
+  it("shows the live result immediately after the core inputs, before blocks", async () => {
+    await startTarget();
+    const results = screen.getByLabelText("Target nutrient results");
+    const blocks = screen.getByText("Blocks (optional)");
+    expect(results.compareDocumentPosition(blocks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("explains analysis and concentration basis under the Analysis details toggle", async () => {
+    await startTarget();
+    fireEvent.click(screen.getByText("Analysis details"));
+    expect(screen.getByText(/grams of nutrient per 100 grams of product/)).toBeTruthy();
+    expect(screen.getByText(/grams of nutrient per 100 mL of product/)).toBeTruthy();
+    expect(screen.getByText(/P₂O₅, K₂O/)).toBeTruthy();
+    expect(screen.getByText(/never converts between them/)).toBeTruthy();
+    expect(screen.getByLabelText("About concentration basis")).toBeTruthy();
+    expect(screen.getByLabelText("About analysis basis")).toBeTruthy();
+    // Manual mode: both basis selectors are explicitly choosable.
+    expect(screen.getByRole("combobox", { name: "Concentration basis" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Analysis basis" })).toBeTruthy();
+  });
+
+  it("shows an empty editable percentage when no analysis exists — never 0% declared", async () => {
+    await startTarget();
+    const pct = screen.getByLabelText("Nutrient percent");
+    expect(pct).toHaveProperty("value", "");
+    expect(screen.getByText(/Manual entry — from the product label/)).toBeTruthy();
+  });
+
   it("persisted nutrientTarget records still open read-only (guard intact)", () => {
     const record: any = {
       id: "r1", vineyard_id: "v1", product_id: null, product_name: "Nitro 16",
