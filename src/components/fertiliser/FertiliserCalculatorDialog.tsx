@@ -196,6 +196,7 @@ function FertiliserCalculatorDialogForm({
 }: Props) {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { isAdmin } = useIsSystemAdmin();
   const showCosts = canSeeCosts(role);
   const productsQ = useProducts(vineyardId);
   const region = useRegionFormatters();
