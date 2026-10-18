@@ -1298,6 +1298,11 @@ function FertiliserCalculatorDialogForm({
         </div>
 
         <DialogFooter className="gap-2">
+          {isTargetMode && (
+            <span className="text-xs text-muted-foreground mr-auto self-center">
+              Preview mode — saving is disabled until cross-platform testing passes.
+            </span>
+          )}
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           {existing ? (
             <>
