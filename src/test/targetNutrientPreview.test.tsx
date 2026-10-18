@@ -111,7 +111,7 @@ describe("Target Nutrient (Preview) gating", () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    expect(screen.getByText(/not supported by this version of the Portal/i)).toBeTruthy();
+    expect(screen.getAllByText(/not supported by this version of the Portal/i).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /Save/i })).toBeNull();
   });
 });
