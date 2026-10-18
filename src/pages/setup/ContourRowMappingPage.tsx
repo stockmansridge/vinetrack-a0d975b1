@@ -41,6 +41,7 @@ import { workingCopyKey, getWorkingCopy, putWorkingCopy, clearWorkingCopy, recon
 import { shiftGroup, shiftDirection, shiftProjection, canUndoShift, makeShiftUndo, SHIFT_LIMITS, type ShiftSide, type ShiftUndo } from "@/lib/contourRows/sideShift";
 import NumberStepper from "@/components/paddocks/NumberStepper";
 import { deleteDraftRow, planRenumber, applyRenumber, groupStatus, firstLastRowStarts } from "@/lib/contourRows/rowNumbering";
+import { fetchCurrentBlock, blockSnapshot, diffBlock, blockChanged, compareNumbering, BlockFreshnessError, type BlockDiff } from "@/lib/contourRows/blockFreshness";
 import { parseLineFile, looksSwapped, duplicateNumbers, linesFarOutside, IMPORT_LIMITS, type LineImportResult } from "@/lib/contourRows/importLines";
 
 type Tool = "none" | "trace" | "area" | "exclusion";
@@ -123,15 +124,25 @@ function BackTo({ id, onClick }: { id?: string; onClick?: (e: React.MouseEvent) 
 interface EditorProps {
   paddock: any; scope: DraftScope; load: DraftLoad; copyKey?: string;
   onSaved: (s: StoredDraft) => void; onReload: () => void; onDiscarded: (revision: number) => void;
+  /** Authoritative block re-read used before Save Draft and on focus (overridable in tests). */
+  fetchBlock?: (vineyardId: string, paddockId: string) => Promise<any>;
 }
 
 type Busy = null | "saving" | "discarding";
 
-export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDiscarded }: EditorProps) {
+export function Editor({ paddock: initialPaddock, scope: scopeProp, load, copyKey, onSaved, onReload, onDiscarded, fetchBlock = fetchCurrentBlock }: EditorProps) {
   // Tab-only working copy (Back/Forward, vineyard switch). Restored only after the normal load passed.
   const [restored] = useState(() => (copyKey ? getWorkingCopy(copyKey) : null));
   const navigate = useNavigate();
   const setupRequired = load.status === "setup_required";
+  // Validation snapshot of the block. Only replaced by an explicit "Recheck" — never silently.
+  const [paddock, setPaddock] = useState<any>(initialPaddock);
+  const [staleBlock, setStaleBlock] = useState<null | { fresh: any; diff: BlockDiff }>(null);
+  const [rechecking, setRechecking] = useState(false);
+  const scope: DraftScope = useMemo(() => ({
+    vineyardId: scopeProp.vineyardId, paddockId: scopeProp.paddockId,
+    canonicalRowIds: new Set(parseRows(paddock.rows).map((r) => r.id).filter((x): x is string => !!x)),
+  }), [scopeProp.vineyardId, scopeProp.paddockId, paddock]);
   const boundary = useMemo(() => parsePolygonPoints(paddock.polygon_points), [paddock]);
   const legacyRows = useMemo(() => parseRows(paddock.rows), [paddock]);
   const initial = useMemo(() => restored ? (JSON.parse(restored.savedJson) as ContourDraft) : (load.status === "loaded" ? load.draft.payload : newDraft(scope.vineyardId, scope.paddockId)),
@@ -303,8 +314,37 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
   const step = !group ? 1 : group.mode !== "imported" && (group.referenceTrace.length < 2 || tool === "trace") ? 2
     : !group.rows.length ? 3 : dirty ? 4 : 0;
 
+  // Background freshness check (window focus): only flags, never replaces the snapshot.
+  const scopeIds = useRef({ v: scopeProp.vineyardId, p: scopeProp.paddockId });
+  useEffect(() => {
+    const onFocus = async () => {
+      if (busyRef.current) return;
+      try {
+        const fresh = await fetchBlock(scopeIds.current.v, scopeIds.current.p);
+        const diff = diffBlock(blockSnapshot(paddock), blockSnapshot(fresh));
+        if (blockChanged(diff)) setStaleBlock({ fresh, diff });
+      } catch { /* best-effort; Save Draft re-checks authoritatively */ }
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [fetchBlock, paddock]);
+
+  /** Explicit recovery: adopt the current block as the validation snapshot. Edits and links are kept. */
+  const recheckBlock = async () => {
+    if (busyRef.current) return;
+    setRechecking(true);
+    try {
+      const latest = await fetchBlock(scopeProp.vineyardId, scopeProp.paddockId);
+      setPaddock(latest); setStaleBlock(null); setSaveError(null);
+      toast({ title: "Rechecked against the current block", description: "Your draft edits are unchanged. Review any problems before saving." });
+    } catch (e) {
+      setSaveError((e as Error).message);
+    } finally { setRechecking(false); }
+  };
+
   const doSave = async () => {
     if (busyRef.current || setupRequired) return;
+    if (staleBlock) { setSaveError("The block changed since this draft was checked. Press “Recheck against current block” first."); return; }
     const errs = [...validateDraftShape(draft, scope), ...checkDraftGeometry(draft, boundary).filter((i) => i.level === "error").map((i) => i.message)];
     if (errs.length) { setSaveError(`Fix these first: ${errs.slice(0, 5).join(" ")}`); return; }
     const json = JSON.stringify(draft);
@@ -313,6 +353,19 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
       attempt.current = { json, id: generateUuid(), revision: base.revision, draftId: base.draftId };
     const snap = attempt.current!;
     setBusy("saving"); setSaveError(null);
+    // Authoritative pre-save block read: stop if boundary or operational row ids moved.
+    try {
+      const fresh = await fetchBlock(scope.vineyardId, scope.paddockId);
+      const diff = diffBlock(blockSnapshot(paddock), blockSnapshot(fresh));
+      if (blockChanged(diff)) {
+        setStaleBlock({ fresh, diff });
+        setSaveError("The block changed since this draft was checked, so it wasn't saved. Press “Recheck against current block”, review the result, then save again.");
+        setBusy(null); return;
+      }
+    } catch (e) {
+      setSaveError(e instanceof BlockFreshnessError ? e.message : "Couldn't confirm the block is up to date. Nothing was saved — try again.");
+      setBusy(null); return;
+    }
     try {
       const s = await saveDraft(scope, { draftId: snap.draftId, revision: snap.revision }, snap.id, JSON.parse(snap.json));
       if (copyKey) reconcileSaved(copyKey, snap.json, { draftId: s.draftId, revision: s.revision });
@@ -467,12 +520,13 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
     onDragEnd: (x) => updateRow(selRow.id, (r) => moveVertex(r, pi, qi, x)),
   })));
   const blocking = hasErrors(geoIssues) || shapeErrors.length > 0;
+  const numbering = useMemo(() => compareNumbering(allRows.map((r) => r.number), legacyRows.map((r) => r.number).filter((n): n is number => typeof n === "number")), [allRows, legacyRows]);
   // Selecting a different row opens Row edit (not repeated for point clicks on the same row).
   // Explicit row pick (map row line / table row) always reopens the panel on Row edit; vertex handles don't.
   function pickRow(gid: string, rowId: string) {
     setGroupId(gid); setTool("none"); setRowSel({ rowId, part: 0, idx: null }); setPanelTab("row"); setRevealNonce((n) => n + 1);
   }
-  const canSave = !setupRequired && dirty && !busy && !blocking;
+  const canSave = !setupRequired && dirty && !busy && !blocking && !staleBlock;
 
   return (
     <div className="space-y-4">
@@ -505,6 +559,16 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
       {setupRequired && (
         <Alert><AlertTriangle className="h-4 w-4" /><AlertTitle>Database setup required — saving is off</AlertTitle>
           <AlertDescription>The VineTrack database doesn't have Contour Row Mapping storage yet. You can try the tools and export a backup, but nothing can be saved until it's set up.</AlertDescription></Alert>
+      )}
+      {staleBlock && (
+        <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Block changed since this draft was checked</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>{[staleBlock.diff.boundaryChanged && "The block boundary was changed", staleBlock.diff.rowsChanged && "The block's operational rows were changed"].filter(Boolean).join(". ")} (for example in another tab or the mobile app). Saving is paused.</p>
+            <p>Recheck validates your draft against the current block. Your edits and row links are kept — links to rows no longer in the block are only flagged.</p>
+            <p className="text-xs text-muted-foreground">VineTrack can't lock the block while a draft saves, so a change made at the very moment of saving may still be missed.</p>
+            <div className="flex gap-2"><Button size="sm" variant="outline" disabled={locked || rechecking} onClick={recheckBlock}>{rechecking ? "Rechecking…" : "Recheck against current block"}</Button>
+              <Button size="sm" variant="outline" onClick={exportJson}>Export backup</Button></div>
+          </AlertDescription></Alert>
       )}
       {saveError && (
         <Alert variant="destructive"><AlertTitle>Draft not saved</AlertTitle>
@@ -595,6 +659,17 @@ export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDis
               </CardContent></Card>
           )}
 
+          {numbering.draftCount > 0 && (
+            <Card data-testid="numbering-compare"><CardHeader className="pb-2"><CardTitle className="text-base">Draft vs operational row numbers</CardTitle></CardHeader>
+              <CardContent className="space-y-1 text-xs">
+                <p>Draft: <b>{numbering.draftCount}</b> rows · Block Setup (operational): <b>{numbering.operationalCount}</b> rows</p>
+                {numbering.same ? <p>The draft uses the same row numbers as the block.</p> : <>
+                  {numbering.onlyInDraft.length > 0 && <p>Only in draft: {fmtNums(numbering.onlyInDraft)}</p>}
+                  {numbering.onlyOperational.length > 0 && <p>Only in Block Setup: {fmtNums(numbering.onlyOperational)}</p>}
+                </>}
+                <p className="text-muted-foreground flex gap-1"><Info className="h-3.5 w-3.5 shrink-0 mt-0.5" /> For information only — differences are expected until contour rows are activated. Saving this draft never renumbers or changes the block's operational rows.</p>
+              </CardContent></Card>
+          )}
           <Card><CardHeader className="pb-2"><CardTitle className="text-base">Draft measurements</CardTitle></CardHeader>
             <CardContent className="space-y-2 text-sm">
               <p className="text-xs text-muted-foreground flex gap-1"><Info className="h-3.5 w-3.5 shrink-0 mt-0.5" /> Draft preview only. Vine, post and irrigation figures still come from Block Setup.</p>
@@ -712,6 +787,7 @@ function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, sel
           </div>
     </> }] : []),
     { id: "rows", label: "Rows", content: <>
+        {imported && <p className="text-[11px] text-muted-foreground flex gap-1" data-testid="imported-checks-note"><Info className="h-3.5 w-3.5 shrink-0 mt-0.5" /> Imported GeoJSON/KML rows are checked against the block boundary and for crossings, overlaps and repeated points (each part separately). This group's working area and cut-outs are not applied to imported rows.</p>}
         {!imported && <>
           <div className="grid grid-cols-2 gap-2">
             <NumberStepper label="Row spacing (m)" value={g.spacingM} min={LIMITS.minSpacingM} max={LIMITS.maxSpacingM} step={0.1} disabled={locked} onChange={(n) => update((x) => ({ ...x, spacingM: n }))} />
@@ -787,3 +863,5 @@ function GroupPanel({ g, tool, setTool, exclusionId, setExclusionId, update, sel
     </div>
   );
 }
+
+function fmtNums(ns: number[]) { return ns.length > 12 ? `${ns.slice(0, 12).join(", ")} … (+${ns.length - 12} more)` : ns.join(", "); }

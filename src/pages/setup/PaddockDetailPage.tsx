@@ -21,6 +21,7 @@ import { ArrowLeft, Save, AlertTriangle, Trash2, Pencil, Info, Archive, LayoutDa
 
 import { fetchOne } from "@/lib/queries";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import { loadDraft as loadContourDraft } from "@/lib/contourRows/draftApi";
 import {
   archivePaddock,
   fetchLinkedRecordCounts,
@@ -522,6 +523,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
                 Drag a vertex to move it, tap a midpoint handle to insert, tap a vertex (with ≥ 4 pts) to remove.
                 {canEdit ? " Saving regenerates rows against the new boundary." : ""}
               </CardDescription>
+              <ContourDraftRegenNotice paddockId={paddock.id} vineyardId={paddock.vineyard_id} />
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="h-[520px] rounded-md overflow-hidden border">
@@ -560,10 +562,13 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
             <PanelTabs label="Row setup"
               header={<div><div className="text-sm font-semibold">Row setup</div><p className="text-xs text-muted-foreground">Same generator as iOS &amp; New Block.</p></div>}
               footer={canEdit ? (
-                <div className="flex justify-end">
-                  <Button onClick={onSaveRows} disabled={saving || rowOverrideError || generatedRows.length === 0} className="gap-1">
-                    <Save className="h-4 w-4" /> Save rows
-                  </Button>
+                <div className="space-y-2">
+                  <ContourDraftRegenNotice paddockId={paddock.id} vineyardId={paddock.vineyard_id} />
+                  <div className="flex justify-end">
+                    <Button onClick={onSaveRows} disabled={saving || rowOverrideError || generatedRows.length === 0} className="gap-1">
+                      <Save className="h-4 w-4" /> Save rows
+                    </Button>
+                  </div>
                 </div>
               ) : undefined}
               tabs={[
@@ -989,6 +994,22 @@ function CountLine({ label, n }: { label: string; n: number }) {
   return <li>{label}: <span className="font-medium">{n}</span></li>;
 }
 
+
+/** System Admin-only notice: straight saves don't touch a saved contour draft. Read-only. */
+export function ContourDraftRegenNotice({ paddockId, vineyardId }: { paddockId: string; vineyardId: string }) {
+  const { isAdmin } = useIsSystemAdmin();
+  const q = useQuery({
+    queryKey: ["contour-draft-exists", vineyardId, paddockId], enabled: isAdmin && !!vineyardId, retry: false,
+    queryFn: () => loadContourDraft({ vineyardId, paddockId }),
+  });
+  if (!isAdmin || q.data?.status !== "loaded") return null;
+  return (
+    <p className="mt-2 rounded-md border border-orange-500/50 p-2 text-xs text-orange-700 dark:text-orange-400" data-testid="contour-regen-notice">
+      This block has a saved Contour Row Mapping (Beta) draft. Save boundary and Save rows regenerate the block's straight
+      operational rows as usual — they don't change the contour draft, and the draft doesn't change these rows.
+    </p>
+  );
+}
 
 /** System Admin-only entry to the Contour Row Mapping (Beta) draft pilot. */
 function ContourRowMappingLink({ paddockId }: { paddockId: string }) {

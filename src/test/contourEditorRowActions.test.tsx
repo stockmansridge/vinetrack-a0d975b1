@@ -5,6 +5,8 @@ import { MemoryRouter } from "react-router-dom";
 
 vi.mock("@/lib/systemAdmin", () => ({ useIsSystemAdmin: () => ({ isAdmin: true, loading: false }) }));
 vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn() }));
+// Pre-save freshness read: the block is unchanged in these tests.
+vi.mock("@/lib/contourRows/blockFreshness", async (orig) => ({ ...(await orig<any>()), fetchCurrentBlock: async () => paddock }));
 vi.mock("@/components/paddocks/ContourAppleMap", () => ({
   default: ({ shapes, markers }: any) => (
     <div data-testid="map">

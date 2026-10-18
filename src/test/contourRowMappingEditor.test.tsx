@@ -10,6 +10,8 @@ vi.mock("leaflet", () => ({ default: { divIcon: () => ({}), latLngBounds: () => 
 vi.mock("leaflet/dist/leaflet.css", () => ({}));
 vi.mock("@/lib/systemAdmin", () => ({ useIsSystemAdmin: () => ({ isAdmin: true, loading: false }) }));
 vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn() }));
+// Pre-save freshness read: the block is unchanged in these tests.
+vi.mock("@/lib/contourRows/blockFreshness", async (orig) => ({ ...(await orig<any>()), fetchCurrentBlock: async () => paddock }));
 
 let resolveSave: (v: any) => void = () => {};
 const saveDraft = vi.fn(() => new Promise((r) => { resolveSave = r; }));
