@@ -7,16 +7,15 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
-const h = vi.hoisted(() => ({ isAdmin: false, saves: [] as any[] }));
+const h = vi.hoisted(() => ({ isAdmin: false, saves: [] as any[], products: [] as any[] }));
 
 vi.mock("@/lib/systemAdmin", () => ({
   useIsSystemAdmin: () => ({ isAdmin: h.isAdmin, loading: false }),
 }));
 vi.mock("@/integrations/ios-supabase/client", () => {
-  const rows: Record<string, any[]> = { saved_chemicals: [] };
   const from = (t: string) => {
     const c: any = { select: () => c, eq: () => c, is: () => c, order: () => c, in: () => c,
-      then: (r: any) => Promise.resolve({ data: rows[t] ?? [], error: null }).then(r) };
+      then: (r: any) => Promise.resolve({ data: t === "saved_chemicals" ? h.products : [], error: null }).then(r) };
     return c;
   };
   return { supabase: { from, rpc: async () => ({ data: null, error: null }) } };
@@ -62,7 +61,7 @@ async function openModeMenu() {
 }
 
 describe("Target Nutrient (Preview) gating", () => {
-  beforeEach(() => { h.isAdmin = false; h.saves = []; });
+  beforeEach(() => { h.isAdmin = false; h.saves = []; h.products = []; });
 
   async function startTarget() {
     h.isAdmin = true;
@@ -101,6 +100,24 @@ describe("Target Nutrient (Preview) gating", () => {
     fireEvent.change(screen.getByLabelText("Treated area ha"), { target: { value: "3" } });
     expect(screen.getByLabelText("Product rate result").textContent).toBe("12.5 kg/ha");
     expect(screen.getByLabelText("Total product result").textContent).toBe("37.5 kg");
+  });
+
+  it("blocks unknown legacy bases and oxide values for actual nutrient targets", async () => {
+    h.products = [{ id: "legacy", name: "Legacy product", nitrogen_percent: 16, analysis_basis: "oxide", product_form: "solid", product_category: "granularFertiliser" }];
+    await startTarget();
+    fireEvent.click(await screen.findByRole("button", { name: /Legacy product/ }));
+    expect(screen.getByLabelText("Nutrient percent")).toHaveProperty("value", "");
+    fireEvent.change(screen.getByLabelText("Nutrient percent"), { target: { value: "16" } });
+    fireEvent.change(screen.getByLabelText("Target quantity"), { target: { value: "2" } });
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("—");
+    await choose("Analysis basis", /Oxide/);
+    await choose("Concentration basis", /w\/w/);
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("—");
+    await choose("Analysis basis", /Elemental/);
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("12.5 g/vine");
+    fireEvent.change(screen.getByLabelText("Nutrient percent"), { target: { value: "140" } });
+    expect(screen.getByLabelText("Product rate result").textContent).toBe("—");
+    expect(h.saves).toEqual([]);
   });
 
   it("requires documented density for w/w liquids, not w/v", async () => {
