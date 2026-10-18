@@ -1,6 +1,6 @@
-# Target Nutrient Application — Shared Contract v0.1 (DRAFT for review)
+# Target Nutrient Application — Shared Contract v0.2 (DB foundation applied)
 
-Status: DRAFT — not approved, not implemented anywhere. Owners: ChatGPT (database), Rork (iOS/Android), Lovable (Portal). No platform implements against this document until all three sign off and the database migration is applied and verified by ChatGPT.
+Status: database foundation APPLIED and verified by ChatGPT (migration `target_nutrient_additive_contract_foundation`); Portal and mobile implementation NOT started; feature gated off everywhere. Owners: ChatGPT (database), Rork (iOS/Android), Lovable (Portal). §3/§4 below now describe the LIVE schema, audited read-only by Lovable on 18 Oct 2026.
 
 ## 1. Purpose
 
@@ -18,10 +18,10 @@ Extend the Fertiliser Calculator with a `nutrientTarget` calculation mode that w
 
 Today's saved product stores only `nitrogen_percent`, `phosphorus_percent`, `potassium_percent`, plus `analysis_basis` and density. That cannot express Ca, Mg, S, micronutrients, or custom nutrients.
 
-Proposed replacement (additive — existing N/P/K columns stay for backward compatibility and are mirrored into the list by the migration):
+Live schema (audited 18 Oct 2026): a NEW TABLE `public.product_nutrient_analysis` exists. Its column list could not be enumerated read-only — the migration did not GRANT SELECT to `anon`/`authenticated`, so every probe returns `42501` (permission denied) before column resolution. The columns below are the agreed contract shape; ChatGPT to confirm the actual column names/types and the intended GRANT/RLS posture before Portal implementation:
 
 ```
-product_nutrient_analysis (new table, or jsonb column on saved_chemicals — ChatGPT to decide)
+product_nutrient_analysis (new table — EXISTS, not yet readable by app roles)
   product_id        uuid  -> saved_chemicals.id
   nutrient_key      text  -- canonical key, e.g. "N","P","K","Ca","Mg","S","Fe","Mn","Zn","Cu","B","Mo","Cl","Si","Co", or "other:<slug>"
   display_name      text  -- e.g. "Zinc", or the grower's custom name for other:*
@@ -38,21 +38,25 @@ Rules:
 
 ## 4. Record payload (what a saved nutrientTarget record must carry)
 
-Existing `fertiliser_records` columns are reused where possible; new columns (ChatGPT to confirm names/types):
+Existing `fertiliser_records` columns are reused where possible. New columns CONFIRMED PRESENT on the live table (probed column-by-column via the API, 18 Oct 2026):
 
 ```
 calculation_mode        = "nutrientTarget"
-nutrient_key            text NOT NULL        -- selected nutrient
-nutrient_display_name   text NOT NULL
-target_rate             numeric NOT NULL     -- grower's target
-target_rate_unit        text NOT NULL        -- "g/vine" | "kg/ha"
-nutrient_percent        numeric NOT NULL     -- percentage actually used (product-derived or manual)
-nutrient_percent_source text NOT NULL        -- "product_analysis" | "manual"
-analysis_basis          text                 -- elemental | oxide, copied from product
-concentration_basis     text                 -- w/w | w/v
-product_density_kg_per_l numeric             -- snapshot when used
-product_analysis_snapshot jsonb NOT NULL     -- full declared analysis of the product at save time
+nutrient_key            text        -- selected nutrient            [CONFIRMED]
+nutrient_display_name   text        --                              [CONFIRMED]
+target_rate             numeric     -- grower's target              [CONFIRMED]
+target_rate_unit        text        -- "g/vine" | "kg/ha"           [CONFIRMED]
+nutrient_percent        numeric     -- percentage actually used     [CONFIRMED]
+nutrient_percent_source text        -- "product_analysis" | "manual" [CONFIRMED]
+analysis_basis          text        -- elemental | oxide            [CONFIRMED]
+concentration_basis     text        -- w/w | w/v                    [CONFIRMED]
+product_density_kg_per_l numeric    -- density snapshot when used   [CONFIRMED]
+product_analysis_snapshot jsonb     -- full declared analysis at save [CONFIRMED]
+nutrient_contract_version text      -- contract version the record was written against [CONFIRMED]
+nutrient_declared_as    text        -- how the nutrient was declared (e.g. elemental/oxide form label) [CONFIRMED]
 ```
+
+Differences from the v0.1 proposal: `nutrient_contract_version` and `nutrient_declared_as` were ADDED; there are NO separate `density_source` / `density_reference` columns (probed — absent). If density provenance is required, it must live inside `product_analysis_snapshot` or be added later. Column nullability/defaults/check constraints could not be verified read-only (need a GRANT or ChatGPT's migration source); snapshot jsonb internal format likewise unverified — ChatGPT to publish the exact snapshot shape before Portal writes any record.
 
 - The snapshot is authoritative for historical display: if the product's analysis is later edited, saved records still show what was used.
 - `application_rate` / `application_rate_unit` keep their existing meaning (derived product rate) so existing cost/pack/inventory math is unchanged.
@@ -92,7 +96,10 @@ Verified against current source:
 
 ## 9. Open questions for reviewers
 
-- ChatGPT: new table vs jsonb column for the analysis list; exact new column names on `fertiliser_records`; whether oxide↔elemental conversion factors belong in the DB later.
+Resolved by the applied migration: new TABLE (not jsonb) chosen; `fertiliser_records` column names confirmed as in §4.
+
+Still open:
+- ChatGPT: publish the exact `product_nutrient_analysis` column list, nullability, checks and GRANT/RLS posture (currently unreadable by app roles — Portal cannot implement the product analysis editor until SELECT/INSERT/UPDATE grants + RLS exist); publish the exact `product_analysis_snapshot` jsonb shape and the `nutrient_contract_version` value to write (proposal: `"1"`); confirm whether density provenance lives in the snapshot; whether oxide↔elemental conversion factors belong in the DB later.
 - Rork: confirm current iOS/Android behaviour when reading an unknown `calculation_mode`; confirm offline persistence can store the snapshot jsonb; confirm the mode gate mechanism.
 - All: agreed canonical nutrient key list and display names (proposal in §3).
 
@@ -103,3 +110,12 @@ Verified against current source:
 3. ChatGPT implements and verifies the migration (additive only).
 4. Lovable ships the §2 unsupported-mode guard on Portal (can ship earlier — it is a bug fix).
 5. Rork + Lovable implement behind gates; cross-platform testing; gates lifted together.
+
+## 11. Lovable read-only integration audit (18 Oct 2026)
+
+Method: column-by-column probes against the live VineTrack database API (read-only; no writes, no SQL executed by Lovable). Results:
+
+- `fertiliser_records`: all twelve v0.1/proposed nutrient columns present (§4), plus `nutrient_contract_version` and `nutrient_declared_as`. No `density_source`/`density_reference` columns exist.
+- `product_nutrient_analysis`: table EXISTS but is not readable by `anon`/`authenticated` (42501). Column shape unverified — blocker for the Portal product analysis editor until ChatGPT confirms grants/RLS and publishes the column list.
+- `saved_chemicals`: no nutrient-list/jsonb column added there (probed — absent); the analysis list lives only in the new table.
+- Portal guard regression tests re-run after the migration: 16/16 passed (`fertiliserUnsupportedMode.test.tsx`, `fertiliserPersistence.test.ts`). Per-hectare/per-vine paths and the unsupported-mode read-only guard are unaffected by the additive columns (Portal selects columns explicitly, never `select=*`, so new columns are ignored until used).
