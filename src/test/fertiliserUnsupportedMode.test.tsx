@@ -162,6 +162,9 @@ describe("opening an unsupported record", () => {
     expect(within(dialog).queryByText("Mark Completed")).toBeNull();
     expect(within(dialog).queryByText("Save as Planned")).toBeNull();
     expect(h.saves).toHaveLength(0);
+    // The calculator form (and its allocation fetch / computeCalculation
+    // pipeline) was never mounted for this record.
+    expect(h.fetchAllocCalls).toHaveLength(0);
   });
 
   it("fertigation and unknown modes are equally read-only", async () => {
