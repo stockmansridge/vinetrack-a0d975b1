@@ -868,7 +868,7 @@ function FertiliserCalculatorDialogForm({
           {/* Blocks */}
           <section className="rounded-lg border-2 border-border bg-card shadow-sm p-4 space-y-2">
             <Label className="text-sm font-semibold">Blocks (optional)</Label>
-            {mode === "perVine" && checkedBlocks.length > 0 && (
+            {calcMode === "perVine" && checkedBlocks.length > 0 && (
               <div className="rounded-md border bg-muted/40 p-3 space-y-2" role="radiogroup" aria-label="Vine count basis">
                 <div className="text-sm font-semibold">Vine count basis</div>
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -927,7 +927,7 @@ function FertiliserCalculatorDialogForm({
                     }}
                     aria-label={`${b.name} area ${areaLabel(region)}`}
                   />
-                  {mode === "perVine" && b.selected ? (
+                  {calcMode === "perVine" && b.selected ? (
                     <div className="text-xs tabular-nums" aria-label={`${b.name} vine count`}>
                       <div className="font-medium">
                         {(selectedBlocks.find((x) => x.id === b.id)?.vineCount ?? 0).toLocaleString()} vines
@@ -963,9 +963,9 @@ function FertiliserCalculatorDialogForm({
             {selectedBlocks.length === 0 && (
               <div className="grid gap-2 sm:grid-cols-2 border-t pt-2">
                 <div className="sm:col-span-2 text-xs text-muted-foreground">
-                  No blocks selected — enter the treated {mode === "perHectare" ? "area" : "vine count"} to calculate. The record will be saved without block allocations.
+                  No blocks selected — enter the treated {calcMode === "perHectare" ? "area" : "vine count"} to calculate. The record will be saved without block allocations.
                 </div>
-                {mode === "perHectare" ? (
+                {calcMode === "perHectare" ? (
                   <div>
                     <Label className="text-xs">Treated area ({areaLabel(region)})</Label>
                     <Input inputMode="decimal" value={manualArea} onChange={(e) => setManualArea(e.target.value)} aria-label={`Treated area ${areaLabel(region)}`} />
