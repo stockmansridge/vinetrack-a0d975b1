@@ -907,7 +907,7 @@ function FertiliserCalculatorDialogForm({
                 <div>
                   <Label className="text-xs">Product nutrient (%)</Label>
                   <Input inputMode="decimal" aria-label="Nutrient percent" placeholder="16" value={!useManualPercent && selectedEntry ? selectedEntry.percent : manualPercent} onChange={(e) => { setManualPercent(e.target.value); setUseManualPercent(true); }} />
-                  <div className="text-xs text-muted-foreground mt-1">{targetPctSource === "product_analysis" ? "Product analysis" : "Manual percentage"}</div>
+                  <div className="text-xs text-muted-foreground mt-1">{!useManualPercent && selectedEntry ? "From the saved product analysis — editable" : "Manual entry — from the product label"}</div>
                 </div>
                 <div>
                   <Label className="text-xs">Target amount</Label>
