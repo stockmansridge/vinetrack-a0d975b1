@@ -18,10 +18,10 @@ Extend the Fertiliser Calculator with a `nutrientTarget` calculation mode that w
 
 Today's saved product stores only `nitrogen_percent`, `phosphorus_percent`, `potassium_percent`, plus `analysis_basis` and density. That cannot express Ca, Mg, S, micronutrients, or custom nutrients.
 
-Proposed replacement (additive — existing N/P/K columns stay for backward compatibility and are mirrored into the list by the migration):
+Live schema (audited 18 Oct 2026): a NEW TABLE `public.product_nutrient_analysis` exists. Its column list could not be enumerated read-only — the migration did not GRANT SELECT to `anon`/`authenticated`, so every probe returns `42501` (permission denied) before column resolution. The columns below are the agreed contract shape; ChatGPT to confirm the actual column names/types and the intended GRANT/RLS posture before Portal implementation:
 
 ```
-product_nutrient_analysis (new table, or jsonb column on saved_chemicals — ChatGPT to decide)
+product_nutrient_analysis (new table — EXISTS, not yet readable by app roles)
   product_id        uuid  -> saved_chemicals.id
   nutrient_key      text  -- canonical key, e.g. "N","P","K","Ca","Mg","S","Fe","Mn","Zn","Cu","B","Mo","Cl","Si","Co", or "other:<slug>"
   display_name      text  -- e.g. "Zinc", or the grower's custom name for other:*
