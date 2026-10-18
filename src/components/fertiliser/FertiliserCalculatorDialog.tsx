@@ -714,7 +714,7 @@ function FertiliserCalculatorDialogForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className={`${isTargetMode ? "max-w-6xl" : "max-w-4xl"} max-h-[90vh] overflow-y-auto`}>
         {idError && (
           <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
             {idError}
@@ -727,7 +727,7 @@ function FertiliserCalculatorDialogForm({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4">
+        <div className={isTargetMode ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]" : "grid gap-4"}>
           {/* Product picker */}
           <section className="rounded-lg border-2 border-border bg-card shadow-sm p-4 space-y-2">
             <div className="flex items-center gap-2 flex-wrap justify-between">
