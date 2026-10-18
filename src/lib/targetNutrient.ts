@@ -281,6 +281,7 @@ export function seedAnalysisFromLegacyProduct(p: {
 }): NutrientAnalysisEntry[] {
   // Legacy N/P/K fields alone do not establish concentration or elemental basis.
   if (!p.concentration_basis || !["elemental", "oxide"].includes(p.analysis_basis)) return [];
+  const concentrationBasis = p.concentration_basis;
   const basis: AnalysisBasis = p.analysis_basis === "oxide" ? "oxide" : "elemental";
   const out: NutrientAnalysisEntry[] = [];
   const push = (key: string, pct: number | null) => {
@@ -290,7 +291,7 @@ export function seedAnalysisFromLegacyProduct(p: {
         displayName: NUTRIENT_DISPLAY[key] ?? key,
         percent: pct,
         analysisBasis: basis,
-        concentrationBasis: p.concentration_basis,
+        concentrationBasis,
         sourceKind: "product_analysis",
         isPrimary: out.length === 0,
       });
