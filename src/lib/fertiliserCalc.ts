@@ -13,6 +13,29 @@
 
 export type FertiliserForm = "solid" | "liquid";
 export type FertiliserCalculationMode = "perHectare" | "perVine";
+
+// The live database enum also allows "nutrientTarget" and "fertigation"
+// (SQL 110/111), so records in those modes can exist — created by mobile
+// apps or future releases. The Portal calculator implements only perHectare
+// and perVine. Unsupported records must NEVER be reinterpreted as perHectare,
+// recalculated, or overwritten: they are shown read-only with their stored
+// values verbatim (see docs/target-nutrient-contract.md §2).
+export function isSupportedCalculationMode(
+  mode: string | null | undefined,
+): mode is FertiliserCalculationMode {
+  return mode === "perHectare" || mode === "perVine";
+}
+
+export function calculationModeLabel(mode: string | null | undefined): string {
+  if (mode === "perHectare") return "Per hectare";
+  if (mode === "perVine") return "Per vine";
+  if (mode === "nutrientTarget") return "Target nutrient";
+  if (mode === "fertigation") return "Fertigation";
+  return mode ? `Unknown (${mode})` : "Unknown";
+}
+
+export const UNSUPPORTED_MODE_NOTICE =
+  "This calculation mode is not supported by this version of the Portal.";
 export type FertiliserRecordStatus = "draft" | "planned" | "completed" | "cancelled";
 
 /** Per-block input the calculator works with. */
