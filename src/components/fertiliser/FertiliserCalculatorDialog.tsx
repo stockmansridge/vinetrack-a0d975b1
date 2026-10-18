@@ -588,7 +588,7 @@ function FertiliserCalculatorDialogForm({
         application_date: effectiveDate,
         vine_count_basis: VINE_COUNT_BASIS_PERSISTED
           ? vineCountBasisForSave({
-              mode, selectedBlockCount: selectedBlocks.length, basis: vineBasis,
+              mode: calcMode, selectedBlockCount: selectedBlocks.length, basis: vineBasis,
               isEdit: !!existing, sourceBasis: duplicateFrom?.record?.vine_count_basis ?? null,
             })
           : undefined,
