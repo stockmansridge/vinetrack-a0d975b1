@@ -996,7 +996,7 @@ function CountLine({ label, n }: { label: string; n: number }) {
 
 
 /** System Admin-only notice: straight saves don't touch a saved contour draft. Read-only. */
-function ContourDraftRegenNotice({ paddockId, vineyardId }: { paddockId: string; vineyardId: string }) {
+export function ContourDraftRegenNotice({ paddockId, vineyardId }: { paddockId: string; vineyardId: string }) {
   const { isAdmin } = useIsSystemAdmin();
   const q = useQuery({
     queryKey: ["contour-draft-exists", vineyardId, paddockId], enabled: isAdmin && !!vineyardId, retry: false,
