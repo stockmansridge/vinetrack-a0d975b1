@@ -353,7 +353,11 @@ export default function FertiliserCalculatorPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          title="Edit"
+                          title={
+                            isSupportedCalculationMode(r.calculation_mode)
+                              ? "Edit"
+                              : "View (read-only — mode not supported by this Portal version)"
+                          }
                           disabled={!canWrite}
                           onClick={() => {
                             setEditing(r);
@@ -365,8 +369,12 @@ export default function FertiliserCalculatorPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          title="Duplicate"
-                          disabled={!canWrite}
+                          title={
+                            isSupportedCalculationMode(r.calculation_mode)
+                              ? "Duplicate"
+                              : "Duplication unavailable — mode not supported by this Portal version"
+                          }
+                          disabled={!canWrite || !isSupportedCalculationMode(r.calculation_mode)}
                           onClick={() => onDuplicate(r)}
                         >
                           <Copy className="h-4 w-4" />
