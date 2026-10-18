@@ -96,7 +96,10 @@ Verified against current source:
 
 ## 9. Open questions for reviewers
 
-- ChatGPT: new table vs jsonb column for the analysis list; exact new column names on `fertiliser_records`; whether oxide↔elemental conversion factors belong in the DB later.
+Resolved by the applied migration: new TABLE (not jsonb) chosen; `fertiliser_records` column names confirmed as in §4.
+
+Still open:
+- ChatGPT: publish the exact `product_nutrient_analysis` column list, nullability, checks and GRANT/RLS posture (currently unreadable by app roles — Portal cannot implement the product analysis editor until SELECT/INSERT/UPDATE grants + RLS exist); publish the exact `product_analysis_snapshot` jsonb shape and the `nutrient_contract_version` value to write (proposal: `"1"`); confirm whether density provenance lives in the snapshot; whether oxide↔elemental conversion factors belong in the DB later.
 - Rork: confirm current iOS/Android behaviour when reading an unknown `calculation_mode`; confirm offline persistence can store the snapshot jsonb; confirm the mode gate mechanism.
 - All: agreed canonical nutrient key list and display names (proposal in §3).
 
