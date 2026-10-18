@@ -41,7 +41,7 @@ import { workingCopyKey, getWorkingCopy, putWorkingCopy, clearWorkingCopy, recon
 import { shiftGroup, shiftDirection, shiftProjection, canUndoShift, makeShiftUndo, SHIFT_LIMITS, type ShiftSide, type ShiftUndo } from "@/lib/contourRows/sideShift";
 import NumberStepper from "@/components/paddocks/NumberStepper";
 import { deleteDraftRow, planRenumber, applyRenumber, groupStatus, firstLastRowStarts } from "@/lib/contourRows/rowNumbering";
-import { fetchCurrentBlock, blockSnapshot, diffBlock, blockChanged, compareNumbering, BlockFreshnessError, type BlockDiff } from "@/lib/contourRows/blockFreshness";
+import { fetchCurrentBlock, blockSnapshot, diffBlock, blockChanged, compareNumbering, describeBlockChange, BlockFreshnessError, type BlockDiff } from "@/lib/contourRows/blockFreshness";
 import { parseLineFile, looksSwapped, duplicateNumbers, linesFarOutside, IMPORT_LIMITS, type LineImportResult } from "@/lib/contourRows/importLines";
 
 type Tool = "none" | "trace" | "area" | "exclusion";
@@ -563,7 +563,7 @@ export function Editor({ paddock: initialPaddock, scope: scopeProp, load, copyKe
       {staleBlock && (
         <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Block changed since this draft was checked</AlertTitle>
           <AlertDescription className="space-y-2">
-            <p>{[staleBlock.diff.boundaryChanged && "The block boundary was changed", staleBlock.diff.rowsChanged && "The block's operational rows were changed"].filter(Boolean).join(". ")} (for example in another tab or the mobile app). Saving is paused.</p>
+            <p>{describeBlockChange(staleBlock.diff).join(". ")} (for example in another tab or the mobile app). Saving is paused.</p>
             <p>Recheck validates your draft against the current block. Your edits and row links are kept — links to rows no longer in the block are only flagged.</p>
             <p className="text-xs text-muted-foreground">VineTrack can't lock the block while a draft saves, so a change made at the very moment of saving may still be missed.</p>
             <div className="flex gap-2"><Button size="sm" variant="outline" disabled={locked || rechecking} onClick={recheckBlock}>{rechecking ? "Rechecking…" : "Recheck against current block"}</Button>
