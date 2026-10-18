@@ -507,7 +507,7 @@ function FertiliserCalculatorDialogForm({
       isSavedProduct,
       seasonRow,
       productUnit,
-      mode,
+      calcMode,
       applicationRate,
       packSize,
       pricePerPack,
