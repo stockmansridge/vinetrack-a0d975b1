@@ -812,11 +812,21 @@ function FertiliserCalculatorDialogForm({
           <section className="rounded-lg border-2 border-border bg-card shadow-sm p-4 grid gap-3 sm:grid-cols-4">
             <div className="sm:col-span-2">
               <Label className="text-xs">Calculation mode</Label>
-              <Select value={mode} onValueChange={(v) => setMode(v as FertiliserCalculationMode)}>
+              <Select
+                value={mode}
+                onValueChange={(v) => {
+                  // The preview mode is System Admin-only; never selectable otherwise.
+                  if (v === "nutrientTarget" && !isAdmin) return;
+                  setMode(v as FertiliserCalculationMode | "nutrientTarget");
+                }}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="perHectare">Per hectare</SelectItem>
                   <SelectItem value="perVine">Per vine</SelectItem>
+                  {isAdmin && (
+                    <SelectItem value="nutrientTarget">Target Nutrient (Preview)</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
