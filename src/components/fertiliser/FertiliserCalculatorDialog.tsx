@@ -74,7 +74,6 @@ import {
   fetchWorkTaskPaddocksForVineyard,
   syncWorkTaskPaddocks,
 } from "@/lib/workTasksQuery";
-import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import {
   computeTargetNutrient,
   seedAnalysisFromLegacyProduct,
@@ -203,7 +202,6 @@ function FertiliserCalculatorDialogForm({
 }: Props) {
   const qc = useQueryClient();
   const { user } = useAuth();
-  const { isAdmin } = useIsSystemAdmin();
   const showCosts = canSeeCosts(role);
   const productsQ = useProducts(vineyardId);
   const region = useRegionFormatters();
@@ -217,7 +215,7 @@ function FertiliserCalculatorDialogForm({
   const [productSearch, setProductSearch] = useState("");
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [form, setForm] = useState<FertiliserForm>("solid");
-  // "nutrientTarget" is a System Admin-only PREVIEW mode: it never saves.
+  // "nutrientTarget" is a PREVIEW mode available to calculator users: it never saves.
   const [mode, setMode] = useState<FertiliserCalculationMode | "nutrientTarget">("perHectare");
   const [applicationRate, setApplicationRate] = useState<string>("");
   // Target Nutrient (Preview) state — local only, never persisted.
@@ -846,8 +844,6 @@ function FertiliserCalculatorDialogForm({
               <Select
                 value={mode}
                 onValueChange={(v) => {
-                  // The preview mode is System Admin-only; never selectable otherwise.
-                  if (v === "nutrientTarget" && !isAdmin) return;
                   setMode(v as FertiliserCalculationMode | "nutrientTarget");
                 }}
               >
@@ -855,9 +851,7 @@ function FertiliserCalculatorDialogForm({
                 <SelectContent>
                   <SelectItem value="perHectare">Per hectare</SelectItem>
                   <SelectItem value="perVine">Per vine</SelectItem>
-                  {isAdmin && (
-                    <SelectItem value="nutrientTarget">Target Nutrient (Preview)</SelectItem>
-                  )}
+                  <SelectItem value="nutrientTarget">Target Nutrient (Preview)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
