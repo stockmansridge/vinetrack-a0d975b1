@@ -123,15 +123,25 @@ function BackTo({ id, onClick }: { id?: string; onClick?: (e: React.MouseEvent) 
 interface EditorProps {
   paddock: any; scope: DraftScope; load: DraftLoad; copyKey?: string;
   onSaved: (s: StoredDraft) => void; onReload: () => void; onDiscarded: (revision: number) => void;
+  /** Authoritative block re-read used before Save Draft and on focus (overridable in tests). */
+  fetchBlock?: (vineyardId: string, paddockId: string) => Promise<any>;
 }
 
 type Busy = null | "saving" | "discarding";
 
-export function Editor({ paddock, scope, load, copyKey, onSaved, onReload, onDiscarded }: EditorProps) {
+export function Editor({ paddock: initialPaddock, scope: scopeProp, load, copyKey, onSaved, onReload, onDiscarded, fetchBlock = fetchCurrentBlock }: EditorProps) {
   // Tab-only working copy (Back/Forward, vineyard switch). Restored only after the normal load passed.
   const [restored] = useState(() => (copyKey ? getWorkingCopy(copyKey) : null));
   const navigate = useNavigate();
   const setupRequired = load.status === "setup_required";
+  // Validation snapshot of the block. Only replaced by an explicit "Recheck" — never silently.
+  const [paddock, setPaddock] = useState<any>(initialPaddock);
+  const [staleBlock, setStaleBlock] = useState<null | { fresh: any; diff: BlockDiff }>(null);
+  const [rechecking, setRechecking] = useState(false);
+  const scope: DraftScope = useMemo(() => ({
+    vineyardId: scopeProp.vineyardId, paddockId: scopeProp.paddockId,
+    canonicalRowIds: new Set(parseRows(paddock.rows).map((r) => r.id).filter((x): x is string => !!x)),
+  }), [scopeProp.vineyardId, scopeProp.paddockId, paddock]);
   const boundary = useMemo(() => parsePolygonPoints(paddock.polygon_points), [paddock]);
   const legacyRows = useMemo(() => parseRows(paddock.rows), [paddock]);
   const initial = useMemo(() => restored ? (JSON.parse(restored.savedJson) as ContourDraft) : (load.status === "loaded" ? load.draft.payload : newDraft(scope.vineyardId, scope.paddockId)),
