@@ -10,7 +10,10 @@
 // testing passes (contract §6). Persisted nutrientTarget records remain
 // read-only via the unsupported-mode guard in fertiliserCalc.ts.
 
-import { isNum, round3, type FertiliserForm } from "@/lib/fertiliserCalc";
+import { round3, type FertiliserForm } from "@/lib/fertiliserCalc";
+
+const isNum = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v);
 
 export const NUTRIENT_CONTRACT_VERSION = "1";
 
