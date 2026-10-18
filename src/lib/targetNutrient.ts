@@ -115,7 +115,7 @@ export function computeTargetNutrient(input: TargetNutrientInput): TargetNutrien
   const target = input.targetRate;
   const isLiquid = input.form === "liquid";
   const isWV = input.concentrationBasis === "w/v";
-  const density = isPos(input.densityKgPerL) ? input.densityKgPerL! : null;
+  const density = isPos(input.densityKgPerL) ? input.densityKgPerL : null;
 
   if (!isPos(pct) || pct > 100) issues.push("Enter a nutrient percentage between 0 and 100.");
   if (!isPos(target)) issues.push("Enter a target nutrient quantity greater than zero.");
@@ -142,7 +142,7 @@ export function computeTargetNutrient(input: TargetNutrientInput): TargetNutrien
     productUnit === "L"
       ? isWV
         ? totalProductMassKg // w/v: percent = g/100 mL, so "kg of nutrient / fraction" is numerically litres
-        : totalProductMassKg / density!
+        : totalProductMassKg / (density ?? 1)
       : totalProductMassKg;
 
   // Per-unit rates.
@@ -277,7 +277,10 @@ export function seedAnalysisFromLegacyProduct(p: {
   potassium_percent: number | null;
   analysis_basis: string;
   product_form?: string;
+  concentration_basis?: ConcentrationBasis;
 }): NutrientAnalysisEntry[] {
+  // Legacy N/P/K fields alone do not establish concentration or elemental basis.
+  if (!p.concentration_basis || !["elemental", "oxide"].includes(p.analysis_basis)) return [];
   const basis: AnalysisBasis = p.analysis_basis === "oxide" ? "oxide" : "elemental";
   const out: NutrientAnalysisEntry[] = [];
   const push = (key: string, pct: number | null) => {
@@ -285,9 +288,9 @@ export function seedAnalysisFromLegacyProduct(p: {
       out.push({
         nutrientKey: key,
         displayName: NUTRIENT_DISPLAY[key] ?? key,
-        percent: pct!,
+        percent: pct,
         analysisBasis: basis,
-        concentrationBasis: "w/w",
+        concentrationBasis: p.concentration_basis,
         sourceKind: "product_analysis",
         isPrimary: out.length === 0,
       });
