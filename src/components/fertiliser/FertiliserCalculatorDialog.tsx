@@ -923,41 +923,86 @@ function FertiliserCalculatorDialogForm({
                     </SelectContent>
                   </Select>
                 </div>
-                {(form === "liquid" || targetConcBasis === "unknown") && <div className="col-span-2">
-                  <Label className="text-xs">Concentration basis (product label)</Label>
-                  <Select value={targetConcBasis} onValueChange={(v) => setConcentrationBasis(v as ConcentrationBasis)}>
-                    <SelectTrigger aria-label="Concentration basis"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unknown" disabled>Confirm from label</SelectItem>
-                      <SelectItem value="w/w">w/w — weight / weight</SelectItem>
-                      {form === "liquid" && <SelectItem value="w/v">w/v — weight / volume</SelectItem>}
-                    </SelectContent>
-                  </Select>
-                </div>}
-                {targetAnalysisBasis !== "elemental" && <div className="col-span-2">
-                  <Label className="text-xs">Nutrient basis (product label)</Label>
-                  <Select value={targetAnalysisBasis} onValueChange={(v) => setAnalysisBasis(v as AnalysisBasis)}>
-                    <SelectTrigger aria-label="Analysis basis"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unknown" disabled>Confirm from label</SelectItem>
-                      <SelectItem value="elemental">Elemental — actual nutrient</SelectItem>
-                      <SelectItem value="oxide">Oxide — conversion unavailable</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>}
                 {form === "liquid" && targetConcBasis === "w/w" && <>
                   <div><Label className="text-xs">Density (kg/L)</Label><Input inputMode="decimal" aria-label="Product density" value={densityInput} onChange={(e) => setDensityInput(e.target.value)} placeholder="e.g. 1.25" /></div>
                   <div><Label className="text-xs">Density source</Label><Input aria-label="Density source" value={densityReference} onChange={(e) => setDensityReference(e.target.value)} placeholder="Label / technical sheet" /></div>
                 </>}
               </div>
-              <div className="border-y border-primary/30 bg-primary/5 py-4 px-3 space-y-4" aria-label="Target nutrient results" aria-live="polite">
-                <div><div className="text-sm text-muted-foreground">Product per {targetUnit === "g/vine" ? "vine" : "hectare"}</div>
-                  <div className="text-3xl font-semibold tabular-nums break-words" aria-label="Product rate result">{targetReady ? `${targetUnit === "g/vine" ? targetResult?.productPerVine?.toLocaleString() : targetResult?.productPerHa?.toLocaleString()} ${targetUnit === "g/vine" ? targetResult?.productPerVineUnit : targetResult?.productPerHaUnit}` : "—"}</div>
+              {/* Basis selectors live under an unobtrusive toggle, with plain-language help. */}
+              <details
+                className="rounded-md border p-3 space-y-3"
+                open={form === "liquid" || targetConcBasis === "unknown" || targetAnalysisBasis !== "elemental"}
+                aria-label="Analysis details"
+              >
+                <summary className="cursor-pointer text-sm font-medium">Analysis details</summary>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <Label className="text-xs flex items-center gap-1">
+                      Concentration basis (product label)
+                      <Info
+                        className="h-3.5 w-3.5 text-muted-foreground"
+                        aria-label="About concentration basis"
+                        aria-hidden={false}
+                      />
+                    </Label>
+                    <Select value={targetConcBasis} onValueChange={(v) => setConcentrationBasis(v as ConcentrationBasis)}>
+                      <SelectTrigger aria-label="Concentration basis"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unknown" disabled>Confirm from label</SelectItem>
+                        <SelectItem value="w/w">w/w — weight / weight</SelectItem>
+                        {form === "liquid" && <SelectItem value="w/v">w/v — weight / volume</SelectItem>}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      w/w means grams of nutrient per 100 grams of product. w/v means grams of nutrient per 100 mL of product.
+                      A w/v liquid calculates litres directly — no density needed. A w/w liquid needs a verified density (kg/L) before litres can be shown.
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-xs flex items-center gap-1">
+                      Analysis basis (product label)
+                      <Info
+                        className="h-3.5 w-3.5 text-muted-foreground"
+                        aria-label="About analysis basis"
+                        aria-hidden={false}
+                      />
+                    </Label>
+                    <Select value={targetAnalysisBasis} onValueChange={(v) => setAnalysisBasis(v as AnalysisBasis)}>
+                      <SelectTrigger aria-label="Analysis basis"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unknown" disabled>Confirm from label</SelectItem>
+                        <SelectItem value="elemental">Elemental — actual nutrient</SelectItem>
+                        <SelectItem value="oxide">Oxide — conversion unavailable</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Elemental is the actual nutrient (P, K). Oxide is a label convention (P₂O₅, K₂O).
+                      This preview never converts between them — enter the percentage exactly as the label declares it and pick the matching basis.
+                    </p>
+                  </div>
                 </div>
-                <div><div className="text-sm text-muted-foreground">Total product required</div><div className="text-2xl font-semibold tabular-nums break-words" aria-label="Total product result">{targetReady && hasQuantity ? `${targetResult?.totalProductRequired.toLocaleString()} ${targetResult?.productUnit}` : "—"}</div></div>
-                {targetBlocker && <div role="alert" className="text-sm text-destructive">{targetBlocker}</div>}
-                {!targetBlocker && targetResult?.issues.map((issue) => <div key={issue} role="alert" className="text-sm text-destructive">{issue}</div>)}
+              </details>
+            </section>
+          )}
+
+          {isTargetMode && (
+            <section
+              className="rounded-lg border-2 border-primary/30 bg-primary/5 shadow-sm p-4 space-y-4 lg:col-start-2 lg:row-start-1 lg:row-span-3 lg:self-start lg:sticky lg:top-2"
+              aria-label="Target nutrient results"
+              aria-live="polite"
+            >
+              <div className="text-sm font-semibold">Results</div>
+              <div><div className="text-sm text-muted-foreground">Product per {targetUnit === "g/vine" ? "vine" : "hectare"}</div>
+                <div className="text-3xl font-semibold tabular-nums break-words" aria-label="Product rate result">{targetReady ? `${targetUnit === "g/vine" ? targetResult?.productPerVine?.toLocaleString() : targetResult?.productPerHa?.toLocaleString()} ${targetUnit === "g/vine" ? targetResult?.productPerVineUnit : targetResult?.productPerHaUnit}` : "—"}</div>
               </div>
+              <div><div className="text-sm text-muted-foreground">Total product required</div><div className="text-2xl font-semibold tabular-nums break-words" aria-label="Total product result">{targetReady && hasQuantity ? `${targetResult?.totalProductRequired.toLocaleString()} ${targetResult?.productUnit}` : "—"}</div></div>
+              {targetReady && targetResult && (
+                <div className="text-sm text-muted-foreground tabular-nums">
+                  Total nutrient delivered: {targetResult.totalNutrientKg.toLocaleString()} kg
+                </div>
+              )}
+              {targetBlocker && <div role="alert" className="text-sm text-destructive">{targetBlocker}</div>}
+              {!targetBlocker && targetResult?.issues.map((issue) => <div key={issue} role="alert" className="text-sm text-destructive">{issue}</div>)}
             </section>
           )}
 
