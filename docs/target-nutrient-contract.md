@@ -38,21 +38,25 @@ Rules:
 
 ## 4. Record payload (what a saved nutrientTarget record must carry)
 
-Existing `fertiliser_records` columns are reused where possible; new columns (ChatGPT to confirm names/types):
+Existing `fertiliser_records` columns are reused where possible. New columns CONFIRMED PRESENT on the live table (probed column-by-column via the API, 18 Oct 2026):
 
 ```
 calculation_mode        = "nutrientTarget"
-nutrient_key            text NOT NULL        -- selected nutrient
-nutrient_display_name   text NOT NULL
-target_rate             numeric NOT NULL     -- grower's target
-target_rate_unit        text NOT NULL        -- "g/vine" | "kg/ha"
-nutrient_percent        numeric NOT NULL     -- percentage actually used (product-derived or manual)
-nutrient_percent_source text NOT NULL        -- "product_analysis" | "manual"
-analysis_basis          text                 -- elemental | oxide, copied from product
-concentration_basis     text                 -- w/w | w/v
-product_density_kg_per_l numeric             -- snapshot when used
-product_analysis_snapshot jsonb NOT NULL     -- full declared analysis of the product at save time
+nutrient_key            text        -- selected nutrient            [CONFIRMED]
+nutrient_display_name   text        --                              [CONFIRMED]
+target_rate             numeric     -- grower's target              [CONFIRMED]
+target_rate_unit        text        -- "g/vine" | "kg/ha"           [CONFIRMED]
+nutrient_percent        numeric     -- percentage actually used     [CONFIRMED]
+nutrient_percent_source text        -- "product_analysis" | "manual" [CONFIRMED]
+analysis_basis          text        -- elemental | oxide            [CONFIRMED]
+concentration_basis     text        -- w/w | w/v                    [CONFIRMED]
+product_density_kg_per_l numeric    -- density snapshot when used   [CONFIRMED]
+product_analysis_snapshot jsonb     -- full declared analysis at save [CONFIRMED]
+nutrient_contract_version text      -- contract version the record was written against [CONFIRMED]
+nutrient_declared_as    text        -- how the nutrient was declared (e.g. elemental/oxide form label) [CONFIRMED]
 ```
+
+Differences from the v0.1 proposal: `nutrient_contract_version` and `nutrient_declared_as` were ADDED; there are NO separate `density_source` / `density_reference` columns (probed — absent). If density provenance is required, it must live inside `product_analysis_snapshot` or be added later. Column nullability/defaults/check constraints could not be verified read-only (need a GRANT or ChatGPT's migration source); snapshot jsonb internal format likewise unverified — ChatGPT to publish the exact snapshot shape before Portal writes any record.
 
 - The snapshot is authoritative for historical display: if the product's analysis is later edited, saved records still show what was used.
 - `application_rate` / `application_rate_unit` keep their existing meaning (derived product rate) so existing cost/pack/inventory math is unchanged.
