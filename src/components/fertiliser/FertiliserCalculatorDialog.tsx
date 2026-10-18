@@ -1122,6 +1122,68 @@ function FertiliserCalculatorDialogForm({
               <Stat label="Packs to open" value={packs ? String(packs.packsToOpen) : "—"} />
             </div>
 
+            {isTargetMode && targetResult && (
+              <div className="border-t pt-3 space-y-3" aria-label="Target nutrient results">
+                <Label className="text-sm font-semibold">Target nutrient result</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                  <Stat
+                    label={targetUnit === "g/vine" ? "Product per vine" : "Product per hectare"}
+                    value={
+                      (targetUnit === "g/vine" ? targetResult.productPerVine : targetResult.productPerHa) == null
+                        ? "—"
+                        : `${(targetUnit === "g/vine" ? targetResult.productPerVine : targetResult.productPerHa)!.toLocaleString()} ${
+                            targetUnit === "g/vine" ? targetResult.productPerVineUnit : targetResult.productPerHaUnit
+                          }`
+                    }
+                  />
+                  <Stat
+                    label="Total product required"
+                    value={`${targetResult.totalProductRequired.toLocaleString()} ${targetResult.productUnit}`}
+                  />
+                  <Stat
+                    label={`Total ${selectedEntry?.displayName || manualNutrientName || "nutrient"} delivered`}
+                    value={`${targetResult.totalNutrientKg.toLocaleString()} kg`}
+                  />
+                  <Stat
+                    label="Percentage used"
+                    value={`${targetPct > 0 ? targetPct : "—"}% ${targetAnalysisBasis} · ${targetConcBasis} (${targetPctSource === "product_analysis" ? "product analysis" : "manual"})`}
+                  />
+                </div>
+                {targetResult.issues.map((m) => (
+                  <div key={m} role="alert" className="text-xs text-destructive">{m}</div>
+                ))}
+                {targetResult.others.length > 0 && (
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">Other nutrients also applied (informational)</Label>
+                    <div className="rounded border divide-y text-xs">
+                      {targetResult.others.map((o) => (
+                        <div key={o.nutrientKey} className="flex items-center justify-between gap-2 p-2">
+                          <span>
+                            {o.displayName} <span className="text-muted-foreground">({o.analysisBasis})</span>
+                          </span>
+                          <span className="tabular-nums text-right">
+                            {o.totalKg != null ? (
+                              <>
+                                {o.totalKg.toLocaleString()} kg total
+                                {o.perVineG != null && ` · ${o.perVineG.toLocaleString()} g/vine`}
+                                {o.perHaKg != null && ` · ${o.perHaKg.toLocaleString()} kg/ha`}
+                              </>
+                            ) : (
+                              <span className="text-muted-foreground">{o.note ?? "Unavailable"}</span>
+                            )}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="text-xs text-muted-foreground">
+                  Preview only — Target Nutrient records cannot be saved yet. Percentages are used exactly as
+                  declared; oxide-labelled values are never silently treated as elemental.
+                </div>
+              </div>
+            )}
+
             {isSavedProduct && (
               <div className="border-t pt-3 space-y-1">
                 <Label className="text-sm font-semibold">Inventory</Label>
