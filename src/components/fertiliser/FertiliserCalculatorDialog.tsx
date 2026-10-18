@@ -418,9 +418,9 @@ function FertiliserCalculatorDialogForm({
     ? targetRateCanon
     : rateToCanonical(numOr(applicationRate), calcMode, effectiveForm, region);
   const manualAreaHa = areaToCanonical(numOr(manualArea), region);
-  const displayRateUnit = rateLabel(mode, form, region);
-  const displayQtyUnit = quantityLabel(form, region);
-  const qty = (v: number) => `${Number(quantityToDisplay(v, form, region).toFixed(3)).toLocaleString()} ${displayQtyUnit}`;
+  const displayRateUnit = rateLabel(calcMode, effectiveForm, region);
+  const displayQtyUnit = quantityLabel(effectiveForm, region);
+  const qty = (v: number) => `${Number(quantityToDisplay(v, effectiveForm, region).toFixed(3)).toLocaleString()} ${displayQtyUnit}`;
   const selectedProduct = (productsQ.data ?? []).find((p) => p.id === productId) ?? null;
   const isSavedProduct = !!productId;
 
