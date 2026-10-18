@@ -176,7 +176,7 @@ interface BlockState extends PaddockOption {
   allocationId: string;
 }
 
-export default function FertiliserCalculatorDialog({
+function FertiliserCalculatorDialogForm({
   open,
   onOpenChange,
   vineyardId,
@@ -585,68 +585,6 @@ export default function FertiliserCalculatorDialog({
       });
     },
   });
-
-  // Unsupported calculation modes (e.g. nutrientTarget, fertigation, or
-  // anything newer than this Portal build): render the stored record
-  // read-only, verbatim. Never run the calculator against it, never save.
-  const existingUnsupported =
-    existing != null && !isSupportedCalculationMode(existing.calculation_mode);
-
-  if (existingUnsupported) {
-    const r = existing!;
-    const roQty = (v: number | null, unit: string | null) =>
-      v == null ? "—" : `${Number(v).toLocaleString()}${unit ? ` ${unit}` : ""}`;
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Fertiliser Record (read-only)</DialogTitle>
-            <DialogDescription>{UNSUPPORTED_MODE_NOTICE}</DialogDescription>
-          </DialogHeader>
-          <div
-            role="alert"
-            className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
-          >
-            {UNSUPPORTED_MODE_NOTICE} The stored values are shown exactly as
-            recorded and cannot be edited, duplicated or recalculated here.
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 rounded-lg border p-4">
-            <Stat label="Date" value={r.application_date || "—"} />
-            <Stat label="Product" value={r.product_name || "—"} />
-            <Stat label="Form" value={r.form === "liquid" ? "Liquid" : "Solid"} />
-            <Stat label="Calculation mode" value={calculationModeLabel(r.calculation_mode)} />
-            <Stat label="Status" value={STATUS_TEXT[r.record_status] ?? r.record_status} />
-            <Stat label="Blocks" value={(r.block_names ?? []).join(", ") || "—"} />
-            <Stat label="Application rate" value={roQty(r.application_rate, r.application_rate_unit)} />
-            <Stat label="Total product required" value={roQty(r.total_product_required, r.product_unit)} />
-            <Stat label="Total area" value={roQty(r.total_area_ha, "ha")} />
-            <Stat label="Total vines" value={r.total_vines == null ? "—" : Number(r.total_vines).toLocaleString()} />
-            <Stat label="Pack size" value={roQty(r.pack_size, r.product_unit)} />
-            <Stat label="Pack count" value={r.pack_count == null ? "—" : String(r.pack_count)} />
-            {showCosts && (
-              <>
-                <Stat label="Product cost" value={money(r.estimated_product_cost)} />
-                <Stat label="Labour cost" value={money(r.labour_cost)} />
-                <Stat label="Machinery cost" value={money(r.machinery_cost)} />
-                <Stat label="Total job cost" value={money(r.total_job_cost)} />
-              </>
-            )}
-          </div>
-          {r.notes && (
-            <div className="rounded-lg border p-3 text-sm">
-              <div className="text-xs text-muted-foreground mb-1">Notes</div>
-              {r.notes}
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    );
-  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1102,4 +1040,100 @@ export function paddocksToOptions(rows: any[]): PaddockOption[] {
       })(),
     };
   });
+}
+
+/**
+ * Read-only view for records whose calculation_mode this Portal build does
+ * not implement (nutrientTarget, fertigation, or anything newer). Renders the
+ * stored values verbatim — no calculator hooks, no computeCalculation, no
+ * save path. Mounted INSTEAD OF the form so an unsupported record never
+ * enters the calculation pipeline at all.
+ */
+function UnsupportedFertiliserRecordDialog({
+  open,
+  onOpenChange,
+  record,
+  role,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  record: FertiliserRecord;
+  role: string | null;
+}) {
+  const region = useRegionFormatters();
+  const showCosts = canSeeCosts(role);
+  const money = (v: number | null | undefined) => (v == null ? "—" : region.currency(v, 2));
+  const roQty = (v: number | null, unit: string | null) =>
+    v == null ? "—" : `${Number(v).toLocaleString()}${unit ? ` ${unit}` : ""}`;
+  const r = record;
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Fertiliser Record (read-only)</DialogTitle>
+          <DialogDescription>{UNSUPPORTED_MODE_NOTICE}</DialogDescription>
+        </DialogHeader>
+        <div
+          role="alert"
+          className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+        >
+          {UNSUPPORTED_MODE_NOTICE} The stored values are shown exactly as
+          recorded and cannot be edited, duplicated, deleted or recalculated
+          here.
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 rounded-lg border p-4">
+          <Stat label="Date" value={r.application_date || "—"} />
+          <Stat label="Product" value={r.product_name || "—"} />
+          <Stat label="Form" value={r.form === "liquid" ? "Liquid" : "Solid"} />
+          <Stat label="Calculation mode" value={calculationModeLabel(r.calculation_mode)} />
+          <Stat label="Status" value={STATUS_TEXT[r.record_status] ?? r.record_status} />
+          <Stat label="Blocks" value={(r.block_names ?? []).join(", ") || "—"} />
+          <Stat label="Application rate" value={roQty(r.application_rate, r.application_rate_unit)} />
+          <Stat label="Total product required" value={roQty(r.total_product_required, r.product_unit)} />
+          <Stat label="Total area" value={roQty(r.total_area_ha, "ha")} />
+          <Stat label="Total vines" value={r.total_vines == null ? "—" : Number(r.total_vines).toLocaleString()} />
+          <Stat label="Pack size" value={roQty(r.pack_size, r.product_unit)} />
+          <Stat label="Pack count" value={r.pack_count == null ? "—" : String(r.pack_count)} />
+          {showCosts && (
+            <>
+              <Stat label="Product cost" value={money(r.estimated_product_cost)} />
+              <Stat label="Labour cost" value={money(r.labour_cost)} />
+              <Stat label="Machinery cost" value={money(r.machinery_cost)} />
+              <Stat label="Total job cost" value={money(r.total_job_cost)} />
+            </>
+          )}
+        </div>
+        {r.notes && (
+          <div className="rounded-lg border p-3 text-sm">
+            <div className="text-xs text-muted-foreground mb-1">Notes</div>
+            {r.notes}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Default export: hook-free router between the read-only view and the
+ * calculator form. The form (and its computeCalculation pipeline) is never
+ * mounted for an unsupported record.
+ */
+export default function FertiliserCalculatorDialog(props: Props) {
+  if (props.existing != null && !isSupportedCalculationMode(props.existing.calculation_mode)) {
+    return (
+      <UnsupportedFertiliserRecordDialog
+        open={props.open}
+        onOpenChange={props.onOpenChange}
+        record={props.existing}
+        role={props.role}
+      />
+    );
+  }
+  return <FertiliserCalculatorDialogForm {...props} />;
 }

@@ -100,6 +100,36 @@ describe("records list with an unsupported-mode record", () => {
     expect((within(row).getByTitle(/View \(read-only/).closest("button")!).disabled).toBe(false);
   });
 
+  it("shows the stored total + unit verbatim, never the form-based conversion", async () => {
+    // form "liquid" would convert the total to litres; stored unit is kg.
+    h.records = [{ ...BASE, id: "nt-2", product_name: "MicroMix", calculation_mode: "nutrientTarget", total_product_required: 42, product_unit: "kg" }];
+    renderPage();
+    const row = (await screen.findByText("MicroMix")).closest("tr")!;
+    expect(within(row).getByText("42 kg")).toBeTruthy();
+    expect(within(row).queryByText(/42 L/)).toBeNull();
+  });
+
+  it("disables Delete with an explanation and never reaches the confirmation or mutation", async () => {
+    h.records = [{ ...BASE, id: "nt-3", product_name: "NitroPlus", calculation_mode: "fertigation" }];
+    renderPage();
+    const row = (await screen.findByText("NitroPlus")).closest("tr")!;
+    const del = within(row).getByTitle(/Deletion unavailable/).closest("button")!;
+    expect(del.disabled).toBe(true);
+    fireEvent.click(del);
+    // No confirmation dialog, no alertdialog role appears.
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("keeps Delete working for supported records", async () => {
+    h.records = [{ ...BASE, id: "ph-2", product_name: "Urea", form: "solid", calculation_mode: "perHectare" }];
+    renderPage();
+    const row = (await screen.findByText("Urea")).closest("tr")!;
+    const del = within(row).getByTitle("Delete").closest("button")!;
+    expect(del.disabled).toBe(false);
+    fireEvent.click(del);
+    expect(await screen.findByRole("alertdialog")).toBeTruthy();
+  });
+
   it("a perHectare record is unchanged: label, converted rate, enabled actions", async () => {
     h.records = [{ ...BASE, id: "ph-1", product_name: "Urea", form: "solid", calculation_mode: "perHectare", application_rate: 50, application_rate_unit: "kg/ha" }];
     renderPage();
@@ -132,6 +162,9 @@ describe("opening an unsupported record", () => {
     expect(within(dialog).queryByText("Mark Completed")).toBeNull();
     expect(within(dialog).queryByText("Save as Planned")).toBeNull();
     expect(h.saves).toHaveLength(0);
+    // The calculator form (and its allocation fetch / computeCalculation
+    // pipeline) was never mounted for this record.
+    expect(h.fetchAllocCalls).toHaveLength(0);
   });
 
   it("fertigation and unknown modes are equally read-only", async () => {

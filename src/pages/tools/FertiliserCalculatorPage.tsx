@@ -339,6 +339,13 @@ export default function FertiliserCalculatorPage() {
                       </td>
                       <td className="py-2 pr-3 text-right tabular-nums whitespace-nowrap">
                         {(() => {
+                          // Unsupported modes: stored total + unit verbatim,
+                          // never through the form-based regional conversion.
+                          if (!isSupportedCalculationMode(r.calculation_mode)) {
+                            return r.total_product_required == null
+                              ? "—"
+                              : `${Number(r.total_product_required).toLocaleString()} ${r.product_unit ?? ""}`.trim();
+                          }
                           const f = r.form === "liquid" ? "liquid" : "solid";
                           return `${Number(quantityToDisplay(Number(r.total_product_required), f, region).toFixed(3)).toLocaleString()} ${quantityLabel(f, region)}`;
                         })()}
@@ -383,8 +390,18 @@ export default function FertiliserCalculatorPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            title="Delete"
-                            onClick={() => setConfirmDelete(r)}
+                            title={
+                              isSupportedCalculationMode(r.calculation_mode)
+                                ? "Delete"
+                                : "Deletion unavailable — mode not supported by this Portal version"
+                            }
+                            disabled={!isSupportedCalculationMode(r.calculation_mode)}
+                            onClick={() => {
+                              // Guard: unsupported records never reach the
+                              // confirmation dialog or the delete mutation.
+                              if (!isSupportedCalculationMode(r.calculation_mode)) return;
+                              setConfirmDelete(r);
+                            }}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
