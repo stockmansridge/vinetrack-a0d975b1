@@ -1,4 +1,4 @@
-import { PILOT_VINEYARD, PILOT_VERSION, insidePolygon, type ExactManifest } from './satellite-ingestion-core.ts';
+import { PILOT_VINEYARD, PILOT_VERSION, insidePolygon, TerminalQualityError, type ExactManifest } from './satellite-ingestion-core.ts';
 import { productionItem, EARTH_SEARCH_URL } from './satellite-pilot-discovery.ts';
 import { canonicalRing, hashJson, sha256 } from './satellite-pilot-geometry.ts';
 import { Provider429, RequestBudget } from './satellite-bounded-cog.ts';
@@ -50,9 +50,13 @@ export async function runPilot(kind:'worker'|'discovery',deps:PipelineDependenci
       if(nextBody) throw new Error('Unbounded catalogue results');
       if(features.length>150) throw new Error('Unbounded catalogue results');
       const items=features.map(productionItem).filter((m:ExactManifest)=>Date.parse(m.acquired_at)>=since.getTime()&&Date.parse(m.acquired_at)<=now.getTime()).sort((a:ExactManifest,b:ExactManifest)=>b.acquired_at.localeCompare(a.acquired_at)||a.item_id.localeCompare(b.item_id));
+      // Acquisitions already proven cloud-obscured/insufficient for a paddock are never re-queued; try the next newest item instead.
+      const prior=await db.from('satellite_work_items').select('paddock_id,acquisition_id,status');
+      if(prior.error) throw prior.error;
+      const terminal=new Set((prior.data??[]).filter((w:any)=>w.status==='cloud_obscured'||w.status==='insufficient_coverage').map((w:any)=>`${w.paddock_id}:${w.acquisition_id}`));
       let queued=0;
       for(let i=0;i<paddocks.length;i++) {
-        const manifest=items.find((m:ExactManifest)=>m.footprint&&rings[i].every(v=>insidePolygon(v[0],v[1],[m.footprint as number[][]])));
+        const manifest=items.find((m:ExactManifest)=>m.footprint&&rings[i].every(v=>insidePolygon(v[0],v[1],[m.footprint as number[][]]))&&!terminal.has(`${paddocks[i].id}:${(m as any).item_id}`));
         if(!manifest) {
           const f=await db.from('satellite_freshness').upsert({vineyard_id:PILOT_VINEYARD,paddock_id:paddocks[i].id,provider:PILOT_PROVIDER,processing_version:PILOT_VERSION,last_provider_check_at:now.toISOString()},{onConflict:'vineyard_id,paddock_id,provider,processing_version'});if(f.error) throw f.error;
           continue;
