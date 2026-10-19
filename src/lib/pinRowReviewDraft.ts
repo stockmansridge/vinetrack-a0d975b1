@@ -260,10 +260,10 @@ export function csvCell(v: any): string {
 
 export function exportDraftCsv(decisions: ReviewDecision[]): string {
   const head = ["authority", "pin_id", "decision", "block_id", "vine_row", "driving_aisle", "side", "reason", "source",
-    "acknowledged_warnings", "reviewer", "reviewed_at", "snap_latitude", "snap_longitude", "snap_sync_version",
+    "acknowledged_warnings", "reviewer", "reviewer_user_id", "reviewed_at", "snap_latitude", "snap_longitude", "snap_sync_version",
     "snap_updated_at", "snap_geometry_fingerprint", "notice"];
   return [head.join(","), ...decisions.map((d) => [AUTHORITY, d.pin_id, d.decision, d.block_id, d.vine_row,
-    d.driving_aisle, d.side, d.reason, d.source, d.acknowledged_warnings.join("|"), d.reviewer, d.reviewed_at,
+    d.driving_aisle, d.side, d.reason, d.source, d.acknowledged_warnings.join("|"), d.reviewer, d.reviewer_user_id, d.reviewed_at,
     d.snapshot.latitude, d.snapshot.longitude, d.snapshot.sync_version, d.snapshot.updated_at,
     d.snapshot.geometry_fingerprint, DRAFT_NOTICE].map(csvCell).join(","))].join("\n");
 }

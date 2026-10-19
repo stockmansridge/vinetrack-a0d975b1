@@ -1,6 +1,6 @@
 // Stage 1 Existing Pin Row Recovery — System Admin, Stockman's Ridge only.
 // REVIEW ONLY: no writes, no queue, no confirmations. Notes stay in this tab.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useAuth } from "@/context/AuthContext";
@@ -19,11 +19,11 @@ import {
 import { AdminGate } from "./_shared";
 import { PinRowReviewDetail } from "@/components/admin/PinRowReviewDetail";
 import {
-  AUTHORITY, DECISION_LABEL, DRAFT_NOTICE, buildDecision, exportDraftCsv, exportDraftJson, importDraftJson,
-  writebackPreflight, type CurrentPin, type DecisionKind, type ReviewDecision,
+  AUTHORITY, DECISION_LABEL, DRAFT_NOTICE, PREFLIGHT_NOTICE, buildDecision, draftStorageKey, exportDraftCsv, exportDraftJson,
+  importDraftJson, parseStoredDrafts, reconcileDrafts, writebackPreflight,
+  type CurrentPin, type CurrentState, type DecisionKind, type ReviewDecision,
 } from "@/lib/pinRowReviewDraft";
 
-const DRAFT_KEY = "vinetrack.pinRowReviewDraft." + RECOVERY_VINEYARD_ID;
 type MissingInput = "any" | "gps" | "direction" | "side" | "block";
 function download(name: string, text: string, type: string) {
   const blob = new Blob([text], { type });
@@ -179,14 +179,44 @@ function PinRowRecoveryInner() {
   const [missingFilter, setMissingFilter] = useState<MissingInput>("any");
   const [decisionFilter, setDecisionFilter] = useState<DecisionKind | "unreviewed" | "all">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const userId = user?.id ?? null;
   const reviewer = user?.email ?? user?.id ?? "unknown reviewer";
-  // Local-only drafts (this browser). Never sent to the database.
-  const [decisions, setDecisions] = useState<Record<string, ReviewDecision>>(() => {
-    try { return JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "{}"); } catch { return {}; }
-  });
-  const persist = (d: Record<string, ReviewDecision>) => { setDecisions(d); try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch { /* ignore */ } };
+  const draftKey = draftStorageKey(userId);
+  // Local-only drafts, scoped to this signed-in account + vineyard. Raw entries are
+  // UNTRUSTED until reconciled against live data; never sent to the database.
+  const [rawDrafts, setRawDrafts] = useState<Record<string, unknown>>({});
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  useEffect(() => {
+    // Account changed: drop everything shown for the previous account before loading.
+    setSelectedId(null); setImportMsg(null); setNotes({});
+    if (!draftKey) { setRawDrafts({}); return; }
+    const entries = parseStoredDrafts((() => { try { return localStorage.getItem(draftKey); } catch { return null; } })());
+    const m: Record<string, unknown> = {};
+    entries.forEach((e: any) => { if (e && typeof e.pin_id === "string") m[e.pin_id] = e; });
+    setRawDrafts(m);
+  }, [draftKey]);
+  const persist = (d: Record<string, unknown>) => {
+    if (!draftKey) return;
+    setRawDrafts(d); try { localStorage.setItem(draftKey, JSON.stringify(d)); } catch { /* ignore */ }
+  };
 
+  const segMap = segments.data?.map ?? null;
+  const currentMap = useMemo(() => {
+    const m = new Map<string, CurrentPin>();
+    for (const r of rows) m.set(r.id, { pin: r.pin, segs: segMap ? segMap.get(r.id) ?? [] : null, row: r });
+    return m;
+  }, [rows, segMap]);
+  const refreshing = base.isFetching || evidence.isFetching || segments.isFetching;
+  const evidenceReady = !!base.data && !refreshing && !!evidence.data?.map && !!segments.data?.map;
+  const draftState: CurrentState = useMemo(() => ({ current: currentMap, paddocks: base.data?.paddocks ?? [], userId, evidenceReady }),
+    [currentMap, base.data, userId, evidenceReady]);
+  const reconciled = useMemo(() => reconcileDrafts(Object.values(rawDrafts), draftState), [rawDrafts, draftState]);
+  const decisions = useMemo(() => {
+    const m: Record<string, ReviewDecision> = {};
+    reconciled.accepted.forEach((d) => { m[d.pin_id] = d; });
+    return m;
+  }, [reconciled]);
+  const refreshCurrent = () => { void base.refetch(); void evidence.refetch(); void segments.refetch(); };
   const shown = (filter === "priority"
     ? rows.filter(isPriorityPin)
     : [...rows.filter((r) => filter === "all" || r.status === filter)].sort((a, b) => Number(isPriorityPin(b)) - Number(isPriorityPin(a))))
@@ -197,13 +227,7 @@ function PinRowRecoveryInner() {
       return missingFilter === "block" ? !r.savedBlockName : t[missingFilter] !== "qualified";
     })
     .filter((r) => decisionFilter === "all" || (decisionFilter === "unreviewed" ? !decisions[r.id] : decisions[r.id]?.decision === decisionFilter));
-  const segMap = segments.data?.map ?? null;
-  const currentMap = useMemo(() => {
-    const m = new Map<string, CurrentPin>();
-    for (const r of rows) m.set(r.id, { pin: r.pin, segs: segMap ? segMap.get(r.id) ?? [] : null, row: r });
-    return m;
-  }, [rows, segMap]);
-  const preflight = useMemo(() => base.data ? writebackPreflight(Object.values(decisions), currentMap, base.data.paddocks) : null, [decisions, currentMap, base.data]);
+  const preflight = useMemo(() => base.data ? writebackPreflight(Object.values(rawDrafts), draftState) : null, [rawDrafts, draftState, base.data]);
   const reviewSummary = useMemo(() => {
     const c = { unreviewed: 0, approve_for_writeback: 0, hold: 0, needs_field_verification: 0, preserve_existing: 0 } as Record<"unreviewed" | DecisionKind, number>;
     rows.forEach((r) => { c[decisions[r.id]?.decision ?? "unreviewed"]++; });
@@ -214,11 +238,13 @@ function PinRowRecoveryInner() {
   const selected = selIdx >= 0 ? shown[selIdx] : selectedId ? rows.find((r) => r.id === selectedId) ?? null : null;
   const go = (d: number) => { if (!shown.length) return; const i = ((selIdx < 0 ? 0 : selIdx + d) + shown.length) % shown.length; setSelectedId(shown[i].id); };
   const onImport = async (file: File) => {
-    const res = importDraftJson(await file.text(), [...currentMap.values()], base.data?.paddocks ?? []);
-    const next = { ...decisions };
+    if (!draftKey) { setImportMsg("Sign in to import drafts."); return; }
+    if (!evidenceReady) { setImportMsg("Import refused: pins, capture evidence and row segments must be fully loaded first."); return; }
+    const res = importDraftJson(await file.text(), draftState);
+    const next = { ...rawDrafts };
     res.accepted.forEach((d) => { next[d.pin_id] = d; });
     persist(next);
-    setImportMsg(`Imported ${res.accepted.length}. Refused as stale (pin or map changed — re-review): ${res.stale.length}${res.stale.length ? ` [${res.stale.map((s) => `${s.pin_id.slice(0, 8)}: ${s.fields.join("/")}`).join("; ")}]` : ""}. Rejected: ${res.rejected.length}${res.rejected.length ? ` [${res.rejected.map((x) => `${x.pin_id?.slice(0, 8) ?? "file"}: ${x.reason}`).join("; ")}]` : ""}.`);
+    setImportMsg(`Imported ${res.accepted.length} (re-validated; still unsigned drafts). Refused: ${res.issues.length}${res.issues.length ? ` [${res.issues.map((x) => `${x.pin_id?.slice(0, 8) ?? "file"}: ${x.kind} — ${x.reason}`).join("; ")}]` : ""}.`);
   };
   const pageRows = shown.slice(page * PAGE, page * PAGE + PAGE);
   const pages = Math.max(1, Math.ceil(shown.length / PAGE));
@@ -357,13 +383,24 @@ function PinRowRecoveryInner() {
               </label>
             </div>
             {importMsg && <div className="text-xs">{importMsg}</div>}
-            <div className="text-xs text-muted-foreground">{DRAFT_NOTICE} Drafts are saved in this browser only.</div>
+            {!userId && <div className="text-xs text-destructive">Not signed in — drafts are disabled.</div>}
+            {userId && !evidenceReady && <div className="text-xs">Saved drafts are hidden until pins, capture evidence and row segments have loaded and been re-validated.</div>}
+            {reconciled.issues.length > 0 && evidenceReady && (
+              <div className="text-xs space-y-0.5">
+                <div className="font-medium text-destructive">Drafts not shown (conflict — never eligible): {reconciled.issues.length}</div>
+                {reconciled.issues.map((x, i) => <div key={i} className="font-mono text-destructive">{x.pin_id?.slice(0, 8) ?? "—"}: {x.kind} — {x.reason}</div>)}
+              </div>
+            )}
+            <div className="text-xs text-muted-foreground">{DRAFT_NOTICE} Drafts are saved in this browser only, for this signed-in account only.</div>
           </Card>
 
           {preflight && (
             <Card className="p-4 text-sm space-y-1">
-              <div className="font-medium">Writeback preflight (read-only — no write path exists yet)</div>
-              <div>Eligible after explicit owner approval: <b>{preflight.eligible}</b> · Conflict / re-review: <b>{preflight.conflict}</b> · Not an approval (hold/verify/preserve): {preflight.notApproval}</div>
+              <div className="font-medium flex items-center gap-2 flex-wrap">Writeback preflight (read-only — no write path exists yet)
+                <Button size="sm" variant="outline" onClick={refreshCurrent} disabled={refreshing}>{refreshing ? "Refreshing…" : "Refresh current state"}</Button></div>
+              <div className="rounded border border-destructive/50 bg-destructive/5 p-2 text-xs"><b>NOT position-verified · NOT approved.</b> {PREFLIGHT_NOTICE}</div>
+              {!preflight.ready && <div className="text-xs text-destructive">Evidence/segments loading or unavailable — nothing can be eligible.</div>}
+              <div>Structurally eligible (pending separate owner approval): <b>{preflight.eligible}</b> · Conflict / re-review: <b>{preflight.conflict}</b> · Not an approval (hold/verify/preserve): {preflight.notApproval}</div>
               {preflight.items.filter((i) => i.outcome === "conflict").map((i) => (
                 <div key={i.pin_id} className="text-xs text-destructive font-mono">{i.pin_id.slice(0, 8)}: {i.checks.join("; ")}</div>
               ))}
@@ -379,8 +416,9 @@ function PinRowRecoveryInner() {
               existing={decisions[selected.id] ?? null} reviewer={reviewer}
               position={selIdx >= 0 ? `${selIdx + 1} of ${shown.length} in current filter` : "outside current filter"}
               onPrev={() => go(-1)} onNext={() => go(1)}
-              onClear={() => { const n = { ...decisions }; delete n[selected.id]; persist(n); }}
-              onSave={(input) => persist({ ...decisions, [selected.id]: buildDecision(selected, input, reviewer, base.data!.paddocks, segMap ? segMap.get(selected.id) ?? [] : null) })}
+              onClear={() => { const n = { ...rawDrafts }; delete n[selected.id]; persist(n); }}
+              readOnly={!userId || !evidenceReady}
+              onSave={(input) => { if (!userId || !evidenceReady) return; persist({ ...rawDrafts, [selected.id]: buildDecision(selected, input, reviewer, userId, base.data!.paddocks, segMap ? segMap.get(selected.id) ?? [] : null) }); }}
             />
           )}
 
