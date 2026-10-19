@@ -92,3 +92,24 @@ Deno.test('wrong product, multi-tile, absent scale, bad raster and cancellation 
   await assert.rejects(()=>renderPilot(f.manifest,f.ring,'NDVI',new RequestBudget(AbortSignal.timeout(1000),24,1048576,async()=>new Response('invalid',{status:200}))));
   assert.equal(retryAfterMs('1500'),1500);assert.equal(retryAfterMs('invalid'),null);
 });
+Deno.test('crash mid-upload reclaims lease with new token and immutable object retry succeeds',async()=>{
+  const db=await setup();try{
+    await enable(db);const storage=new Map<string,Uint8Array>(),deps=dependencies(db,storage);await runPilot('discovery',deps as any,AbortSignal.timeout(20000));
+    const crash=dependencies(db,storage,{corrupt:true});await runPilot('worker',crash as any,AbortSignal.timeout(20000));
+    assert.equal(storage.size,1);assert.equal((await db.query('select * from satellite_raster_assets')).rows.length,0);
+    await db.exec("update satellite_work_items set due_at=now(),status='leased',lease_token='11111111-1111-4111-8111-111111111111',lease_expires_at=now()-interval '1 second' where status='retry'");
+    assert.equal((await runPilot('worker',deps as any,AbortSignal.timeout(20000))).reason,'published');
+    assert.equal((await db.query('select * from satellite_raster_assets')).rows.length,2);
+  }finally{await db.close();}
+});
+Deno.test('same-day alternative acquisition cannot replace authorised product; late publication token rejected',async()=>{
+  const db=await setup();try{
+    await enable(db);await runPilot('discovery',dependencies(db) as any,AbortSignal.timeout(20000));
+    const first=(await db.query<any>('select * from satellite_acquisitions limit 1')).rows[0];
+    const other=(await db.query<any>("insert into satellite_acquisitions(provider,collection,provider_scene_id,acquired_at,source_manifest,source_manifest_hash) values($1,$2,'different-product',$3,$4,$5) returning id",[PILOT_PROVIDER,first.collection,first.acquired_at,'{}','a'.repeat(64)])).rows[0];
+    assert.equal((await db.query<any>('select satellite_enqueue_pilot($1,$2,$3,$4) n',[other.id,'00000000-0000-4000-8000-000000000001','[]','b'.repeat(64)])).rows[0].n,0);
+    const w=(await db.query<any>('select * from satellite_claim_work($1,$2)',[PILOT_VINEYARD,PILOT_PROVIDER])).rows[0];
+    await assert.rejects(()=>db.query('select satellite_publish_pilot($1,$2,$3)',[w.id,'22222222-2222-4222-8222-222222222222','{}']));
+    assert.equal((await db.query('select * from satellite_scenes')).rows.length,0);
+  }finally{await db.close();}
+});
