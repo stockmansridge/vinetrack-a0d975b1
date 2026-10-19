@@ -1,4 +1,4 @@
-import { BaseClient, BaseResponse, fromCustomClient } from 'npm:geotiff@3.0.5';
+import { BaseClient, BaseResponse, fromCustomClient } from './vendor/geotiff.js';
 import { retryAfterMs } from './satellite-ingestion-core.ts';
 export class Provider429 extends Error { constructor(public retryMs: number) { super('Provider backoff required'); } }
 class BytesResponse extends BaseResponse {

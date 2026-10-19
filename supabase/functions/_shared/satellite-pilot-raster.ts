@@ -1,4 +1,4 @@
-import { writeArrayBuffer, fromArrayBuffer } from 'npm:geotiff@3.0.5';
+import { writeArrayBuffer, fromArrayBuffer } from './vendor/geotiff.js';
 import { encode, decode } from 'npm:fast-png@6.4.0';
 import { processNativePixels, validateNativeGrid, type ExactManifest, type NativeGrid, type PilotLayer } from './satellite-ingestion-core.ts';
 import { requireAlignedScl, sampleSclNearest } from './satellite-exact-adapter.ts';

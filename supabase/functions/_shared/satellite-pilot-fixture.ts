@@ -1,5 +1,5 @@
 // Synthetic in-memory fixture ONLY. No catalogue, storage or provider requests.
-import { writeArrayBuffer } from 'npm:geotiff@3.0.5';
+import { writeArrayBuffer } from './vendor/geotiff.js';
 import { renderPilot } from './satellite-pilot-raster.ts';
 import { RequestBudget } from './satellite-bounded-cog.ts';
 import { projection } from './satellite-pilot-geometry.ts';
