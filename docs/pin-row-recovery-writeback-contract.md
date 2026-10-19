@@ -1,50 +1,32 @@
-# Pin Row Recovery — future writeback contract (DESIGN ONLY, NOT APPLIED)
+# Pin Row Recovery — Stage 1 writeback (Stockman's Ridge only)
 
-Status: proposal for review by the owner and Rork (shared contract owner). No migration,
-RPC or grant exists. The Portal has no write button and never calls `pins.update` or
-`confirm_saved_pin_location_v2` for this workflow (that RPC needs rich capture evidence
-and strict-resolver approval, and rejects existing side/placement; it is not a backfill path).
+Status: **prepared, NOT applied.** SQL: `sql/267_pin_row_backfill_stockmans_ridge.sql` for the shared
+VineTrack database. Local Postgres harness: `sql/tests/267_*`. Portal workflow: `/admin/pin-row-recovery` →
+"Owner-approved row backfill".
 
-## Proposed RPC
-`public.apply_reviewed_pin_row_assignments(p_batch_id uuid, p_items jsonb) returns jsonb`
+## Server contract (sql/267)
+- `pin_row_backfill_dry_run(vineyard, items)` — per-item result, no writes.
+- `pin_row_backfill_create_approval(vineyard, items)` — refuses if any item blocked; freezes items plus server
+  geometry identity; stores server sha256 hash; returns `APPLY <n> PIN ROWS` phrase.
+- `pin_row_backfill_apply(approval_id, items_hash, phrase)` — re-runs every check, all-or-nothing; idempotent.
+- Auth: hard-coded vineyard allow-list AND `is_system_admin()` AND owner/manager membership. anon, non-members,
+  workers and other vineyards are denied. Fixed `search_path`; no table write grants to `authenticated`.
+- Item checks: CAS on sync_version, updated_at and raw lat/lon; no row/aisle/segments/row-scope (the 4
+  preserved pins are blocked); block = saved block (or saved block is null); raw GPS inside current polygon;
+  row exists; side never contradicts `pin_side` and is supplied only by `manual_field_check`; aisle adjacent
+  and verified by projection; geometry identity unchanged since approval.
+- Projection: raw GPS projected orthogonally onto the chosen row segment; must be inside 5–95% of the
+  segment, chosen row among the two nearest, neighbour row on the pin's side, distance ≤ 0.75 × spacing.
+  Non-field sources must pass projection.
+- Effects: `pin_row_number`, `paddock_id` (only if null), `driving_row_number` (if verified), `pin_side`
+  (only if null), `sync_version + 1`, `updated_at = now()`. `snapped_latitude/longitude` and
+  `snapped_to_row = true` **only** when projection verified and no snap existed (`assigned_snapped`); otherwise
+  `assigned_unsnapped`. Raw lat/lon, existing snaps, capture evidence and trips are never changed.
+- Immutable `pin_row_backfill_audit` (before/after/projection per pin).
 
-- `SECURITY DEFINER`, `search_path = public`, `EXECUTE` granted to `authenticated` only.
-- Authorisation inside the function: caller is a System Admin (`is_system_admin()`) **and**
-  owner/manager of the pin's vineyard (`vineyard_members` via `auth.uid()`). Initially
-  restricted to vineyard `fe952afe-437f-4be7-8cbf-fdd8e630411c` by an explicit allow-list.
-- One transaction for the batch; per-item results returned; any item failing CAS is skipped
-  (or the whole batch rolled back — owner to choose).
-
-### Item shape
-```
-{ pin_id, expected_sync_version, expected_updated_at, expected_latitude, expected_longitude,
-  expected_geometry_identity, paddock_id, pin_row_number, driving_row_number?, pin_side?,
-  decision_source: 'measured'|'reviewed_track'|'manual_field_check', reason, reviewer_note,
-  draft_reviewer, draft_reviewed_at, owner_approval_ref }
-```
-
-### Guards (all must pass, else item = conflict)
-1. Pin exists, `deleted_at is null`, vineyard on allow-list.
-2. CAS: `sync_version = expected_sync_version` and `updated_at = expected_updated_at`;
-   latitude/longitude unchanged.
-3. `row_number`, `pin_row_number`, `driving_row_number` all null; no `pin_row_segments`;
-   `location_scope <> 'row'`.
-4. `paddock_id` belongs to the same vineyard; `pin_row_number` exists in that block's rows;
-   if `driving_row_number` supplied, `|pin_row_number − driving_row_number| = 0.5`.
-5. Block geometry identity (server `pin_geometry_identity(polygon_points, rows)`) equals
-   `expected_geometry_identity`, otherwise conflict → re-review. (The Portal's
-   `portal-fnv1a` fingerprint is a client check only and must be replaced by the server identity.)
-
-### Effects
-- Set `paddock_id` (only if null), `pin_row_number`, optional `driving_row_number`/`pin_side`.
-- Never modify `latitude`, `longitude`, `snapped_*`, capture evidence or trips.
-- Bump `sync_version` and `updated_at` so mobile clients pick up the change via normal sync CAS.
-- Insert one immutable audit row per item into a new `pin_row_assignment_audit` table:
-  before/after JSON, batch id, idempotency key (`batch_id`+`pin_id`), actor, owner approval
-  reference, decision source, reason, timestamp. Re-running the same batch is a no-op.
-
-## Rollout gates
-1. Owner signs off the exported draft (pin list + rows).
-2. Rork reviews the contract; migration written and reviewed separately.
-3. Dry-run mode (`p_dry_run`) returns would-apply/conflict counts matching the Portal preflight.
-4. Only then a guarded Portal button, System Admin only, Stockman's Ridge only.
+## Rork must confirm before apply
+iOS and Android must read `pin_row_number`, `driving_row_number`, `pin_side`, `snapped_latitude`,
+`snapped_longitude` and `snapped_to_row`, accept server `sync_version` bumps, and resolve offline edits
+against the bumped version safely (no overwrite of the server row with a stale local copy). Confirm whether a
+pins trigger already bumps `sync_version` (sql/267 sets it explicitly) and whether `pin_placements` derives
+row/side from these columns.
