@@ -1,0 +1,88 @@
+import { PGlite } from 'npm:@electric-sql/pglite@0.5.10';
+import assert from 'node:assert/strict';
+import { runPilot, PILOT_PROVIDER } from './satellite-pilot-pipeline.ts';
+import { renderPilot } from './satellite-pilot-raster.ts';
+import { pilotFixture, runRasterFixture } from './satellite-pilot-fixture.ts';
+import { RequestBudget, Provider429 } from './satellite-bounded-cog.ts';
+import { PILOT_VINEYARD, PILOT_VERSION, retryAfterMs } from './satellite-ingestion-core.ts';
+import { productionItem } from './satellite-pilot-discovery.ts';
+const root=new URL('../../../',import.meta.url);
+const file=(p:string)=>Deno.readTextFile(new URL(p,root));
+async function setup() {
+  const db=new PGlite();
+  await db.exec(`CREATE ROLE anon;CREATE ROLE authenticated;CREATE ROLE service_role;
+    CREATE FUNCTION set_updated_at() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.updated_at=now();RETURN NEW;END $$;`);
+  const base=await file('supabase/migrations/20260710034517_d69e6c4f-cbde-487a-8e34-0a12fa9e0ee2.sql');
+  // Exact legacy scene/asset/summary DDL; no managed storage schema in local fixture.
+  await db.exec(base.slice(0,base.indexOf('-- ---- satellite_processing_jobs')));
+  await db.exec(await file('supabase/migrations/20260710225135_b380203f-9422-4a2c-9d6c-30043dbab7e7.sql'));
+  const old=await file('supabase/migrations/20260713020438_89d7f076-416f-4140-ad1d-f5332cc08a3c.sql');
+  await db.exec(old.slice(0,old.indexOf('-- ============ satellite_refresh_jobs')));
+  await db.exec(old.slice(old.indexOf('CREATE OR REPLACE FUNCTION public.refresh_paddock_manifest'),old.indexOf('CREATE OR REPLACE FUNCTION public.satellite_scenes_manifest_sync')));
+  for(const p of ['0000_satellite_ingestion_disabled_foundation.sql','0001_satellite_verification_fail_closed.sql','0002_satellite_service_privilege_hardening.sql','0003_satellite_pilot_day_selection.sql','0004_satellite_pilot_fenced_publish.sql','0005_satellite_v7_manifest_compatibility.sql']) await db.exec(await file('drizzle/migrations/'+p));
+  await db.exec(`CREATE UNIQUE INDEX satellite_scenes_unique_capture_idx ON satellite_scenes(vineyard_id,paddock_id,provider,((acquired_at AT TIME ZONE 'UTC')::date));`);
+  return db;
+}
+// Typed API test double backed by real PostgreSQL queue/RPC transactions, not a fake queue.
+function client(db:PGlite,storage:Map<string,Uint8Array>,corrupt=false) {
+  class Query {
+    filters:{key:string;value:unknown}[]=[];operation='select';value:any;columns='*';singleResult=false;
+    constructor(public table:string){}
+    select(c='*'){this.columns=c;return this;}
+    eq(key:string,value:unknown){this.filters.push({key,value});return this;}
+    insert(v:any){this.operation='insert';this.value=v;return this;}
+    upsert(v:any){this.operation='upsert';this.value=v;return this;}
+    single(){this.singleResult=true;return this;}
+    maybeSingle(){this.singleResult=true;return this;}
+    then(resolve:any,reject:any){return this.execute().then(resolve,reject);}
+    async execute(){try{
+      const values:unknown[]=[];let sql='';
+      if(this.operation==='select') {sql=`SELECT ${this.columns} FROM ${this.table}`;if(this.filters.length)sql+=' WHERE '+this.filters.map(f=>{values.push(f.value);return `${f.key}=$${values.length}`;}).join(' AND ');}
+      else {const keys=Object.keys(this.value);keys.forEach(k=>values.push(typeof this.value[k]==='object'?JSON.stringify(this.value[k]):this.value[k]));sql=`INSERT INTO ${this.table}(${keys.join(',')}) VALUES(${keys.map((_,i)=>'$'+(i+1)).join(',')})`;if(this.operation==='upsert')sql+=' ON CONFLICT(vineyard_id,paddock_id,provider,processing_version) DO UPDATE SET last_provider_check_at=EXCLUDED.last_provider_check_at,newest_discovered_at=EXCLUDED.newest_discovered_at';sql+=' RETURNING '+this.columns;}
+      const r=await db.query(sql,values);return {data:this.singleResult?r.rows[0]:r.rows,error:null};
+    }catch(error){return {data:null,error};}}
+  }
+  return {
+    from:(table:string)=>new Query(table),
+    rpc:async(name:string,args:Record<string,unknown>)=>{try{
+      const keys=Object.keys(args),values=keys.map(k=>typeof args[k]==='object'?JSON.stringify(args[k]):args[k]);
+      const set=name==='satellite_claim_work';const r=await db.query(`SELECT ${set?'* FROM ':''}${name}(${keys.map((k,i)=>`${k}=>$${i+1}`).join(',')})${set?'':' result'}`,values);
+      return {data:set?r.rows:r.rows[0]?.result,error:null};
+    }catch(error){return {data:null,error};}},
+    storage:{from:()=>({upload:async(path:string,bytes:Uint8Array)=>{if(storage.has(path))return {error:{statusCode:'409'}};storage.set(path,bytes.slice());return {error:null};},download:async(path:string)=>({data:new Blob([corrupt?new Uint8Array([1]):storage.get(path)??new Uint8Array()]),error:null})})},
+  };
+}
+async function enable(db:PGlite){await db.exec(`INSERT INTO satellite_ingestion_control(scope,scope_key,enabled) VALUES('global','all',true),('vineyard','${PILOT_VINEYARD}',true),('provider','${PILOT_PROVIDER}',true),('pixels','all',true),('publisher','all',true);INSERT INTO satellite_provider_throttle(provider,min_interval_ms) VALUES('${PILOT_PROVIDER}',1);INSERT INTO satellite_provider_budget(provider,period_kind,period_start,request_limit,processing_limit,cpu_ms_limit,transfer_limit,storage_limit,hard_spend_limit,approved_at) VALUES('${PILOT_PROVIDER}','day',current_date,1000,100,10000000,1000000000,100000000,10,now()),('${PILOT_PROVIDER}','month',date_trunc('month',now())::date,1000,100,10000000,1000000000,100000000,10,now());`);}
+function stac(){const f=pilotFixture();return {type:'Feature',id:'S2B_55H_20261019',collection:'sentinel-2-l2a',properties:{datetime:new Date().toISOString(),'s2:processing_baseline':'05.00','s2:product_uri':'S2B_MSIL2A_SYNTHETIC','eo:cloud_cover':0,'proj:epsg':32755},geometry:{type:'Polygon',coordinates:[[[146,-35],[149,-35],[149,-34],[146,-34],[146,-35]]]},assets:Object.fromEntries(Object.entries(f.manifest.bands).map(([k,b])=>[k,{href:b.href,'raster:bands':[{scale:b.scale,offset:b.offset,spatial_resolution:b.resolution}],'proj:epsg':32755,'proj:shape':k==='scl'?[2,2]:[4,4],'proj:transform':k==='scl'?f.manifest.scl_grid?.affine:f.manifest.native_grid?.affine}]))};}
+function dependencies(db:PGlite,storage=new Map<string,Uint8Array>(),options:{corrupt?:boolean;stale?:boolean;status?:number}={}) {
+  const f=pilotFixture();const ids=Array.from({length:8},(_,i)=>`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`);
+  const paddocks=ids.map(id=>({id,vineyard_id:PILOT_VINEYARD,polygon_points:f.ring.map(v=>({longitude:v[0],latitude:v[1]}))}));
+  return {db:client(db,storage,options.corrupt),canonical:async(id?:string)=>id?(options.stale?[{...paddocks[0],polygon_points:[]}]:paddocks.filter(p=>p.id===id)):paddocks,fetch:async()=>new Response(options.status===429?'':JSON.stringify({features:[stac()],links:[]}),{status:options.status??200,headers:{'Retry-After':'2'}}),render:(m: any,r:any,l:any,b:RequestBudget)=>renderPilot(m,r,l,new RequestBudget(b.signal,24,1048576,f.transport))};
+}
+Deno.test('native Deno parser PNG and float GeoTIFF synthetic 10m fixture',async()=>{assert.equal((await runRasterFixture()).mean,.5);});
+Deno.test('discovery -> actual atomic queue -> native NDVI -> immutable storage -> fenced v7 manifest; v6 preserved',async()=>{
+  const db=await setup();try{
+    await enable(db);const deps=dependencies(db);
+    await db.exec(`INSERT INTO satellite_scenes(id,vineyard_id,paddock_id,provider,collection,provider_scene_id,acquired_at,quality_status,processing_status) VALUES('11111111-1111-4111-8111-111111111111','${PILOT_VINEYARD}','00000000-0000-4000-8000-000000000001','legacy','s2','old','2026-08-01','partial','complete');INSERT INTO satellite_raster_assets(satellite_scene_id,index_type,asset_type,processing_version,storage_path,mime_type) VALUES('11111111-1111-4111-8111-111111111111','NDVI','DISPLAY_RASTER','sentinel2-v6-native-10m','old.png','image/png');`);
+    const discovered=await runPilot('discovery',deps as any,AbortSignal.timeout(20000));assert.equal(discovered.reason,'discovered');assert.equal((discovered as any).queued,16);
+    assert.equal((await runPilot('discovery',deps as any,AbortSignal.timeout(20000)) as any).queued,0);
+    // Pin mock catalogue datetime across retries by querying existing acquisition; no second item versions in fixture.
+    const published=await runPilot('worker',deps as any,AbortSignal.timeout(20000));assert.equal(published.reason,'published');
+    const stats=await db.query<any>('select mean_value,valid_pixel_count from satellite_index_summaries');assert.equal(Number(stats.rows[0].mean_value),.5);assert.equal(stats.rows[0].valid_pixel_count,16);
+    const manifest=await db.query<any>('select * from satellite_paddock_manifest where latest_processing_version=$1',[PILOT_VERSION]);assert.equal(manifest.rows.length,1);assert.equal(manifest.rows[0].package_status,'display_available');assert.equal(manifest.rows[0].missing_summary_count,0);
+    assert.equal((await db.query('select * from satellite_raster_assets where processing_version=$1',['sentinel2-v6-native-10m'])).rows.length,1);
+    assert.equal((await db.query('select * from satellite_raster_assets where native_resolution_m=10 and verified_at is not null')).rows.length,2);
+  }finally{await db.close();}
+});
+Deno.test('quota ZERO and switches OFF cause zero HTTP and no queue; service grants reject browsers',async()=>{
+  const db=await setup();try{const deps=dependencies(db);deps.fetch=async()=>{throw new Error('Provider must not be called');};assert.equal((await runPilot('discovery',deps as any,AbortSignal.timeout(10000))).reason,'disabled');await enable(db);await db.exec('update satellite_provider_budget set hard_spend_limit=0');assert.equal((await runPilot('discovery',deps as any,AbortSignal.timeout(10000))).reason,'budget_or_backoff');for(const role of ['anon','authenticated']){for(const table of ['satellite_acquisitions','satellite_work_items','satellite_pilot_day_selection'])assert.equal((await db.query<any>('select has_table_privilege($1,$2,$3) allowed',[role,table,'SELECT,INSERT,UPDATE,DELETE'])).rows[0].allowed,false);assert.equal((await db.query<any>('select has_function_privilege($1,$2,$3) allowed',[role,'satellite_claim_work(uuid,text)','EXECUTE'])).rows[0].allowed,false);}}finally{await db.close();}
+});
+Deno.test('partial storage never publishes, stale boundary terminates before pixels, 429 persists global backoff',async()=>{
+  const db=await setup();try{await enable(db);const deps=dependencies(db);await runPilot('discovery',deps as any,AbortSignal.timeout(20000));const bad=await runPilot('worker',dependencies(db,new Map(),{corrupt:true}) as any,AbortSignal.timeout(20000));assert.equal(bad.reason,'Storage content checksum mismatch');assert.equal((await db.query('select * from satellite_raster_assets')).rows.length,0);const stale=await runPilot('worker',dependencies(db,new Map(),{stale:true}) as any,AbortSignal.timeout(20000));assert.equal(stale.provider_calls,0);assert.equal((stale as any).failed,true);const limited=await runPilot('discovery',dependencies(db,new Map(),{status:429}) as any,AbortSignal.timeout(20000));assert.equal(limited.reason,'Provider backoff required');assert.equal(Number((await db.query<any>('select rate_limited_count from satellite_provider_throttle')).rows[0].rate_limited_count),1);}finally{await db.close();}
+});
+Deno.test('wrong product, multi-tile, absent scale, bad raster and cancellation fail closed',async()=>{
+  for(const mutate of [(i:any)=>i.properties['s2:product_uri']='wrong',(i:any)=>i.geometry.type='MultiPolygon',(i:any)=>delete i.assets.nir['raster:bands'][0].scale,(i:any)=>i.assets.blue.href='https://evil.invalid/b.tif']){const i=stac();mutate(i);assert.throws(()=>productionItem(i));}
+  const f=pilotFixture();await assert.rejects(()=>renderPilot(f.manifest,f.ring,'NDVI',new RequestBudget(AbortSignal.abort(),24,1048576,f.transport)));
+  await assert.rejects(()=>renderPilot(f.manifest,f.ring,'NDVI',new RequestBudget(AbortSignal.timeout(1000),24,1048576,async()=>new Response('invalid',{status:200}))));
+  assert.equal(retryAfterMs('1500'),1500);assert.equal(retryAfterMs('invalid'),null);
+});

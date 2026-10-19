@@ -3,6 +3,7 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { PILOT_VINEYARD } from './satellite-ingestion-core.ts';
 import { runPilot } from './satellite-pilot-pipeline.ts';
 import { renderPilot } from './satellite-pilot-raster.ts';
+import { runRasterFixture } from './satellite-pilot-fixture.ts';
 export { corsHeaders };
 export function cloudClient() {
   const url = Deno.env.get('SUPABASE_URL'), key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -25,9 +26,12 @@ export async function handleMachine(req: Request, kind: 'worker' | 'discovery') 
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return response({ error: 'method_not_allowed' }, 405);
   if (!authenticateMachine(req)) return response({ error: 'machine_auth_required' }, 401);
-  let body: { correlation_id?: unknown; vineyard_id?: unknown };
+  let body: { correlation_id?: unknown; vineyard_id?: unknown; synthetic_self_test?: unknown };
   try { body = await req.json(); } catch { return response({ error: 'invalid_json' }, 400); }
   if (body.vineyard_id != null && body.vineyard_id !== PILOT_VINEYARD) return response({ error: 'pilot_scope_only' }, 403);
+  if(body.synthetic_self_test===true) {
+    try { return response(await runRasterFixture()); } catch { return response({error:'synthetic_raster_fixture_failed',provider_calls:0},503); }
+  }
   const correlation = body.correlation_id ?? crypto.randomUUID();
   if (typeof correlation !== 'string' || !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(correlation)) return response({ error: 'invalid_correlation_id' }, 400);
   try {
