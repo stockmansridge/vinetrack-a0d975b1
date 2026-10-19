@@ -153,7 +153,7 @@ export function buildDecision(
   r: RecoveryRow, input: DecisionInput, reviewer: string, paddocks: any[],
   segs: any[] | null, now: Date = new Date(),
 ): ReviewDecision {
-  const pad = paddocks.find((p) => p.id === (r.pin.paddock_id ?? input.block_id)) ?? null;
+  const pad = reviewPaddock(r.pin, input.block_id, paddocks);
   return {
     authority: AUTHORITY,
     pin_id: r.id,
@@ -164,6 +164,14 @@ export function buildDecision(
     snapshot: snapshotOf(r.pin, pad, segs, r.geometrySource),
   };
 }
+
+/** Block used for the geometry fingerprint: chosen block, else saved block. */
+export function reviewPaddock(pin: any, blockId: string | null, paddocks: any[]): any | null {
+  const id = blockId ?? pin?.paddock_id ?? null;
+  return id ? paddocks.find((p) => p.id === id) ?? null : null;
+}
+
+export interface CurrentPin { pin: any; segs: any[] | null; row: RecoveryRow | null }
 
 // ---------- staleness ----------
 const SNAP_FIELDS: (keyof PinSnapshot)[] = [
@@ -222,7 +230,8 @@ export interface ImportResult {
 /** Parse + reconcile an exported JSON draft against the current live data. */
 export function importDraftJson(
   text: string,
-  current: { pin: any; paddock: any | null; segs: any[] | null; row: RecoveryRow | null }[],
+  current: CurrentPin[],
+  paddocks: any[],
 ): ImportResult {
   const out: ImportResult = { accepted: [], stale: [], rejected: [] };
   let f: any;
@@ -241,7 +250,7 @@ export function importDraftJson(
     if (d.snapshot.pin_id !== id) { out.rejected.push({ pin_id: id, reason: "Snapshot pin id mismatch" }); continue; }
     const c = byId.get(id);
     if (!c || !c.row) { out.rejected.push({ pin_id: id, reason: "Pin not in current missing-row queue (deleted, moved or already has a row)" }); continue; }
-    const now = snapshotOf(c.pin, c.paddock, c.segs, c.row.geometrySource);
+    const now = snapshotOf(c.pin, reviewPaddock(c.pin, d.block_id ?? null, paddocks), c.segs, c.row.geometrySource);
     const diff = snapshotDiff(d.snapshot, now);
     if (diff.length) { out.stale.push({ pin_id: id, fields: diff }); continue; }
     out.accepted.push(d as ReviewDecision);
@@ -256,7 +265,7 @@ export interface PreflightReport { items: PreflightItem[]; eligible: number; con
 
 export function writebackPreflight(
   decisions: ReviewDecision[],
-  current: Map<string, { pin: any; paddock: any | null; segs: any[] | null; row: RecoveryRow | null }>,
+  current: Map<string, CurrentPin>,
   paddocks: any[],
 ): PreflightReport {
   const items: PreflightItem[] = [];
@@ -274,7 +283,7 @@ export function writebackPreflight(
       if (c.segs == null) fails.push("row segments unreadable — cannot rule out existing segments");
       else if (c.segs.length) fails.push("pin has saved row segments");
       if (p.location_scope === "row") fails.push("pin location_scope is row");
-      const diff = snapshotDiff(d.snapshot, snapshotOf(p, c.paddock, c.segs, d.snapshot.geometry_source));
+      const diff = snapshotDiff(d.snapshot, snapshotOf(p, reviewPaddock(p, d.block_id, paddocks), c.segs, d.snapshot.geometry_source));
       if (diff.length) fails.push(`changed since review (${diff.join(", ")}) — re-review`);
       if (c.row) {
         const v = validateDecision(c.row, d, paddocks);
