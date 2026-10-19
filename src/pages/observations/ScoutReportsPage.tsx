@@ -133,7 +133,9 @@ export default function ScoutReportsPage() {
   }, [assessmentsByVisit, paddockName]);
 
   const permissionDenied =
-    visitsQuery.error && isPermissionError(visitsQuery.error);
+    access === "denied" || (visitsQuery.error && isPermissionError(visitsQuery.error));
+  // The preflight itself failed — never show an empty list in this state.
+  const accessUnknown = !accessQuery.isLoading && !accessQuery.error && access === "unknown";
 
   return (
     <div className="space-y-4 p-4 sm:p-6">
