@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Download, Loader2, ShieldAlert } from "lucide-react";
@@ -61,7 +61,7 @@ function WeatherCard({ title, snapshot }: { title: string; snapshot: Record<stri
 function ObservationPhoto({ storagePath, caption }: { storagePath: string; caption: string }) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
-  useMemo(() => {
+  useEffect(() => {
     let live = true;
     signScoutPhotoUrl(storagePath).then((u) => {
       if (!live) return;
