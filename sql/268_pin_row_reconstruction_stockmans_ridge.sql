@@ -2,7 +2,7 @@
 -- PREPARED FOR RORK — NOT APPLIED. Apply on the shared VineTrack DB (tbafuqwruefgkbyxrxyb) only
 -- AFTER sql/267, and only after a specific batch is approved by the owner.
 --
--- Algorithm: 'pbf-recon-v1'. Read-only: the reconstruction functions are STABLE and never write.
+-- Algorithm: 'pbf-recon-v2'. Read-only: the reconstruction functions are STABLE and never write.
 -- Three components, each with explicit availability / quality / provenance:
 --   1. GPS          raw lat/lon (never altered), capture time, accuracy, raw vs saved snap, sample history.
 --   2. TRAVEL       from qualified timestamped GPS course observations and/or a short straight ordered
@@ -21,6 +21,9 @@ do $$ begin
   if to_regprocedure('public.vt_pbf_check_item(uuid,jsonb)') is null then raise exception '268: apply sql/267 first'; end if;
   if to_regclass('public.pin_capture_evidence') is null then raise exception '268: pin_capture_evidence missing'; end if;
   if to_regclass('public.trips') is null then raise exception '268: trips missing'; end if;
+  if to_regclass('public.pin_location_geometry_history') is null then raise exception '268: capture-time geometry history missing'; end if;
+  if to_regprocedure('public.pin_geometry_identity(jsonb,jsonb)') is null then raise exception '268: canonical geometry identity missing'; end if;
+  if not exists(select 1 from information_schema.columns where table_schema='public' and table_name='pins' and column_name='pin_row_number' and data_type='numeric') then raise exception '268: pin_row_number must match live numeric contract'; end if;
 end $$;
 
 -- ---------- helpers ----------
@@ -116,7 +119,7 @@ declare kx double precision := 111320 * cos(radians(p_lat)); ky double precision
   acc jsonb := '[]'::jsonb; lo jsonb; hi jsonb; axes double precision[] := '{}'; ax0 double precision; maxdev double precision := 0; a double precision;
 begin
   if p_rows is null or jsonb_typeof(p_rows) <> 'array' then return jsonb_build_object('ok',false,'reason','no rows'); end if;
-  for r in select * from jsonb_array_elements(p_rows) loop
+  for r in select * from jsonb_array_elements(public.vt_pbf_rows(p_rows)) loop
     select * into s from public.vt_pbf_pt(coalesce(r->'startPoint', r->'start'));
     select * into e from public.vt_pbf_pt(coalesce(r->'endPoint', r->'end'));
     continue when (r->>'number') is null or s.lat is null or e.lat is null;
@@ -135,6 +138,7 @@ begin
   return jsonb_build_object('ok',true,'row_axis_deg',mod((ax0+360)::numeric,360),'row_divergence_deg',maxdev,
     'row_a',(lo->>'n')::int,'dist_a_m',(lo->>'d')::double precision,'t_a',(lo->>'t')::double precision,
     'row_b',(hi->>'n')::int,'dist_b_m',(hi->>'d')::double precision,'t_b',(hi->>'t')::double precision,
+    'adjacent_numbering',abs((lo->>'n')::int-(hi->>'n')::int)=1,
     'spacing_m',(lo->>'d')::double precision + (hi->>'d')::double precision,
     'aisle',((lo->>'n')::int + (hi->>'n')::int)::numeric / 2);
 end $$;
@@ -146,10 +150,13 @@ declare p record; pj jsonb; ev record; evj jsonb; pad record; padj jsonb; trip_p
   gps jsonb; trv jsonb; tobs jsonb; ttrk jsonb; sides text[]; side_src jsonb := '{}'::jsonb; side text; side_c jsonb;
   blk jsonb; geo jsonb; bnd jsonb; dev double precision; acc double precision; course double precision; hold text[] := '{}';
   tier text; chosen int; vx double precision; cross double precision; proj jsonb; captured timestamptz; v_poly_ids uuid[]; v_block uuid; block_src text;
-  combo text;
+  combo text; hist record; hist_count int; evidence_count int; hist_poly jsonb; hist_rows jsonb; preserved boolean;
 begin
   select * into p from public.pins where id = p_pin; if not found then return null; end if;
+  if not public.vt_pbf_authorized(p.vineyard_id) then raise exception 'not authorised' using errcode='42501'; end if;
   pj := to_jsonb(p);
+  select count(*) into evidence_count from public.pin_capture_evidence e where e.pin_id=p_pin;
+  if evidence_count > 1 then hold := array_append(hold,'multiple capture evidence records; capture provenance ambiguous'); end if;
   select * into ev from public.pin_capture_evidence e where e.pin_id = p_pin order by e.captured_at desc nulls last limit 1;
   evj := case when ev is null then null else to_jsonb(ev) end;
   captured := coalesce((evj->>'captured_at')::timestamptz, (pj->>'created_at')::timestamptz);
@@ -166,7 +173,7 @@ begin
   -- 2. TRAVEL (device heading is comparison only)
   tobs := public.vt_pbf_travel_obs(evj->'observations');
   trip_id := nullif(pj->>'trip_id','')::uuid;
-  if trip_id is not null then select to_jsonb(t)->'path_points' into trip_path from public.trips t where t.id = trip_id; end if;
+  if trip_id is not null then select to_jsonb(t)->'path_points' into trip_path from public.trips t where t.id = trip_id and t.vineyard_id=p.vineyard_id; end if;
   ttrk := case when trip_id is null then jsonb_build_object('ok',false,'anchor','no_trip','reason','no linked trip')
                else public.vt_pbf_travel_track(p.latitude, p.longitude, trip_path) end;
   if (tobs->>'ok')::boolean and (ttrk->>'ok')::boolean then
@@ -199,36 +206,52 @@ begin
       and public.vt_pbf_point_in_polygon(p.latitude, p.longitude, d.polygon_points::jsonb) is true;
     if cardinality(v_poly_ids) = 1 then v_block := v_poly_ids[1]; block_src := 'polygon_suggestion'; else block_src := 'none'; end if;
   end if;
-  if v_block is not null then select * into pad from public.paddocks where id = v_block; padj := to_jsonb(pad); end if;
+  if v_block is not null then select * into pad from public.paddocks where id = v_block and vineyard_id=p.vineyard_id and deleted_at is null; padj := to_jsonb(pad); end if;
   blk := jsonb_build_object('paddock_id',v_block,'source',block_src,'candidates',coalesce(cardinality(v_poly_ids),0));
 
-  -- geometry (current; historical is not stored in the live schema — flagged when block changed after capture)
-  if v_block is not null and p.latitude is not null then
-    bnd := public.vt_pbf_bounding(p.latitude, p.longitude, pad.rows::jsonb);
-    geo := jsonb_build_object('geometry_source','current_only','historical_geometry','unavailable',
-      'geometry_identity', public.vt_pbf_geometry_identity(pad.polygon_points::jsonb, pad.rows::jsonb),
-      'capture_geometry_hash', evj->>'geometry_hash',
-      'block_updated_after_capture', (padj->>'updated_at')::timestamptz > captured,
-      'inside_polygon', public.vt_pbf_point_in_polygon(p.latitude, p.longitude, pad.polygon_points::jsonb),
-      'bounding', bnd);
-  end if;
+  -- Capture-time half-open interval, strictly scoped by vineyard + block.
+  -- Never substitute current geometry, even when it happens to resemble history.
+  if v_block is not null and captured is not null then
+    select count(*) into hist_count from public.pin_location_geometry_history h
+      where h.vineyard_id=p.vineyard_id and h.paddock_id=v_block
+      and h.valid_from<=captured and (h.valid_to is null or captured<h.valid_to);
+    if hist_count=1 then
+      select * into hist from public.pin_location_geometry_history h
+        where h.vineyard_id=p.vineyard_id and h.paddock_id=v_block
+        and h.valid_from<=captured and (h.valid_to is null or captured<h.valid_to);
+      hist_poly:=hist.polygon_points::jsonb; hist_rows:=hist.rows::jsonb;
+      bnd:=public.vt_pbf_bounding(p.latitude,p.longitude,hist_rows);
+      geo:=jsonb_build_object('geometry_source','capture_time_history','historical_geometry','available',
+        'history_id',hist.id,'valid_from',hist.valid_from,'valid_to',hist.valid_to,
+        'geometry_identity',public.pin_geometry_identity(hist_poly,hist_rows),
+        'stored_history_hash',hist.geometry_hash,'capture_geometry_hash',evj->>'geometry_hash',
+        'inside_polygon',public.vt_pbf_point_in_polygon(p.latitude,p.longitude,hist_poly),'bounding',bnd,
+        'current_geometry_identity',case when padj is not null then public.pin_geometry_identity(pad.polygon_points::jsonb,pad.rows::jsonb) end);
+      if nullif(evj->>'geometry_hash','') is null then hold:=array_append(hold,'capture geometry hash missing');
+      elsif evj->>'geometry_hash' is distinct from public.pin_geometry_identity(hist_poly,hist_rows) then
+        hold:=array_append(hold,'capture evidence hash differs from canonical capture-time identity'); end if;
+      -- History geometry_hash may use a legacy hash scheme; never compare it as canonical
+      -- and never rewrite it. The evidence hash MUST match canonical geometry identity.
+    else
+      hold:=array_append(hold,case when hist_count=0 then 'capture-time geometry missing; current map cannot replace it' else 'overlapping capture-time geometry intervals' end);
+      geo:=jsonb_build_object('geometry_source','unavailable','historical_geometry','unavailable','matching_intervals',hist_count);
+    end if;
+  else hold:=array_append(hold,'capture time or saved block unavailable for historical geometry'); end if;
 
   combo := 'gps' || case when dev is not null then '+device_heading' else '' end || case when side_src <> '{}'::jsonb then '+side' else '' end;
 
   -- tiering
-  if p.row_number is not null or p.pin_row_number is not null or p.driving_row_number is not null
-     or coalesce(p.location_scope,'') = 'row' or exists (select 1 from public.pin_row_segments s where s.pin_id = p.id) then tier := 'preserved';
-  elsif exists (select 1 from public.pin_row_backfill_audit a where a.pin_id = p.id and a.decision_source = 'manual_field_check') then tier := 'field_confirmed';
-  elsif v_block is null then tier := 'missing_block';
+  if v_block is null then tier := 'missing_block';
   elsif (side_c->>'conflict')::boolean or side is null then tier := 'missing_side';
     if (side_c->>'conflict')::boolean then hold := array_append(hold, 'side sources conflict'); else hold := array_append(hold, 'no recorded Left/Right — field confirmation required'); end if;
   elsif course is null then tier := 'missing_direction'; hold := array_append(hold, coalesce(trv->>'reason','no travel'));
   else
     if block_src <> 'saved' then hold := array_append(hold, 'block is a polygon suggestion, not saved'); end if;
     if (geo->>'inside_polygon')::boolean is distinct from true then hold := array_append(hold, 'raw GPS outside block polygon'); end if;
-    if coalesce((geo->>'block_updated_after_capture')::boolean, false) then hold := array_append(hold, 'block geometry changed after capture (historical geometry unavailable)'); end if;
+
     if not coalesce((bnd->>'ok')::boolean,false) then hold := array_append(hold, coalesce(bnd->>'reason','no bounding rows'));
     else
+      if (bnd->>'adjacent_numbering')::boolean is distinct from true then hold:=array_append(hold,'bounding row numbers are not adjacent; no offsets permitted'); end if;
       if (bnd->>'row_divergence_deg')::double precision > 10 then hold := array_append(hold, 'rows diverge (contour) — straight-row model unsafe'); end if;
       if least((bnd->>'t_a')::double precision,(bnd->>'t_b')::double precision) < 0.05 or greatest((bnd->>'t_a')::double precision,(bnd->>'t_b')::double precision) > 0.95 then hold := array_append(hold, 'headland / row end'); end if;
       if acc is null then hold := array_append(hold, 'GPS accuracy unknown');
@@ -245,11 +268,18 @@ begin
     tier := case when cardinality(hold) = 0 and chosen is not null then 'technically_supported' else 'needs_review' end;
   end if;
 
-  if tier = 'technically_supported' then proj := public.vt_pbf_project(p.latitude, p.longitude, pad.rows::jsonb, chosen);
+  if tier = 'technically_supported' then proj := public.vt_pbf_project(p.latitude, p.longitude, hist_rows, chosen);
     if not coalesce((proj->>'ok')::boolean,false) then tier := 'needs_review'; hold := array_append(hold, ('projection: '||coalesce(proj->>'reason','failed'))); end if;
   end if;
 
-  return jsonb_build_object('algorithm_version','pbf-recon-v1','pin_id',p.id,'tier',tier,'combination',combo,
+  preserved := p.row_number is not null or p.pin_row_number is not null or p.driving_row_number is not null
+    or coalesce(p.location_scope,'')='row' or exists(select 1 from public.pin_row_segments z where z.pin_id=p.id);
+  if preserved then tier:='preserved'; end if;
+  return jsonb_build_object('diagnostic',jsonb_build_object('predicted_vine_row',chosen,'projected_aisle',bnd->'aisle',
+    'quality_ok',cardinality(hold)=0 and chosen is not null,'saved_vine_row',coalesce(p.pin_row_number,p.row_number),
+    'saved_driving_aisle',p.driving_row_number,'saved_aisle_matches',p.driving_row_number=(bnd->>'aisle')::numeric,
+    'raw_snap_distance_m',case when p.snapped_latitude is not null and p.snapped_longitude is not null then
+      public.vt_pbf_metres(p.latitude,p.longitude,p.snapped_latitude,p.snapped_longitude) end), 'algorithm_version','pbf-recon-v2','pin_id',p.id,'tier',tier,'combination',combo,
     'gps',gps,'travel',trv,'side',side_c,'block',blk,'geometry',geo,'holds',hold,
     'suggestion', jsonb_build_object('derived',true,'authoritative',false,
       'bounding_rows', case when (bnd->>'ok')::boolean then jsonb_build_array((bnd->>'row_a')::int,(bnd->>'row_b')::int) end,
@@ -257,24 +287,59 @@ begin
       'vine_row', case when tier in ('technically_supported','needs_review') then chosen end,
       'snap', case when tier = 'technically_supported' and p.snapped_latitude is null and p.snapped_longitude is null
                    then jsonb_build_object('latitude',proj->'snapped_latitude','longitude',proj->'snapped_longitude') end),
+    'quality',tier,'proposed_block_id',v_block,'nominal_three_input',dev is not null and side_src<>'{}'::jsonb,
     'source_fields_immutable', true,
     'sync_version', p.sync_version, 'updated_at', p.updated_at);
 end $$;
 revoke all on function public.vt_pbf_reconstruct_pin(uuid) from public, anon, authenticated;
 
+-- Known-row cohort is selected without consulting predictions. Frozen algorithm;
+-- deterministic ID-ordered alternating holdout, never used to fit row offsets.
+create or replace function public.vt_pbf_validation(p_vineyard uuid)
+returns jsonb language plpgsql stable security definer set search_path=public as $$
+declare pid uuid; r jsonb; cohort jsonb:='[]'; idx int:=0; train int:=0; held int:=0; bad int:=0; unavailable int:=0;
+begin
+  if not public.vt_pbf_authorized(p_vineyard) then raise exception 'not authorised' using errcode='42501'; end if;
+  for pid in select p.id from public.pins p where p.vineyard_id=p_vineyard and p.deleted_at is null
+    and coalesce(p.pin_row_number,p.row_number) is not null and p.trip_id is not null and p.paddock_id is not null
+    and p.latitude is not null and p.longitude is not null order by p.id loop
+    r:=public.vt_pbf_reconstruct_pin(pid);
+    if r->'travel'->'track'->>'anchor'<>'unique' or (r->'side'->>'available')::boolean is distinct from true then continue; end if;
+    idx:=idx+1;
+    if idx%2=0 then held:=held+1; else train:=train+1; end if;
+    if (r->'diagnostic'->>'quality_ok')::boolean is distinct from true then unavailable:=unavailable+1;
+    elsif (r->'diagnostic'->>'predicted_vine_row')::numeric is distinct from (r->'diagnostic'->>'saved_vine_row')::numeric
+      or ((r->'diagnostic'->>'saved_driving_aisle') is not null and (r->'diagnostic'->>'saved_aisle_matches')::boolean is distinct from true) then bad:=bad+1; end if;
+    cohort:=cohort||jsonb_build_object('pin_id',pid,'partition',case when idx%2=0 then 'held_out' else 'comparison' end,
+      'diagnostic',r->'diagnostic','holds',r->'holds','capture_geometry',r->'geometry');
+  end loop;
+  return jsonb_build_object('passed',train>=10 and held>=10 and bad=0 and unavailable=0,
+    'cohort_size',idx,'comparison_count',train,'held_out_count',held,'mismatches',bad,'unavailable',unavailable,
+    'mismatch_rate',bad::numeric/nullif(idx-unavailable,0),'partition','immutable ID order, alternating',
+    'minimum_each_partition',10,'rows',cohort,'read_only',true);
+end $$;
+revoke all on function public.vt_pbf_validation(uuid) from public,anon,authenticated;
+
 -- Report: one row per missing pin + per-combination / tier counts. Read-only.
 create or replace function public.pin_row_reconstruction_report(p_vineyard uuid)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
-declare res jsonb := '[]'::jsonb; r jsonb; pid uuid; assigned int;
+declare res jsonb := '[]'::jsonb; r jsonb; pid uuid; assigned int; validation jsonb;
 begin
   if not public.vt_pbf_authorized(p_vineyard) then raise exception 'not authorised' using errcode = '42501'; end if;
+  validation:=public.vt_pbf_validation(p_vineyard);
   for pid in select id from public.pins where vineyard_id = p_vineyard and deleted_at is null and latitude is not null and longitude is not null
                 and row_number is null and pin_row_number is null order by id loop
-    res := res || public.vt_pbf_reconstruct_pin(pid);
+    r:=public.vt_pbf_reconstruct_pin(pid);
+    if (validation->>'passed')::boolean is distinct from true and r->>'tier'='technically_supported' then
+      r:=r||jsonb_build_object('tier','needs_review','quality','validation_blocked','holds',(r->'holds')||'"known-row validation failed or insufficient"'::jsonb,
+        'suggestion',(r->'suggestion')||jsonb_build_object('vine_row',null,'snap',null)); end if;
+    res := res || r;
   end loop;
   select count(*) into assigned from public.pins where vineyard_id = p_vineyard and deleted_at is null and latitude is not null
     and (row_number is not null or pin_row_number is not null);
-  return jsonb_build_object('algorithm_version','pbf-recon-v1','generated_at',now(),'read_only',true,
+  return jsonb_build_object('algorithm_version','pbf-recon-v2','generated_at',now(),'read_only',true,
+    'validation',validation,'approved_batch',null,'supported_batch',(select coalesce(jsonb_agg(x),'[]') from jsonb_array_elements(res) x where x->>'tier'='technically_supported'),
+    'nominal_three_input_count',(select count(*) from jsonb_array_elements(res) x where (x->>'nominal_three_input')::boolean),
     'missing_total', jsonb_array_length(res), 'already_assigned_preserved', assigned,
     'by_combination', (select coalesce(jsonb_object_agg(k, n),'{}') from (select x->>'combination' k, count(*) n from jsonb_array_elements(res) x group by 1) q),
     'by_tier', (select coalesce(jsonb_object_agg(k, n),'{}') from (select x->>'tier' k, count(*) n from jsonb_array_elements(res) x group by 1) q),
@@ -289,14 +354,19 @@ alter function public.vt_pbf_check_item(uuid, jsonb) rename to vt_pbf_check_item
 
 create or replace function public.vt_pbf_check_item(p_vineyard uuid, it jsonb)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
-declare base jsonb; rc jsonb; fails text[]; src text := it->>'source'; fc jsonb := it->'field_confirmation'; rhash text;
+declare base jsonb; rc jsonb; fails text[]; src text := it->>'source'; fc jsonb := it->'field_confirmation'; rhash text; validation jsonb;
 begin
   base := public.vt_pbf_check_item_base(p_vineyard, it);
+  if not public.vt_pbf_authorized(p_vineyard) or not exists(select 1 from public.pins where id=(it->>'pin_id')::uuid and vineyard_id=p_vineyard) then return base; end if;
   rc := public.vt_pbf_reconstruct_pin((it->>'pin_id')::uuid);
   if rc is null then return base; end if;
   select coalesce(array_agg(x),'{}') into fails from jsonb_array_elements_text(base->'fails') x;
   rhash := encode(sha256(convert_to((rc - 'sync_version' - 'updated_at')::text,'UTF8')),'hex');
   if src in ('measured','reviewed_track') then
+    validation:=public.vt_pbf_validation(p_vineyard);
+    if (validation->>'passed')::boolean is distinct from true then fails:=array_append(fails,'known-row held-out validation failed or insufficient; automatic proposal blocked'); end if;
+    if rc->'geometry'->>'geometry_identity' is distinct from rc->'geometry'->>'current_geometry_identity' then
+      fails:=array_append(fails,'capture/current geometry identity differs; 267 current projection cannot write historical inference'); end if;
     if rc->>'tier' <> 'technically_supported' then
       fails := array_append(fails, ('REVIEW-BYPASS: server reconstruction is '||(rc->>'tier')||' — needs server-supported travel+side+geometry or manual_field_check'));
     else
@@ -314,7 +384,7 @@ begin
   return base || jsonb_build_object('ok', cardinality(fails) = 0, 'fails', fails,
     'outcome', case when cardinality(fails) > 0 then 'blocked' else base->>'outcome' end,
     'projection', coalesce(base->'projection','{}'::jsonb) || jsonb_build_object('reconstruction', rc),
-    'reconstruction_hash', rhash, 'algorithm_version', 'pbf-recon-v1');
+    'reconstruction_hash', rhash, 'algorithm_version', 'pbf-recon-v2');
 end $$;
 revoke all on function public.vt_pbf_check_item(uuid, jsonb) from public, anon, authenticated;
 revoke all on function public.vt_pbf_check_item_base(uuid, jsonb) from public, anon, authenticated;
