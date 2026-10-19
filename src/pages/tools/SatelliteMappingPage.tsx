@@ -59,7 +59,9 @@ import {
   type PaddockCompleteness,
 } from "@/lib/satelliteCompleteness";
 import { fetchManifest, fetchAssetBytes, type ManifestResponse } from "@/lib/satelliteManifest";
-import { getAssetBlob, deleteCachedAsset, readCachedAsset } from "@/lib/satelliteCache";
+import { deleteCachedAsset, readCachedAsset, writeCachedAsset, readCachedManifest, writeCachedManifest } from "@/lib/satelliteCache";
+import { bounded, retrySaved, runSavedQueue, validatePng, validRasterBounds, decodeSavedImage, SavedAssetError } from "@/lib/satelliteSavedLoader";
+import { selectSavedPair } from "@/lib/satelliteSavedSelection";
 
 // Satellite edge functions live in the Lovable Cloud project but authorize the
 // caller against the VineTrack iOS Supabase project. Send the iOS access token
@@ -740,10 +742,29 @@ export default function SatelliteMappingPage() {
   // `satellite-list-scenes` query has been retired; every scene/asset/summary
   // the page renders now flows from `manifestQuery.data.date_coverage[*].paddocks[*].layers`.
   const activePaddockIds = useMemo(() => paddocks.map((p) => p.id), [paddocks]);
+  const [manifestFallback, setManifestFallback] = useState<string | null>(null);
   const manifestQuery = useQuery({
     queryKey: ["satellite-manifest", activeVineyardId, activePaddockIds.join(",")],
-    queryFn: () => fetchManifest(activeVineyardId!, activePaddockIds),
-    enabled: !!activeVineyardId,
+    queryFn: async ({ signal }) => {
+      if (!activeVineyardId) throw new Error("No vineyard selected");
+      setManifestFallback(null);
+      try {
+        const manifest = await bounded((child) => fetchManifest(activeVineyardId, activePaddockIds, child), signal, 15_000, "Saved imagery manifest");
+        void writeCachedManifest(activeVineyardId, manifest);
+        return manifest;
+      } catch (error) {
+        if (signal.aborted) throw error;
+        // Never use cached private metadata to bypass a permission/authentication error.
+        if (error instanceof SavedAssetError && (error.status === 401 || error.status === 403)) throw error;
+        const cached = await readCachedManifest(activeVineyardId);
+        if (!cached) throw error;
+        setManifestFallback(error instanceof Error ? error.message : "Manifest unavailable");
+        return cached;
+      }
+    },
+    enabled: !!activeVineyardId && isSystemAdmin && !paddocksLoading && activePaddockIds.length > 0,
+    retry: false,
+    refetchOnWindowFocus: false,
     staleTime: 30_000,
   });
 
@@ -1137,18 +1158,13 @@ export default function SatelliteMappingPage() {
   const buildAssetPairsFor = (dateKey: string | null) => {
     if (!dateKey || !derivedFromManifest) return [] as Array<{ displayAsset: DBAsset; analyticalAsset?: DBAsset; scene: DBScene }>;
     const { assets } = derivedFromManifest;
-    const displayFor = (sceneId: string) => assets.find((x) =>
-      x.satellite_scene_id === sceneId && x.index_type === layer && assetKind(x) === "DISPLAY_RASTER"
-    );
-    const analyticalFor = (sceneId: string) => assets.find((x) =>
-      x.satellite_scene_id === sceneId && x.index_type === layer && assetKind(x) === "ANALYTICAL_RASTER"
-    );
     const group = dateCoverage.find((g) => g.date === dateKey);
     if (!group) return [];
     const out: Array<{ displayAsset: DBAsset; analyticalAsset?: DBAsset; scene: DBScene }> = [];
     for (const scene of group.sceneByPaddock.values()) {
-      const displayAsset = displayFor(scene.id);
-      if (displayAsset) out.push({ displayAsset, analyticalAsset: analyticalFor(scene.id), scene });
+      if (paddockId !== "all" && scene.paddock_id !== paddockId) continue;
+      const pair = selectSavedPair(assets, scene.id, layer);
+      if (pair.display) out.push({ displayAsset: pair.display, analyticalAsset: pair.analytical, scene });
     }
     return out;
   };
@@ -1157,14 +1173,14 @@ export default function SatelliteMappingPage() {
   const activeAssetPairs = useMemo(
     () => buildAssetPairsFor(selectedSceneKey),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [derivedFromManifest, selectedSceneKey, layer, dateCoverage],
+    [derivedFromManifest, selectedSceneKey, layer, dateCoverage, paddockId],
   );
 
   // Effective display pairs — drive the map overlay images.
   const displayAssetPairs = useMemo(
     () => (effectiveDisplayDate === selectedSceneKey ? activeAssetPairs : buildAssetPairsFor(effectiveDisplayDate)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [derivedFromManifest, effectiveDisplayDate, selectedSceneKey, layer, dateCoverage, activeAssetPairs],
+    [derivedFromManifest, effectiveDisplayDate, selectedSceneKey, layer, dateCoverage, activeAssetPairs, paddockId],
   );
 
   const activeAssets = useMemo(
@@ -1174,8 +1190,7 @@ export default function SatelliteMappingPage() {
 
   const activeAnalyticalAssets = useMemo(
     () => activeAssetPairs
-      .filter((x) => x.analyticalAsset)
-      .map(({ analyticalAsset, scene }) => ({ asset: analyticalAsset!, scene })),
+      .flatMap(({ analyticalAsset, scene }) => analyticalAsset ? [{ asset: analyticalAsset, scene }] : []),
     [activeAssetPairs],
   );
 
@@ -1215,15 +1230,14 @@ export default function SatelliteMappingPage() {
   // overlays instead of blanking the map, then crossfade when preview is ready.
   const targetMapOverlays = useMemo<SatelliteRasterOverlay[]>(() => {
     if (disableCropOverlays) return [];
-    const source = previewPending
-      ? activeAssetPairs.map(({ displayAsset, scene }) => ({ asset: displayAsset, scene }))
-      : activeAssets;
+    // Never label the committed-date raster as the preview acquisition.
+    const source = activeAssets;
     return source
-      .filter(({ asset }) => asset.bounds && signedUrls[asset.id])
-      .map(({ asset, scene }) => ({
+      .filter(({ asset }) => validRasterBounds(asset.bounds) && signedUrls[asset.id])
+      .flatMap(({ asset, scene }) => asset.bounds ? [{
         paddockId: scene.paddock_id,
         url: signedUrls[asset.id],
-        bounds: asset.bounds!,
+        bounds: asset.bounds,
         opacity: opacity / 100,
         // Stable identity — matches `displayKeyFor(paddockId, effectiveDate, layer, assetId)`
         // so the view model and every overlay-lifecycle callback share ONE key space.
@@ -1231,7 +1245,7 @@ export default function SatelliteMappingPage() {
         sceneId: scene.id,
         indexType: layer,
         assetId: asset.id,
-      }));
+      }] : []);
   }, [activeAssets, activeAssetPairs, signedUrls, opacity, previewPending, effectiveDisplayDate, layer, disableCropOverlays]);
 
   // Crossfade-mounted overlays. When the target changes, keep the previous
@@ -1414,147 +1428,94 @@ export default function SatelliteMappingPage() {
   useEffect(() => { setIsPlaying(false); setPreviewDate(null); }, [activeVineyardId, paddockId, layer]);
 
 
-  // Cache-first loader: for each visible asset, check IndexedDB for a stored
-  // blob keyed by (assetId, processingVersion). If present, mint an object URL
-  // and render immediately with zero network. Otherwise fetch a short-lived
-  // signed URL, download the bytes, cache them and mint the object URL.
+  // Visible displays settle first (concurrency 3); analysis/prefetch cannot starve the map.
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      // Order: committed display + committed analytical first, then adjacent
-      // preload (display only). Preload never triggers analytical downloads.
-      const all = [
-        ...activeAssets,
-        ...activeAnalyticalAssets,
-        ...preloadDisplayAssets,
-      ];
-      for (const { asset } of all) {
-        if (signedUrls[asset.id]) continue;
-        const kind = assetKind(asset);
-        const pv = asset.processing_version ?? null;
-        const isDisplay = kind === "DISPLAY_RASTER";
-        const boundsLabel = asset.bounds
-          ? `${asset.bounds.west.toFixed(5)},${asset.bounds.south.toFixed(5)} → ${asset.bounds.east.toFixed(5)},${asset.bounds.north.toFixed(5)}`
-          : "—";
-        const sceneForAsset = displayAssetPairs.find((p) => p.displayAsset.id === asset.id)?.scene
-          ?? activeAssetPairs.find((p) => p.analyticalAsset?.id === asset.id || p.displayAsset.id === asset.id)?.scene
-          ?? null;
-        const updateAssetDiag = (patch: Partial<AssetPipelineDiagnostic>) => {
-          if (!isDisplay) return;
-          setAssetDiagnostics((prev) => ({
-            ...prev,
-            [asset.id]: {
-              assetId: asset.id,
-              paddockId: sceneForAsset?.paddock_id ?? null,
-              layer: asset.index_type,
-              endpointStatus: null,
-              blobSize: null,
-              mimeType: null,
-              etag: null,
-              objectUrlCreated: false,
-              imageStatus: "not_checked",
-              bounds: boundsLabel,
-              finalStatus: "pending",
-              error: null,
-              ...(prev[asset.id] ?? {}),
-              ...patch,
-            },
-          }));
-        };
-        updateAssetDiag({ finalStatus: "pending" });
-        if (isDisplay) cacheStatsRef.current.displayRequested += 1;
-        else cacheStatsRef.current.analyticalRequested += 1;
-
-        // Cache probe (no network).
-        const cachedProbe = await readCachedAsset(asset.id, pv);
-        if (cachedProbe) {
-          if (isDisplay) cacheStatsRef.current.displayHits += 1;
-          else cacheStatsRef.current.analyticalHits += 1;
-          assetBlobsRef.current.set(`${asset.id}:${pv ?? "unknown"}`, cachedProbe.blob);
-          if (cancelled) return;
-          const url = URL.createObjectURL(cachedProbe.blob);
-          objectUrlsRef.current.set(asset.id, url);
-          updateAssetDiag({
-            endpointStatus: 304,
-            blobSize: cachedProbe.blob.size,
-            mimeType: cachedProbe.contentType ?? cachedProbe.blob.type ?? null,
-            etag: cachedProbe.etag,
-            objectUrlCreated: true,
-            finalStatus: "cached",
-          });
-          setSignedUrls((prev) => ({ ...prev, [asset.id]: url }));
-          bumpStats();
-          continue;
-        }
-        if (isDisplay) cacheStatsRef.current.displayMisses += 1;
-        else cacheStatsRef.current.analyticalMisses += 1;
-
-        try {
-          const blob = await getAssetBlob(asset.id, pv, async (ifNoneMatch) => {
-            const r = await fetchAssetBytes(asset.id, ifNoneMatch);
-            cacheStatsRef.current.assetRequests += 1;
-            if (r.status === 304) cacheStatsRef.current.http304 += 1;
-            else if (r.blob) cacheStatsRef.current.bytesDownloaded += r.blob.size;
-            updateAssetDiag({
-              endpointStatus: r.status,
-              blobSize: r.blob?.size ?? null,
-              mimeType: r.contentType,
-              etag: r.etag,
-            });
-            return { status: r.status, blob: r.blob, etag: r.etag, contentType: r.contentType };
-          });
-
-          if (cancelled) return;
-          if (!blob) {
-            updateAssetDiag({ finalStatus: "failed", error: "No blob returned" });
-            continue;
+    const controller = new AbortController();
+    const { signal } = controller;
+    const load = async ({ asset, scene }: { asset: DBAsset; scene: DBScene }) => {
+      if (objectUrlsRef.current.has(asset.id) || signal.aborted) return;
+      const isDisplay = assetKind(asset) === "DISPLAY_RASTER";
+      const pv = asset.processing_version ?? null;
+      const key = isDisplay
+        ? displayKeyFor(scene.paddock_id, effectiveDisplayDate, asset.index_type, asset.id)
+        : analyticalKeyFor(scene.paddock_id, scene.id, asset.index_type, asset.id);
+      const state = isDisplay ? setDisplayLoadState : setAnalyticalLoadState;
+      const diag = (patch: Partial<AssetPipelineDiagnostic>) => {
+        if (!isDisplay || signal.aborted) return;
+        setAssetDiagnostics((prev) => ({ ...prev, [asset.id]: {
+          assetId: asset.id, paddockId: scene.paddock_id, layer: asset.index_type,
+          endpointStatus: null, blobSize: null, mimeType: null, etag: null,
+          objectUrlCreated: false, imageStatus: "not_checked", bounds: JSON.stringify(asset.bounds),
+          finalStatus: "pending", error: null, ...(prev[asset.id] ?? {}), ...patch,
+        } }));
+      };
+      state((prev) => new Map(prev).set(key, { phase: "loading" }));
+      diag({ finalStatus: "pending" });
+      let url: string | null = null;
+      try {
+        if (!validRasterBounds(asset.bounds)) throw new SavedAssetError("Saved raster bounds missing or invalid");
+        if (isDisplay) cacheStatsRef.current.displayRequested++;
+        else cacheStatsRef.current.analyticalRequested++;
+        let cached = await readCachedAsset(asset.id, pv);
+        if (signal.aborted) return;
+        // Reject corrupt cache entries rather than trapping the page on them.
+        if (cached && isDisplay) {
+          try { await bounded(() => validatePng(cached.blob), signal, 2_000, "Cached PNG validation"); }
+          catch (error) {
+            if (signal.aborted) return;
+            void deleteCachedAsset(asset.id, pv); cached = null;
           }
-          assetBlobsRef.current.set(`${asset.id}:${pv ?? "unknown"}`, blob);
-          const url = URL.createObjectURL(blob);
-          objectUrlsRef.current.set(asset.id, url);
-          updateAssetDiag({
-            blobSize: blob.size,
-            mimeType: blob.type || null,
-            objectUrlCreated: true,
-            finalStatus: "loaded",
-          });
-          setSignedUrls((prev) => ({ ...prev, [asset.id]: url }));
-          bumpStats();
-        } catch (e: any) {
-          const errorMessage = String(e?.message ?? e);
-          updateAssetDiag({ finalStatus: "failed", error: errorMessage });
-          if (isDisplay && sceneForAsset) {
-            const displayKey = displayKeyFor(
-              sceneForAsset.paddock_id,
-              effectiveDisplayDate,
-              asset.index_type,
-              asset.id,
-            );
-            setDisplayLoadState((prev) => {
-              const next = new Map(prev);
-              next.set(displayKey, { phase: "failed", errorMessage });
-              return next;
-            });
-          } else if (!isDisplay && sceneForAsset) {
-            const analyticalKey = analyticalKeyFor(
-              sceneForAsset.paddock_id,
-              sceneForAsset.id,
-              asset.index_type,
-              asset.id,
-            );
-            setAnalyticalLoadState((prev) => {
-              const next = new Map(prev);
-              next.set(analyticalKey, { phase: "failed", errorMessage });
-              return next;
-            });
-          }
-          console.error("asset load failed", e);
         }
+        const blob = cached?.blob ?? await retrySaved(async (child) => {
+          cacheStatsRef.current.assetRequests++;
+          const result = await fetchAssetBytes(asset.id, null, child);
+          diag({ endpointStatus: result.status, mimeType: result.contentType, blobSize: result.blob?.size ?? null, etag: result.etag });
+          if (!result.blob?.size) throw new SavedAssetError("Saved asset returned empty bytes");
+          cacheStatsRef.current.bytesDownloaded += result.blob.size;
+          return result.blob;
+        }, signal);
+        if (signal.aborted) return;
+        if (isDisplay) await bounded(() => validatePng(blob), signal, 2_000, "PNG validation");
+        if (signal.aborted) return;
+        url = URL.createObjectURL(blob);
+        if (isDisplay) await decodeSavedImage(url, signal);
+        if (signal.aborted) { URL.revokeObjectURL(url); return; }
+        const old = objectUrlsRef.current.get(asset.id);
+        if (old) URL.revokeObjectURL(old);
+        objectUrlsRef.current.set(asset.id, url);
+        assetBlobsRef.current.set(`${asset.id}:${pv ?? "unknown"}`, blob);
+        // IDB writes are optional and never delay display publication.
+        if (!cached) void writeCachedAsset(asset.id, pv, `${asset.id}:${pv}`, blob, blob.type);
+        if (isDisplay) {
+          if (cached) cacheStatsRef.current.displayHits++; else cacheStatsRef.current.displayMisses++;
+        } else {
+          if (cached) cacheStatsRef.current.analyticalHits++; else cacheStatsRef.current.analyticalMisses++;
+        }
+        diag({ endpointStatus: cached ? 304 : 200, blobSize: blob.size, mimeType: blob.type,
+          objectUrlCreated: true, imageStatus: isDisplay ? "loaded" : "not_checked", finalStatus: cached ? "cached" : "loaded" });
+        state((prev) => new Map(prev).set(key, { phase: "loaded" }));
+        setSignedUrls((prev) => ({ ...prev, [asset.id]: url as string }));
+        bumpStats();
+      } catch (error) {
+        if (url) URL.revokeObjectURL(url);
+        if (signal.aborted) return;
+        const message = error instanceof Error ? error.message : String(error);
+        diag({ finalStatus: "failed", error: message, endpointStatus: error instanceof SavedAssetError ? error.status ?? null : null });
+        state((prev) => new Map(prev).set(key, { phase: "failed", errorMessage: message }));
       }
-    })();
-    return () => { cancelled = true; };
+    };
+    void runSavedQueue(activeAssets, [...activeAnalyticalAssets, ...preloadDisplayAssets],
+      ({ asset }) => `${asset.id}:${asset.processing_version}`, load, signal, 3);
+    return () => controller.abort();
+    // signedUrls is output, not a trigger: failures cannot restart this queue indefinitely.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAssets, activeAnalyticalAssets, preloadDisplayAssets, displayAssetPairs, activeAssetPairs, effectiveDisplayDate]);
+  }, [activeAssets, activeAnalyticalAssets, preloadDisplayAssets, effectiveDisplayDate, activeVineyardId]);
+
+  useEffect(() => () => {
+    for (const url of objectUrlsRef.current.values()) URL.revokeObjectURL(url);
+    objectUrlsRef.current.clear();
+    assetBlobsRef.current.clear();
+  }, []);
 
   // Revoke stale object URLs when the visible asset set changes. Keeps memory
   // bounded across date/layer switches. Adjacent-preload and preview-display
@@ -1571,6 +1532,7 @@ export default function SatelliteMappingPage() {
         if (import.meta.env.DEV) console.info("[CropHealth] revoke object URL", { assetId });
         try { URL.revokeObjectURL(url); } catch { /* ignore */ }
         objectUrlsRef.current.delete(assetId);
+        for (const key of assetBlobsRef.current.keys()) { if (key.startsWith(`${assetId}:`)) assetBlobsRef.current.delete(key); }
         setSignedUrls((prev) => {
           if (!(assetId in prev)) return prev;
           const next = { ...prev }; delete next[assetId]; return next;
@@ -1588,6 +1550,7 @@ export default function SatelliteMappingPage() {
   // Decode selected analytical rasters once. Pointer movement only reads this cache.
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
 
     async function decodeAsset(asset: DBAsset, scene: DBScene, url: string) {
       if (!asset.bounds) throw new Error("Analytical raster bounds missing");
@@ -1596,14 +1559,14 @@ export default function SatelliteMappingPage() {
       if (existing) { cacheStatsRef.current.decodedHits += 1; return; }
       cacheStatsRef.current.decodedMisses += 1;
 
-      const promise = (async (): Promise<DecodedAnalyticalRaster> => {
+      const promise = bounded(async (signal): Promise<DecodedAnalyticalRaster> => {
         // Prefer the cached blob (already downloaded for display) over the network.
         const blobKey = `${asset.id}:${asset.processing_version ?? "unknown"}`;
         const cachedBlob = assetBlobsRef.current.get(blobKey);
         const buf = cachedBlob
           ? await cachedBlob.arrayBuffer()
           : await (async () => {
-              const res = await fetch(url);
+              const res = await fetch(url, { signal });
               if (!res.ok) throw new Error(`Analytical raster fetch failed (${res.status})`);
               return res.arrayBuffer();
             })();
@@ -1622,7 +1585,7 @@ export default function SatelliteMappingPage() {
           rowOrientation: asset.row_orientation ?? "north_to_south",
           processingVersion: asset.processing_version ?? "unknown",
         };
-      })();
+      }, controller.signal, 10_000, "Analytical decode");
 
       analyticalCacheRef.current.set(key, promise);
       const vmKey = analyticalKeyFor(scene.paddock_id, scene.id, asset.index_type, asset.id);
@@ -1653,7 +1616,7 @@ export default function SatelliteMappingPage() {
       if (url) void decodeAsset(asset, scene, url);
     }
 
-    return () => { cancelled = true; };
+    return () => { cancelled = true; controller.abort(); };
     // rasterCacheVersion is deliberately not a dependency; it is only a UI refresh tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAnalyticalAssets, signedUrls]);
@@ -2944,7 +2907,7 @@ export default function SatelliteMappingPage() {
           <div className="max-h-36 overflow-y-auto space-y-1">
             {Object.values(assetDiagnostics).length === 0 ? (
               <div>No display asset requests recorded yet.</div>
-            ) : Object.values(assetDiagnostics).slice(0, 8).map((d) => (
+            ) : Object.values(assetDiagnostics).filter((d) => activeAssets.some(({ asset }) => asset.id === d.assetId)).map((d) => (
               <div key={d.assetId} className="rounded-sm bg-background/60 p-1.5">
                 <div className="text-foreground">{d.layer} · {d.paddockId?.slice(0, 8) ?? "—"}</div>
                 <div>asset: <span className="text-foreground">{d.assetId.slice(0, 8)}…</span> · HTTP <span className="text-foreground">{d.endpointStatus ?? "—"}</span> · blob <span className="text-foreground">{d.blobSize ?? "—"}</span> · {d.mimeType ?? "—"}</div>
@@ -3087,6 +3050,13 @@ export default function SatelliteMappingPage() {
         </div>
       )}
 
+      {(manifestQuery.isError || manifestFallback) && (
+        <div role="alert" className="mx-3 mb-2 border border-destructive/40 bg-background p-3 text-sm">
+          {manifestFallback
+            ? `Stale/offline saved imagery · acquisition ${effectiveDisplayDate ?? "not selected"}. ${manifestFallback}`
+            : `Saved imagery manifest failed: ${manifestQuery.error instanceof Error ? manifestQuery.error.message : "Unavailable"}. The base map remains available.`}
+        </div>
+      )}
       {searchError && !mapFocus && (
         <Card className="mx-3 mb-2 border-destructive/40 bg-destructive/5">
           <CardHeader className="pb-2">
