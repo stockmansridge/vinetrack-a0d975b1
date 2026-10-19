@@ -128,7 +128,7 @@ export default function VintageNotesPage() {
   }, [draft.noteDate, seasonStartMonth, seasonStartDay]);
 
   const openAdd = () => {
-    setDraft({ noteDate: localToday(), noteTypeId: null, notes: "" });
+    setDraft({ noteDate: localToday(vineyardTimeZone), noteTypeId: null, notes: "" });
     setClientId(newVintageNoteClientId());
     setAddOpen(true);
   };
@@ -163,6 +163,9 @@ export default function VintageNotesPage() {
     },
     onError: (e) => {
       // The form stays open with its contents so nothing typed is lost.
+      // Issue a fresh save identity: if the user edits and retries, the new
+      // id can never be mistaken for a possibly-saved earlier attempt.
+      setClientId(newVintageNoteClientId());
       toast({
         title: "The note could not be saved",
         description:
@@ -214,10 +217,17 @@ export default function VintageNotesPage() {
             </div>
           </CardContent>
         </Card>
-      ) : notesQuery.isLoading || vintage.isLoading ? (
+      ) : accessQuery.isLoading || (access === "allowed" && (notesQuery.isLoading || vintage.isLoading)) ? (
         <div className="flex items-center gap-2 p-8 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading vintage notes…
         </div>
+      ) : accessUnknown || accessQuery.error ? (
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground">
+            We couldn't confirm your access to Vintage Notes. Check your connection and try
+            again — an empty history is only shown once access is confirmed.
+          </CardContent>
+        </Card>
       ) : notesQuery.error ? (
         <Card>
           <CardContent className="p-6 text-sm text-muted-foreground">
@@ -321,7 +331,7 @@ export default function VintageNotesPage() {
                 id="vn-date"
                 type="date"
                 value={draft.noteDate}
-                max={localToday()}
+                max={localToday(vineyardTimeZone)}
                 onChange={(e) => setDraft((d) => ({ ...d, noteDate: e.target.value }))}
               />
               {vintagePreview != null && (
