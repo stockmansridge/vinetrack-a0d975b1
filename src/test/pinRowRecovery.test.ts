@@ -20,16 +20,21 @@ const at = (m: number) => ({ lat: -33.9995, lng: 150 + m * M_LNG });
 const pt = at(7);
 const goodEvidence = {
   pin_id: "p", captured_at: "2026-10-14T01:00:05Z", heading_observed_at: "2026-10-14T01:00:03Z",
-  horizontal_accuracy_m: 0.8, heading_degrees: 2, pressed_side: "Right",
-  observations: [{ latitude: pt.lat, longitude: pt.lng }, { latitude: pt.lat, longitude: pt.lng }, { bad: 1 }, null],
+  horizontal_accuracy_m: 0.8, heading_degrees: 291.84, pressed_side: "Right",
+  observations: [
+    { latitude: pt.lat - 0.00002, longitude: pt.lng, observedAt: "2026-10-14T01:00:02Z", courseDegrees: 1, speedMps: 1.2, horizontalAccuracyM: 1 },
+    { latitude: pt.lat + 0.00001, longitude: pt.lng, observedAt: "2026-10-14T01:00:05Z", courseDegrees: 359, speedMps: 1.2, horizontalAccuracyM: 1 },
+    { bad: 1 }, null,
+  ],
 };
+const trackNorth = () => [-30, -20, -10, 0, 10, 20, 30].map((d) => ({ lat: pt.lat + d * 1e-5 * (d === 0 ? 0 : 1), lng: pt.lng }));
 const corroborated = () => ({
   paddocks: [pad],
   evidence: new Map([["p", goodEvidence]]),
   segments: new Map(),
-  trips: new Map([["t1", [at(1), pt, at(9)]]]),
+  trips: new Map([["t1", trackNorth()]]),
 });
-const pinP = { id: "p", latitude: pt.lat, longitude: pt.lng, paddock_id: "b1", heading: 2, pin_side: "Right", trip_id: "t1" };
+const pinP = { id: "p", latitude: pt.lat, longitude: pt.lng, paddock_id: "b1", heading: 291.84, pin_side: "Right", trip_id: "t1" };
 
 describe("geometry", () => {
   it("bounding rows and aisle are distinct from nearest physical row", () => {
@@ -73,11 +78,63 @@ describe("evidence", () => {
 });
 
 describe("status", () => {
-  it("supported candidate only with fresh heading, accuracy inside clearance and unique anchor", () => {
+  it("device heading ≠ travel (6f1c2656-style 291.84° vs ~0°): candidate row from GPS travel, conflict flagged, not supported", () => {
     const r = assessPin(pinP, corroborated());
-    expect(r.status).toBe("supported_candidate");
+    expect(r.travel.source).toBe("gps_observations");
+    expect(r.headingVsTravelDeg!).toBeGreaterThan(60);
+    expect(r.directionConflict).toMatch(/device heading differs/);
+    expect(r.status).toBe("requires_review");
+    // Travelling north, Right → east bounding row 4. Compass 291.84° would be rejected as cross-row.
     expect(r.suggestedVineRow).toBe(4);
     expect(r.observationCount).toBe(2);
+  });
+  it("supported only when device heading agrees with corroborated GPS travel", () => {
+    const ev = corroborated();
+    ev.evidence.set("p", { ...goodEvidence, heading_degrees: 5 });
+    const r = assessPin({ ...pinP, heading: 5 }, ev);
+    expect(r.status).toBe("supported_candidate");
+    expect(r.suggestedVineRow).toBe(4);
+  });
+  it("compass heading alone never yields a vine row; low-speed course fails closed", () => {
+    const ev = corroborated();
+    ev.trips = new Map();
+    ev.evidence.set("p", { ...goodEvidence, heading_degrees: 0, observations: [
+      { latitude: pt.lat, longitude: pt.lng, observedAt: "2026-10-14T01:00:02Z", courseDegrees: 11, speedMps: 0.35, horizontalAccuracyM: 1 },
+      { latitude: pt.lat + 1e-5, longitude: pt.lng, observedAt: "2026-10-14T01:00:04Z", courseDegrees: 12, speedMps: 0.35, horizontalAccuracyM: 1 },
+    ] });
+    const r = assessPin({ ...pinP, heading: 0 }, ev);
+    expect(r.travel.courseDeg).toBeNull();
+    expect(r.suggestedVineRow).toBeNull();
+    expect(r.geometry?.boundingRows).toEqual([3, 4]);
+    expect(r.status).toBe("requires_review");
+  });
+  it("observations and track disagreeing → direction conflict, no row", () => {
+    const ev = corroborated();
+    ev.trips.set("t1", trackNorth().reverse().map((q, i, a) => a[a.length - 1 - i]).map((q) => ({ lat: 2 * pt.lat - q.lat, lng: q.lng })));
+    const r = assessPin(pinP, ev);
+    expect(r.directionConflict).toMatch(/disagree/);
+    expect(r.suggestedVineRow).toBeNull();
+  });
+  it("turning track around anchor is not straight → no track travel", () => {
+    const turn = [{ lat: pt.lat - 6e-5, lng: pt.lng }, pt, { lat: pt.lat, lng: pt.lng + 8 * M_LNG }];
+    expect(travelFromTrack(pt, turn).courseDeg).toBeNull();
+    expect(travelFromTrack(pt, trackNorth()).courseDeg! < 5 || travelFromTrack(pt, trackNorth()).courseDeg! > 355).toBe(true);
+  });
+  it("headland / beyond row end and off-block saved pins are not resolvable", () => {
+    const head = { ...pinP, latitude: -34.00005, longitude: pt.lng }; // inside polygon, before row start
+    expect(assessPin(head, corroborated()).status).toBe("not_resolvable");
+    const nearEnd = { ...pinP, latitude: -34 + 1e-5, longitude: pt.lng }; // ~1 m from row start
+    expect(assessPin(nearEnd, corroborated()).geometry?.withinRowExtents).toBe(false);
+    const offPad = { ...pad, polygon_points: poly.map((q) => ({ ...q, longitude: q.longitude + 1 })) };
+    const r = assessPin(pinP, { ...corroborated(), paddocks: [offPad] });
+    expect(r.geometry?.insidePolygon).toBe(false);
+    expect(r.status).toBe("not_resolvable");
+  });
+  it("divergent rows are never a supported candidate", () => {
+    const bent = rows.map((r) => r.number === 4 ? { ...r, endPoint: { latitude: -33.999, longitude: r.endPoint.longitude + 20 * M_LNG } } : r);
+    const ev = corroborated(); ev.evidence.set("p", { ...goodEvidence, heading_degrees: 5 });
+    const r = assessPin({ ...pinP, heading: 5 }, { ...ev, paddocks: [{ ...pad, rows: bent }] });
+    expect(r.status).not.toBe("supported_candidate");
   });
   it("geometry-only (no evidence, no trips) requires review", () => {
     const r = assessPin(pinP, { paddocks: [pad], evidence: new Map(), segments: new Map(), trips: "not_loaded" });
@@ -151,6 +208,15 @@ describe("validation and export", () => {
     const known = [{ id: "k", paddock_id: "b1", latitude: at(6.2).lat, longitude: at(6.2).lng, pin_row_number: 4, driving_row_number: 3.5, heading: 0, pin_side: "right" }];
     const v = validateKnownPins(known, [pad]);
     expect(v).toMatchObject({ total: 1, adjacencyValid: 1, aisleMatch: 1, nearestDiffersFromSaved: 1, vineRowMatch: 1, falsePositives: 0 });
+  });
+  it("saved aisle adjacency holds while compass-derived row is WRONG (fa0201e1-style 292° compass, ~8° travel)", () => {
+    // Saved Row 4 / aisle 3.5, travelling north with side Right → row 4. Compass 200° (south-ish) pairs to row 3.
+    const known = [{ id: "fa", paddock_id: "b1", latitude: at(7).lat, longitude: at(7).lng, pin_row_number: 4, driving_row_number: 3.5, heading: 200, pin_side: "right" }];
+    const v = validateKnownPins(known, [pad]);
+    expect(v.adjacencyValid).toBe(1);
+    expect(v.vineRowMatch).toBe(0);
+    expect(v.falsePositives).toBe(1);
+    expect(v.withSavedBlock).toBe(1);
   });
   it("CSV marks rows non-authoritative and never says confirmed", () => {
     const csv = recoveryCsv([assessPin(pinP, corroborated())], { p: "check" });
