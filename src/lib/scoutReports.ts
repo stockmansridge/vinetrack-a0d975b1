@@ -193,6 +193,34 @@ export function stopWeather(a: ScoutAssessment): Record<string, unknown> | null 
     : null;
 }
 
+/**
+ * Access preflight for the Vineyard Insights tables.
+ *
+ * Ordinary PostgreSQL RLS SELECT filters disallowed rows silently — a member
+ * without rights gets an EMPTY result with no error, indistinguishable from a
+ * genuinely empty history. So list pages must call this BEFORE trusting an
+ * empty result:
+ *   "allowed"  — the backend confirmed read access; an empty list is real.
+ *   "denied"   — the backend confirmed no access; show the restricted state.
+ *   "unknown"  — the check itself failed (RPC missing/network); show an
+ *                error/retry state, never an empty list.
+ * Uses the existing safe can_use_vineyard_insights(vineyard_id) RPC — the same
+ * helper the table policies use — with the ordinary authenticated client.
+ */
+export type InsightsAccess = "allowed" | "denied" | "unknown";
+
+export async function checkInsightsAccess(vineyardId: string): Promise<InsightsAccess> {
+  try {
+    const { data, error } = await supabase.rpc("can_use_vineyard_insights" as any, {
+      p_vineyard_id: vineyardId,
+    } as any);
+    if (error) return "unknown";
+    return data === true ? "allowed" : "denied";
+  } catch {
+    return "unknown";
+  }
+}
+
 export async function fetchScoutVisits(vineyardId: string): Promise<ScoutVisit[]> {
   const { data, error } = await supabase
     .from("scout_visits" as any)
@@ -224,15 +252,15 @@ export async function fetchScoutVisitDetail(
 
   const { data: assessments, error: aErr } = await supabase
     .from("scout_block_assessments" as any)
-    .select("id, scout_visit_id, vineyard_id, paddock_id, status, stop_context, deleted_at")
+    .select("id, scout_visit_id, vineyard_id, paddock_id, status, stop_context, created_at, deleted_at")
     .eq("scout_visit_id", visitId)
     .eq("vineyard_id", vineyardId)
     .is("deleted_at", null);
   if (aErr) throw aErr;
 
-  const orderedAssessments = ((assessments ?? []) as unknown as ScoutAssessment[])
-    .slice()
-    .sort((a, b) => stopOrder(a) - stopOrder(b) || a.id.localeCompare(b.id));
+  const orderedAssessments = sortAssessmentsChronologically(
+    (assessments ?? []) as unknown as ScoutAssessment[],
+  );
 
   const assessmentIds = orderedAssessments.map((a) => a.id);
   let observations: ScoutObservation[] = [];
