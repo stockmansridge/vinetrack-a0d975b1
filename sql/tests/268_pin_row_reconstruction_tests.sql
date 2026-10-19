@@ -15,6 +15,8 @@ insert into paddocks(id,vineyard_id,polygon_points,rows,deleted_at,updated_at) s
   (select jsonb_agg(jsonb_build_object('number',r,'startPoint',jsonb_build_object('latitude',-34,'longitude',150+(r-1)*2.8*m),
      'endPoint',jsonb_build_object('latitude',-33.999,'longitude',150+(r-1)*2.8*m))) from generate_series(1,5) r), null, '2026-06-01T00:00:00Z' from k;
 
+insert into pin_location_geometry_history(paddock_id,vineyard_id,valid_from,valid_to,polygon_points,rows,geometry_hash)
+ select id,vineyard_id,'2026-09-12',null,polygon_points,rows,'legacy-history-hash' from paddocks;
 -- ===== 1. live input matrix 71 / 6 / 4 / 38 (no travel evidence) =====
 begin;
 insert into pins(id,vineyard_id,paddock_id,latitude,longitude,heading,pin_side)
@@ -38,7 +40,7 @@ create or replace function pg_temp.obs(lat float8, lon float8, course float8, sp
   select jsonb_agg(jsonb_build_object('latitude', lat + (i-2)*1.5/110574.0, 'longitude', lon, 'observedAt', ('2026-10-01T00:00:0'||(i*2)||'Z'),
     'courseDegrees', course, 'speedMps', speed, 'horizontalAccuracyM', acc)) from generate_series(1,3) i $$;
 create or replace function pg_temp.track(lat float8, lon float8, pts float8[]) returns jsonb language sql as $$
-  select jsonb_agg(jsonb_build_object('latitude', case when d = 0 then lat else lat + d/110574.0 end, 'longitude', lon) order by o)
+  select jsonb_agg(jsonb_build_object('bearing',0,'accuracy',1,'speed',1.2,'latitude', case when d = 0 then lat else lat + d/110574.0 end, 'longitude', lon) order by o)
     from unnest(pts) with ordinality u(d, o) $$;
 insert into trips(id,path_points) select '00000000-0000-0000-0000-0000000000c2', pg_temp.track(-33.9995,150+7*m, array[-12,-8,-4,0,4,8,12]) from k;      -- straight north, unique
 insert into trips(id,path_points) select '00000000-0000-0000-0000-0000000000c3', pg_temp.track(-33.9995,150+7*m, array[-8,0,8,12,0,-8]) from k;         -- anchor twice
@@ -56,12 +58,13 @@ select ('00000000-0000-0000-0000-0000000000'||lpad(i::text,2,'0'))::uuid, :VY,
   case when i = 11 then -33.99951 end, case when i = 11 then 150.00006 end,
   case when i = 12 then 3.5 end
 from k, generate_series(1,12) i;
+update trips set vineyard_id=:VY;
 update pins set pin_side='Left' where id::text like '%05' or id::text like '%04';
 insert into pin_capture_evidence(pin_id,captured_at,horizontal_accuracy_m,heading_degrees,pressed_side,observations,geometry_hash)
 select id, case when id::text like '%10' then '2026-01-01T00:00:00Z' else '2026-10-01T00:00:00Z' end::timestamptz,
   case when id::text like '%09' then 3.0 else 1.0 end, null,
   case when id::text like '%06' then 'left' end,
-  case when id::text ~ '(01|06|09|10|11)$' then pg_temp.obs(latitude, longitude, 0, 1.2, 2) end, 'legacy-hash'
+  case when id::text ~ '(01|06|09|10|11)$' then pg_temp.obs(latitude, longitude, 0, 1.2, 2) end, (select public.pin_geometry_identity(polygon_points,rows) from paddocks limit 1)
 from pins;
 
 create temp table rc as select id, vt_pbf_reconstruct_pin(id) r from pins;
@@ -71,7 +74,7 @@ select pg_temp.eq('P1 bounding rows 3/4', (select r->'suggestion'->'bounding_row
 select pg_temp.eq('P1 aisle 3.5', (select (r->'suggestion'->>'driving_aisle')::numeric from rc where id::text like '%01'), 3.5);
 select pg_temp.eq('P1 phone heading 80° off is not used', (select (r->'travel'->>'device_heading_used')::boolean from rc where id::text like '%01'), false);
 select pg_temp.eq('P1 heading disagreement logged', (select round((r->'travel'->>'device_heading_vs_travel_deg')::numeric) from rc where id::text like '%01'), 80::numeric);
-select pg_temp.eq('P1 versioned', (select r->>'algorithm_version' from rc where id::text like '%01'), 'pbf-recon-v1');
+select pg_temp.eq('P1 versioned', (select r->>'algorithm_version' from rc where id::text like '%01'), 'pbf-recon-v2');
 select pg_temp.eq('P2 unique track anchor', (select r->'travel'->'track'->>'anchor' from rc where id::text like '%02'), 'unique');
 select pg_temp.eq('P2 left going north = row 3', (select (r->'suggestion'->>'vine_row')::int from rc where id::text like '%02'), 3);
 select pg_temp.eq('P2 track source', (select r->'travel'->>'source' from rc where id::text like '%02'), 'trip_track');
@@ -86,11 +89,22 @@ select pg_temp.eq('P7 no vine row', (select r->'suggestion'->>'vine_row' from rc
 select pg_temp.eq('P8 missing block', (select r->>'tier' from rc where id::text like '%08'), 'missing_block');
 select pg_temp.eq('P9 3 m accuracy crosses 2.8 m aisle', (select r->>'tier' from rc where id::text like '%09'), 'needs_review');
 select pg_temp.eq('P10 geometry changed after capture', (select r->>'tier' from rc where id::text like '%10'), 'needs_review');
-select pg_temp.eq('P10 historical geometry unavailable', (select r->'geometry'->>'historical_geometry' from rc where id::text like '%10'), 'unavailable');
+select pg_temp.eq('P10 historical geometry unavailable before September', (select r->'geometry'->>'historical_geometry' from rc where id::text like '%10'), 'unavailable');
 select pg_temp.eq('P11 supported, no new snap', (select r->'suggestion'->>'snap' from rc where id::text like '%11'), null::text);
 select pg_temp.eq('P12 preserved', (select r->>'tier' from rc where id::text like '%12'), 'preserved');
 select pg_temp.eq('P1 provenance accuracy', (select r->'gps'->>'accuracy_source' from rc where id::text like '%01'), 'pin_capture_evidence.horizontal_accuracy_m');
 select pg_temp.eq('P1 side provenance', (select r->'side'->'sources'->>'pins.pin_side' from rc where id::text like '%01'), 'right');
+
+-- Schema-shaped known-row holdout: deterministic IDs, already assigned, no writes by reconstruction.
+insert into pins(id,vineyard_id,paddock_id,latitude,longitude,pin_row_number,driving_row_number,pin_side,trip_id)
+ select ('10000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,:VY,
+ '00000000-0000-0000-0000-0000000000b1',-33.9995,150+7*m,3::numeric,3.5,'Left','00000000-0000-0000-0000-0000000000c2'
+ from k,generate_series(1,20) i;
+insert into pin_capture_evidence(pin_id,captured_at,horizontal_accuracy_m,geometry_hash)
+ select id,'2026-10-01',1,(select pin_geometry_identity(polygon_points,rows) from paddocks limit 1)
+ from pins where id::text like '10000000%';
+select pg_temp.eq('held-out known-row validation passes', (vt_pbf_validation(:VY)->>'passed')::boolean,true);
+select pg_temp.eq('held-out count', (vt_pbf_validation(:VY)->>'held_out_count')::int,10);
 
 -- ===== 3. dry-run gate =====
 create temp table it as select id, jsonb_build_object('pin_id',id,'paddock_id',paddock_id,'pin_row_number',4,'driving_row_number',3.5,
@@ -120,7 +134,7 @@ select pg_temp.eq('P1 sync_version bumped', (select sync_version from pins where
 select pg_temp.eq('P1 raw lat preserved', (select latitude from pins where id::text like '%01'), -33.9995::float8);
 select pg_temp.eq('P11 original snap preserved', (select snapped_latitude from pins where id::text like '%11'), -33.99951::float8);
 select pg_temp.eq('P11 outcome unsnapped', (select outcome from pin_row_backfill_audit where pin_id::text like '%11'), 'assigned_unsnapped');
-select pg_temp.eq('audit carries reconstruction', (select projection->'reconstruction'->>'algorithm_version' from pin_row_backfill_audit where pin_id::text like '%01'), 'pbf-recon-v1');
+select pg_temp.eq('audit carries reconstruction', (select projection->'reconstruction'->>'algorithm_version' from pin_row_backfill_audit where pin_id::text like '%01'), 'pbf-recon-v2');
 select pg_temp.eq('idempotent rerun', (pin_row_backfill_apply(:'aid', :'h', 'APPLY 2 PIN ROWS')->>'idempotent')::boolean, true);
 select pg_temp.eq('no double bump', (select sync_version from pins where id::text like '%01'), 2);
 select pg_temp.eq('applied pin now preserved', (vt_pbf_reconstruct_pin('00000000-0000-0000-0000-000000000001')->>'tier'), 'preserved');
@@ -134,5 +148,5 @@ do $$ begin
     (select items_hash from pin_row_backfill_approvals where status='pending_owner' order by created_at desc limit 1), 'APPLY 1 PIN ROWS');
   raise exception 'FAIL drift apply should have been blocked';
 exception when others then if sqlerrm like 'FAIL%' then raise; end if; raise notice 'ok  drift blocks apply: %', left(sqlerrm, 90); end $$;
-select pg_temp.eq('P2 untouched after blocked apply', (select pin_row_number from pins where id::text like '%02'), null::int);
+select pg_temp.eq('P2 untouched after blocked apply', (select pin_row_number from pins where id::text like '%02'), null::numeric);
 \echo ALL 268 TESTS PASSED

@@ -55,9 +55,9 @@ begin
     select (o->>'observedAt')::timestamptz t, (o->>'latitude')::double precision lat, (o->>'longitude')::double precision lon, (o->>'courseDegrees')::double precision c
       from jsonb_array_elements(p_obs) o
      where o->>'observedAt' is not null and o->>'latitude' is not null and o->>'longitude' is not null
-       and coalesce((o->>'courseDegrees')::double precision,-1) >= 0
+       and coalesce((o->>'courseDegrees')::double precision,-1) between 0 and 359.999999
        and coalesce((o->>'speedMps')::double precision,0) >= 0.8
-       and coalesce((o->>'horizontalAccuracyM')::double precision, 999) <= 5) z;
+       and coalesce((o->>'horizontalAccuracyM')::double precision, 999) between 0 and 5) z;
   n := jsonb_array_length(q);
   if n < 2 then return jsonb_build_object('ok',false,'available',true,'samples',total,'qualified',n,'reason',n||' qualified course sample(s); need >=2 at >=0.8 m/s, <=5 m'); end if;
   f := q->0; l := q->(n-1); t0 := (f->>'t')::timestamptz; t1 := (l->>'t')::timestamptz;
@@ -71,6 +71,8 @@ begin
   db := public.vt_pbf_bearing((f->>'lat')::float8,(f->>'lon')::float8,(l->>'lat')::float8,(l->>'lon')::float8);
   if public.vt_pbf_angle_diff(db, mean) > 30 then return jsonb_build_object('ok',false,'available',true,'qualified',n,'conflict',true,'reason','displacement disagrees with reported course'); end if;
   return jsonb_build_object('ok',true,'available',true,'source','gps_observations','course_deg',mean,'qualified',n,'displacement_m',disp,'spread_deg',spread);
+exception when invalid_text_representation or datetime_field_overflow then
+  return jsonb_build_object('ok',false,'available',true,'reason','malformed observation data');
 end $$;
 
 -- Travel from ordered trip path around a UNIQUE exact anchor (|Δ| < 1e-7°): walk ≥5 m each way,
@@ -109,6 +111,8 @@ begin
   if chord / nullif(path_b + path_f,0) < 0.9 then return jsonb_build_object('ok',false,'anchor','unique','reason','track not straight around anchor','straightness',chord/nullif(path_b+path_f,0)); end if;
   return jsonb_build_object('ok',true,'anchor','unique','source','trip_track','course_deg',public.vt_pbf_bearing(a.lat,a.lon,b.lat,b.lon),
     'chord_m',chord,'straightness',chord/nullif(path_b+path_f,0),'anchor_index',i);
+exception when invalid_text_representation then
+  return jsonb_build_object('ok',false,'anchor','unavailable','reason','malformed track data');
 end $$;
 
 -- Bounding rows / aisle for a point (no row choice). Returns row axis and signed offsets.
@@ -254,7 +258,7 @@ begin
       if (bnd->>'adjacent_numbering')::boolean is distinct from true then hold:=array_append(hold,'bounding row numbers are not adjacent; no offsets permitted'); end if;
       if (bnd->>'row_divergence_deg')::double precision > 10 then hold := array_append(hold, 'rows diverge (contour) — straight-row model unsafe'); end if;
       if least((bnd->>'t_a')::double precision,(bnd->>'t_b')::double precision) < 0.05 or greatest((bnd->>'t_a')::double precision,(bnd->>'t_b')::double precision) > 0.95 then hold := array_append(hold, 'headland / row end'); end if;
-      if acc is null then hold := array_append(hold, 'GPS accuracy unknown');
+      if acc is null or acc<0 then hold := array_append(hold, 'GPS accuracy unknown');
       elsif acc >= least((bnd->>'dist_a_m')::double precision,(bnd->>'dist_b_m')::double precision) then hold := array_append(hold, 'GPS accuracy circle crosses a bounding row (aisle ambiguous)'); end if;
       vx := public.vt_pbf_angle_diff(course, (bnd->>'row_axis_deg')::double precision);
       if least(vx, 180 - vx) > 30 then hold := array_append(hold, 'travel not along rows');
