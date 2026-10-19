@@ -153,8 +153,8 @@ function localAisleOf(P: { x: number; y: number }, offs: { n: number; a: any; b:
     let dx = r.b.x - r.a.x, dy = r.b.y - r.a.y;
     const len = Math.hypot(dx, dy); if (!len) continue;
     dx /= len; dy /= len;
-    if (dx * ux + dy * uy < 0) { dx = -dx; dy = -dy; }
-    const ax = dx === (r.b.x - r.a.x) / len ? r.a : r.b; // start consistent with orientation
+    let ax = r.a;
+    if (dx * ux + dy * uy < 0) { dx = -dx; dy = -dy; ax = r.b; } // orient along block axis
     const t = (P.x - ax.x) * dx + (P.y - ax.y) * dy;
     if (t < 0 || t > len) continue;
     const d = dx * (P.y - ax.y) - dy * (P.x - ax.x); // >0: point left of row
