@@ -134,6 +134,53 @@ export default function ScoutReportDetailPage() {
   });
   const canonicalGrowthIds = canonicalGrowthQuery.data ?? new Set<string>();
 
+  // Linked evidence locations: vineyard pins and verified canonical E-L
+  // records. These are provenance markers, distinct from measured GPS.
+  const linkedPinIds = useMemo(() => {
+    if (!detail) return [] as string[];
+    const ids: string[] = [];
+    for (const list of detail.observationsByAssessment.values()) {
+      for (const o of list) if (o.linked_pin_id) ids.push(o.linked_pin_id);
+    }
+    return Array.from(new Set(ids));
+  }, [detail]);
+
+  const linkedPinsQuery = useQuery({
+    queryKey: ["scout-linked-pins", selectedVineyardId, linkedPinIds.join("|")],
+    enabled: linkedPinIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pins")
+        .select("id, title, latitude, longitude")
+        .in("id", linkedPinIds)
+        .is("deleted_at", null);
+      if (error) {
+        if (isPermissionError(error)) return [] as { id: string; title: string | null; latitude: number | null; longitude: number | null }[];
+        throw error;
+      }
+      return (data ?? []) as { id: string; title: string | null; latitude: number | null; longitude: number | null }[];
+    },
+  });
+
+  const growthLocationsQuery = useQuery({
+    queryKey: ["scout-growth-locations", selectedVineyardId, linkedGrowthIds.join("|")],
+    enabled: linkedGrowthIds.length > 0 && canonicalGrowthIds.size > 0,
+    queryFn: async () => {
+      const ids = linkedGrowthIds.filter((id) => canonicalGrowthIds.has(id));
+      if (!ids.length) return [] as { id: string; latitude: number | null; longitude: number | null }[];
+      const { data, error } = await supabase
+        .from("growth_stage_records" as any)
+        .select("id, latitude, longitude")
+        .in("id", ids)
+        .is("deleted_at", null);
+      if (error) {
+        if (isPermissionError(error)) return [] as { id: string; latitude: number | null; longitude: number | null }[];
+        throw error;
+      }
+      return (data ?? []) as { id: string; latitude: number | null; longitude: number | null }[];
+    },
+  });
+
   const paddocksQuery = useQuery({
     queryKey: ["paddocks-geo", selectedVineyardId],
     enabled: !!selectedVineyardId,
