@@ -128,12 +128,12 @@ describe("schema-snapshot fixture (counts from independent read-only SQL audit, 
     if (i < 84) p.paddock_id = "b1";
     else if (i < 86) { p.latitude = at(6).lat; p.longitude = at(6).lng + (i - 84) * 1e-7; } // inside polygon
     else { p.latitude = -30; p.longitude = 140; } // outside
-    if (i < 77) { p.trip_id = `t${(i % 5) + 1}`; p.heading = 0; }
+    if (i < 77) { p.trip_id = i < 57 ? `t${(i % 4) + 1}` : "t5"; p.heading = 0; }
     if (i < 75) p.pin_side = "left";
     if (i < 56) evidence.set(p.id, { pin_id: p.id, observations: [] });
     if (i === 0 || i === 1) segments.set(p.id, [{ row_number: 108, segment_number: 1 }]);
     if (i === 2 || i === 3) p.driving_row_number = 3.5;
-    if (i < 57) trips.get(`t${(i % 4) + 1}`)!.push({ lat: p.latitude, lng: p.longitude });
+    if (i < 57) trips.get(p.trip_id)!.push({ lat: p.latitude, lng: p.longitude });
     pins.push(p);
   }
   const s = auditSummary(pins, { paddocks: [pad], evidence, segments, trips });
@@ -168,7 +168,7 @@ describe("navigation", () => {
     expect(ops.items.find((i) => i.label === "Pin Row Recovery")!.path).toBe("/admin/pin-row-recovery");
   });
   it("is not offered to a normal operator in search", () => {
-    const viewer: any = { role: "operator", isSystemAdmin: false };
+    const viewer: any = { role: "operator", isSystemAdmin: false, irrigation: { records: false, reports: false, setup: false }, hasAccountBilling: false };
     expect(searchDestinations(viewer).some((d) => d.path === "/admin/pin-row-recovery")).toBe(false);
     expect(searchDestinations({ ...viewer, isSystemAdmin: true }).some((d) => d.path === "/admin/pin-row-recovery")).toBe(true);
   });
