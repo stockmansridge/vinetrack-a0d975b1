@@ -19,7 +19,7 @@ async function setup() {
   const old=await file('supabase/migrations/20260713020438_89d7f076-416f-4140-ad1d-f5332cc08a3c.sql');
   await db.exec(old.slice(0,old.indexOf('-- ============ satellite_refresh_jobs')));
   await db.exec(old.slice(old.indexOf('CREATE OR REPLACE FUNCTION public.refresh_paddock_manifest'),old.indexOf('CREATE OR REPLACE FUNCTION public.satellite_scenes_manifest_sync')));
-  for(const p of ['0000_satellite_ingestion_disabled_foundation.sql','0001_satellite_verification_fail_closed.sql','0002_satellite_service_privilege_hardening.sql','0003_satellite_pilot_day_selection.sql','0004_satellite_pilot_fenced_publish.sql','0005_satellite_v7_manifest_compatibility.sql']) await db.exec(await file('drizzle/migrations/'+p));
+  for(const p of ['0000_satellite_ingestion_disabled_foundation.sql','0001_satellite_verification_fail_closed.sql','0002_satellite_service_privilege_hardening.sql','0003_satellite_pilot_day_selection.sql','0004_satellite_pilot_fenced_publish.sql','0005_satellite_v7_manifest_compatibility.sql','0006_satellite_reservation_null_rejection.sql']) await db.exec(await file('drizzle/migrations/'+p));
   await db.exec(`CREATE UNIQUE INDEX satellite_scenes_unique_capture_idx ON satellite_scenes(vineyard_id,paddock_id,provider,((acquired_at AT TIME ZONE 'UTC')::date));`);
   return db;
 }
@@ -58,7 +58,7 @@ function stac(){const f=pilotFixture();return {type:'Feature',id:'S2B_55H_202610
 function dependencies(db:PGlite,storage=new Map<string,Uint8Array>(),options:{corrupt?:boolean;stale?:boolean;status?:number}={}) {
   const f=pilotFixture();const ids=Array.from({length:8},(_,i)=>`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`);
   const paddocks=ids.map(id=>({id,vineyard_id:PILOT_VINEYARD,polygon_points:f.ring.map(v=>({longitude:v[0],latitude:v[1]}))}));
-  return {db:client(db,storage,options.corrupt),canonical:async(id?:string)=>id?(options.stale?[{...paddocks[0],polygon_points:[]}]:paddocks.filter(p=>p.id===id)):paddocks,fetch:async()=>new Response(options.status===429?'':JSON.stringify({features:[stac()],links:[]}),{status:options.status??200,headers:{'Retry-After':'2'}}),render:(m: any,r:any,l:any,b:RequestBudget)=>renderPilot(m,r,l,new RequestBudget(b.signal,24,1048576,f.transport))};
+  return {unitSpend:.01,db:client(db,storage,options.corrupt),canonical:async(id?:string)=>id?(options.stale?[{...paddocks[0],polygon_points:[]}]:paddocks.filter(p=>p.id===id)):paddocks,fetch:async()=>new Response(options.status===429?'':JSON.stringify({features:[stac()],links:[]}),{status:options.status??200,headers:{'Retry-After':'2'}}),render:(m: any,r:any,l:any,b:RequestBudget)=>renderPilot(m,r,l,new RequestBudget(b.signal,24,1048576,f.transport))};
 }
 Deno.test('native Deno parser PNG and float GeoTIFF synthetic 10m fixture',async()=>{assert.equal((await runRasterFixture()).mean,.5);});
 Deno.test('discovery -> actual atomic queue -> native NDVI -> immutable storage -> fenced v7 manifest; v6 preserved',async()=>{

@@ -9,6 +9,7 @@ export interface PipelineDependencies {
   canonical: (id?:string)=>Promise<any[]>;
   fetch: typeof fetch;
   render: typeof renderPilot;
+  unitSpend?: number;
 }
 async function rpc(db:any,name:string,args:any) { const r=await db.rpc(name,args);if(r.error) throw r.error;return r.data; }
 export async function runPilot(kind:'worker'|'discovery',deps:PipelineDependencies,signal:AbortSignal) {
@@ -19,7 +20,8 @@ export async function runPilot(kind:'worker'|'discovery',deps:PipelineDependenci
     const c=await db.from('satellite_ingestion_control').select('enabled').eq('scope','publisher').eq('scope_key','all').maybeSingle();
     if(c.error||!c.data?.enabled) return {reason:'publisher_disabled',provider_calls:0,no_op:true};
   }
-  const reservation=await rpc(db,'satellite_reserve_provider',{p_provider:PILOT_PROVIDER,p_vineyard:PILOT_VINEYARD,p_requests:kind==='discovery'?1:24,p_processing:kind==='discovery'?0:1,p_cpu:kind==='discovery'?1000:45000,p_transfer:kind==='discovery'?1048576:16777216,p_storage:kind==='discovery'?0:4194304,p_spend:0,p_pixels:kind==='worker'});
+  if(!Number.isFinite(deps.unitSpend)||!deps.unitSpend||deps.unitSpend<=0) return {reason:'unit_cost_not_approved',provider_calls:0,no_op:true};
+  const reservation=await rpc(db,'satellite_reserve_provider',{p_provider:PILOT_PROVIDER,p_vineyard:PILOT_VINEYARD,p_requests:kind==='discovery'?1:24,p_processing:kind==='discovery'?0:1,p_cpu:kind==='discovery'?1000:45000,p_transfer:kind==='discovery'?1048576:16777216,p_storage:kind==='discovery'?0:4194304,p_spend:deps.unitSpend,p_pixels:kind==='worker'});
   if(!reservation) return {reason:'budget_or_backoff',provider_calls:0,no_op:true};
   let calls=0,work:any;const budget=new RequestBudget(signal,24,16777216,deps.fetch);
   try {
