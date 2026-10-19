@@ -45,6 +45,7 @@ export default function BackfillPanel({
 
   const status = statusQuery.data;
   const active = isBackfillActive(status);
+  const activelyRunningHere = running && authorisedVineyard === vineyardId;
 
   // Drive batches only after explicit consent in this mounted session.
   // A persisted active job or page refresh never grants that consent.
@@ -133,9 +134,9 @@ export default function BackfillPanel({
             <div>Stored dates: <span className="text-foreground">{done} of {total}</span></div>
             <div>Missing: <span className="text-foreground">{missing}</span></div>
             {status?.newest_missing_date && (
-              <div className="col-span-2">Next to process: <span className="text-foreground">{status.newest_missing_date}</span></div>
+              <div className="col-span-2">Newest historical backlog date: <span className="text-foreground">{status.newest_missing_date}</span></div>
             )}
-            {job?.current_processing_date && active && (
+            {job?.current_processing_date && activelyRunningHere && (
               <div className="col-span-2">Working on: <span className="text-foreground">{job.current_processing_date}</span></div>
             )}
             {(status?.outcome_counts?.cloud_obscured ?? 0) > 0 && (
@@ -159,8 +160,8 @@ export default function BackfillPanel({
 
       {active && (
         <div className="inline-flex items-center gap-1.5 text-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          {authorisedVineyard === vineyardId ? "Processing explicitly started backfill." : "Stored job marked active; not resumed by this page."}
+          {activelyRunningHere ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <History className="h-3.5 w-3.5" />}
+          {activelyRunningHere ? "Processing explicitly started backfill." : "Historical backlog paused; current activity not checked; not resumed by this page."}
         </div>
       )}
 
@@ -169,13 +170,13 @@ export default function BackfillPanel({
           size="sm"
           variant="outline"
           className="h-7 text-[11px]"
-          disabled={active || discover.isPending || statusQuery.isLoading}
+          disabled
           onClick={() => setConfirmOpen(true)}
         >
           {discover.isPending
             ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
             : <History className="h-3.5 w-3.5 mr-1.5" />}
-          {active ? "Backfill running…" : "Find and fill missing dates"}
+          Historical processing disabled — budget required
         </Button>
       )}
 

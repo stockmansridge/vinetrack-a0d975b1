@@ -31,25 +31,34 @@ export interface AssetFetchResult {
   etag: string | null;
   contentType: string | null;
 }
+export type AssetDeliveryEvent = { stage: "signer" | "bytes"; status: number | null; result: "pending" | "ok" | "failed" };
 
 export async function fetchAssetBytes(
   assetId: string,
   ifNoneMatch?: string | null,
   signal?: AbortSignal,
+  onDelivery?: (event: AssetDeliveryEvent) => void,
 ): Promise<AssetFetchResult> {
   // Use the same authenticated function-invocation path as the manifest.
   // The former direct GET mixed a VineTrack JWT with this project's raw
   // function gateway and could fail before the asset function ran, leaving
   // every overlay without a blob even though its manifest row was present.
-  const signed = await invoke<{ signed_url: string; expires_in: number }>(
+  onDelivery?.({ stage: "signer", status: null, result: "pending" });
+  let signed: { signed_url: string; expires_in: number };
+  try { signed = await invoke<{ signed_url: string; expires_in: number }>(
     "satellite-get-asset-url",
     { asset_id: assetId },
     signal,
-  );
+  ); } catch (error) {
+    onDelivery?.({ stage: "signer", status: error instanceof SavedAssetError ? error.status ?? null : null, result: "failed" });
+    throw error;
+  }
   if (!signed?.signed_url) throw new Error("asset URL was not returned");
+  onDelivery?.({ stage: "signer", status: 200, result: "ok" });
 
   // A fresh URL is minted for each bounded retry. Never persist an expiring URL.
   const res = await fetch(signed.signed_url, { method: "GET", signal });
+  onDelivery?.({ stage: "bytes", status: res.status, result: res.ok ? "ok" : "failed" });
   if (!res.ok) throw new SavedAssetError(`Saved asset download failed (HTTP ${res.status})`, res.status);
   const blob = await res.blob();
   const etag = res.headers.get("ETag") ?? ifNoneMatch ?? null;

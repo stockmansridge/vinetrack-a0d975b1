@@ -10,6 +10,8 @@ import RefreshProgressPanel from "@/components/satellite/RefreshProgressPanel";
 import { fromArrayBuffer } from "geotiff";
 import SatelliteMap, { type SatelliteRasterOverlay, type OverlayCallbackInfo, type SatelliteMapDiagnostics } from "@/components/SatelliteMap";
 import OverlayHealthPanel from "@/components/satellite/OverlayHealthPanel";
+import IngestionHealthPanel from "@/components/satellite/IngestionHealthPanel";
+import { historicalTimelineStatus } from "@/lib/cropHealthActivity";
 import { useCropHealthViewModel } from "@/hooks/useCropHealthViewModel";
 import { displayKeyFor, analyticalKeyFor, type AssetLoadState, type OverlayLifecycleState } from "@/lib/cropHealthViewModel";
 import { reasonToCustomerMessage } from "@/lib/cropHealthCopy";
@@ -474,6 +476,8 @@ type AssetPipelineDiagnostic = {
   paddockId: string | null;
   layer: SatelliteIndexType | string | null;
   endpointStatus: number | null;
+  signerStatus?: number | null;
+  signerResult?: string;
   blobSize: number | null;
   mimeType: string | null;
   etag: string | null;
@@ -1029,27 +1033,16 @@ export default function SatelliteMappingPage() {
         coveragePercent: d.coveragePercent,
       });
     }
-    const OUTCOME_STATUS: Record<string, TimelineStatus> = {
-      pending: "queued",
-      retry_pending: "queued",
-      processing: "processing",
-      downloaded: "processing",
-      available: "processing",
-      cloud_obscured: "cloud",
-      invalid_coverage: "cloud",
-      no_provider_capture: "no_capture",
-      failed: "failed",
-    };
     for (const e of backfillStatusQuery.data?.expected_dates ?? []) {
       if (byDate.has(e.date)) continue; // saved imagery always wins
-      const status = OUTCOME_STATUS[e.status] ?? "queued";
+      const status = historicalTimelineStatus(e.status);
       byDate.set(e.date, {
         date: e.date,
         status,
         paddockCount: 0,
         activeCount: singlePaddockScope ? 1 : (e.paddocks_total || totalPaddocks),
         coveragePercent: 0,
-        note: status === "failed" ? e.last_error : null,
+        note: status === "failed" ? e.last_error : status === "queued" ? "Historical backlog; no current fenced lease confirmed" : null,
       });
     }
     return Array.from(byDate.values());
@@ -1457,7 +1450,7 @@ export default function SatelliteMappingPage() {
         if (!validRasterBounds(asset.bounds)) throw new SavedAssetError("Saved raster bounds missing or invalid");
         if (isDisplay) cacheStatsRef.current.displayRequested++;
         else cacheStatsRef.current.analyticalRequested++;
-        let cached = await readCachedAsset(asset.id, pv);
+        let cached = await bounded(() => readCachedAsset(asset.id, pv), signal, 2_000, "Saved cache read").catch(() => null);
         if (signal.aborted) return;
         // Reject corrupt cache entries rather than trapping the page on them.
         if (cached && isDisplay) {
@@ -1469,7 +1462,10 @@ export default function SatelliteMappingPage() {
         }
         const blob = cached?.blob ?? await retrySaved(async (child) => {
           cacheStatsRef.current.assetRequests++;
-          const result = await fetchAssetBytes(asset.id, null, child);
+          const result = await fetchAssetBytes(asset.id, null, child, (event) => {
+            if (event.stage === "signer") diag({ signerStatus: event.status, signerResult: event.result });
+            else diag({ endpointStatus: event.status });
+          });
           diag({ endpointStatus: result.status, mimeType: result.contentType, blobSize: result.blob?.size ?? null, etag: result.etag });
           if (!result.blob?.size) throw new SavedAssetError("Saved asset returned empty bytes");
           cacheStatsRef.current.bytesDownloaded += result.blob.size;
@@ -1492,7 +1488,7 @@ export default function SatelliteMappingPage() {
         } else {
           if (cached) cacheStatsRef.current.analyticalHits++; else cacheStatsRef.current.analyticalMisses++;
         }
-        diag({ endpointStatus: cached ? 304 : 200, blobSize: blob.size, mimeType: blob.type,
+        diag({ endpointStatus: cached ? null : 200, signerResult: cached ? "cache — signer not called" : "ok", blobSize: blob.size, mimeType: blob.type,
           objectUrlCreated: true, imageStatus: isDisplay ? "loaded" : "not_checked", finalStatus: cached ? "cached" : "loaded" });
         state((prev) => new Map(prev).set(key, { phase: "loaded" }));
         const publishedUrl = url;
@@ -2753,11 +2749,12 @@ export default function SatelliteMappingPage() {
       <BackfillPanel
         vineyardId={activeVineyardId ?? null}
         paddockIds={geoms.map((g) => g.id)}
-        canManage={isSystemAdmin}
+        canManage={false}
         onImageryChanged={() => manifestQuery.refetch()}
       />
 
       <div className="flex flex-wrap items-center gap-2">
+        <IngestionHealthPanel vineyardId={activeVineyardId ?? null} />
         <Button
           size="sm"
           variant={disableCropOverlays ? "secondary" : "outline"}
