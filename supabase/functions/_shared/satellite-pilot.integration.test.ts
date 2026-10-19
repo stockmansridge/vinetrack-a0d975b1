@@ -19,7 +19,7 @@ async function setup() {
   const old=await file('supabase/migrations/20260713020438_89d7f076-416f-4140-ad1d-f5332cc08a3c.sql');
   await db.exec(old.slice(0,old.indexOf('-- ============ satellite_refresh_jobs')));
   await db.exec(old.slice(old.indexOf('CREATE OR REPLACE FUNCTION public.refresh_paddock_manifest'),old.indexOf('CREATE OR REPLACE FUNCTION public.satellite_scenes_manifest_sync')));
-  for(const p of ['0000_satellite_ingestion_disabled_foundation.sql','0001_satellite_verification_fail_closed.sql','0002_satellite_service_privilege_hardening.sql','0003_satellite_pilot_day_selection.sql','0004_satellite_pilot_fenced_publish.sql','0005_satellite_v7_manifest_compatibility.sql','0006_satellite_reservation_null_rejection.sql','0007_satellite_raster_identity_and_blank_guard.sql','0008_satellite_terminal_quality_statuses.sql']) await db.exec(await file('drizzle/migrations/'+p));
+  for(const p of ['0000_satellite_ingestion_disabled_foundation.sql','0001_satellite_verification_fail_closed.sql','0002_satellite_service_privilege_hardening.sql','0003_satellite_pilot_day_selection.sql','0004_satellite_pilot_fenced_publish.sql','0005_satellite_v7_manifest_compatibility.sql','0006_satellite_reservation_null_rejection.sql','0007_satellite_raster_identity_and_blank_guard.sql','0008_satellite_terminal_quality_statuses.sql','0009_satellite_work_items_terminal_quality_check.sql']) await db.exec(await file('drizzle/migrations/'+p));
   await db.exec(`CREATE UNIQUE INDEX satellite_scenes_unique_capture_idx ON satellite_scenes(vineyard_id,paddock_id,provider,((acquired_at AT TIME ZONE 'UTC')::date));`);
   return db;
 }
