@@ -530,6 +530,8 @@ export function assessPin(pin: any, ev: RecoveryEvidence): RecoveryRow {
     suggestedBlockName, suggestedBlockNote,
     geometrySource: block ? GEOMETRY_SOURCE_LABEL : "None",
     storedHeading, evidenceHeading, headingFresh, side, pressedSide, accuracy, evidenceState,
+    sideFields: { pin_side: pin.pin_side ?? null, side: pin.side ?? null, pressed_side: evRow?.pressed_side ?? null },
+    sideConflict, snapped: sl != null && sg != null ? { lat: sl, lng: sg } : null,
     observationCount, tripId, trackAnchor: anchor, segmentsState, segmentsLabel, existingMeta,
   };
   const geometry = block && lat != null && lng != null ? aisleGeometry({ lat, lng }, block.rows, block.polygon_points) : null;
@@ -753,7 +755,7 @@ export function recoveryCsv(rows: RecoveryRow[], notes: Record<string, string>):
     "saved_block", "suggested_block", "geometry_source", "stored_heading", "evidence_heading", "heading_fresh",
     "side", "pressed_side", "accuracy_m", "evidence", "valid_observations", "trip_id", "track_anchor",
     "saved_segments", "existing_metadata", "nearest_physical_row", "bounding_rows", "suggested_driving_aisle",
-    "travel_course", "travel_source", "heading_vs_travel_deg", "direction_conflict", "suggested_vine_row", "status", "reason", "review_note"];
+    "travel_course", "travel_source", "heading_vs_travel_deg", "direction_conflict", "gps_input", "direction_input", "side_input", "triad_group", "priority_first_inspection", "snapped_lat", "snapped_lng", "raw_pin_side", "raw_side", "raw_pressed_side", "suggested_vine_row", "status", "reason", "review_note"];
   const lines = [head.join(",")];
   for (const r of rows) {
     lines.push([
@@ -763,8 +765,91 @@ export function recoveryCsv(rows: RecoveryRow[], notes: Record<string, string>):
       r.segmentsState === "unavailable" ? "unavailable" : r.segmentsLabel, r.existingMeta,
       r.geometry?.nearestPhysicalRow, r.geometry?.boundingRows?.join("|"), r.geometry?.aisle,
       r.travel.courseDeg?.toFixed(1), r.travel.source, r.headingVsTravelDeg?.toFixed(1), r.directionConflict,
+      ...(() => { const t = triadOf(r); return [t.gps, t.direction, t.side, triadGroup(r, t)]; })(),
+      isPriorityPin(r) ? "yes" : "no", r.snapped?.lat, r.snapped?.lng,
+      r.sideFields.pin_side, r.sideFields.side, r.sideFields.pressed_side,
       r.suggestedVineRow, STATUS_LABEL[r.status], r.reason, notes[r.id] ?? "",
     ].map(esc).join(","));
   }
   return lines.join("\n");
+}
+
+// ---------- three-input evidence (GPS / DIRECTION / SIDE) ----------
+export type InputStatus = "qualified" | "unreliable" | "absent" | "conflicting" | "unavailable";
+export interface Triad { gps: InputStatus; direction: InputStatus; side: InputStatus; notes: string[] }
+
+export function triadOf(r: RecoveryRow): Triad {
+  const notes: string[] = [];
+  // A) GPS
+  let gps: InputStatus;
+  if (r.lat == null || r.lng == null) gps = "absent";
+  else if (r.evidenceState === "unavailable") { gps = "unavailable"; notes.push("GPS accuracy unreadable"); }
+  else if (r.accuracy == null) { gps = "unreliable"; notes.push("GPS accuracy unknown"); }
+  else if (r.geometry?.clearanceM != null && r.accuracy < r.geometry.clearanceM && (r.geometry.clearance ?? 0) >= MIN_ROW_CLEARANCE_FRACTION) gps = "qualified";
+  else { gps = "unreliable"; notes.push("GPS uncertainty can cross an aisle"); }
+  if (r.snapped) notes.push("stored snapped coordinate present (not treated as raw GPS)");
+  // B) DIRECTION (movement only)
+  let direction: InputStatus;
+  const srcConflict = !!r.directionConflict?.includes("disagree");
+  if (srcConflict) direction = "conflicting";
+  else if (r.travel.courseDeg != null) direction = "qualified";
+  else if (r.trackAnchor === "not_loaded" || r.trackAnchor === "unavailable") direction = r.obsTravel ? "unreliable" : "unavailable";
+  else if (r.obsTravel || r.trackTravel) direction = "unreliable";
+  else direction = "absent";
+  if (r.trackAnchor === "unique" && r.travel.source !== "trip_track") notes.push("exact track anchor but no qualified segment direction");
+  if (r.headingVsTravelDeg != null && r.headingVsTravelDeg > DIRECTION_CONFLICT_DEG) notes.push("phone heading ≠ travel");
+  // C) SIDE
+  let side: InputStatus;
+  if (r.sideConflict) side = "conflicting";
+  else if (!r.side) side = "absent";
+  else if (r.trackTravel?.reason.includes("reverses")) { side = "unreliable"; notes.push("side ambiguous at direction reversal"); }
+  else side = "qualified";
+  return { gps, direction, side, notes };
+}
+
+export type TriadGroup = "fully_qualifying" | "preserve_existing" | "conflicts" | "block_geometry" | "missing_side" | "missing_travel" | "gps_uncertain";
+export const TRIAD_GROUP_LABEL: Record<TriadGroup, string> = {
+  fully_qualifying: "All three inputs qualify", preserve_existing: "Preserve existing", conflicts: "Conflicts",
+  block_geometry: "Block / geometry problem", missing_side: "Missing side", missing_travel: "Missing / ambiguous travel",
+  gps_uncertain: "GPS uncertainty crosses aisle",
+};
+export function triadGroup(r: RecoveryRow, t: Triad = triadOf(r)): TriadGroup {
+  if (r.status === "preserve_existing") return "preserve_existing";
+  if (t.direction === "conflicting" || t.side === "conflicting" ||
+      (r.headingVsTravelDeg != null && r.headingVsTravelDeg > DIRECTION_CONFLICT_DEG)) return "conflicts";
+  if (!r.savedBlockName || r.status === "not_resolvable" || (r.geometry?.geometryIssues.length ?? 0) > 0) return "block_geometry";
+  if (t.side !== "qualified") return "missing_side";
+  if (t.direction !== "qualified") return "missing_travel";
+  if (t.gps !== "qualified") return "gps_uncertain";
+  return "fully_qualifying";
+}
+
+/** First-inspection set: unique trip anchor + side + saved block. */
+export function isPriorityPin(r: RecoveryRow): boolean {
+  return r.trackAnchor === "unique" && !!r.side && !!r.savedBlockName && r.status !== "preserve_existing";
+}
+
+export interface TriadCoverage {
+  total: number;
+  gps: Record<InputStatus, number>; direction: Record<InputStatus, number>; side: Record<InputStatus, number>;
+  groups: Record<TriadGroup, number>;
+  uniqueAnchor: number; uniqueAnchorWithSide: number; uniqueAnchorNoSide: number; priority: number;
+  withSide: number; noSide: number; tripLinkedWithSide: number; standaloneWithSide: number;
+}
+export function triadCoverage(rows: RecoveryRow[]): TriadCoverage {
+  const z = (): Record<InputStatus, number> => ({ qualified: 0, unreliable: 0, absent: 0, conflicting: 0, unavailable: 0 });
+  const c: TriadCoverage = { total: rows.length, gps: z(), direction: z(), side: z(),
+    groups: { fully_qualifying: 0, preserve_existing: 0, conflicts: 0, block_geometry: 0, missing_side: 0, missing_travel: 0, gps_uncertain: 0 },
+    uniqueAnchor: 0, uniqueAnchorWithSide: 0, uniqueAnchorNoSide: 0, priority: 0, withSide: 0, noSide: 0,
+    tripLinkedWithSide: 0, standaloneWithSide: 0 };
+  for (const r of rows) {
+    const t = triadOf(r);
+    c.gps[t.gps]++; c.direction[t.direction]++; c.side[t.side]++;
+    c.groups[triadGroup(r, t)]++;
+    const hasSide = !!r.side || r.sideConflict;
+    if (hasSide) { c.withSide++; if (r.tripId) c.tripLinkedWithSide++; else c.standaloneWithSide++; } else c.noSide++;
+    if (r.trackAnchor === "unique") { c.uniqueAnchor++; if (hasSide) c.uniqueAnchorWithSide++; else c.uniqueAnchorNoSide++; }
+    if (isPriorityPin(r)) c.priority++;
+  }
+  return c;
 }
