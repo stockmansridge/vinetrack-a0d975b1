@@ -24,16 +24,19 @@ export async function fetchActionParticipants(action: string, kind: ParticipantK
   for (const column of columns) {
     const records: Record<string, unknown>[] = [];
     for (let page = 0; page < 100; page++) {
-      let query = (iosSupabase as any).from(action).select(column).order("created_at", { ascending: true }).range(page * 1000, page * 1000 + 999);
+      let query = (iosSupabase as any).from(action).select(column, { count: "exact" }).order("created_at", { ascending: true }).order(column, { ascending: true }).range(page * 1000, page * 1000 + 999);
       if (since) query = query.gte("created_at", since);
       if (signal) query = query.abortSignal(signal);
-      const { data, error } = await query;
+      const { data, error, count } = await query;
       if (error) {
         if (error.code === "42703" || error.code === "PGRST204") break;
         throw new Error("Activity details are unavailable with your current access. No permissions have been changed.");
       }
       records.push(...(data ?? []));
-      if ((data ?? []).length < 1000) return reconcileParticipants(aggregateParticipants(records, column), expected);
+      if ((data ?? []).length < 1000) {
+        if (count == null || count !== records.length) throw new Error("The record list is incomplete. Choose a shorter period or try again.");
+        return reconcileParticipants(aggregateParticipants(records, column), expected);
+      }
       if (page === 99) throw new Error("This activity is too large to list safely. Choose a shorter period.");
     }
   }
