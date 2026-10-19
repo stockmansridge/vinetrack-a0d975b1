@@ -22,6 +22,7 @@ import { formatDate } from "@/lib/dateFormat";
 import {
   ALL_BLOCKS,
   ALL_STATUSES,
+  checkInsightsAccess,
   fetchScoutVisits,
   filterScoutVisits,
   isPermissionError,
@@ -65,9 +66,18 @@ export default function ScoutReportsPage() {
   const [status, setStatus] = useState(ALL_STATUSES);
   const [blockId, setBlockId] = useState(ALL_BLOCKS);
 
+  // Access preflight: RLS SELECT silently filters disallowed rows, so an
+  // empty list is only trustworthy after the backend confirms read access.
+  const accessQuery = useQuery({
+    queryKey: ["insights-access", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => checkInsightsAccess(selectedVineyardId!),
+  });
+  const access = accessQuery.data;
+
   const visitsQuery = useQuery({
     queryKey: ["scout-visits", selectedVineyardId],
-    enabled: !!selectedVineyardId,
+    enabled: !!selectedVineyardId && access === "allowed",
     queryFn: () => fetchScoutVisits(selectedVineyardId!),
   });
 
