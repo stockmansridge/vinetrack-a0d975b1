@@ -75,6 +75,7 @@ import {
 } from "@/lib/irrigationRows";
 
 import { ValveRowSelector } from "@/components/irrigation/ValveRowSelector";
+import ValveImportDialog from "@/components/irrigation/ValveImportDialog";
 
 
 function useBlocks(vineyardId: string | null) {
@@ -429,6 +430,8 @@ function ValvesTab({
           <CardTitle className="text-base">Valves</CardTitle>
           <CardDescription>Each valve waters one or more blocks.</CardDescription>
         </div>
+      </CardHeader>
+      <div className="flex flex-wrap gap-2 px-6 pb-4">
         <Button
           size="sm"
           disabled={!systems.data?.length}
@@ -439,7 +442,8 @@ function ValvesTab({
         >
           <Plus className="mr-1.5 h-4 w-4" /> New valve
         </Button>
-      </CardHeader>
+        {vineyardId && systems.data && valves.data && <ValveImportDialog key={vineyardId} vineyardId={vineyardId} systems={systems.data} valves={valves.data} />}
+      </div>
       <CardContent className="pt-0">
         {!systems.data?.length && (
           <PortalNotice
@@ -1742,7 +1746,7 @@ export default function IrrigationSetupPage() {
           <SystemsTab vineyardId={selectedVineyardId} />
         </TabsContent>
         <TabsContent value="valves" className="mt-4">
-          <ValvesTab vineyardId={selectedVineyardId} onConfigure={configureValve} />
+          <ValvesTab key={selectedVineyardId} vineyardId={selectedVineyardId} onConfigure={configureValve} />
         </TabsContent>
         <TabsContent value="connections" className="mt-4">
           <ConnectionsTab vineyardId={selectedVineyardId} focusValveId={focusValveId} />
