@@ -220,6 +220,12 @@ export default function ScoutReportDetailPage() {
     if (!detail) return [];
     const out: ScoutMapMarker[] = [];
     detail.assessments.forEach((a, i) => {
+      const label = stopLabel(a, i);
+      // Measured stop GPS from stop_context (legacy stops may have none).
+      const sc = stopCoord(a);
+      if (sc) {
+        out.push({ id: `stop-${a.id}`, lat: sc.lat, lng: sc.lng, title: `${label} — measured stop`, colour: "#16A34A" });
+      }
       const obs = detail.observationsByAssessment.get(a.id) ?? [];
       for (const o of obs) {
         const c = measuredCoord(o);
@@ -228,9 +234,36 @@ export default function ScoutReportDetailPage() {
             id: o.id,
             lat: c.lat,
             lng: c.lng,
-            title: `${stopLabel(a, i)} — ${o.item_kind}`,
+            title: `${label} — ${o.item_kind} (measured)`,
             colour: "#3B82F6",
           });
+        }
+        // Linked evidence markers — provenance, not measurement.
+        if (o.linked_pin_id) {
+          const pin = (linkedPinsQuery.data ?? []).find((p) => p.id === o.linked_pin_id);
+          const pc = pin ? measuredCoord(pin) : null;
+          if (pc) {
+            out.push({
+              id: `pin-${o.linked_pin_id}`,
+              lat: pc.lat,
+              lng: pc.lng,
+              title: `${label} — linked pin${pin?.title ? `: ${pin.title}` : ""} (pin location)`,
+              colour: "#8B5CF6",
+            });
+          }
+        }
+        if (o.linked_growth_record_id && canonicalGrowthIds.has(o.linked_growth_record_id)) {
+          const rec = (growthLocationsQuery.data ?? []).find((r) => r.id === o.linked_growth_record_id);
+          const rc = rec ? measuredCoord(rec) : null;
+          if (rc) {
+            out.push({
+              id: `el-${o.linked_growth_record_id}`,
+              lat: rc.lat,
+              lng: rc.lng,
+              title: `${label} — linked growth stage record (record location)`,
+              colour: "#0D9488",
+            });
+          }
         }
         for (const p of detail.photosByObservation.get(o.id) ?? []) {
           const pc = measuredCoord(p);
@@ -239,7 +272,7 @@ export default function ScoutReportDetailPage() {
               id: p.id,
               lat: pc.lat,
               lng: pc.lng,
-              title: `${stopLabel(a, i)} — photo`,
+              title: `${label} — photo (captured)`,
               colour: "#F59E0B",
             });
           }
@@ -247,7 +280,7 @@ export default function ScoutReportDetailPage() {
       }
     });
     return out;
-  }, [detail]);
+  }, [detail, linkedPinsQuery.data, growthLocationsQuery.data, canonicalGrowthIds]);
 
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? "Vineyard";
