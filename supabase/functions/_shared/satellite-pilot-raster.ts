@@ -1,7 +1,7 @@
 // @deno-types="./vendor/geotiff.d.ts"
 import { writeArrayBuffer, fromArrayBuffer } from './vendor/geotiff.js';
 import { encode, decode } from 'npm:fast-png@6.4.0';
-import { processNativePixels, validateNativeGrid, type ExactManifest, type NativeGrid, type PilotLayer } from './satellite-ingestion-core.ts';
+import { processNativePixels, validateNativeGrid, validScl, TerminalQualityError, MIN_VALID_COVERAGE_PERCENT, type ExactManifest, type NativeGrid, type PilotLayer } from './satellite-ingestion-core.ts';
 import { requireAlignedScl, sampleSclNearest } from './satellite-exact-adapter.ts';
 import { nativeWindow, pixelMask, projection, sha256, hashJson } from './satellite-pilot-geometry.ts';
 import { readExactNativeWindow, RequestBudget } from './satellite-bounded-cog.ts';
@@ -11,14 +11,11 @@ export async function renderPilot(manifest: ExactManifest, ring: number[][], lay
   const source=manifest.native_grid;
   if (!source) throw new Error('Missing signed native source grid');
   const {window,projected}=nativeWindow(ring,source);
-  const keys=layer==='NDVI'?['red','nir']:['red','green','blue'];
-  const bands: Record<string, Awaited<ReturnType<typeof readExactNativeWindow>>>={};
-  for (const key of keys) {
-    const b=await readExactNativeWindow(manifest.bands[key].href,window,budget);
-    if (await hashJson(b.source_grid)!==await hashJson(source)) throw new Error('COG native grid differs from immutable STAC');
-    bands[key]=b;
-  }
-  const grid=bands.red.measurement_grid; validateNativeGrid(grid);
+  // Measurement grid derived from the immutable STAC grid + window; verified against each TIFF below.
+  const grid:NativeGrid={crs:source.crs,affine:[source.affine[0],0,source.affine[2]+window[0]*source.affine[0],0,source.affine[4],source.affine[5]+window[1]*source.affine[4]],width:window[2]-window[0],height:window[3]-window[1]};
+  validateNativeGrid(grid);
+  const inside=pixelMask(grid,projected);
+  // SCL-first preflight: classify the exact paddock geometry before any spectral band read.
   const sclSource=manifest.scl_grid;
   if (!sclSource) throw new Error('Missing SCL source grid');
   requireAlignedScl(source,sclSource);
@@ -26,9 +23,31 @@ export async function renderPilot(manifest: ExactManifest, ring: number[][], lay
   const scl=await readExactNativeWindow(manifest.bands.scl.href,sclWindow,budget);
   if (await hashJson(scl.source_grid)!==await hashJson(sclSource)) throw new Error('SCL native grid mismatch');
   const mask=Array.from({length:grid.width*grid.height},(_,i)=>sampleSclNearest(grid.affine[2]+(i%grid.width+.5)*10,grid.affine[5]-(Math.floor(i/grid.width)+.5)*10,{affine:scl.measurement_grid.affine,width:scl.measurement_grid.width,height:scl.measurement_grid.height,values:Array.from(scl.data as ArrayLike<number>)}));
+  const histogram:Record<string,number>={};let validSclCount=0,paddockPixels=0;
+  for(let i=0;i<mask.length;i++){if(!inside[i])continue;paddockPixels++;histogram[String(mask[i])]=(histogram[String(mask[i])]??0)+1;if(validScl(mask[i]))validSclCount++;}
+  if(paddockPixels===0)throw new TerminalQualityError('insufficient_coverage',histogram,'Paddock boundary covers no native cells');
+  // Terminal cloud/shadow/snow occlusion: skip spectral bands entirely, never retried for this acquisition.
+  if(validSclCount===0)throw new TerminalQualityError('cloud_obscured',histogram,`Cloud-obscured paddock: 0/${paddockPixels} usable SCL cells (${JSON.stringify(histogram)})`);
+  const keys=layer==='NDVI'?['red','nir']:['red','green','blue'];
+  const bands: Record<string, Awaited<ReturnType<typeof readExactNativeWindow>>>={};
+  for (const key of keys) {
+    const b=await readExactNativeWindow(manifest.bands[key].href,window,budget);
+    if (await hashJson(b.source_grid)!==await hashJson(source)) throw new Error('COG native grid differs from immutable STAC');
+    bands[key]=b;
+  }
+  if(bands.red.measurement_grid.width!==grid.width||bands.red.measurement_grid.height!==grid.height) throw new Error('COG native grid differs from immutable STAC');
   const noData=bands.red.no_data;
   if (noData==null || keys.some(k=>bands[k].no_data!==noData)) throw new Error('Missing/mismatched nodata');
-  return packagePixels({ grid,layer,red:Array.from(bands.red.data as ArrayLike<number>),nir:bands.nir?Array.from(bands.nir.data as ArrayLike<number>):undefined,green:bands.green?Array.from(bands.green.data as ArrayLike<number>):undefined,blue:bands.blue?Array.from(bands.blue.data as ArrayLike<number>):undefined,scl:mask,inside:pixelMask(grid,projected),scales:manifest.bands,noData });
+  let rendered;
+  try {
+    rendered=await packagePixels({ grid,layer,red:Array.from(bands.red.data as ArrayLike<number>),nir:bands.nir?Array.from(bands.nir.data as ArrayLike<number>):undefined,green:bands.green?Array.from(bands.green.data as ArrayLike<number>):undefined,blue:bands.blue?Array.from(bands.blue.data as ArrayLike<number>):undefined,scl:mask,inside,scales:manifest.bands,noData });
+  } catch(error) {
+    if(error instanceof Error&&error.message==='No valid paddock pixels')throw new TerminalQualityError('insufficient_coverage',histogram,'No usable pixels after calibration/nodata filtering');
+    throw error;
+  }
+  // Honest partial coverage: below the minimum usable share this is a terminal quality result, not a publishable raster.
+  if(rendered.valid_coverage_percent!=null&&rendered.valid_coverage_percent<MIN_VALID_COVERAGE_PERCENT)throw new TerminalQualityError('insufficient_coverage',histogram,`Only ${rendered.valid_coverage_percent.toFixed(1)}% usable paddock coverage (minimum ${MIN_VALID_COVERAGE_PERCENT}%)`);
+  return {...rendered,scl_histogram:histogram};
 }
 export async function packagePixels(input: Parameters<typeof processNativePixels>[0]) {
   const result=processNativePixels(input);
