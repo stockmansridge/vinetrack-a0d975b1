@@ -4,7 +4,8 @@
 // never server-confirmed. Files exported here are unsigned, non-authoritative
 // working copies for resuming review.
 import { parseRows } from "@/lib/paddockGeometry";
-import { RECOVERY_VINEYARD_ID, type RecoveryRow, triadOf } from "@/lib/pinRowRecovery";
+import { RECOVERY_VINEYARD_ID, type RecoveryRow, triadOf, pointInPolygon } from "@/lib/pinRowRecovery";
+import { parsePolygonPoints } from "@/lib/paddockGeometry";
 
 export type DecisionKind = "approve_for_writeback" | "hold" | "needs_field_verification" | "preserve_existing";
 export type DecisionSource = "measured" | "reviewed_track" | "manual_field_check";
@@ -15,7 +16,14 @@ export const DECISION_LABEL: Record<DecisionKind, string> = {
   preserve_existing: "Preserve existing",
 };
 export const DRAFT_FORMAT = "vinetrack.pin-row-review-draft";
-export const DRAFT_VERSION = 1;
+export const DRAFT_VERSION = 2;
+/** Legacy vineyard-only key (v1). Never read: it was not scoped to a signed-in account. */
+export const LEGACY_DRAFT_KEY = "vinetrack.pinRowReviewDraft." + RECOVERY_VINEYARD_ID;
+/** Local draft key scoped to BOTH the signed-in auth user id and the vineyard. Null = no account → no drafts. */
+export function draftStorageKey(userId: string | null | undefined): string | null {
+  if (!userId || typeof userId !== "string") return null;
+  return `vinetrack.pinRowReviewDraft.v2.${userId}.${RECOVERY_VINEYARD_ID}`;
+}
 export const AUTHORITY = "operator_approved_draft";
 
 export type WarningKey = "no_gps_accuracy" | "no_reliable_direction" | "no_side" | "no_saved_block" | "current_only_map";
@@ -61,7 +69,10 @@ export interface ReviewDecision {
   reason: string;
   source: DecisionSource | null;
   acknowledged_warnings: WarningKey[];
+  /** Display label only (email). NOT proof of approval. */
   reviewer: string;
+  /** Auth user id of the signed-in account that saved the draft. Drafts from other ids are never shown or accepted. */
+  reviewer_user_id: string;
   reviewed_at: string;
   snapshot: PinSnapshot;
 }
@@ -146,20 +157,56 @@ export function validateDecision(r: RecoveryRow, input: DecisionInput, paddocks:
   }
   const missing = requiredWarnings(r).filter((w) => !input.acknowledged_warnings.includes(w));
   if (missing.length) e.push(`Acknowledge: ${missing.map((w) => WARNING_LABEL[w]).join(", ")}.`);
+  // Fail closed on incomplete evidence.
+  if (r.evidenceState === "unavailable") e.push("Capture evidence unavailable — cannot approve.");
+  if (r.segmentsState === "unavailable") e.push("Row segments unavailable — cannot rule out existing metadata.");
+  // BLOCK-CONFLICT: pin-row-only backfill may set paddock_id only when it is null.
+  const saved = r.pin?.paddock_id ?? null;
+  if (saved && input.block_id && input.block_id !== saved)
+    e.push(`${BLOCK_CONFLICT}: chosen block differs from the saved block — needs a separate authoritative block correction, not eligible for pin-row backfill.`);
+  if (pad) {
+    const poly = parsePolygonPoints(pad.polygon_points);
+    if (r.lat == null || r.lng == null) e.push("Pin has no GPS — cannot check it lies in the chosen block.");
+    else if (poly.length < 3) e.push("Chosen block has no current polygon — cannot check the pin lies inside it.");
+    else if (!pointInPolygon({ lat: r.lat, lng: r.lng }, poly)) e.push("GPS lies outside the chosen block's current polygon (current geometry only).");
+  }
+  // Left/right must never contradict what was recorded, nor be invented.
+  if (r.sideConflict) e.push("Recorded left/right values conflict (pin_side / side / pressed_side) — resolve in the field first.");
+  if (input.side && r.side && input.side !== r.side) e.push(`Side ${input.side} contradicts recorded side ${r.side}.`);
+  if (input.side && !r.side && input.source !== "manual_field_check") e.push("No side was recorded — only a manual field check may supply one.");
+  // Pairing against current geometry, unless verified in the field.
+  if (input.source !== "manual_field_check") {
+    const g = r.geometry;
+    const sameBlock = !input.block_id || input.block_id === (r.pin?.paddock_id ?? null);
+    if (sameBlock && g?.aisle != null && input.driving_aisle != null && input.driving_aisle !== g.aisle)
+      e.push(`Driving aisle ${input.driving_aisle} differs from the geometric aisle ${g.aisle} — needs a manual field check.`);
+    if (sameBlock && g?.boundingRows && input.vine_row != null && !g.boundingRows.includes(input.vine_row))
+      e.push(`Row ${input.vine_row} is not one of the bounding rows ${g.boundingRows.join(" & ")} — needs a manual field check.`);
+    if (r.suggestedVineRow != null && input.vine_row != null && input.vine_row !== r.suggestedVineRow)
+      e.push(`Row ${input.vine_row} contradicts the travel + side pairing (Row ${r.suggestedVineRow}) — needs a manual field check.`);
+    // Acknowledging a warning never upgrades weak evidence.
+    const t = triadOf(r);
+    if (r.accuracy == null || t.direction !== "qualified" || t.side !== "qualified")
+      e.push("Technical evidence is insufficient (GPS accuracy / travel direction / side) — only a manual field check can support approval.");
+  }
   return e;
 }
 
+export const BLOCK_CONFLICT = "BLOCK-CONFLICT";
+
 export function buildDecision(
-  r: RecoveryRow, input: DecisionInput, reviewer: string, paddocks: any[],
+  r: RecoveryRow, input: DecisionInput, reviewer: string, reviewerUserId: string, paddocks: any[],
   segs: any[] | null, now: Date = new Date(),
 ): ReviewDecision {
   const pad = reviewPaddock(r.pin, input.block_id, paddocks);
   return {
     authority: AUTHORITY,
     pin_id: r.id,
-    ...input,
+    decision: input.decision, block_id: input.block_id, vine_row: input.vine_row, driving_aisle: input.driving_aisle,
+    side: input.side, source: input.source, acknowledged_warnings: [...input.acknowledged_warnings],
     reason: input.reason.trim(),
     reviewer,
+    reviewer_user_id: reviewerUserId,
     reviewed_at: now.toISOString(),
     snapshot: snapshotOf(r.pin, pad, segs, r.geometrySource),
   };
@@ -227,55 +274,125 @@ export interface ImportResult {
   rejected: { pin_id: string | null; reason: string }[];
 }
 
-/** Parse + reconcile an exported JSON draft against the current live data. */
-export function importDraftJson(
-  text: string,
-  current: CurrentPin[],
-  paddocks: any[],
-): ImportResult {
-  const out: ImportResult = { accepted: [], stale: [], rejected: [] };
-  let f: any;
-  try { f = JSON.parse(text); } catch { out.rejected.push({ pin_id: null, reason: "Not valid JSON" }); return out; }
-  if (f?.format !== DRAFT_FORMAT || f?.version !== DRAFT_VERSION) { out.rejected.push({ pin_id: null, reason: "Unrecognised draft format/version" }); return out; }
-  if (f.vineyard_id !== RECOVERY_VINEYARD_ID) { out.rejected.push({ pin_id: null, reason: "Draft is for a different vineyard" }); return out; }
-  const byId = new Map(current.map((c) => [String(c.pin.id), c]));
+// ---------- strict schema validation of UNTRUSTED drafts (localStorage + imports) ----------
+const isStr = (v: any) => typeof v === "string";
+const isNumOrNull = (v: any) => v === null || (typeof v === "number" && Number.isFinite(v));
+const isStrOrNull = (v: any) => v === null || typeof v === "string";
+const SOURCES: DecisionSource[] = ["measured", "reviewed_track", "manual_field_check"];
+const DECISION_KEYS = ["authority", "pin_id", "decision", "block_id", "vine_row", "driving_aisle", "side", "reason",
+  "source", "acknowledged_warnings", "reviewer", "reviewer_user_id", "reviewed_at", "snapshot"];
+const SNAP_KEYS: (keyof PinSnapshot)[] = ["pin_id", "vineyard_id", "latitude", "longitude", "sync_version", "updated_at",
+  "paddock_id", "row_number", "pin_row_number", "driving_row_number", "pin_side", "side", "location_scope",
+  "snapped_latitude", "snapped_longitude", "segments", "geometry_fingerprint", "geometry_source"];
+
+/** Returns null when the object is a well-formed decision, else the first schema problem. */
+export function schemaError(d: any): string | null {
+  if (!d || typeof d !== "object" || Array.isArray(d)) return "not an object";
+  const extra = Object.keys(d).filter((k) => !DECISION_KEYS.includes(k));
+  if (extra.length) return `unexpected field(s) ${extra.join(", ")}`;
+  if (d.authority !== AUTHORITY) return "authority must be operator_approved_draft";
+  if (!isStr(d.pin_id) || !d.pin_id) return "pin_id";
+  if (!(typeof d.decision === "string" && Object.prototype.hasOwnProperty.call(DECISION_LABEL, d.decision))) return "decision";
+  if (!isStrOrNull(d.block_id)) return "block_id";
+  if (!isNumOrNull(d.vine_row)) return "vine_row";
+  if (!isNumOrNull(d.driving_aisle)) return "driving_aisle";
+  if (!(d.side === null || d.side === "left" || d.side === "right")) return "side";
+  if (!isStr(d.reason)) return "reason";
+  if (!(d.source === null || SOURCES.includes(d.source))) return "source";
+  if (!Array.isArray(d.acknowledged_warnings) || d.acknowledged_warnings.some((w: any) => !(typeof w === "string" && w in WARNING_LABEL))) return "acknowledged_warnings";
+  if (!isStr(d.reviewer)) return "reviewer";
+  if (!isStr(d.reviewer_user_id) || !d.reviewer_user_id) return "reviewer_user_id";
+  if (!isStr(d.reviewed_at) || Number.isNaN(Date.parse(d.reviewed_at))) return "reviewed_at";
+  const sn = d.snapshot;
+  if (!sn || typeof sn !== "object" || Array.isArray(sn)) return "snapshot";
+  if (Object.keys(sn).some((k) => !SNAP_KEYS.includes(k as any))) return "snapshot has unexpected fields";
+  if (sn.pin_id !== d.pin_id) return "snapshot pin id mismatch";
+  if (sn.vineyard_id !== RECOVERY_VINEYARD_ID) return "snapshot vineyard";
+  return null;
+}
+
+export interface CurrentState {
+  current: Map<string, CurrentPin>;
+  paddocks: any[];
+  /** Signed-in auth user id. */
+  userId: string | null;
+  /** True only when pins, blocks, capture evidence AND row segments are all loaded without error. */
+  evidenceReady: boolean;
+}
+export type DraftIssueKind = "rejected" | "stale" | "invalid" | "other_account";
+export interface DraftIssue { pin_id: string | null; kind: DraftIssueKind; reason: string }
+export interface ReconcileResult { accepted: ReviewDecision[]; issues: DraftIssue[] }
+
+/**
+ * Re-validate untrusted drafts against CURRENT live data. Used on cold load from
+ * localStorage and on import. Nothing is accepted until evidence/segments are ready.
+ * Accepted means "displayable as a local draft" — never confirmed or approved.
+ */
+export function reconcileDrafts(raw: unknown[], st: CurrentState): ReconcileResult {
+  const out: ReconcileResult = { accepted: [], issues: [] };
+  if (!st.userId) { out.issues.push({ pin_id: null, kind: "rejected", reason: "Not signed in — drafts not shown" }); return out; }
   const seen = new Set<string>();
-  for (const d of Array.isArray(f.decisions) ? f.decisions : []) {
-    const id = typeof d?.pin_id === "string" ? d.pin_id : null;
-    if (!id || !d.snapshot || d.authority !== AUTHORITY || !(d.decision in DECISION_LABEL)) {
-      out.rejected.push({ pin_id: id, reason: "Malformed decision" }); continue;
-    }
-    if (seen.has(id)) { out.rejected.push({ pin_id: id, reason: "Duplicate pin in file" }); continue; }
-    seen.add(id);
-    if (d.snapshot.pin_id !== id) { out.rejected.push({ pin_id: id, reason: "Snapshot pin id mismatch" }); continue; }
-    const c = byId.get(id);
-    if (!c || !c.row) { out.rejected.push({ pin_id: id, reason: "Pin not in current missing-row queue (deleted, moved or already has a row)" }); continue; }
-    const now = snapshotOf(c.pin, reviewPaddock(c.pin, d.block_id ?? null, paddocks), c.segs, c.row.geometrySource);
-    const diff = snapshotDiff(d.snapshot, now);
-    if (diff.length) { out.stale.push({ pin_id: id, fields: diff }); continue; }
-    out.accepted.push(d as ReviewDecision);
+  for (const d of raw) {
+    const pid = d && typeof (d as any).pin_id === "string" ? (d as any).pin_id : null;
+    const se = schemaError(d);
+    if (se) { out.issues.push({ pin_id: pid, kind: "rejected", reason: `Malformed decision (${se})` }); continue; }
+    const dec = d as ReviewDecision;
+    if (dec.reviewer_user_id !== st.userId) { out.issues.push({ pin_id: pid, kind: "other_account", reason: "Saved by a different account — not shown; re-review as yourself" }); continue; }
+    if (seen.has(dec.pin_id)) { out.issues.push({ pin_id: pid, kind: "rejected", reason: "Duplicate pin" }); continue; }
+    seen.add(dec.pin_id);
+    if (!st.evidenceReady) { out.issues.push({ pin_id: pid, kind: "invalid", reason: "Evidence/segments not loaded — draft held for revalidation" }); continue; }
+    const c = st.current.get(dec.pin_id);
+    if (!c || !c.row) { out.issues.push({ pin_id: pid, kind: "rejected", reason: "Pin not in current missing-row queue (deleted, moved or already has a row)" }); continue; }
+    const now = snapshotOf(c.pin, reviewPaddock(c.pin, dec.block_id, st.paddocks), c.segs, c.row.geometrySource);
+    const diff = snapshotDiff(dec.snapshot, now);
+    if (diff.length) { out.issues.push({ pin_id: pid, kind: "stale", reason: `changed since review (${diff.join(", ")})` }); continue; }
+    const v = validateDecision(c.row, dec, st.paddocks);
+    if (v.length) { out.issues.push({ pin_id: pid, kind: "invalid", reason: v.join(" ") }); continue; }
+    out.accepted.push(dec);
   }
   return out;
 }
 
-// ---------- writeback PREFLIGHT (read-only) ----------
-export type PreflightOutcome = "eligible_pending_owner" | "conflict" | "not_approval";
-export interface PreflightItem { pin_id: string; outcome: PreflightOutcome; checks: string[] }
-export interface PreflightReport { items: PreflightItem[]; eligible: number; conflict: number; notApproval: number }
+/** Parse an exported JSON draft file (untrusted) and reconcile it. */
+export function importDraftJson(text: string, st: CurrentState): ReconcileResult {
+  let f: any;
+  try { f = JSON.parse(text); } catch { return { accepted: [], issues: [{ pin_id: null, kind: "rejected", reason: "Not valid JSON" }] }; }
+  if (!f || f.format !== DRAFT_FORMAT || f.version !== DRAFT_VERSION || f.authority !== AUTHORITY)
+    return { accepted: [], issues: [{ pin_id: null, kind: "rejected", reason: "Unrecognised draft format/version" }] };
+  if (f.vineyard_id !== RECOVERY_VINEYARD_ID) return { accepted: [], issues: [{ pin_id: null, kind: "rejected", reason: "Draft is for a different vineyard" }] };
+  if (!Array.isArray(f.decisions)) return { accepted: [], issues: [{ pin_id: null, kind: "rejected", reason: "No decisions array" }] };
+  return reconcileDrafts(f.decisions, st);
+}
 
-export function writebackPreflight(
-  decisions: ReviewDecision[],
-  current: Map<string, CurrentPin>,
-  paddocks: any[],
-): PreflightReport {
+/** Parse raw localStorage text into an array of untrusted entries. */
+export function parseStoredDrafts(text: string | null): unknown[] {
+  if (!text) return [];
+  try { const o = JSON.parse(text); return o && typeof o === "object" && !Array.isArray(o) ? Object.values(o) : []; } catch { return []; }
+}
+
+// ---------- writeback PREFLIGHT (read-only) ----------
+export type PreflightOutcome = "structurally_eligible" | "conflict" | "not_approval";
+export interface PreflightItem { pin_id: string; outcome: PreflightOutcome; checks: string[] }
+export interface PreflightReport { items: PreflightItem[]; eligible: number; conflict: number; notApproval: number; ready: boolean }
+export const PREFLIGHT_NOTICE =
+  "Structurally eligible means the draft passes format, ownership, queue, snapshot and geometry checks only. It does NOT mean the row is position-correct, and it is NOT an approval. A separate, explicit signed-in owner approval and a guarded server writeback (not built) are required.";
+
+export function writebackPreflight(raw: unknown[], st: CurrentState): PreflightReport {
   const items: PreflightItem[] = [];
-  for (const d of decisions) {
+  for (const d0 of raw) {
+    const pid = d0 && typeof (d0 as any).pin_id === "string" ? (d0 as any).pin_id : "(unknown)";
+    const se = schemaError(d0);
+    if (se) { items.push({ pin_id: pid, outcome: "conflict", checks: [`malformed draft (${se})`] }); continue; }
+    const d = d0 as ReviewDecision;
+    if (!st.userId || d.reviewer_user_id !== st.userId) { items.push({ pin_id: pid, outcome: "conflict", checks: ["draft not saved by the signed-in account"] }); continue; }
     if (d.decision !== "approve_for_writeback") { items.push({ pin_id: d.pin_id, outcome: "not_approval", checks: [DECISION_LABEL[d.decision]] }); continue; }
-    const c = current.get(d.pin_id);
     const fails: string[] = [];
+    if (!st.evidenceReady) fails.push("evidence/segments not fully loaded — cannot be eligible");
+    const c = st.current.get(d.pin_id);
     if (!c) fails.push("pin no longer live / visible");
     else {
       const p = c.pin;
+      if (String(p.id) !== d.pin_id) fails.push("pin id mismatch");
       if (String(p.vineyard_id) !== RECOVERY_VINEYARD_ID) fails.push("pin not in Stockman's Ridge");
       if (p.deleted_at) fails.push("pin deleted");
       if (n(p.row_number) != null || n(p.pin_row_number) != null) fails.push("pin now has a saved row");
@@ -283,19 +400,18 @@ export function writebackPreflight(
       if (c.segs == null) fails.push("row segments unreadable — cannot rule out existing segments");
       else if (c.segs.length) fails.push("pin has saved row segments");
       if (p.location_scope === "row") fails.push("pin location_scope is row");
-      const diff = snapshotDiff(d.snapshot, snapshotOf(p, reviewPaddock(p, d.block_id, paddocks), c.segs, d.snapshot.geometry_source));
+      if (p.paddock_id && d.block_id !== p.paddock_id) fails.push(`${BLOCK_CONFLICT}: draft block differs from the current saved block`);
+      const diff = snapshotDiff(d.snapshot, snapshotOf(p, reviewPaddock(p, d.block_id, st.paddocks), c.segs, c.row?.geometrySource ?? d.snapshot.geometry_source));
       if (diff.length) fails.push(`changed since review (${diff.join(", ")}) — re-review`);
-      if (c.row) {
-        const v = validateDecision(c.row, d, paddocks);
-        fails.push(...v);
-      }
+      if (!c.row) fails.push("pin not assessable");
+      else fails.push(...validateDecision(c.row, d, st.paddocks));
     }
-    items.push({ pin_id: d.pin_id, outcome: fails.length ? "conflict" : "eligible_pending_owner",
-      checks: fails.length ? fails : ["row exists in block", "adjacency ok", "snapshot unchanged", "no saved row/segments"] });
+    items.push({ pin_id: d.pin_id, outcome: fails.length ? "conflict" : "structurally_eligible",
+      checks: fails.length ? fails : ["format ok", "own account", "row exists in block", "inside current block polygon", "adjacency ok", "side not contradicted", "snapshot unchanged", "no saved row/segments"] });
   }
   return {
-    items,
-    eligible: items.filter((i) => i.outcome === "eligible_pending_owner").length,
+    items, ready: st.evidenceReady,
+    eligible: items.filter((i) => i.outcome === "structurally_eligible").length,
     conflict: items.filter((i) => i.outcome === "conflict").length,
     notApproval: items.filter((i) => i.outcome === "not_approval").length,
   };
