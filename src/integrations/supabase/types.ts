@@ -1433,6 +1433,53 @@ export type Database = {
           },
         ]
       }
+      satellite_scl_preflight: {
+        Row: {
+          acquisition_id: string
+          boundary_hash: string
+          created_at: string
+          histogram: Json
+          paddock_id: string
+          paddock_pixels: number
+          scl_cells: Json
+          scl_window: Json
+          terminal_quality: string | null
+          valid_scl_count: number
+        }
+        Insert: {
+          acquisition_id: string
+          boundary_hash: string
+          created_at?: string
+          histogram: Json
+          paddock_id: string
+          paddock_pixels: number
+          scl_cells: Json
+          scl_window: Json
+          terminal_quality?: string | null
+          valid_scl_count: number
+        }
+        Update: {
+          acquisition_id?: string
+          boundary_hash?: string
+          created_at?: string
+          histogram?: Json
+          paddock_id?: string
+          paddock_pixels?: number
+          scl_cells?: Json
+          scl_window?: Json
+          terminal_quality?: string | null
+          valid_scl_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "satellite_scl_preflight_acquisition_id_fkey"
+            columns: ["acquisition_id"]
+            isOneToOne: false
+            referencedRelation: "satellite_acquisitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       satellite_work_items: {
         Row: {
           acquisition_id: string

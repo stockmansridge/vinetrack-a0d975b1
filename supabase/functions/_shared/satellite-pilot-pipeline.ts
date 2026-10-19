@@ -2,12 +2,13 @@ import { PILOT_VINEYARD, PILOT_VERSION, insidePolygon, TerminalQualityError, typ
 import { productionItem, EARTH_SEARCH_URL } from './satellite-pilot-discovery.ts';
 import { canonicalRing, hashJson, sha256 } from './satellite-pilot-geometry.ts';
 import { Provider429, RequestBudget } from './satellite-bounded-cog.ts';
-import { renderPilot } from './satellite-pilot-raster.ts';
+import { renderPilot, preflightScl, preflightFromPersisted, type SclPreflight } from './satellite-pilot-raster.ts';
 export const PILOT_PROVIDER='EARTH_SEARCH_SENTINEL_2';
 export interface PipelineDependencies {
   db: any;
   canonical: (id?:string)=>Promise<any[]>;
   fetch: typeof fetch;
+  pixels?: typeof fetch;
   render: typeof renderPilot;
   unitSpend?: number;
 }
@@ -21,9 +22,13 @@ export async function runPilot(kind:'worker'|'discovery',deps:PipelineDependenci
     if(c.error||!c.data?.enabled) return {reason:'publisher_disabled',provider_calls:0,no_op:true};
   }
   if(!Number.isFinite(deps.unitSpend)||!deps.unitSpend||deps.unitSpend<=0) return {reason:'unit_cost_not_approved',provider_calls:0,no_op:true};
-  const reservation=await rpc(db,'satellite_reserve_provider',{p_provider:PILOT_PROVIDER,p_vineyard:PILOT_VINEYARD,p_requests:kind==='discovery'?3:96,p_processing:kind==='discovery'?0:1,p_cpu:kind==='discovery'?1000:45000,p_transfer:kind==='discovery'?1048576:16777216,p_storage:kind==='discovery'?0:4194304,p_spend:deps.unitSpend,p_pixels:kind==='worker'});
+  // Stage-specific worst-case envelopes: discovery (catalogue only), SCL preflight (one 20m band window),
+  // spectral (remaining bands + rasters). A clouded paddock only ever reserves the tiny SCL stage.
+  const stage=kind==='discovery'?{requests:3,processing:0,cpu:1000,transfer:1048576,storage:0,spend:deps.unitSpend}
+    :{requests:8,processing:0,cpu:5000,transfer:2097152,storage:0,spend:deps.unitSpend*0.2};
+  const reservation=await rpc(db,'satellite_reserve_provider',{p_provider:PILOT_PROVIDER,p_vineyard:PILOT_VINEYARD,p_requests:stage.requests,p_processing:stage.processing,p_cpu:stage.cpu,p_transfer:stage.transfer,p_storage:stage.storage,p_spend:stage.spend,p_pixels:kind==='worker'});
   if(!reservation) return {reason:'budget_or_backoff',provider_calls:0,no_op:true};
-  let calls=0,work:any;const budget=new RequestBudget(signal,96,16777216,deps.fetch);
+  let calls=0,work:any,spectralReservation:string|null=null;const budget=new RequestBudget(signal,96,16777216,kind==='worker'?(deps.pixels??deps.fetch):deps.fetch);
   try {
     if(kind==='discovery') {
       const paddocks=await deps.canonical();
@@ -82,7 +87,23 @@ export async function runPilot(kind:'worker'|'discovery',deps:PipelineDependenci
     if(canonical.length!==1||await hashJson(canonicalRing(canonical[0].polygon_points))!==work.boundary_hash) throw new Error('Stale canonical boundary');
     const a=await db.from('satellite_acquisitions').select('*').eq('id',work.acquisition_id).single();if(a.error) throw a.error;
     if(await hashJson(a.data.source_manifest)!==a.data.source_manifest_hash) throw new Error('Immutable provenance hash mismatch');
-    const rendered=await deps.render(a.data.source_manifest,work.boundary_snapshot,work.layer,budget);
+    // SCL stage: reuse the persisted classification for this immutable acquisition/paddock/boundary when present
+    // (NDVI and True Colour share one provider SCL read); otherwise run the tiny bounded preflight now.
+    let preflight:SclPreflight;
+    const cached=await db.from('satellite_scl_preflight').select('*').eq('acquisition_id',work.acquisition_id).eq('paddock_id',work.paddock_id).eq('boundary_hash',work.boundary_hash).maybeSingle();
+    if(cached.error) throw cached.error;
+    if(cached.data) {
+      if(cached.data.terminal_quality) throw new TerminalQualityError(cached.data.terminal_quality,cached.data.histogram,`Persisted terminal SCL preflight: ${cached.data.terminal_quality} (${JSON.stringify(cached.data.histogram)})`);
+      preflight=preflightFromPersisted(a.data.source_manifest,work.boundary_snapshot,cached.data);
+    } else {
+      preflight=await preflightScl(a.data.source_manifest,work.boundary_snapshot,budget);
+      const save=await db.from('satellite_scl_preflight').insert({acquisition_id:work.acquisition_id,paddock_id:work.paddock_id,boundary_hash:work.boundary_hash,scl_window:preflight.sclWindow,scl_cells:preflight.sclCells,histogram:preflight.histogram,paddock_pixels:preflight.paddockPixels,valid_scl_count:preflight.validSclCount,terminal_quality:null});
+      if(save.error&&save.error.code!=='23505') throw save.error;
+    }
+    // Spectral stage: separately authorised envelope, reserved only after the paddock is proven usable.
+    spectralReservation=await rpc(db,'satellite_reserve_provider',{p_provider:PILOT_PROVIDER,p_vineyard:PILOT_VINEYARD,p_requests:88,p_processing:1,p_cpu:40000,p_transfer:14680064,p_storage:4194304,p_spend:deps.unitSpend*0.8,p_pixels:true});
+    if(!spectralReservation) { await rpc(db,'satellite_finish_work',{p_id:work.id,p_token:work.lease_token,p_status:'retry',p_error:'Spectral stage budget or backoff',p_retry_ms:300000}); return {reason:'budget_or_backoff',provider_calls:budget.requests,no_op:budget.requests===0}; }
+    const rendered=await deps.render(a.data.source_manifest,work.boundary_snapshot,work.layer,budget,preflight);
     if(signal.aborted) throw new Error('Worker deadline');
     // Re-read canonical boundary after potentially slow decoding, before publication.
     const fresh=await deps.canonical(work.paddock_id);if(fresh.length!==1||await hashJson(canonicalRing(fresh[0].polygon_points))!==work.boundary_hash) throw new Error('Boundary changed during processing');
@@ -105,14 +126,19 @@ export async function runPilot(kind:'worker'|'discovery',deps:PipelineDependenci
   } catch(error) {
     // Deterministic acquisition-quality failure: terminal, never retried for this immutable acquisition/paddock.
     if(error instanceof TerminalQualityError) {
-      if(work) await rpc(db,'satellite_finish_work',{p_id:work.id,p_token:work.lease_token,p_status:error.quality,p_result:{schema_version:1,quality:error.quality,scl_histogram:error.sclHistogram,acquisition_id:work.acquisition_id,boundary_hash:work.boundary_hash,layer:work.layer,processing_version:PILOT_VERSION},p_error:error.message});
+      if(work) {
+        // Persist the terminal classification so the sibling layer never re-reads the SCL band for this acquisition.
+        const seen=await db.from('satellite_scl_preflight').select('acquisition_id').eq('acquisition_id',work.acquisition_id).eq('paddock_id',work.paddock_id).eq('boundary_hash',work.boundary_hash).maybeSingle();
+        if(!seen.error&&!seen.data) await db.from('satellite_scl_preflight').insert({acquisition_id:work.acquisition_id,paddock_id:work.paddock_id,boundary_hash:work.boundary_hash,scl_window:[],scl_cells:[],histogram:error.sclHistogram,paddock_pixels:0,valid_scl_count:0,terminal_quality:error.quality});
+        await rpc(db,'satellite_finish_work',{p_id:work.id,p_token:work.lease_token,p_status:error.quality,p_result:{schema_version:1,quality:error.quality,scl_histogram:error.sclHistogram,acquisition_id:work.acquisition_id,boundary_hash:work.boundary_hash,layer:work.layer,processing_version:PILOT_VERSION},p_error:error.message});
+      }
       return {reason:error.quality,quality:error.quality,scl_histogram:error.sclHistogram,provider_calls:budget.requests,no_op:false,failed:true,terminal:true};
     }
     const retry=error instanceof Provider429?error.retryMs:null;
     if(work) await rpc(db,'satellite_finish_work',{p_id:work.id,p_token:work.lease_token,p_status:'retry',p_error:error instanceof Error?error.message:'Pipeline failure',p_retry_ms:retry??30000});
     if(retry!=null) await rpc(db,'satellite_release_provider',{p_provider:PILOT_PROVIDER,p_token:reservation,p_retry_ms:retry});
     return {reason:error instanceof Error?error.message:'Pipeline failure',provider_calls:kind==='worker'?budget.requests:calls,no_op:calls+budget.requests===0,failed:true};
-  } finally { await rpc(db,'satellite_release_provider',{p_provider:PILOT_PROVIDER,p_token:reservation}); }
+  } finally { if(spectralReservation) await rpc(db,'satellite_release_provider',{p_provider:PILOT_PROVIDER,p_token:spectralReservation}); await rpc(db,'satellite_release_provider',{p_provider:PILOT_PROVIDER,p_token:reservation}); }
 }
 function httpRetry(value:string|null){const numeric=Number(value);if(value&&Number.isFinite(numeric)&&numeric>=0)return Math.min(86400000,numeric*1000);const t=value?Date.parse(value):NaN;return Number.isFinite(t)?Math.min(86400000,Math.max(0,t-Date.now())):60000;}
 async function boundedText(res:Response,max:number){if(!res.body)throw new Error('Missing catalogue body');const reader=res.body.getReader();let n=0;const chunks=[];try{while(true){const r=await reader.read();if(r.done)break;n+=r.value.length;if(n>max){await reader.cancel();throw new Error('Catalogue byte ceiling');}chunks.push(r.value);}}finally{reader.releaseLock();}const out=new Uint8Array(n);let i=0;for(const c of chunks){out.set(c,i);i+=c.length;}return new TextDecoder().decode(out);}

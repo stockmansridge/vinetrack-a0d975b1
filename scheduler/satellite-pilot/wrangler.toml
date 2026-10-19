@@ -3,6 +3,14 @@ main = "worker.ts"
 compatibility_date = "2026-10-19"
 [vars]
 SCHEDULER_ENABLED = "false"
+# One-time owner setup (Cloudflare dashboard or wrangler CLI), in order:
+#   1. wrangler secret put FUNCTION_ORIGIN  →  https://<project-ref>.supabase.co/functions/v1
+#   2. wrangler secret put MACHINE_TOKEN    →  the current SATELLITE_MACHINE_TOKEN value
+#      (Project Settings → Secrets; rotate it there first if it was ever shared)
+#   3. Uncomment the [triggers] block below and run: wrangler deploy
+#   4. Verify in Cloudflare logs that each receipt shows provider_calls: 0 and
+#      no_op: true while the Lovable Cloud ingestion kill switches remain OFF.
+#   5. Only after owner approval: set SCHEDULER_ENABLED = "true" and redeploy.
 # Configure FUNCTION_ORIGIN and MACHINE_TOKEN through the scheduler's encrypted
 # secrets, never browser settings or source. No trigger is registered here.
 # After pilot approval only:
