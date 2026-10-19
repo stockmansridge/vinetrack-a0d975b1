@@ -186,52 +186,52 @@ declare p record; pad record; proj jsonb; fails text[] := '{}'; v_row int; v_ais
 begin
   select * into p from public.pins where id = (it->>'pin_id')::uuid;
   if not found then return jsonb_build_object('pin_id',it->>'pin_id','ok',false,'fails',array['pin not found']); end if;
-  if p.vineyard_id <> p_vineyard then fails := fails || 'pin not in vineyard'; end if;
-  if p.deleted_at is not null then fails := fails || 'pin deleted'; end if;
-  if p.row_number is not null or p.pin_row_number is not null then fails := fails || 'pin already has a row'; end if;
-  if p.driving_row_number is not null then fails := fails || 'pin already has a driving aisle (preserved)'; end if;
-  if exists (select 1 from public.pin_row_segments s where s.pin_id = p.id) then fails := fails || 'pin has row segments (preserved)'; end if;
-  if coalesce(p.location_scope,'') = 'row' then fails := fails || 'location_scope is row'; end if;
-  if v_src is null or v_src not in ('measured','reviewed_track','manual_field_check') then fails := fails || 'invalid source'; end if;
-  if coalesce(btrim(it->>'reason'),'') = '' then fails := fails || 'reason required'; end if;
+  if p.vineyard_id <> p_vineyard then fails := array_append(fails, 'pin not in vineyard'); end if;
+  if p.deleted_at is not null then fails := array_append(fails, 'pin deleted'); end if;
+  if p.row_number is not null or p.pin_row_number is not null then fails := array_append(fails, 'pin already has a row'); end if;
+  if p.driving_row_number is not null then fails := array_append(fails, 'pin already has a driving aisle (preserved)'); end if;
+  if exists (select 1 from public.pin_row_segments s where s.pin_id = p.id) then fails := array_append(fails, 'pin has row segments (preserved)'); end if;
+  if coalesce(p.location_scope,'') = 'row' then fails := array_append(fails, 'location_scope is row'); end if;
+  if v_src is null or v_src not in ('measured','reviewed_track','manual_field_check') then fails := array_append(fails, 'invalid source'); end if;
+  if coalesce(btrim(it->>'reason'),'') = '' then fails := array_append(fails, 'reason required'); end if;
   -- CAS on the live record
-  if p.sync_version::text is distinct from (it->>'expected_sync_version') then fails := fails || 'sync_version changed'; end if;
-  if p.updated_at is distinct from (it->>'expected_updated_at')::timestamptz then fails := fails || 'updated_at changed'; end if;
+  if p.sync_version::text is distinct from (it->>'expected_sync_version') then fails := array_append(fails, 'sync_version changed'); end if;
+  if p.updated_at is distinct from (it->>'expected_updated_at')::timestamptz then fails := array_append(fails, 'updated_at changed'); end if;
   if p.latitude::double precision is distinct from (it->>'expected_latitude')::double precision
-     or p.longitude::double precision is distinct from (it->>'expected_longitude')::double precision then fails := fails || 'raw GPS changed'; end if;
-  if p.latitude is null or p.longitude is null then fails := fails || 'no raw GPS'; end if;
+     or p.longitude::double precision is distinct from (it->>'expected_longitude')::double precision then fails := array_append(fails, 'raw GPS changed'); end if;
+  if p.latitude is null or p.longitude is null then fails := array_append(fails, 'no raw GPS'); end if;
   -- block
-  if p.paddock_id is not null and p.paddock_id <> (it->>'paddock_id')::uuid then fails := fails || 'BLOCK-CONFLICT: differs from saved block'; end if;
+  if p.paddock_id is not null and p.paddock_id <> (it->>'paddock_id')::uuid then fails := array_append(fails, 'BLOCK-CONFLICT: differs from saved block'); end if;
   select id, vineyard_id, polygon_points, rows into pad from public.paddocks where id = (it->>'paddock_id')::uuid and deleted_at is null;
-  if not found or pad.vineyard_id <> p_vineyard then fails := fails || 'block not in vineyard';
+  if not found or pad.vineyard_id <> p_vineyard then fails := array_append(fails, 'block not in vineyard');
   else
     ident := public.vt_pbf_geometry_identity(pad.polygon_points::jsonb, pad.rows::jsonb);
-    if it ? 'expected_geometry_identity' and it->>'expected_geometry_identity' <> ident then fails := fails || 'block geometry changed'; end if;
+    if it ? 'expected_geometry_identity' and it->>'expected_geometry_identity' <> ident then fails := array_append(fails, 'block geometry changed'); end if;
     inside := public.vt_pbf_point_in_polygon(p.latitude, p.longitude, pad.polygon_points::jsonb);
-    if inside is distinct from true then fails := fails || 'raw GPS not inside current block polygon'; end if;
+    if inside is distinct from true then fails := array_append(fails, 'raw GPS not inside current block polygon'); end if;
   end if;
   v_row := (it->>'pin_row_number')::int;
-  if v_row is null then fails := fails || 'pin_row_number required'; end if;
+  if v_row is null then fails := array_append(fails, 'pin_row_number required'); end if;
   if pad.id is not null and v_row is not null and not exists (select 1 from jsonb_array_elements(pad.rows::jsonb) r where (r->>'number')::int = v_row)
-    then fails := fails || 'row does not exist in block'; end if;
+    then fails := array_append(fails, 'row does not exist in block'); end if;
   -- side: never contradict, never invent without field check
   v_side := lower(nullif(it->>'pin_side',''));
-  if v_side is not null and v_side not in ('left','right') then fails := fails || 'invalid side'; end if;
-  if v_side is not null and p.pin_side is not null and lower(p.pin_side) <> v_side then fails := fails || 'side contradicts recorded pin_side'; end if;
-  if v_side is not null and p.pin_side is null and v_src <> 'manual_field_check' then fails := fails || 'side not recorded — only manual_field_check may supply it'; end if;
+  if v_side is not null and v_side not in ('left','right') then fails := array_append(fails, 'invalid side'); end if;
+  if v_side is not null and p.pin_side is not null and lower(p.pin_side) <> v_side then fails := array_append(fails, 'side contradicts recorded pin_side'); end if;
+  if v_side is not null and p.pin_side is null and v_src <> 'manual_field_check' then fails := array_append(fails, 'side not recorded — only manual_field_check may supply it'); end if;
   -- projection
   if pad.id is not null and v_row is not null and p.latitude is not null then
     proj := public.vt_pbf_project(p.latitude, p.longitude, pad.rows::jsonb, v_row);
   end if;
   v_aisle := nullif(it->>'driving_row_number','')::numeric;
   if v_aisle is not null then
-    if abs(v_aisle - v_row) <> 0.5 then fails := fails || 'driving aisle not adjacent to row';
+    if abs(v_aisle - v_row) <> 0.5 then fails := array_append(fails, 'driving aisle not adjacent to row');
     elsif coalesce((proj->>'ok')::boolean,false) is false or (proj->>'aisle')::numeric <> v_aisle then
-      if v_src <> 'manual_field_check' then fails := fails || 'driving aisle not verified by projection'; end if;
+      if v_src <> 'manual_field_check' then fails := array_append(fails, 'driving aisle not verified by projection'); end if;
     end if;
   end if;
   if v_src <> 'manual_field_check' and coalesce((proj->>'ok')::boolean,false) is false then
-    fails := fails || ('projection failed: ' || coalesce(proj->>'reason','n/a') || ' — needs manual_field_check');
+    fails := array_append(fails, ('projection failed: ' || coalesce(proj->>'reason','n/a') || ' — needs manual_field_check'));
   end if;
   will_snap := coalesce((proj->>'ok')::boolean,false) and p.snapped_latitude is null and p.snapped_longitude is null
                and coalesce(p.snapped_to_row,false) = false;
@@ -282,7 +282,7 @@ end $$;
 -- ---------- 6. apply (owner confirmation, all-or-nothing, idempotent) ----------
 create or replace function public.pin_row_backfill_apply(p_approval uuid, p_items_hash text, p_confirm text)
 returns jsonb language plpgsql volatile security definer set search_path = public as $$
-declare a record; it jsonb; chk jsonb; p record; receipts jsonb := '[]'::jsonb; proj jsonb; snap boolean;
+declare a record; it jsonb; chk jsonb; p record; v_receipts jsonb := '[]'::jsonb; proj jsonb; snap boolean;
   v_after jsonb; v_before jsonb;
 begin
   select * into a from public.pin_row_backfill_approvals where id = p_approval for update;
@@ -323,10 +323,10 @@ begin
     if v_after is null then raise exception 'CAS lost for pin %', p.id; end if;
     insert into public.pin_row_backfill_audit(approval_id,pin_id,vineyard_id,actor,outcome,decision_source,reason,before,after,projection)
       values (a.id, p.id, a.vineyard_id, auth.uid(), chk->>'outcome', it->>'source', it->>'reason', v_before, v_after, proj);
-    receipts := receipts || jsonb_build_object('pin_id',p.id,'outcome',chk->>'outcome','after',v_after);
+    v_receipts := v_receipts || jsonb_build_object('pin_id',p.id,'outcome',chk->>'outcome','after',v_after);
   end loop;
-  update public.pin_row_backfill_approvals set status='applied', confirmed_by=auth.uid(), confirmed_at=now(), receipts=receipts where id=a.id;
-  return jsonb_build_object('idempotent',false,'receipts',receipts);
+  update public.pin_row_backfill_approvals set status='applied', confirmed_by=auth.uid(), confirmed_at=now(), receipts=v_receipts where id=a.id;
+  return jsonb_build_object('idempotent',false,'receipts',v_receipts);
 end $$;
 
 revoke all on function public.pin_row_backfill_dry_run(uuid, jsonb) from public, anon;
