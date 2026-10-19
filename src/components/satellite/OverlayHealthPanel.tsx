@@ -55,6 +55,13 @@ export default function OverlayHealthPanel({ viewModel, selectedLayer }: Props) 
           {mountFailures > 0 && (
             <div>Mount failures: <span className="text-destructive">{mountFailures}</span></div>
           )}
+          <div>Usable bytes: <span className="text-foreground">{s.usableDisplays}</span> ({s.verifiedDisplays} native-verified)</div>
+          {s.storedBlank > 0 && (
+            <div>Stored blank: <span className="text-destructive">{s.storedBlank}</span></div>
+          )}
+          {s.storedInvalid > 0 && (
+            <div>Stored invalid: <span className="text-destructive">{s.storedInvalid}</span></div>
+          )}
           {s.analyticalFailed > 0 && (
             <div>Analytical failures: <span className="text-destructive">{s.analyticalFailed}</span></div>
           )}
@@ -80,6 +87,7 @@ export default function OverlayHealthPanel({ viewModel, selectedLayer }: Props) 
                   <th className="py-1 pr-2">Display asset</th>
                   <th className="py-1 pr-2">Load</th>
                   <th className="py-1 pr-2">Mount</th>
+                  <th className="py-1 pr-2">Bytes</th>
                   <th className="py-1 pr-2">Analytical</th>
                   <th className="py-1 pr-2">Availability</th>
                   <th className="py-1 pr-2">Error</th>
@@ -93,7 +101,8 @@ export default function OverlayHealthPanel({ viewModel, selectedLayer }: Props) 
                     <td className="py-1 pr-2 font-mono">{short(p.displayAssetId)}</td>
                     <td className="py-1 pr-2">{p.displayStatus}</td>
                     <td className="py-1 pr-2">{p.displayMounted ? "mounted" : "—"}</td>
-                    <td className="py-1 pr-2">{p.analyticalStatus}</td>
+                    <td className="py-1 pr-2">{p.rasterVerification}</td>
+                    <td className="py-1 pr-2">{p.analyticalStatus}{p.analyticalVerification !== "unchecked" ? ` · ${p.analyticalVerification}` : ""}</td>
                     <td className="py-1 pr-2">{reasonToCustomerMessage(p.availabilityReason, p.selectedLayer)}</td>
                     <td className="py-1 pr-2 text-destructive">{p.errorMessage ?? ""}</td>
                   </tr>

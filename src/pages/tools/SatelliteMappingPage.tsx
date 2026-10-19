@@ -2706,6 +2706,31 @@ export default function SatelliteMappingPage() {
       </div>
 
       {selectedSceneKey && (() => {
+        const bad = viewModel.paddocks.filter(
+          (p) => p.availabilityReason === "stored_blank" || p.availabilityReason === "stored_invalid",
+        );
+        if (bad.length === 0) return null;
+        return (
+          <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-[11px] text-muted-foreground space-y-1">
+            <div className="text-xs font-semibold text-destructive">Saved imagery is blank or invalid</div>
+            <div>
+              Files were saved for {formatDate(selectedSceneKey)}, but they contain no usable pixels, so no colours can be shown.
+              This is different from "no capture". A new satellite capture and processing run is needed to get coloured imagery.
+            </div>
+            <ul className="space-y-0.5 pt-1">
+              {bad.map((p) => (
+                <li key={p.paddockId}>
+                  <span className="font-medium text-foreground">{p.paddockName}</span>
+                  {" · "}{reasonToCustomerMessage(p.availabilityReason, p.selectedLayer)}
+                  {p.errorMessage ? <span className="block text-[10px]">{p.errorMessage}</span> : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
+
+      {selectedSceneKey && (() => {
         const missing = viewModel.paddocks.filter(
           (p) => p.availabilityReason === "no_scene_for_date"
             || p.availabilityReason === "selected_layer_missing"
