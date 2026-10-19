@@ -12,6 +12,7 @@ import {
   RECOVERY_VINEYARD_ID, STATUS_LABEL, assessPin, isMissingRowPin, pinTripId, recoveryCsv,
   validateKnownPins, type RecoveryStatus,
 } from "@/lib/pinRowRecovery";
+import { AdminGate } from "./_shared";
 
 const SAMPLE_IDS = [
   "3c15741a-ae59-48f7-80c5-e53092d715ec",
@@ -29,6 +30,10 @@ async function chunked<T>(ids: string[], size: number, fn: (c: string[]) => Prom
 }
 
 export default function PinRowRecoveryPage() {
+  return <AdminGate><PinRowRecoveryInner /></AdminGate>;
+}
+
+function PinRowRecoveryInner() {
   const base = useQuery({
     queryKey: ["pin-row-recovery", "base"],
     staleTime: 5 * 60_000,
