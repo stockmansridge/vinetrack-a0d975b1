@@ -23,7 +23,13 @@ export function canonicalRing(raw: unknown): number[][] {
 export async function sha256(bytes: Uint8Array): Promise<string> {
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b=>b.toString(16).padStart(2,'0')).join('');
 }
-export const hashJson = (value: unknown) => sha256(new TextEncoder().encode(JSON.stringify(value)));
+// PostgreSQL jsonb reorders object keys; content identity must survive readback.
+function canonicalJson(value: unknown): unknown {
+  if(Array.isArray(value)) return value.map(canonicalJson);
+  if(value && typeof value==='object') return Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>[k,canonicalJson(v)]));
+  return value;
+}
+export const hashJson = (value: unknown) => sha256(new TextEncoder().encode(JSON.stringify(canonicalJson(value))));
 export function projection(crs: string) {
   const epsg = Number(crs.replace('EPSG:','')), zone=epsg%100;
   if (!/^EPSG:32[67]\d\d$/.test(crs) || zone<1 || zone>60) throw new Error('Unsupported UTM CRS');
