@@ -115,6 +115,7 @@ import AdminPaddockDetailPage from "./pages/admin/AdminPaddockDetailPage";
 import AdminBlocksPage from "./pages/admin/AdminBlocksPage";
 import AdminInvitationsPage from "./pages/admin/AdminInvitationsPage";
 import AdminPinsPage from "./pages/admin/AdminPinsPage";
+import PinRowRecoveryPage from "./pages/admin/PinRowRecoveryPage";
 import AdminSprayRecordsPage from "./pages/admin/AdminSprayRecordsPage";
 import AdminWorkTasksPage from "./pages/admin/AdminWorkTasksPage";
 import AdminTripsPage from "./pages/admin/AdminTripsPage";
@@ -313,6 +314,7 @@ const App = () => (
                     <Route path="/admin/blocks" element={<AdminBlocksPage />} />
                     <Route path="/admin/invitations" element={<AdminInvitationsPage />} />
                     <Route path="/admin/pins" element={<AdminPinsPage />} />
+                    <Route path="/admin/pin-row-recovery" element={<PinRowRecoveryPage />} />
                     <Route path="/admin/spray-records" element={<AdminSprayRecordsPage />} />
                     <Route path="/admin/work-tasks" element={<AdminWorkTasksPage />} />
                     <Route path="/admin/trips" element={<AdminTripsPage />} />
