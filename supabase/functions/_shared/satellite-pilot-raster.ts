@@ -5,6 +5,7 @@ import { processNativePixels, validateNativeGrid, type ExactManifest, type Nativ
 import { requireAlignedScl, sampleSclNearest } from './satellite-exact-adapter.ts';
 import { nativeWindow, pixelMask, projection, sha256, hashJson } from './satellite-pilot-geometry.ts';
 import { readExactNativeWindow, RequestBudget } from './satellite-bounded-cog.ts';
+import { countVisibleRgba, countValidCells } from './satellite-raster-usability.ts';
 export async function renderPilot(manifest: ExactManifest, ring: number[][], layer: PilotLayer, budget: RequestBudget) {
   // Source grid is recorded by discovery and must match the TIFF itself.
   const source=manifest.native_grid;
@@ -44,13 +45,20 @@ export async function packagePixels(input: Parameters<typeof processNativePixels
   }
   const png=encode({width:grid.width,height:grid.height,data:display,channels:4,depth:8});
   const decoded=decode(png); if(decoded.width!==grid.width||decoded.height!==grid.height) throw new Error('PNG verification failed');
+  // Fail closed before any storage write: a decodable PNG with no visible pixels is not imagery.
+  const display_visible_pixel_count=countVisibleRgba(decoded.data as ArrayLike<number>,decoded.channels);
+  if(display_visible_pixel_count===0) throw new Error('Blank display raster: zero visible pixels after encoding');
   const assets=[{kind:'DISPLAY_RASTER',mime:'image/png',bytes:png,sha256:await sha256(png),width:grid.width,height:grid.height,bounds,native_resolution_m:10,display_resolution_m:null}];
+  let analytical_valid_cell_count: number|null=null;
   if(input.layer==='NDVI') {
     const bytes=new Uint8Array(writeArrayBuffer(result.analytical,{width:grid.width,height:grid.height,SampleFormat:[3],BitsPerSample:[32],ModelPixelScale:[10,10,0],ModelTiepoint:[0,0,0,a[2],a[5],0],ProjectedCSTypeGeoKey:Number(grid.crs.slice(5)),GTModelTypeGeoKey:1,GTRasterTypeGeoKey:1,GDAL_NODATA:'-9999'}));
     const check=await fromArrayBuffer(bytes.buffer);const image=await check.getImage();
     const values=await image.readRasters({interleave:true});
     if(image.getWidth()!==grid.width||image.getHeight()!==grid.height||image.getGeoKeys()?.ProjectedCSTypeGeoKey!==Number(grid.crs.slice(5))||Array.from(values as ArrayLike<number>).some((v,i)=>v!==result.analytical[i])) throw new Error('GeoTIFF readback mismatch');
+    analytical_valid_cell_count=countValidCells(values as ArrayLike<number>,-9999,[-1,1]);
+    if(analytical_valid_cell_count===0) throw new Error('Blank analytical raster: every cell is no-data');
+    if(analytical_valid_cell_count!==result.valid_pixel_count) throw new Error('Analytical readback valid cells differ from statistics');
     assets.push({kind:'ANALYTICAL_RASTER',mime:'image/tiff',bytes,sha256:await sha256(bytes),width:grid.width,height:grid.height,bounds,native_resolution_m:10,display_resolution_m:null});
   }
-  return {assets,summary:result.summary,grid,bounds,cloud_percent:result.cloud_percent,valid_coverage_percent:result.valid_coverage_percent,no_data_pixel_count:grid.width*grid.height-result.valid_pixel_count,valid_pixel_count:result.valid_pixel_count};
+  return {assets,summary:result.summary,grid,bounds,display_visible_pixel_count,analytical_valid_cell_count,cloud_percent:result.cloud_percent,valid_coverage_percent:result.valid_coverage_percent,no_data_pixel_count:grid.width*grid.height-result.valid_pixel_count,valid_pixel_count:result.valid_pixel_count};
 }

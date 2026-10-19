@@ -78,7 +78,7 @@ export async function runPilot(kind:'worker'|'discovery',deps:PipelineDependenci
       if(bytes.length!==asset.bytes.length||await sha256(bytes)!==asset.sha256) throw new Error('Storage content checksum mismatch');
       assets.push({...asset,bytes:bytes.length,path});
     }
-    const proof={schema_version:1,verified:true,acquisition_id:work.acquisition_id,source_manifest_hash:a.data.source_manifest_hash,boundary_hash:work.boundary_hash,layer:work.layer,processing_version:PILOT_VERSION,assets,summary:rendered.summary,measurement_grid:rendered.grid,display_crs:'EPSG:4326',source:a.data.source_manifest,cloud_percent:rendered.cloud_percent,valid_coverage_percent:rendered.valid_coverage_percent,no_data_pixel_count:rendered.no_data_pixel_count};
+    const proof={schema_version:1,verified:true,acquisition_id:work.acquisition_id,source_manifest_hash:a.data.source_manifest_hash,boundary_hash:work.boundary_hash,layer:work.layer,processing_version:PILOT_VERSION,assets,summary:rendered.summary,measurement_grid:rendered.grid,display_crs:'EPSG:4326',source:a.data.source_manifest,cloud_percent:rendered.cloud_percent,valid_coverage_percent:rendered.valid_coverage_percent,no_data_pixel_count:rendered.no_data_pixel_count,valid_pixel_count:rendered.valid_pixel_count,display_visible_pixel_count:rendered.display_visible_pixel_count,analytical_valid_cell_count:rendered.analytical_valid_cell_count};
     if(signal.aborted) throw new Error('Publication deadline');
     const scene=await rpc(db,'satellite_publish_pilot',{p_work:work.id,p_token:work.lease_token,p_output:proof});
     return {reason:'published',scene_id:scene,provider_calls:budget.requests,no_op:false};
