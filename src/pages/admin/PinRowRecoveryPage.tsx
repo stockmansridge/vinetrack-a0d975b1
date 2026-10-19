@@ -17,6 +17,19 @@ import {
   type CaptureEvidence, type RecoveryStatus,
 } from "@/lib/pinRowRecovery";
 import { AdminGate } from "./_shared";
+import { PinRowReviewDetail } from "@/components/admin/PinRowReviewDetail";
+import {
+  AUTHORITY, DECISION_LABEL, DRAFT_NOTICE, buildDecision, exportDraftCsv, exportDraftJson, importDraftJson,
+  writebackPreflight, type CurrentPin, type DecisionKind, type ReviewDecision,
+} from "@/lib/pinRowReviewDraft";
+
+const DRAFT_KEY = "vinetrack.pinRowReviewDraft." + RECOVERY_VINEYARD_ID;
+type MissingInput = "any" | "gps" | "direction" | "side" | "block";
+function download(name: string, text: string, type: string) {
+  const blob = new Blob([text], { type });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href);
+}
 
 const SAMPLE_IDS = [
   "3c15741a-ae59-48f7-80c5-e53092d715ec",
@@ -162,9 +175,51 @@ function PinRowRecoveryInner() {
   const [filter, setFilter] = useState<RecoveryStatus | "all" | "priority">("all");
   const [page, setPage] = useState(0);
   const [notes, setNotes] = useState<Record<string, string>>({});
-  const shown = filter === "priority"
-    ? [...rows.filter(isPriorityPin)]
-    : [...rows.filter((r) => filter === "all" || r.status === filter)].sort((a, b) => Number(isPriorityPin(b)) - Number(isPriorityPin(a)));
+  const [blockFilter, setBlockFilter] = useState<string>("all");
+  const [missingFilter, setMissingFilter] = useState<MissingInput>("any");
+  const [decisionFilter, setDecisionFilter] = useState<DecisionKind | "unreviewed" | "all">("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const reviewer = user?.email ?? user?.id ?? "unknown reviewer";
+  // Local-only drafts (this browser). Never sent to the database.
+  const [decisions, setDecisions] = useState<Record<string, ReviewDecision>>(() => {
+    try { return JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "{}"); } catch { return {}; }
+  });
+  const persist = (d: Record<string, ReviewDecision>) => { setDecisions(d); try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch { /* ignore */ } };
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+
+  const shown = (filter === "priority"
+    ? rows.filter(isPriorityPin)
+    : [...rows.filter((r) => filter === "all" || r.status === filter)].sort((a, b) => Number(isPriorityPin(b)) - Number(isPriorityPin(a))))
+    .filter((r) => blockFilter === "all" || (r.pin.paddock_id ?? "none") === blockFilter)
+    .filter((r) => {
+      if (missingFilter === "any") return true;
+      const t = triadOf(r);
+      return missingFilter === "block" ? !r.savedBlockName : t[missingFilter] !== "qualified";
+    })
+    .filter((r) => decisionFilter === "all" || (decisionFilter === "unreviewed" ? !decisions[r.id] : decisions[r.id]?.decision === decisionFilter));
+  const segMap = segments.data?.map ?? null;
+  const currentMap = useMemo(() => {
+    const m = new Map<string, CurrentPin>();
+    for (const r of rows) m.set(r.id, { pin: r.pin, segs: segMap ? segMap.get(r.id) ?? [] : null, row: r });
+    return m;
+  }, [rows, segMap]);
+  const preflight = useMemo(() => base.data ? writebackPreflight(Object.values(decisions), currentMap, base.data.paddocks) : null, [decisions, currentMap, base.data]);
+  const reviewSummary = useMemo(() => {
+    const c = { unreviewed: 0, approve_for_writeback: 0, hold: 0, needs_field_verification: 0, preserve_existing: 0 } as Record<"unreviewed" | DecisionKind, number>;
+    rows.forEach((r) => { c[decisions[r.id]?.decision ?? "unreviewed"]++; });
+    const pri = rows.filter(isPriorityPin);
+    return { ...c, priorityReviewed: pri.filter((r) => decisions[r.id]).length, priorityTotal: pri.length };
+  }, [rows, decisions]);
+  const selIdx = selectedId ? shown.findIndex((r) => r.id === selectedId) : -1;
+  const selected = selIdx >= 0 ? shown[selIdx] : selectedId ? rows.find((r) => r.id === selectedId) ?? null : null;
+  const go = (d: number) => { if (!shown.length) return; const i = ((selIdx < 0 ? 0 : selIdx + d) + shown.length) % shown.length; setSelectedId(shown[i].id); };
+  const onImport = async (file: File) => {
+    const res = importDraftJson(await file.text(), [...currentMap.values()], base.data?.paddocks ?? []);
+    const next = { ...decisions };
+    res.accepted.forEach((d) => { next[d.pin_id] = d; });
+    persist(next);
+    setImportMsg(`Imported ${res.accepted.length}. Refused as stale (pin or map changed — re-review): ${res.stale.length}${res.stale.length ? ` [${res.stale.map((s) => `${s.pin_id.slice(0, 8)}: ${s.fields.join("/")}`).join("; ")}]` : ""}. Rejected: ${res.rejected.length}${res.rejected.length ? ` [${res.rejected.map((x) => `${x.pin_id?.slice(0, 8) ?? "file"}: ${x.reason}`).join("; ")}]` : ""}.`);
+  };
   const pageRows = shown.slice(page * PAGE, page * PAGE + PAGE);
   const pages = Math.max(1, Math.ceil(shown.length / PAGE));
 
@@ -291,6 +346,59 @@ function PinRowRecoveryInner() {
             })}
           </Card>
 
+          <Card className="p-4 text-sm space-y-2">
+            <div className="font-medium">Review register (local drafts — {AUTHORITY}, not server-confirmed)</div>
+            <div>First inspection reviewed: {reviewSummary.priorityReviewed}/{reviewSummary.priorityTotal} · Unreviewed {reviewSummary.unreviewed} · Approve (draft) {reviewSummary.approve_for_writeback} · Hold {reviewSummary.hold} · Needs field verification {reviewSummary.needs_field_verification} · Preserve existing {reviewSummary.preserve_existing}</div>
+            <div className="flex gap-2 flex-wrap items-center">
+              <Button size="sm" variant="outline" onClick={() => download("pin-row-review-draft-UNSIGNED.json", exportDraftJson(Object.values(decisions)), "application/json")}>Export review draft (JSON)</Button>
+              <Button size="sm" variant="outline" onClick={() => download("pin-row-review-draft-UNSIGNED.csv", exportDraftCsv(Object.values(decisions)), "text/csv")}>Export review draft (CSV)</Button>
+              <label className="text-xs border rounded px-2 py-1 cursor-pointer">Import review draft (JSON)
+                <input type="file" accept="application/json,.json" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void onImport(f); e.target.value = ""; }} />
+              </label>
+            </div>
+            {importMsg && <div className="text-xs">{importMsg}</div>}
+            <div className="text-xs text-muted-foreground">{DRAFT_NOTICE} Drafts are saved in this browser only.</div>
+          </Card>
+
+          {preflight && (
+            <Card className="p-4 text-sm space-y-1">
+              <div className="font-medium">Writeback preflight (read-only — no write path exists yet)</div>
+              <div>Eligible after explicit owner approval: <b>{preflight.eligible}</b> · Conflict / re-review: <b>{preflight.conflict}</b> · Not an approval (hold/verify/preserve): {preflight.notApproval}</div>
+              {preflight.items.filter((i) => i.outcome === "conflict").map((i) => (
+                <div key={i.pin_id} className="text-xs text-destructive font-mono">{i.pin_id.slice(0, 8)}: {i.checks.join("; ")}</div>
+              ))}
+              <div className="text-xs text-muted-foreground">Applying decisions needs a future audited server writeback (see design doc) and owner sign-off. Nothing has been written.</div>
+            </Card>
+          )}
+
+          <div id="pin-review-detail" />
+          {selected && base.data && (
+            <PinRowReviewDetail
+              r={selected} paddocks={base.data.paddocks}
+              track={selected.tripId && trips.data?.map ? trips.data.map.get(selected.tripId) ?? null : null}
+              existing={decisions[selected.id] ?? null} reviewer={reviewer}
+              position={selIdx >= 0 ? `${selIdx + 1} of ${shown.length} in current filter` : "outside current filter"}
+              onPrev={() => go(-1)} onNext={() => go(1)}
+              onClear={() => { const n = { ...decisions }; delete n[selected.id]; persist(n); }}
+              onSave={(input) => persist({ ...decisions, [selected.id]: buildDecision(selected, input, reviewer, base.data!.paddocks, segMap ? segMap.get(selected.id) ?? [] : null) })}
+            />
+          )}
+
+          <div className="flex gap-2 items-center flex-wrap text-xs">
+            <label>Block <select className="border rounded h-8 bg-background" value={blockFilter} onChange={(e) => { setBlockFilter(e.target.value); setPage(0); }}>
+              <option value="all">All</option><option value="none">No saved block</option>
+              {base.data.paddocks.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select></label>
+            <label>Missing input <select className="border rounded h-8 bg-background" value={missingFilter} onChange={(e) => { setMissingFilter(e.target.value as MissingInput); setPage(0); }}>
+              <option value="any">Any</option><option value="gps">GPS not qualified</option><option value="direction">Direction not qualified</option><option value="side">Side not qualified</option><option value="block">No saved block</option>
+            </select></label>
+            <label>Review <select className="border rounded h-8 bg-background" value={decisionFilter} onChange={(e) => { setDecisionFilter(e.target.value as any); setPage(0); }}>
+              <option value="all">All</option><option value="unreviewed">Unreviewed</option>
+              {Object.entries(DECISION_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select></label>
+            <span className="text-muted-foreground">{shown.length} shown</span>
+          </div>
+
           <div className="flex gap-2 items-center flex-wrap">
             {(["all", "priority", "supported_candidate", "requires_review", "not_resolvable", "preserve_existing"] as const).map((f) => (
               <Button key={f} size="sm" variant={filter === f ? "default" : "outline"} onClick={() => { setFilter(f); setPage(0); }}>
@@ -302,12 +410,12 @@ function PinRowRecoveryInner() {
           <Card className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="text-left text-muted-foreground">
-                <tr>{["Pin", "Title / mode / date", "Block", "GPS", "Inputs (GPS / direction / side)", "Device heading vs GPS travel", "Evidence", "Trip / anchor", "Existing", "Nearest row", "Bounding rows / aisle", "Candidate vine row", "Status / reason", "Review note (local)"].map((h) => <th key={h} className="p-2">{h}</th>)}</tr>
+                <tr>{["Pin", "Title / mode / date", "Block", "GPS", "Inputs (GPS / direction / side)", "Device heading vs GPS travel", "Evidence", "Trip / anchor", "Existing", "Nearest row", "Bounding rows / aisle", "Candidate vine row", "Status / reason", "Review note (local)", "Draft"].map((h) => <th key={h} className="p-2">{h}</th>)}</tr>
               </thead>
               <tbody className="divide-y">
                 {pageRows.map((r) => (
                   <tr key={r.id} className="align-top">
-                    <td className="p-2 font-mono">{r.id.slice(0, 8)}</td>
+                    <td className="p-2 font-mono"><Button size="sm" variant={selectedId === r.id ? "default" : "outline"} className="h-6 px-2 text-xs" onClick={() => { setSelectedId(r.id); setTimeout(() => document.getElementById("pin-review-detail")?.scrollIntoView({ behavior: "smooth" }), 0); }}>{r.id.slice(0, 8)}</Button></td>
                     <td className="p-2">{r.title}<br />{r.mode}<br />{r.createdAt?.slice(0, 10)}</td>
                     <td className="p-2">{r.savedBlockName ?? (r.suggestedBlockName ? <span className="italic">Suggested: {r.suggestedBlockName}</span> : "—")}
                       {!r.savedBlockName && <div className="text-muted-foreground">{r.suggestedBlockNote}</div>}</td>
@@ -332,6 +440,7 @@ function PinRowRecoveryInner() {
                     <td className="p-2">{r.suggestedVineRow != null ? `Candidate Row ${r.suggestedVineRow}` : "—"}</td>
                     <td className="p-2"><Badge variant="outline">{STATUS_LABEL[r.status]}</Badge><div className="text-muted-foreground mt-1">{r.reason}</div></td>
                     <td className="p-2"><Input value={notes[r.id] ?? ""} onChange={(e) => setNotes({ ...notes, [r.id]: e.target.value })} className="h-7 text-xs" /></td>
+                    <td className="p-2">{decisions[r.id] ? DECISION_LABEL[decisions[r.id].decision] : "Unreviewed"}</td>
                   </tr>
                 ))}
               </tbody>
