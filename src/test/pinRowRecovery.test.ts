@@ -239,3 +239,52 @@ describe("navigation", () => {
     expect(searchDestinations({ ...viewer, isSystemAdmin: true }).some((d) => d.path === "/admin/pin-row-recovery")).toBe(true);
   });
 });
+
+import { diffKey, trackSummary } from "@/lib/pinRowRecovery";
+describe("diagnostics", () => {
+  it("diffKey buckets signed differences", () => {
+    expect([diffKey(-2), diffKey(-1), diffKey(0), diffKey(1), diffKey(2), diffKey(3), diffKey(0.5)]).toEqual(["-2", "-1", "0", "+1", "+2", "other", "other"]);
+  });
+  it("per-block distribution, era and snapped vs raw comparison without changing pins", () => {
+    const known = [
+      { id: "a", paddock_id: "b1", latitude: at(6.2).lat, longitude: at(6.2).lng, pin_row_number: 4, driving_row_number: 3.5, created_at: "2026-05-02" },
+      { id: "b", paddock_id: "b1", latitude: at(6.2).lat, longitude: at(6.2).lng, pin_row_number: 5, driving_row_number: 4.5, created_at: "2026-05-03",
+        snapped_latitude: at(9.8).lat, snapped_longitude: at(9.8).lng },
+    ];
+    const copy = JSON.stringify(known);
+    const v = validateKnownPins(known, [pad]);
+    expect(JSON.stringify(known)).toBe(copy);
+    const b = v.perBlock[0];
+    expect(b.diffs).toEqual({ "0": 1, "-1": 1 });
+    expect(b.eras["2026-05"]).toEqual({ evaluated: 2, matched: 1 });
+    expect(v.withSnapped).toBe(1);
+    expect(v.snappedMatch).toBe(1); // snapped position sits in saved aisle 4.5
+    expect(v.localMatch).toBe(1);
+  });
+  it("local segment aisle flags where midpoint projection is invalid (shorter, offset row)", () => {
+    // Row 3 shortened to the north half: point in south half has no local row 3.
+    const short = rows.map((r) => r.number === 3 ? { ...r, startPoint: { latitude: -33.9995, longitude: r.startPoint.longitude } } : r);
+    const g = aisleGeometry(at(6.2) && { lat: -33.9998, lng: at(6.2).lng }, short, poly);
+    expect(g.aisle).toBe(3.5);
+    expect(g.localAisle).toBeNull();
+    expect(g.methodDisagree).toBe(true);
+  });
+  it("failure categories distinguish missing block, outside polygon and headland", () => {
+    expect(assessPin({ id: "n", latitude: -30, longitude: 140 }, corroborated()).category).toBe("missing_block");
+    expect(assessPin({ ...pinP, latitude: -34.00005 }, corroborated()).category).toBe("headland_or_row_end");
+    const offPad = { ...pad, polygon_points: poly.map((q) => ({ ...q, longitude: q.longitude + 1 })) };
+    expect(assessPin(pinP, { ...corroborated(), paddocks: [offPad] }).category).toBe("outside_polygon");
+  });
+  it("track summary counts anchors and status transitions after loading tracks", () => {
+    const ev = corroborated(); ev.evidence.set("p", { ...goodEvidence, heading_degrees: 5, observations: [] });
+    const p = { ...pinP, heading: 5 };
+    const before = [assessPin(p, { ...ev, trips: "not_loaded" })];
+    const after = [assessPin(p, ev)];
+    const s = trackSummary(before, after);
+    expect(s.notLoaded).toBe(0);
+    expect(s.unique).toBe(1);
+    expect(s.travelFromTrack).toBe(1);
+    expect(s.transitions["requires_review→supported_candidate"]).toBe(1);
+    expect(trackSummary(before, before).notLoaded).toBe(1);
+  });
+});

@@ -136,7 +136,34 @@ export interface AisleGeometry {
   rowsParallel: boolean | null;
   /** Geometry problems that rule out a supported candidate. */
   geometryIssues: string[];
+  /** Aisle from local point-to-segment offsets of rows whose extent covers the point. */
+  localAisle: number | null;
+  localBoundingRows: [number, number] | null;
+  /** Midpoint/global-normal aisle disagrees with local segment aisle. */
+  methodDisagree: boolean | null;
+  /** Bounding row lengths differ by >20% (midpoints not comparable). */
+  variableLength: boolean | null;
   reason?: string;
+}
+
+/** Local aisle: signed perpendicular distance from each row's OWN line, only rows covering the point. */
+function localAisleOf(P: { x: number; y: number }, offs: { n: number; a: any; b: any }[], ux: number, uy: number) {
+  let left: { n: number; d: number } | null = null, right: { n: number; d: number } | null = null;
+  for (const r of offs) {
+    let dx = r.b.x - r.a.x, dy = r.b.y - r.a.y;
+    const len = Math.hypot(dx, dy); if (!len) continue;
+    dx /= len; dy /= len;
+    let ax = r.a;
+    if (dx * ux + dy * uy < 0) { dx = -dx; dy = -dy; ax = r.b; } // orient along block axis
+    const t = (P.x - ax.x) * dx + (P.y - ax.y) * dy;
+    if (t < 0 || t > len) continue;
+    const d = dx * (P.y - ax.y) - dy * (P.x - ax.x); // >0: point left of row
+    if (d > 0) { if (!right || d < right.d) right = { n: r.n, d }; } // row is to the right
+    else if (!left || -d < left.d) left = { n: r.n, d: -d };
+  }
+  if (!left || !right) return { aisle: null, rows: null };
+  const a = Math.min(left.n, right.n), b = Math.max(left.n, right.n);
+  return { aisle: b - a === 1 ? (a + b) / 2 : null, rows: [a, b] as [number, number] };
 }
 
 /** Distance from a row end treated as headland / endpoint (m). */
@@ -152,6 +179,7 @@ export function aisleGeometry(pt: LatLng, rawRows: any, polygonRaw?: any): Aisle
     boundingRows: null, aisle: null, nearestPhysicalRow: null, clearance: null, clearanceM: null,
     spacingM: null, rowAxisDeg: null, leftWhenAlongAxis: null, outsideRows: false,
     insidePolygon, withinRowExtents: null, rowsParallel: null, geometryIssues: [],
+    localAisle: null, localBoundingRows: null, methodDisagree: null, variableLength: null,
   };
   if (rows.length < 2) return { ...empty, reason: "Block has fewer than two mapped rows" };
   const proj = projector(rows[0].start!);
@@ -193,7 +221,16 @@ export function aisleGeometry(pt: LatLng, rawRows: any, polygonRaw?: any): Aisle
     const ang = (Math.acos(Math.min(1, Math.abs(dx * ux + dy * uy))) * 180) / Math.PI;
     if (ang > MAX_ROW_DIVERGENCE_DEG) parallel = false;
   }
+  const local = localAisleOf(P, offs, ux, uy);
+  const lenOf = (r: any) => Math.hypot(r.b.x - r.a.x, r.b.y - r.a.y);
+  const l1 = lenOf(lo), l2 = lenOf(hi);
+  const variableLength = Math.max(l1, l2) / Math.max(1e-6, Math.min(l1, l2)) > 1.2;
+  const midAisle = consecutive ? (a + b) / 2 : null;
+  // null when no rows locally cover the point on both sides (can't compare).
+  const methodDisagree = local.rows == null ? null : local.rows[0] !== a || local.rows[1] !== b;
   const issues: string[] = [];
+  if (methodDisagree) issues.push(`midpoint aisle ${midAisle ?? "—"} ≠ local segment aisle ${local.aisle ?? "—"} (global projection invalid here)`);
+  if (variableLength) issues.push("bounding rows differ >20% in length");
   if (insidePolygon === false) issues.push("GPS outside the current block polygon");
   if (insidePolygon == null) issues.push("block polygon missing");
   if (!within) issues.push("GPS beyond a bounding row's extent or within headland/row-end margin");
@@ -201,6 +238,7 @@ export function aisleGeometry(pt: LatLng, rawRows: any, polygonRaw?: any): Aisle
   if (!consecutive) issues.push(`bounding rows ${a} and ${b} not consecutive`);
   return {
     insidePolygon, withinRowExtents: within, rowsParallel: parallel, geometryIssues: issues,
+    localAisle: local.aisle, localBoundingRows: local.rows, methodDisagree, variableLength,
     boundingRows: [a, b],
     aisle: consecutive ? (a + b) / 2 : null,
     nearestPhysicalRow: nearest.n,
@@ -350,6 +388,19 @@ export function trackAnchor(pt: LatLng, track: LatLng[]): "unique" | "multiple" 
   return n === 1 ? "unique" : "none";
 }
 
+export type FailureCategory =
+  | "preserved" | "segments_unavailable" | "no_gps" | "missing_block" | "outside_polygon"
+  | "outside_rows" | "headland_or_row_end" | "no_aisle" | "geometry_method_conflict"
+  | "row_spacing_uncertain" | "direction_conflict" | "no_travel" | "other_review" | "supported";
+export const CATEGORY_LABEL: Record<FailureCategory, string> = {
+  preserved: "Existing metadata preserved", segments_unavailable: "Segments unreadable",
+  no_gps: "No GPS", missing_block: "No saved/unique block", outside_polygon: "Outside current block polygon",
+  outside_rows: "Beyond outermost rows", headland_or_row_end: "Headland / row end",
+  no_aisle: "No consecutive aisle", geometry_method_conflict: "Midpoint vs local geometry disagree",
+  row_spacing_uncertain: "GPS uncertainty vs row spacing", direction_conflict: "Direction conflict",
+  no_travel: "No qualified travel direction", other_review: "Other review", supported: "Supported candidate",
+};
+
 // ---------- per-pin assessment ----------
 /** null map = query unavailable (permission or error). */
 export interface RecoveryEvidence {
@@ -394,6 +445,8 @@ export interface RecoveryRow {
   /** Device heading vs travel difference (deg), when both exist. */
   headingVsTravelDeg: number | null;
   directionConflict: string | null;
+  /** Why not resolvable / review, with CURRENT evidence (not inherently impossible). */
+  category: FailureCategory;
   suggestedVineRow: number | null;
   reason: string;
   status: RecoveryStatus;
@@ -491,21 +544,22 @@ export function assessPin(pin: any, ev: RecoveryEvidence): RecoveryRow {
   const headingNote = headingVsTravelDeg != null && headingVsTravelDeg > DIRECTION_CONFLICT_DEG
     ? `device heading differs from travel by ${Math.round(headingVsTravelDeg)}° (phone orientation ≠ travel)` : null;
 
-  const out = (status: RecoveryStatus, reason: string, suggestedVineRow: number | null = null): RecoveryRow =>
+  const out = (status: RecoveryStatus, reason: string, suggestedVineRow: number | null = null, category: FailureCategory = "other_review"): RecoveryRow =>
     ({ ...base, geometry, travel, obsTravel, trackTravel, headingVsTravelDeg,
-      directionConflict: directionConflict ?? headingNote, suggestedVineRow, status, reason });
+      directionConflict: directionConflict ?? headingNote, suggestedVineRow, status, reason, category });
 
-  if (existingMeta) return out("preserve_existing", "Existing row metadata — preserved, never auto-filled");
+  if (existingMeta) return out("preserve_existing", "Existing row metadata — preserved, never auto-filled", null, "preserved");
   // Fail closed: cannot rule out saved segments.
   if (segmentsState === "unavailable")
-    return out("requires_review", "Saved row segments unreadable (permission unknown) — cannot rule out existing metadata");
-  if (lat == null || lng == null) return out("not_resolvable", "No GPS");
-  if (!block) return out("not_resolvable", suggestedBlockNote ?? "No block");
+    return out("requires_review", "Saved row segments unreadable (permission unknown) — cannot rule out existing metadata", null, "segments_unavailable");
+  if (lat == null || lng == null) return out("not_resolvable", "No GPS", null, "no_gps");
+  if (!block) return out("not_resolvable", suggestedBlockNote ?? "No block", null, "missing_block");
   if (!geometry?.boundingRows || geometry.aisle == null)
-    return out("not_resolvable", geometry?.reason ?? "No aisle");
+    return out("not_resolvable", geometry?.reason ?? "No aisle", null, geometry?.outsideRows ? "outside_rows" : "no_aisle");
 
   if (geometry.insidePolygon === false || geometry.withinRowExtents === false)
-    return out("not_resolvable", geometry.geometryIssues.join("; "));
+    return out("not_resolvable", geometry.geometryIssues.join("; "), null,
+      geometry.insidePolygon === false ? "outside_polygon" : "headland_or_row_end");
   const pair = pairVineRow(geometry, travel.courseDeg, side);
   const issues: string[] = ["current geometry only", ...geometry.geometryIssues];
   if (!saved) issues.push("block is a suggestion");
@@ -523,6 +577,11 @@ export function assessPin(pin: any, ev: RecoveryEvidence): RecoveryRow {
 
   // "current geometry only" is always present → supported only if it's the sole caveat.
   const corroborated = issues.length === 1;
+  const category: FailureCategory = corroborated ? "supported"
+    : geometry.methodDisagree || geometry.rowsParallel === false || geometry.variableLength ? "geometry_method_conflict"
+    : directionConflict || headingNote ? "direction_conflict"
+    : travel.courseDeg == null ? "no_travel"
+    : issues.some((x) => /accuracy|near a vine row/.test(x)) ? "row_spacing_uncertain" : "other_review";
   return out(
     corroborated ? "supported_candidate" : "requires_review",
     corroborated
@@ -530,6 +589,7 @@ export function assessPin(pin: any, ev: RecoveryEvidence): RecoveryRow {
       : issues.join("; "),
     // Only show a candidate row when travel direction is corroborated.
     travel.courseDeg != null ? pair.row : null,
+    category,
   );
 }
 
@@ -566,12 +626,35 @@ export interface ValidationResult {
   total: number; adjacencyValid: number; aisleMatch: number; aisleEvaluated: number;
   vineRowEvaluated: number; vineRowMatch: number; nearestDiffersFromSaved: number; falsePositives: number;
   withSavedBlock: number;
+  /** Local segment aisle evaluated / matched saved. */
+  localEvaluated: number; localMatch: number; methodDisagree: number;
+  /** Raw vs previously-snapped coordinates (never overwritten). */
+  withSnapped: number; snappedEvaluated: number; snappedMatch: number; meanRawSnapM: number | null;
+  perBlock: BlockValidation[];
+}
+
+export interface BlockValidation {
+  paddockId: string; name: string; total: number; adjacent: number; evaluated: number; matched: number;
+  /** current-map aisle − saved aisle → count (keys "-2","-1","0","+1","+2", "other"). */
+  diffs: Record<string, number>;
+  /** capture month (YYYY-MM) → evaluated/matched. */
+  eras: Record<string, { evaluated: number; matched: number }>;
+  localEvaluated: number; localMatched: number; methodDisagree: number; snappedMatched: number; snappedEvaluated: number;
+}
+
+export function diffKey(d: number): string {
+  if (!Number.isFinite(d) || Math.abs(d % 1) > 1e-9 || Math.abs(d) > 2) return "other";
+  return d === 0 ? "0" : d > 0 ? `+${d}` : String(d);
 }
 
 export function validateKnownPins(pins: any[], paddocks: any[]): ValidationResult {
   const padById = new Map(paddocks.map((p) => [p.id, p]));
   const r: ValidationResult = { total: 0, adjacencyValid: 0, aisleMatch: 0, aisleEvaluated: 0,
-    vineRowEvaluated: 0, vineRowMatch: 0, nearestDiffersFromSaved: 0, falsePositives: 0, withSavedBlock: 0 };
+    vineRowEvaluated: 0, vineRowMatch: 0, nearestDiffersFromSaved: 0, falsePositives: 0, withSavedBlock: 0,
+    localEvaluated: 0, localMatch: 0, methodDisagree: 0, withSnapped: 0, snappedEvaluated: 0, snappedMatch: 0,
+    meanRawSnapM: null, perBlock: [] };
+  const blocks = new Map<string, BlockValidation>();
+  let snapSum = 0;
   for (const p of pins) {
     const saved = num(p.pin_row_number) ?? num(p.row_number);
     const aisle = num(p.driving_row_number);
@@ -583,8 +666,30 @@ export function validateKnownPins(pins: any[], paddocks: any[]): ValidationResul
     const block = p.paddock_id ? padById.get(p.paddock_id) : null;
     if (!block) continue;
     r.withSavedBlock++;
+    const bv = blocks.get(block.id) ?? { paddockId: block.id, name: block.name ?? "Unnamed", total: 0, adjacent: 0,
+      evaluated: 0, matched: 0, diffs: {}, eras: {}, localEvaluated: 0, localMatched: 0, methodDisagree: 0,
+      snappedMatched: 0, snappedEvaluated: 0 };
+    blocks.set(block.id, bv);
+    bv.total++;
+    if (Math.abs(saved - aisle) === 0.5) bv.adjacent++;
     const g = aisleGeometry({ lat, lng }, block.rows, block.polygon_points);
-    if (g.aisle != null) { r.aisleEvaluated++; if (g.aisle === aisle) r.aisleMatch++; }
+    const era = String(p.created_at ?? "").slice(0, 7) || "unknown";
+    if (g.aisle != null) {
+      r.aisleEvaluated++; bv.evaluated++;
+      const ok = g.aisle === aisle;
+      if (ok) { r.aisleMatch++; bv.matched++; }
+      const k = diffKey(g.aisle - aisle); bv.diffs[k] = (bv.diffs[k] ?? 0) + 1;
+      const e = (bv.eras[era] ??= { evaluated: 0, matched: 0 }); e.evaluated++; if (ok) e.matched++;
+    }
+    if (g.localAisle != null) { r.localEvaluated++; bv.localEvaluated++; if (g.localAisle === aisle) { r.localMatch++; bv.localMatched++; } }
+    if (g.methodDisagree) { r.methodDisagree++; bv.methodDisagree++; }
+    const sl = num(p.snapped_latitude), sg = num(p.snapped_longitude);
+    if (sl != null && sg != null) {
+      r.withSnapped++;
+      snapSum += metres({ lat, lng }, { lat: sl, lng: sg });
+      const gs = aisleGeometry({ lat: sl, lng: sg }, block.rows, block.polygon_points);
+      if (gs.aisle != null) { r.snappedEvaluated++; bv.snappedEvaluated++; if (gs.aisle === aisle) { r.snappedMatch++; bv.snappedMatched++; } }
+    }
     if (g.nearestPhysicalRow != null && g.nearestPhysicalRow !== saved) r.nearestDiffersFromSaved++;
     // DIAGNOSTIC ONLY: pairs the stored device heading (phone orientation),
     // which is NOT travel direction. Shows how often compass pairing is wrong.
@@ -594,7 +699,39 @@ export function validateKnownPins(pins: any[], paddocks: any[]): ValidationResul
       if (pr.row === saved) r.vineRowMatch++; else r.falsePositives++;
     }
   }
+  r.meanRawSnapM = r.withSnapped ? snapSum / r.withSnapped : null;
+  r.perBlock = [...blocks.values()].sort((a, b) => a.name.localeCompare(b.name));
   return r;
+}
+
+// ---------- trip-evidence summary ----------
+export interface TrackSummary {
+  linked: number; unique: number; multiple: number; none: number; failed: number; notLoaded: number;
+  travelFromTrack: number; travelFromObs: number; headingConflicts: number; sourceConflicts: number;
+  transitions: Record<string, number>;
+  categories: Record<string, number>;
+}
+export function trackSummary(before: RecoveryRow[], after: RecoveryRow[]): TrackSummary {
+  const s: TrackSummary = { linked: 0, unique: 0, multiple: 0, none: 0, failed: 0, notLoaded: 0,
+    travelFromTrack: 0, travelFromObs: 0, headingConflicts: 0, sourceConflicts: 0, transitions: {}, categories: {} };
+  const prev = new Map(before.map((r) => [r.id, r.status]));
+  for (const r of after) {
+    s.categories[r.category] = (s.categories[r.category] ?? 0) + 1;
+    if (r.travel.source === "gps_observations") s.travelFromObs++;
+    if (r.travel.source === "trip_track") s.travelFromTrack++;
+    if (r.directionConflict?.includes("device heading")) s.headingConflicts++;
+    if (r.directionConflict?.includes("disagree")) s.sourceConflicts++;
+    if (!r.tripId) continue;
+    s.linked++;
+    if (r.trackAnchor === "unique") s.unique++;
+    else if (r.trackAnchor === "multiple") s.multiple++;
+    else if (r.trackAnchor === "none") s.none++;
+    else if (r.trackAnchor === "not_loaded") s.notLoaded++;
+    else s.failed++;
+    const p = prev.get(r.id);
+    if (p && p !== r.status) { const k = `${p}→${r.status}`; s.transitions[k] = (s.transitions[k] ?? 0) + 1; }
+  }
+  return s;
 }
 
 // ---------- CSV (client-local, non-authoritative) ----------
