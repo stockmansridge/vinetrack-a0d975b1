@@ -34,6 +34,8 @@ import { useVintage } from "@/lib/useVintage";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 import { formatDate, formatDateTime } from "@/lib/dateFormat";
 import { localToday } from "@/lib/workTaskDefaultOrder";
+import { fetchVineyard } from "@/lib/vineyardSettingsQuery";
+import { checkInsightsAccess } from "@/lib/scoutReports";
 import { useToast } from "@/hooks/use-toast";
 import { FIELD_ROLES } from "@/lib/rolePermissions";
 import {
@@ -64,9 +66,26 @@ export default function VintageNotesPage() {
   const [typeId, setTypeId] = useState(ALL_NOTE_TYPES);
   const [addOpen, setAddOpen] = useState(false);
 
+  // The selected vineyard's own timezone drives "today" for the note date.
+  const vineyardQuery = useQuery({
+    queryKey: ["vineyard-settings", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchVineyard(selectedVineyardId!),
+  });
+  const vineyardTimeZone = vineyardQuery.data?.timezone ?? null;
+
+  // Access preflight: RLS SELECT silently hides rows, so an empty list is
+  // only trustworthy after the backend confirms read access.
+  const accessQuery = useQuery({
+    queryKey: ["insights-access", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => checkInsightsAccess(selectedVineyardId!),
+  });
+  const access = accessQuery.data;
+
   const notesQuery = useQuery({
     queryKey: ["vintage-notes", selectedVineyardId],
-    enabled: !!selectedVineyardId,
+    enabled: !!selectedVineyardId && access === "allowed",
     queryFn: () => fetchVintageNotes(selectedVineyardId!),
   });
   const typesQuery = useQuery({
