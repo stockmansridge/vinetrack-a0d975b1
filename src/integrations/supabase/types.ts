@@ -615,6 +615,42 @@ export type Database = {
         }
         Relationships: []
       }
+      satellite_acquisitions: {
+        Row: {
+          acquired_at: string
+          collection: string
+          created_at: string
+          id: string
+          provenance_version: number
+          provider: string
+          provider_scene_id: string
+          source_manifest: Json
+          source_manifest_hash: string
+        }
+        Insert: {
+          acquired_at: string
+          collection: string
+          created_at?: string
+          id?: string
+          provenance_version?: number
+          provider: string
+          provider_scene_id: string
+          source_manifest: Json
+          source_manifest_hash: string
+        }
+        Update: {
+          acquired_at?: string
+          collection?: string
+          created_at?: string
+          id?: string
+          provenance_version?: number
+          provider?: string
+          provider_scene_id?: string
+          source_manifest?: Json
+          source_manifest_hash?: string
+        }
+        Relationships: []
+      }
       satellite_backfill_jobs: {
         Row: {
           auto_scheduled: boolean
@@ -771,8 +807,42 @@ export type Database = {
         }
         Relationships: []
       }
+      satellite_freshness: {
+        Row: {
+          last_provider_check_at: string | null
+          newest_discovered_at: string | null
+          newest_usable_at: string | null
+          newest_verified_complete_at: string | null
+          paddock_id: string
+          processing_version: string
+          provider: string
+          vineyard_id: string
+        }
+        Insert: {
+          last_provider_check_at?: string | null
+          newest_discovered_at?: string | null
+          newest_usable_at?: string | null
+          newest_verified_complete_at?: string | null
+          paddock_id: string
+          processing_version: string
+          provider: string
+          vineyard_id: string
+        }
+        Update: {
+          last_provider_check_at?: string | null
+          newest_discovered_at?: string | null
+          newest_usable_at?: string | null
+          newest_verified_complete_at?: string | null
+          paddock_id?: string
+          processing_version?: string
+          provider?: string
+          vineyard_id?: string
+        }
+        Relationships: []
+      }
       satellite_index_summaries: {
         Row: {
+          analysis_provenance: Json | null
           created_at: string
           id: string
           index_type: string
@@ -791,6 +861,7 @@ export type Database = {
           valid_pixel_count: number | null
         }
         Insert: {
+          analysis_provenance?: Json | null
           created_at?: string
           id?: string
           index_type: string
@@ -809,6 +880,7 @@ export type Database = {
           valid_pixel_count?: number | null
         }
         Update: {
+          analysis_provenance?: Json | null
           created_at?: string
           id?: string
           index_type?: string
@@ -835,6 +907,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      satellite_ingest_runs: {
+        Row: {
+          completed_at: string | null
+          correlation_id: string
+          heartbeat_at: string
+          id: string
+          kind: string
+          no_op: boolean
+          provider_calls: number
+          reason: string | null
+          started_at: string
+          status: string
+          vineyard_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          correlation_id: string
+          heartbeat_at?: string
+          id?: string
+          kind: string
+          no_op?: boolean
+          provider_calls?: number
+          reason?: string | null
+          started_at?: string
+          status?: string
+          vineyard_id?: string
+        }
+        Update: {
+          completed_at?: string | null
+          correlation_id?: string
+          heartbeat_at?: string
+          id?: string
+          kind?: string
+          no_op?: boolean
+          provider_calls?: number
+          reason?: string | null
+          started_at?: string
+          status?: string
+          vineyard_id?: string
+        }
+        Relationships: []
+      }
+      satellite_ingestion_control: {
+        Row: {
+          changed_at: string
+          enabled: boolean
+          reason: string
+          scope: string
+          scope_key: string
+        }
+        Insert: {
+          changed_at?: string
+          enabled?: boolean
+          reason?: string
+          scope: string
+          scope_key: string
+        }
+        Update: {
+          changed_at?: string
+          enabled?: boolean
+          reason?: string
+          scope?: string
+          scope_key?: string
+        }
+        Relationships: []
       }
       satellite_paddock_manifest: {
         Row: {
@@ -956,12 +1094,104 @@ export type Database = {
         }
         Relationships: []
       }
+      satellite_provider_budget: {
+        Row: {
+          approved_at: string | null
+          cpu_ms_limit: number
+          cpu_ms_reserved: number
+          currency: string
+          hard_spend_limit: number
+          period_kind: string
+          period_start: string
+          processing_limit: number
+          processing_reserved: number
+          provider: string
+          request_limit: number
+          requests_reserved: number
+          spend_reserved: number
+          storage_limit: number
+          storage_reserved: number
+          transfer_limit: number
+          transfer_reserved: number
+        }
+        Insert: {
+          approved_at?: string | null
+          cpu_ms_limit?: number
+          cpu_ms_reserved?: number
+          currency?: string
+          hard_spend_limit?: number
+          period_kind: string
+          period_start: string
+          processing_limit?: number
+          processing_reserved?: number
+          provider: string
+          request_limit?: number
+          requests_reserved?: number
+          spend_reserved?: number
+          storage_limit?: number
+          storage_reserved?: number
+          transfer_limit?: number
+          transfer_reserved?: number
+        }
+        Update: {
+          approved_at?: string | null
+          cpu_ms_limit?: number
+          cpu_ms_reserved?: number
+          currency?: string
+          hard_spend_limit?: number
+          period_kind?: string
+          period_start?: string
+          processing_limit?: number
+          processing_reserved?: number
+          provider?: string
+          request_limit?: number
+          requests_reserved?: number
+          spend_reserved?: number
+          storage_limit?: number
+          storage_reserved?: number
+          transfer_limit?: number
+          transfer_reserved?: number
+        }
+        Relationships: []
+      }
+      satellite_provider_throttle: {
+        Row: {
+          min_interval_ms: number
+          next_allowed_at: string
+          provider: string
+          rate_limited_count: number
+          retry_after_until: string | null
+          slot_expires_at: string | null
+          slot_token: string | null
+        }
+        Insert: {
+          min_interval_ms?: number
+          next_allowed_at?: string
+          provider: string
+          rate_limited_count?: number
+          retry_after_until?: string | null
+          slot_expires_at?: string | null
+          slot_token?: string | null
+        }
+        Update: {
+          min_interval_ms?: number
+          next_allowed_at?: string
+          provider?: string
+          rate_limited_count?: number
+          retry_after_until?: string | null
+          slot_expires_at?: string | null
+          slot_token?: string | null
+        }
+        Relationships: []
+      }
       satellite_raster_assets: {
         Row: {
           acquisition_date: string | null
           asset_type: string
           bounds: Json | null
+          byte_size: number | null
           colour_scale: Json | null
+          content_sha256: string | null
           created_at: string
           data_type: string | null
           display_resolution_m: number | null
@@ -973,18 +1203,22 @@ export type Database = {
           native_resolution_m: number | null
           no_data_sentinel: number | null
           processing_version: string
+          provenance: Json | null
           raster_height: number | null
           raster_width: number | null
           row_orientation: string | null
           satellite_scene_id: string
           scale_factor: number | null
           storage_path: string
+          verified_at: string | null
         }
         Insert: {
           acquisition_date?: string | null
           asset_type?: string
           bounds?: Json | null
+          byte_size?: number | null
           colour_scale?: Json | null
+          content_sha256?: string | null
           created_at?: string
           data_type?: string | null
           display_resolution_m?: number | null
@@ -996,18 +1230,22 @@ export type Database = {
           native_resolution_m?: number | null
           no_data_sentinel?: number | null
           processing_version: string
+          provenance?: Json | null
           raster_height?: number | null
           raster_width?: number | null
           row_orientation?: string | null
           satellite_scene_id: string
           scale_factor?: number | null
           storage_path: string
+          verified_at?: string | null
         }
         Update: {
           acquisition_date?: string | null
           asset_type?: string
           bounds?: Json | null
+          byte_size?: number | null
           colour_scale?: Json | null
+          content_sha256?: string | null
           created_at?: string
           data_type?: string | null
           display_resolution_m?: number | null
@@ -1019,12 +1257,14 @@ export type Database = {
           native_resolution_m?: number | null
           no_data_sentinel?: number | null
           processing_version?: string
+          provenance?: Json | null
           raster_height?: number | null
           raster_width?: number | null
           row_orientation?: string | null
           satellite_scene_id?: string
           scale_factor?: number | null
           storage_path?: string
+          verified_at?: string | null
         }
         Relationships: [
           {
@@ -1096,6 +1336,7 @@ export type Database = {
       satellite_scenes: {
         Row: {
           acquired_at: string
+          acquisition_id: string | null
           collection: string
           created_at: string
           id: string
@@ -1114,6 +1355,7 @@ export type Database = {
         }
         Insert: {
           acquired_at: string
+          acquisition_id?: string | null
           collection: string
           created_at?: string
           id?: string
@@ -1132,6 +1374,7 @@ export type Database = {
         }
         Update: {
           acquired_at?: string
+          acquisition_id?: string | null
           collection?: string
           created_at?: string
           id?: string
@@ -1148,7 +1391,89 @@ export type Database = {
           updated_at?: string
           vineyard_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "satellite_scenes_acquisition_id_fkey"
+            columns: ["acquisition_id"]
+            isOneToOne: false
+            referencedRelation: "satellite_acquisitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      satellite_work_items: {
+        Row: {
+          acquisition_id: string
+          attempts: number
+          boundary_hash: string
+          boundary_snapshot: Json
+          created_at: string
+          due_at: string
+          heartbeat_at: string | null
+          id: string
+          lane: string
+          last_error: string | null
+          layer: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          output_manifest: Json | null
+          paddock_id: string
+          processing_version: string
+          status: string
+          verified_at: string | null
+          vineyard_id: string
+        }
+        Insert: {
+          acquisition_id: string
+          attempts?: number
+          boundary_hash: string
+          boundary_snapshot: Json
+          created_at?: string
+          due_at?: string
+          heartbeat_at?: string | null
+          id?: string
+          lane?: string
+          last_error?: string | null
+          layer: string
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          output_manifest?: Json | null
+          paddock_id: string
+          processing_version?: string
+          status?: string
+          verified_at?: string | null
+          vineyard_id: string
+        }
+        Update: {
+          acquisition_id?: string
+          attempts?: number
+          boundary_hash?: string
+          boundary_snapshot?: Json
+          created_at?: string
+          due_at?: string
+          heartbeat_at?: string | null
+          id?: string
+          lane?: string
+          last_error?: string | null
+          layer?: string
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          output_manifest?: Json | null
+          paddock_id?: string
+          processing_version?: string
+          status?: string
+          verified_at?: string | null
+          vineyard_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "satellite_work_items_acquisition_id_fkey"
+            columns: ["acquisition_id"]
+            isOneToOne: false
+            referencedRelation: "satellite_acquisitions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       support_requests: {
         Row: {
@@ -1334,6 +1659,69 @@ export type Database = {
         Returns: undefined
       }
       restore_saved_chemicals: { Args: { p_id: string }; Returns: undefined }
+      satellite_claim_work: {
+        Args: { p_provider: string; p_vineyard: string }
+        Returns: {
+          acquisition_id: string
+          attempts: number
+          boundary_hash: string
+          boundary_snapshot: Json
+          created_at: string
+          due_at: string
+          heartbeat_at: string | null
+          id: string
+          lane: string
+          last_error: string | null
+          layer: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          output_manifest: Json | null
+          paddock_id: string
+          processing_version: string
+          status: string
+          verified_at: string | null
+          vineyard_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "satellite_work_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      satellite_finish_work: {
+        Args: {
+          p_error?: string
+          p_id: string
+          p_result?: Json
+          p_retry_ms?: number
+          p_status: string
+          p_token: string
+        }
+        Returns: boolean
+      }
+      satellite_pipeline_enabled: {
+        Args: { p_pixels?: boolean; p_provider: string; p_vineyard: string }
+        Returns: boolean
+      }
+      satellite_release_provider: {
+        Args: { p_provider: string; p_retry_ms?: number; p_token: string }
+        Returns: boolean
+      }
+      satellite_reserve_provider: {
+        Args: {
+          p_cpu: number
+          p_pixels?: boolean
+          p_processing: number
+          p_provider: string
+          p_requests: number
+          p_spend: number
+          p_storage: number
+          p_transfer: number
+          p_vineyard: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

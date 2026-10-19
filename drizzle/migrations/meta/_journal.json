@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1792387669521,
+      "tag": "0000_satellite_ingestion_disabled_foundation",
+      "breakpoints": true
+    }
+  ]
+}
