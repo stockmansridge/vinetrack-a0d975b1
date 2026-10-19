@@ -97,7 +97,7 @@ select pg_temp.eq('P1 side provenance', (select r->'side'->'sources'->>'pins.pin
 
 -- Schema-shaped known-row holdout: deterministic IDs, already assigned, no writes by reconstruction.
 insert into pins(id,vineyard_id,paddock_id,latitude,longitude,pin_row_number,driving_row_number,pin_side,trip_id)
- select ('10000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,:VY,
+ select ('10000000-0000-0000-'||lpad(i::text,4,'0')||'-ffffffffffff')::uuid,:VY,
  '00000000-0000-0000-0000-0000000000b1',-33.9995,150+7*m,3::numeric,3.5,'Left','00000000-0000-0000-0000-0000000000c2'
  from k,generate_series(1,20) i;
 insert into pin_capture_evidence(pin_id,captured_at,horizontal_accuracy_m,geometry_hash)
