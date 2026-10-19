@@ -288,3 +288,83 @@ describe("diagnostics", () => {
     expect(trackSummary(before, before).notLoaded).toBe(1);
   });
 });
+
+import { triadOf, triadGroup, triadCoverage, isPriorityPin, GEOMETRY_SOURCE_LABEL } from "@/lib/pinRowRecovery";
+describe("three-input evidence (GPS / direction / side)", () => {
+  const agreeing = () => { const ev = corroborated(); ev.evidence.set("p", { ...goodEvidence, heading_degrees: 5 }); return ev; };
+  const p5 = { ...pinP, heading: 5 };
+  it("all three qualified → fully qualifying, still a non-authoritative candidate", () => {
+    const r = assessPin(p5, agreeing());
+    expect(triadOf(r)).toMatchObject({ gps: "qualified", direction: "qualified", side: "qualified" });
+    expect(triadGroup(r)).toBe("fully_qualifying");
+    expect(isPriorityPin(r)).toBe(true);
+  });
+  it("stationary phone pointing across rows → no direction, no vine row", () => {
+    const ev = agreeing(); ev.trips = new Map();
+    ev.evidence.set("p", { ...goodEvidence, heading_degrees: 90, observations: [
+      { latitude: pt.lat, longitude: pt.lng, observedAt: "2026-10-14T01:00:01Z", courseDegrees: -1, speedMps: 0, horizontalAccuracyM: 1 },
+      { latitude: pt.lat, longitude: pt.lng, observedAt: "2026-10-14T01:00:03Z", courseDegrees: -1, speedMps: 0, horizontalAccuracyM: 1 },
+    ] });
+    const r = assessPin({ ...pinP, heading: 90 }, ev);
+    expect(triadOf(r).direction).not.toBe("qualified");
+    expect(r.suggestedVineRow).toBeNull();
+    expect(triadGroup(r)).toBe("missing_travel");
+  });
+  it("GPS uncertainty spanning an aisle → GPS unreliable, operator review", () => {
+    const ev = agreeing(); ev.evidence.set("p", { ...goodEvidence, heading_degrees: 5, horizontal_accuracy_m: 2 });
+    const r = assessPin(p5, ev);
+    expect(triadOf(r).gps).toBe("unreliable");
+    expect(triadGroup(r)).toBe("gps_uncertain");
+    expect(r.status).toBe("requires_review");
+  });
+  it("headland → block/geometry problem", () => {
+    expect(triadGroup(assessPin({ ...p5, latitude: -34.00005 }, agreeing()))).toBe("block_geometry");
+  });
+  it("reversing track at anchor → no track direction, side ambiguous", () => {
+    const ev = agreeing(); ev.evidence.set("p", { ...goodEvidence, heading_degrees: 5, observations: [] });
+    ev.trips.set("t1", [{ lat: pt.lat - 6e-5, lng: pt.lng }, { lat: pt.lat - 3e-5, lng: pt.lng }, pt, { lat: pt.lat - 3e-5, lng: pt.lng + 1e-7 }, { lat: pt.lat - 6e-5, lng: pt.lng + 1e-7 }]);
+    const r = assessPin(p5, ev);
+    expect(r.trackTravel?.reason).toMatch(/reverses/);
+    expect(triadOf(r).side).toBe("unreliable");
+    expect(r.suggestedVineRow).toBeNull();
+  });
+  it("current-vs-historic geometry: always labelled current-only and caveated", () => {
+    const r = assessPin(p5, agreeing());
+    expect(r.geometrySource).toBe(GEOMETRY_SOURCE_LABEL);
+    expect(r.reason).toMatch(/current geometry only/);
+  });
+  it("no side → missing side, never inferred", () => {
+    const r = assessPin({ ...p5, pin_side: null }, (() => { const e = agreeing(); e.evidence.set("p", { ...goodEvidence, heading_degrees: 5, pressed_side: null }); return e; })());
+    expect(triadOf(r).side).toBe("absent");
+    expect(triadGroup(r)).toBe("missing_side");
+    expect(r.suggestedVineRow).toBeNull();
+  });
+  it("conflicting side fields → conflicts, no row", () => {
+    const r = assessPin({ ...p5, side: "Left" }, agreeing()); // pin_side Right, pressed Right, side Left
+    expect(r.sideConflict).toBe(true);
+    expect(triadGroup(r)).toBe("conflicts");
+    expect(r.suggestedVineRow).toBeNull();
+  });
+  it("exact anchor without qualified segment is not a qualified direction", () => {
+    const ev = agreeing(); ev.evidence.set("p", { ...goodEvidence, heading_degrees: 5, observations: [] });
+    ev.trips.set("t1", [{ lat: pt.lat - 1e-5, lng: pt.lng }, pt, { lat: pt.lat + 1e-5, lng: pt.lng }]); // <5 m each side
+    const r = assessPin(p5, ev);
+    expect(r.trackAnchor).toBe("unique");
+    expect(triadOf(r).direction).toBe("unreliable");
+    expect(triadOf(r).notes.join()).toMatch(/no qualified segment/);
+  });
+  it("SYNTHETIC fixture (not a browser result): 57 anchors → 26 with side, 31 without, 22 with side + saved block", () => {
+    const ev: any = { paddocks: [pad], evidence: new Map(), segments: new Map(), trips: new Map() };
+    const rowsOut = [];
+    for (let i = 0; i < 57; i++) {
+      const lat = pt.lat + (i - 28) * 2e-6;
+      ev.trips.set(`t${i}`, [{ lat: lat - 1e-4, lng: pt.lng }, { lat, lng: pt.lng }, { lat: lat + 1e-4, lng: pt.lng }]);
+      const pin: any = { id: `u${i}`, latitude: lat, longitude: pt.lng, trip_id: `t${i}` };
+      if (i < 26) pin.pin_side = "Left";
+      if (i < 22 || i >= 26) pin.paddock_id = "b1";
+      rowsOut.push(assessPin(pin, ev));
+    }
+    const c = triadCoverage(rowsOut);
+    expect(c).toMatchObject({ uniqueAnchor: 57, uniqueAnchorWithSide: 26, uniqueAnchorNoSide: 31, priority: 22 });
+  });
+});

@@ -13,6 +13,7 @@ import { parsePolygonPoints, type LatLng } from "@/lib/paddockGeometry";
 import {
   GEOMETRY_SOURCE_LABEL, RECOVERY_VINEYARD_ID, STATUS_LABEL, assessPin, isMissingRowPin,
   latestEvidenceByPin, recoveryCsv, validateKnownPins, trackSummary, CATEGORY_LABEL,
+  triadOf, triadGroup, triadCoverage, isPriorityPin, TRIAD_GROUP_LABEL, type InputStatus,
   type CaptureEvidence, type RecoveryStatus,
 } from "@/lib/pinRowRecovery";
 import { AdminGate } from "./_shared";
@@ -148,6 +149,7 @@ function PinRowRecoveryInner() {
     return missing.map((p) => assessPin(p, ev));
   }, [base.data, missing, evidence.data, segments.data]);
   const tracksLoaded = loadTrips && !trips.isLoading && !!trips.data;
+  const cov = useMemo(() => triadCoverage(rows), [rows]);
   const tsum = useMemo(() => trackSummary(rowsNoTracks, rows), [rowsNoTracks, rows]);
 
   const counts = useMemo(() => {
@@ -157,10 +159,12 @@ function PinRowRecoveryInner() {
   }, [rows]);
   const validation = useMemo(() => base.data ? validateKnownPins(base.data.pins, base.data.paddocks) : null, [base.data]);
 
-  const [filter, setFilter] = useState<RecoveryStatus | "all">("all");
+  const [filter, setFilter] = useState<RecoveryStatus | "all" | "priority">("all");
   const [page, setPage] = useState(0);
   const [notes, setNotes] = useState<Record<string, string>>({});
-  const shown = rows.filter((r) => filter === "all" || r.status === filter);
+  const shown = filter === "priority"
+    ? [...rows.filter(isPriorityPin)]
+    : [...rows.filter((r) => filter === "all" || r.status === filter)].sort((a, b) => Number(isPriorityPin(b)) - Number(isPriorityPin(a)));
   const pageRows = shown.slice(page * PAGE, page * PAGE + PAGE);
   const pages = Math.max(1, Math.ceil(shown.length / PAGE));
 
@@ -212,6 +216,22 @@ function PinRowRecoveryInner() {
             </span>
             {!loadTrips && <Button size="sm" variant="outline" onClick={() => setLoadTrips(true)}>Load trip tracks</Button>}
             <Button size="sm" variant="outline" onClick={exportCsv}>Export CSV (non-authoritative)</Button>
+          </Card>
+
+          <Card className="p-4 text-sm space-y-1">
+            <div className="font-medium">Three-input evidence coverage (GPS · travel direction · left/right)</div>
+            {(["gps", "direction", "side"] as const).map((k) => (
+              <div key={k}>{k === "gps" ? "A) GPS" : k === "direction" ? "B) Travel direction (movement, not phone facing)" : "C) Left/right"}:{" "}
+                {(Object.entries(cov[k]) as [InputStatus, number][]).map(([s2, n]) => `${s2} ${n}`).join(" · ")}</div>
+            ))}
+            <div>Groups: {(Object.entries(cov.groups) as [keyof typeof TRIAD_GROUP_LABEL, number][]).map(([g, n]) => `${TRIAD_GROUP_LABEL[g]} ${n}`).join(" · ")}</div>
+            <div>Side recorded {cov.withSide} (trip-linked {cov.tripLinkedWithSide}, standalone {cov.standaloneWithSide}) · no side {cov.noSide}</div>
+            <div>Unique track anchor {cov.uniqueAnchor} (with side {cov.uniqueAnchorWithSide}, without {cov.uniqueAnchorNoSide}) · first-inspection set (anchor + side + saved block): {cov.priority}</div>
+            <div className="text-muted-foreground">
+              An exact track anchor without a qualified straight segment is not a qualified direction. Even with all three inputs,
+              a pin whose GPS uncertainty can cross an aisle needs operator review. Side is never filled from nearby or similar pins.
+              Nothing here is guaranteed or confirmed.{!tracksLoaded && " Trip tracks not loaded — direction counts provisional."}
+            </div>
           </Card>
 
           <Card className="p-4 text-sm space-y-1">
@@ -272,9 +292,9 @@ function PinRowRecoveryInner() {
           </Card>
 
           <div className="flex gap-2 items-center flex-wrap">
-            {(["all", "supported_candidate", "requires_review", "not_resolvable", "preserve_existing"] as const).map((f) => (
+            {(["all", "priority", "supported_candidate", "requires_review", "not_resolvable", "preserve_existing"] as const).map((f) => (
               <Button key={f} size="sm" variant={filter === f ? "default" : "outline"} onClick={() => { setFilter(f); setPage(0); }}>
-                {f === "all" ? "All" : STATUS_LABEL[f]}
+                {f === "all" ? "All" : f === "priority" ? `First inspection (${cov.priority})` : STATUS_LABEL[f]}
               </Button>
             ))}
           </div>
@@ -282,7 +302,7 @@ function PinRowRecoveryInner() {
           <Card className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="text-left text-muted-foreground">
-                <tr>{["Pin", "Title / mode / date", "Block", "GPS", "Device heading vs GPS travel", "Evidence", "Trip / anchor", "Existing", "Nearest row", "Bounding rows / aisle", "Candidate vine row", "Status / reason", "Review note (local)"].map((h) => <th key={h} className="p-2">{h}</th>)}</tr>
+                <tr>{["Pin", "Title / mode / date", "Block", "GPS", "Inputs (GPS / direction / side)", "Device heading vs GPS travel", "Evidence", "Trip / anchor", "Existing", "Nearest row", "Bounding rows / aisle", "Candidate vine row", "Status / reason", "Review note (local)"].map((h) => <th key={h} className="p-2">{h}</th>)}</tr>
               </thead>
               <tbody className="divide-y">
                 {pageRows.map((r) => (
@@ -292,6 +312,13 @@ function PinRowRecoveryInner() {
                     <td className="p-2">{r.savedBlockName ?? (r.suggestedBlockName ? <span className="italic">Suggested: {r.suggestedBlockName}</span> : "—")}
                       {!r.savedBlockName && <div className="text-muted-foreground">{r.suggestedBlockNote}</div>}</td>
                     <td className="p-2 font-mono">{r.lat?.toFixed(7)}, {r.lng?.toFixed(7)}</td>
+                    <td className="p-2">{(() => { const t = triadOf(r); return <>
+                      GPS: {t.gps}<br />Direction: {t.direction}<br />Side: {t.side}
+                      <div className="font-medium">{TRIAD_GROUP_LABEL[triadGroup(r, t)]}{isPriorityPin(r) ? " · first inspection" : ""}</div>
+                      {t.notes.map((n) => <div key={n} className="text-muted-foreground">{n}</div>)}
+                      {r.snapped && <div className="font-mono">snapped {r.snapped.lat.toFixed(7)}, {r.snapped.lng.toFixed(7)}</div>}
+                      <div className="text-muted-foreground">raw side fields: {r.sideFields.pin_side ?? "—"} / {r.sideFields.side ?? "—"} / {r.sideFields.pressed_side ?? "—"}</div>
+                    </>; })()}</td>
                     <td className="p-2">device (phone) {r.evidenceHeading ?? r.storedHeading ?? "—"}°
                       <br />travel {r.travel.courseDeg != null ? `${Math.round(r.travel.courseDeg)}° (${r.travel.source})` : "not established"}
                       {r.headingVsTravelDeg != null && <><br />Δ {Math.round(r.headingVsTravelDeg)}°</>}
