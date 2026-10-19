@@ -12,7 +12,8 @@ import { Input } from "@/components/ui/input";
 import { parsePolygonPoints, type LatLng } from "@/lib/paddockGeometry";
 import {
   GEOMETRY_SOURCE_LABEL, RECOVERY_VINEYARD_ID, STATUS_LABEL, assessPin, isMissingRowPin,
-  latestEvidenceByPin, recoveryCsv, validateKnownPins, type CaptureEvidence, type RecoveryStatus,
+  latestEvidenceByPin, recoveryCsv, validateKnownPins, trackSummary, CATEGORY_LABEL,
+  type CaptureEvidence, type RecoveryStatus,
 } from "@/lib/pinRowRecovery";
 import { AdminGate } from "./_shared";
 
@@ -139,6 +140,15 @@ function PinRowRecoveryInner() {
     };
     return missing.map((p) => assessPin(p, ev));
   }, [base.data, missing, evidence.data, segments.data, trips.data, trips.isLoading, loadTrips]);
+  // Same evidence without tracks — baseline for status transitions.
+  const rowsNoTracks = useMemo(() => {
+    if (!base.data) return [];
+    const ev = { paddocks: base.data.paddocks, evidence: evidence.data?.map ?? null,
+      segments: segments.data?.map ?? null, trips: "not_loaded" as const };
+    return missing.map((p) => assessPin(p, ev));
+  }, [base.data, missing, evidence.data, segments.data]);
+  const tracksLoaded = loadTrips && !trips.isLoading && !!trips.data;
+  const tsum = useMemo(() => trackSummary(rowsNoTracks, rows), [rowsNoTracks, rows]);
 
   const counts = useMemo(() => {
     const c: Record<RecoveryStatus, number> = { supported_candidate: 0, requires_review: 0, not_resolvable: 0, preserve_existing: 0 };
@@ -204,14 +214,44 @@ function PinRowRecoveryInner() {
             <Button size="sm" variant="outline" onClick={exportCsv}>Export CSV (non-authoritative)</Button>
           </Card>
 
+          <Card className="p-4 text-sm space-y-1">
+            {!tracksLoaded
+              ? <div className="font-medium">Trip evidence not loaded — candidate counts provisional.</div>
+              : <div className="font-medium">Trip evidence loaded{trips.data?.error ? ` with failure: ${trips.data.error}` : ""}</div>}
+            <div>Linked pins: {tsum.linked} · unique anchor {tsum.unique} · multiple {tsum.multiple} · none {tsum.none} · failed/unreadable {tsum.failed} · not loaded {tsum.notLoaded}</div>
+            <div>Travel qualified — from GPS observations: {tsum.travelFromObs} · from trip track: {tsum.travelFromTrack}</div>
+            <div>Device heading vs travel conflicts: {tsum.headingConflicts} · observation vs track conflicts: {tsum.sourceConflicts}</div>
+            {tracksLoaded && <div>Status changes after loading tracks: {Object.keys(tsum.transitions).length ? Object.entries(tsum.transitions).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join(" · ") : "none"}</div>}
+            <div>Reasons (current evidence only — "not resolvable" may change with better track/history):{" "}
+              {Object.entries(tsum.categories).map(([k, v]) => `${CATEGORY_LABEL[k as keyof typeof CATEGORY_LABEL] ?? k}: ${v}`).join(" · ")}</div>
+            <div className="text-muted-foreground">Standalone pins without a trip are assessed without track loading.</div>
+          </Card>
+
           {validation && (
             <Card className="p-4 text-sm space-y-1">
               <div className="font-medium">Validation against retrieved pins with a saved half-row aisle (read-only)</div>
               <div>Pins with saved half-row aisle + vine row retrieved this session: {validation.total} (with saved block: {validation.withSavedBlock})</div>
               <div>Saved vine row adjacent to saved aisle: {validation.adjacencyValid}/{validation.total} — a property of saved data, not evidence of new pairing accuracy</div>
               <div>Current-geometry aisle matches saved aisle: {validation.aisleMatch}/{validation.aisleEvaluated} · mismatches: {validation.aisleEvaluated - validation.aisleMatch}</div>
+              <div>Local segment aisle (rows covering the point) matches saved: {validation.localMatch}/{validation.localEvaluated} · midpoint vs local disagree: {validation.methodDisagree}</div>
+              <div>Pins with snapped coordinates: {validation.withSnapped} (mean raw→snapped {validation.meanRawSnapM?.toFixed(2) ?? "—"} m) · snapped-position aisle matches saved: {validation.snappedMatch}/{validation.snappedEvaluated}</div>
+              <div>Travel + left/right predicted vine row vs saved: not yet measurable (reference pins lack qualified travel evidence in this view).</div>
               <div>Diagnostic — stored device heading + side vs saved vine row: match {validation.vineRowMatch}/{validation.vineRowEvaluated}, mismatch {validation.falsePositives}. Device heading is phone orientation, not travel; it is not used for candidates.</div>
               <div>Nearest physical row differs from saved vine row: {validation.nearestDiffersFromSaved}/{validation.total}</div>
+              <table className="text-xs mt-2">
+                <thead className="text-muted-foreground"><tr>{["Block", "Total", "Adjacent", "Aisle match", "−2", "−1", "0", "+1", "+2", "other", "Local match", "Method disagree", "Snapped match", "By capture month"].map((h) => <th key={h} className="pr-3 text-left">{h}</th>)}</tr></thead>
+                <tbody>
+                  {validation.perBlock.map((b) => (
+                    <tr key={b.paddockId}>
+                      <td className="pr-3">{b.name}</td><td>{b.total}</td><td>{b.adjacent}</td><td>{b.matched}/{b.evaluated}</td>
+                      {["-2", "-1", "0", "+1", "+2", "other"].map((k) => <td key={k}>{b.diffs[k] ?? 0}</td>)}
+                      <td>{b.localMatched}/{b.localEvaluated}</td><td>{b.methodDisagree}</td><td>{b.snappedMatched}/{b.snappedEvaluated}</td>
+                      <td>{Object.entries(b.eras).sort().map(([m, e]) => `${m}: ${e.matched}/${e.evaluated}`).join(", ")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="text-muted-foreground">Difference = current-map aisle − saved aisle. Diagnostic only; known pins are never reassigned and no offset is applied.</div>
               <div className="text-muted-foreground">Calculated from data retrieved in this session only; never used to change stored rows.</div>
             </Card>
           )}
