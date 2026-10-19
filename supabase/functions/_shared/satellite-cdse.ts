@@ -12,6 +12,7 @@
 //                https://sh.dataspace.copernicus.eu/api/v1/{catalog,process,statistics}
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { retryAfterMs } from "./satellite-ingestion-core.ts";
 
 export const CDSE_TOKEN_URL =
   "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token";
@@ -647,10 +648,7 @@ async function fetchWithRetry(
       }
       if (res.status !== 429 && !(res.status >= 500 && res.status <= 504)) return res;
       if (attempt >= delays.length) return res;
-      const retryAfter = Number(res.headers.get("retry-after"));
-      const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
-        ? Math.min(retryAfter * 1000, 20000)
-        : delays[attempt];
+      const waitMs = retryAfterMs(res.headers.get("retry-after"), Date.now(), 20_000) ?? delays[attempt];
       try { await res.body?.cancel(); } catch { /* noop */ }
       console.warn(`[cdse] ${label} ${res.status}: retrying in ${waitMs}ms (attempt ${attempt + 1})`);
       await new Promise((r) => setTimeout(r, waitMs + Math.floor(Math.random() * 400)));
