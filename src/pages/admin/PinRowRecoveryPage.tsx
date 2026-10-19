@@ -23,6 +23,7 @@ import {
   importDraftJson, parseStoredDrafts, reconcileDrafts, writebackPreflight,
   type CurrentPin, type CurrentState, type DecisionKind, type ReviewDecision,
 } from "@/lib/pinRowReviewDraft";
+import { applyApproval, batchCsv, buildBatch, createApproval, dryRun, isMissingRpc, verifyApplied } from "@/lib/pinRowBackfill";
 
 type MissingInput = "any" | "gps" | "direction" | "side" | "block";
 function download(name: string, text: string, type: string) {
@@ -216,6 +217,42 @@ function PinRowRecoveryInner() {
     reconciled.accepted.forEach((d) => { m[d.pin_id] = d; });
     return m;
   }, [reconciled]);
+  const batch = useMemo(() => buildBatch(rows, decisions), [rows, decisions]);
+  const [dry, setDry] = useState<{ map: Map<string, any>; ok: number; blocked: number; at: string } | null>(null);
+  const [approval, setApproval] = useState<{ approval_id: string; items_hash: string; item_count: number; confirm_phrase: string } | null>(null);
+  const [phrase, setPhrase] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [bfMsg, setBfMsg] = useState<string | null>(null);
+  const [applied, setApplied] = useState<{ receipts: any[]; missingBefore: number; verify: any } | null>(null);
+  // Any change to the batch or live state invalidates a previous dry-run/approval.
+  const batchKey = JSON.stringify(batch.entries.map((e) => e.item));
+  useEffect(() => { setDry(null); setApproval(null); setPhrase(""); }, [batchKey]);
+  const rpcErr = (e: any) => isMissingRpc(e) ? "Backfill functions are not installed on the VineTrack database yet (sql/267 not applied)." : e?.message ?? String(e);
+  const runDry = async () => {
+    setBusy("dry"); setBfMsg(null); setApproval(null);
+    const { data, error } = await dryRun(db, batch.entries.map((e) => e.item));
+    setBusy(null);
+    if (error) { setBfMsg(rpcErr(error)); return; }
+    setDry({ map: new Map((data.items ?? []).map((x: any) => [String(x.pin_id), x])), ok: data.ok, blocked: data.blocked, at: new Date().toISOString() });
+  };
+  const runApprove = async () => {
+    setBusy("approve"); setBfMsg(null);
+    const { data, error } = await createApproval(db, batch.entries.map((e) => e.item));
+    setBusy(null);
+    if (error) { setBfMsg(rpcErr(error)); return; }
+    setApproval(data);
+  };
+  const runApply = async () => {
+    if (!approval) return;
+    setBusy("apply"); setBfMsg(null);
+    const missingBefore = rows.length;
+    const { data, error } = await applyApproval(db, approval.approval_id, approval.items_hash, phrase);
+    if (error) { setBusy(null); setBfMsg(`Nothing written: ${rpcErr(error)}`); return; }
+    const verify = await verifyApplied(db, approval.approval_id, data.receipts ?? []);
+    await base.refetch();
+    setBusy(null);
+    setApplied({ receipts: data.receipts ?? [], missingBefore, verify });
+  };
   const refreshCurrent = () => { void base.refetch(); void evidence.refetch(); void segments.refetch(); };
   const shown = (filter === "priority"
     ? rows.filter(isPriorityPin)
@@ -407,6 +444,44 @@ function PinRowRecoveryInner() {
               <div className="text-xs text-muted-foreground">Applying decisions needs a future audited server writeback (see design doc) and owner sign-off. Nothing has been written.</div>
             </Card>
           )}
+
+          <Card className="p-4 text-sm space-y-2">
+            <div className="font-medium">Owner-approved row backfill (server, Stockman's Ridge only)</div>
+            <div>Proposed batch: <b>{batch.entries.length}</b> (technically defensible {batch.defensible} · manual field-confirmed {batch.fieldConfirmed}) · held / unresolved: {batch.hold.length}</div>
+            <div className="text-xs text-muted-foreground">Built only from your re-validated "Approve" drafts. Rows are never filled from the nearest row, no offset is applied, side is never invented. Snapping is decided by the server and only when the projection onto the chosen row is verified; otherwise the row is assigned but unsnapped. Raw GPS is never moved.</div>
+            <div className="flex gap-2 flex-wrap">
+              <Button size="sm" variant="outline" onClick={() => download("pin-row-backfill-PROPOSED.csv", batchCsv(batch, dry?.map), "text/csv")}>Export proposed batch (CSV)</Button>
+              <Button size="sm" variant="outline" onClick={() => download("pin-row-backfill-PROPOSED.json", JSON.stringify({ vineyard_id: RECOVERY_VINEYARD_ID, status: "proposed_not_applied", items: batch.entries.map((e) => ({ ...e.item, class: e.cls })), hold: batch.hold }, null, 2), "application/json")}>Export (JSON)</Button>
+              <Button size="sm" disabled={!evidenceReady || !batch.entries.length || !!busy} onClick={runDry}>{busy === "dry" ? "Running…" : "1. Server dry-run (no writes)"}</Button>
+              <Button size="sm" disabled={!dry || dry.blocked > 0 || dry.ok !== batch.entries.length || !!busy || !!approval} onClick={runApprove}>{busy === "approve" ? "Creating…" : "2. Create approval"}</Button>
+            </div>
+            {dry && <div>Dry-run {dry.at}: passes <b>{dry.ok}</b> · blocked <b className={dry.blocked ? "text-destructive" : ""}>{dry.blocked}</b>{dry.blocked > 0 && " — remove or fix blocked pins; writes are blocked."}</div>}
+            {dry && (
+              <div className="max-h-72 overflow-auto border rounded">
+                <table className="w-full text-xs"><thead className="text-left text-muted-foreground"><tr>{["Pin", "Title", "Class", "Row", "Aisle", "Side", "Source", "Server result", "Snap"].map((h) => <th key={h} className="p-1">{h}</th>)}</tr></thead>
+                  <tbody className="divide-y">{batch.entries.map((e) => { const r = dry.map.get(e.item.pin_id); return (
+                    <tr key={e.item.pin_id}><td className="p-1 font-mono">{e.item.pin_id.slice(0, 8)}</td><td className="p-1">{e.title}</td><td className="p-1">{e.cls === "defensible_technical" ? "defensible" : "field-confirmed"}</td>
+                      <td className="p-1">{e.item.pin_row_number}</td><td className="p-1">{e.item.driving_row_number ?? "—"}</td><td className="p-1">{e.item.pin_side ?? "—"}</td><td className="p-1">{e.item.source}</td>
+                      <td className={`p-1 ${r?.ok ? "" : "text-destructive"}`}>{r ? (r.ok ? r.outcome.replace(/_/g, " ") : (r.fails ?? []).join("; ")) : "missing"}</td>
+                      <td className="p-1">{r?.projection?.ok ? `${Number(r.projection.distance_m).toFixed(2)} m` : r?.projection?.reason ?? "—"}</td></tr>); })}</tbody></table>
+              </div>
+            )}
+            {approval && !applied && (
+              <div className="rounded border border-destructive/50 bg-destructive/5 p-2 space-y-2">
+                <div><b>3. Owner confirmation.</b> Approval {approval.approval_id.slice(0, 8)} freezes {approval.item_count} pins (hash {approval.items_hash.slice(0, 12)}…). Applying writes rows to live pins that iOS/Android will sync. Type <span className="font-mono">{approval.confirm_phrase}</span> to apply.</div>
+                <div className="flex gap-2"><Input className="h-8 max-w-xs" value={phrase} onChange={(e) => setPhrase(e.target.value)} />
+                  <Button size="sm" variant="destructive" disabled={phrase !== approval.confirm_phrase || !!busy} onClick={runApply}>{busy === "apply" ? "Applying…" : "Apply batch"}</Button></div>
+              </div>
+            )}
+            {applied && (
+              <div className="space-y-1">
+                <div>Server receipts: {applied.receipts.length} (snapped {applied.receipts.filter((r) => r.outcome === "assigned_snapped").length} · row assigned, unsnapped {applied.receipts.filter((r) => r.outcome === "assigned_unsnapped").length})</div>
+                <div>Read-back verified (pins + audit): <b>{applied.verify.verified}/{applied.verify.total}</b>{applied.verify.error && ` — ${applied.verify.error}`} · placement rows read: {applied.verify.placementRows ?? `unavailable (${applied.verify.placementError})`}</div>
+                <div>Missing-row pins: {applied.missingBefore} → {rows.length} {applied.missingBefore - rows.length === applied.verify.verified ? "(decrease matches verified writes)" : <span className="text-destructive">(does NOT match verified writes — investigate)</span>}</div>
+              </div>
+            )}
+            {bfMsg && <div className="text-xs text-destructive">{bfMsg}</div>}
+          </Card>
 
           <div id="pin-review-detail" />
           {selected && base.data && (
