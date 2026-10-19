@@ -36,6 +36,13 @@
       "when": 1792388838888,
       "tag": "0004_satellite_pilot_fenced_publish",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792388862585,
+      "tag": "0005_satellite_v7_manifest_compatibility",
+      "breakpoints": true
     }
   ]
 }
