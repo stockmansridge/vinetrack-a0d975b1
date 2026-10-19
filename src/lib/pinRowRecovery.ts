@@ -128,14 +128,30 @@ export interface AisleGeometry {
   rowAxisDeg: number | null;
   leftWhenAlongAxis: number | null;
   outsideRows: boolean;
+  /** null = no polygon to check. */
+  insidePolygon: boolean | null;
+  /** Point projects inside both bounding row segments, clear of row ends. */
+  withinRowExtents: boolean | null;
+  /** Bounding rows parallel to the block axis (straight-row model holds). */
+  rowsParallel: boolean | null;
+  /** Geometry problems that rule out a supported candidate. */
+  geometryIssues: string[];
   reason?: string;
 }
 
-export function aisleGeometry(pt: LatLng, rawRows: any): AisleGeometry {
+/** Distance from a row end treated as headland / endpoint (m). */
+export const ROW_END_MARGIN_M = 3;
+/** Max angle between a bounding row and the block axis (deg). */
+export const MAX_ROW_DIVERGENCE_DEG = 5;
+
+export function aisleGeometry(pt: LatLng, rawRows: any, polygonRaw?: any): AisleGeometry {
+  const polygon = polygonRaw == null ? [] : parsePolygonPoints(polygonRaw);
+  const insidePolygon = polygon.length >= 3 ? pointInPolygon(pt, polygon) : null;
   const rows = parseRows(rawRows).filter((r) => r.start && r.end && r.number != null);
   const empty: AisleGeometry = {
     boundingRows: null, aisle: null, nearestPhysicalRow: null, clearance: null, clearanceM: null,
     spacingM: null, rowAxisDeg: null, leftWhenAlongAxis: null, outsideRows: false,
+    insidePolygon, withinRowExtents: null, rowsParallel: null, geometryIssues: [],
   };
   if (rows.length < 2) return { ...empty, reason: "Block has fewer than two mapped rows" };
   const proj = projector(rows[0].start!);
@@ -147,7 +163,7 @@ export function aisleGeometry(pt: LatLng, rawRows: any): AisleGeometry {
   const P = proj(pt);
   const offs = rows.map((r) => {
     const a = proj(r.start!), b = proj(r.end!);
-    return { n: r.number!, o: ((a.x + b.x) / 2) * nx + ((a.y + b.y) / 2) * ny };
+    return { n: r.number!, a, b, o: ((a.x + b.x) / 2) * nx + ((a.y + b.y) / 2) * ny };
   }).sort((a, b) => a.o - b.o);
   const po = P.x * nx + P.y * ny;
   const axisDeg = ((Math.atan2(ux, uy) * 180) / Math.PI + 360) % 360;
@@ -155,6 +171,7 @@ export function aisleGeometry(pt: LatLng, rawRows: any): AisleGeometry {
   for (const r of offs) if (Math.abs(r.o - po) < Math.abs(nearest.o - po)) nearest = r;
   if (po < offs[0].o || po > offs[offs.length - 1].o) {
     return { ...empty, nearestPhysicalRow: nearest.n, rowAxisDeg: axisDeg, outsideRows: true,
+      geometryIssues: ["GPS outside the outermost mapped rows"],
       reason: "GPS point lies outside the outermost mapped rows" };
   }
   let i = 0;
@@ -164,7 +181,26 @@ export function aisleGeometry(pt: LatLng, rawRows: any): AisleGeometry {
   const clearanceM = Math.min(po - lo.o, hi.o - po);
   const a = Math.min(lo.n, hi.n), b = Math.max(lo.n, hi.n);
   const consecutive = b - a === 1;
+  // Segment-projection checks on the two bounding rows.
+  let within = true, parallel = true;
+  for (const r of [lo, hi]) {
+    let dx = r.b.x - r.a.x, dy = r.b.y - r.a.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 2 * ROW_END_MARGIN_M + 1) { within = false; continue; }
+    dx /= len; dy /= len;
+    const along = (P.x - r.a.x) * dx + (P.y - r.a.y) * dy;
+    if (along < ROW_END_MARGIN_M || along > len - ROW_END_MARGIN_M) within = false;
+    const ang = (Math.acos(Math.min(1, Math.abs(dx * ux + dy * uy))) * 180) / Math.PI;
+    if (ang > MAX_ROW_DIVERGENCE_DEG) parallel = false;
+  }
+  const issues: string[] = [];
+  if (insidePolygon === false) issues.push("GPS outside the current block polygon");
+  if (insidePolygon == null) issues.push("block polygon missing");
+  if (!within) issues.push("GPS beyond a bounding row's extent or within headland/row-end margin");
+  if (!parallel) issues.push("bounding rows diverge (straight-row model does not hold; contour/curved rows unsupported)");
+  if (!consecutive) issues.push(`bounding rows ${a} and ${b} not consecutive`);
   return {
+    insidePolygon, withinRowExtents: within, rowsParallel: parallel, geometryIssues: issues,
     boundingRows: [a, b],
     aisle: consecutive ? (a + b) / 2 : null,
     nearestPhysicalRow: nearest.n,
@@ -198,6 +234,107 @@ export function pairVineRow(
   const other = (r: number) => (g.boundingRows![0] === r ? g.boundingRows![1] : g.boundingRows![0]);
   const leftRow = dAlong <= dAgainst ? g.leftWhenAlongAxis : other(g.leftWhenAlongAxis);
   return { row: side === "left" ? leftRow : other(leftRow), reason: "Heading along rows paired with side" };
+}
+
+// ---------- travel direction (NOT device heading) ----------
+// Device compass heading is phone orientation and is never used as travel
+// direction. Travel must come from qualified GPS movement.
+export const MIN_COURSE_SPEED_MPS = 0.8;
+export const MAX_COURSE_ACCURACY_M = 5;
+export const MAX_OBS_GAP_S = 15;
+export const MAX_COURSE_SPREAD_DEG = 20;
+export const MIN_DISPLACEMENT_M = 2;
+export const MIN_TRACK_SPAN_M = 5;
+export const MIN_TRACK_STRAIGHTNESS = 0.9;
+/** Travel sources / device heading that differ by more than this conflict. */
+export const DIRECTION_CONFLICT_DEG = 30;
+
+export interface TravelEstimate {
+  courseDeg: number | null;
+  source: "gps_observations" | "trip_track" | null;
+  reason: string;
+}
+
+const toRad = (d: number) => (d * Math.PI) / 180;
+function bearing(a: LatLng, b: LatLng): number {
+  const y = Math.sin(toRad(b.lng - a.lng)) * Math.cos(toRad(b.lat));
+  const x = Math.cos(toRad(a.lat)) * Math.sin(toRad(b.lat)) -
+    Math.sin(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.cos(toRad(b.lng - a.lng));
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+function metres(a: LatLng, b: LatLng): number {
+  const kx = 111320 * Math.cos(toRad(a.lat));
+  return Math.hypot((b.lng - a.lng) * kx, (b.lat - a.lat) * 110574);
+}
+function circularMean(degs: number[]): { mean: number; spread: number } {
+  const sx = degs.reduce((s, d) => s + Math.sin(toRad(d)), 0);
+  const cx = degs.reduce((s, d) => s + Math.cos(toRad(d)), 0);
+  const mean = ((Math.atan2(sx, cx) * 180) / Math.PI + 360) % 360;
+  return { mean, spread: Math.max(...degs.map((d) => angleDiff(d, mean))) };
+}
+
+export interface ParsedObservation {
+  lat: number; lng: number; t: number | null; course: number | null; speed: number | null; acc: number | null;
+}
+export function parseObservations(raw: any): ParsedObservation[] {
+  let v = raw;
+  if (typeof v === "string") { try { v = JSON.parse(v); } catch { return []; } }
+  if (!Array.isArray(v)) return [];
+  const out: ParsedObservation[] = [];
+  for (const o of v) {
+    if (!o || typeof o !== "object") continue;
+    const lat = num(o.latitude), lng = num(o.longitude);
+    if (lat == null || lng == null || Math.abs(lat) > 90 || Math.abs(lng) > 180) continue;
+    const t = o.observedAt ? Date.parse(o.observedAt) : NaN;
+    out.push({ lat, lng, t: Number.isFinite(t) ? t : null, course: num(o.courseDegrees),
+      speed: num(o.speedMps), acc: num(o.horizontalAccuracyM) });
+  }
+  return out;
+}
+
+/** Travel course from ≥2 qualified, temporally close, mutually consistent observations. */
+export function travelFromObservations(raw: any): TravelEstimate {
+  const obs = parseObservations(raw);
+  const q = obs.filter((o) => o.t != null && o.course != null && o.course >= 0 &&
+    o.speed != null && o.speed >= MIN_COURSE_SPEED_MPS && o.acc != null && o.acc <= MAX_COURSE_ACCURACY_M)
+    .sort((a, b) => a.t! - b.t!);
+  if (q.length < 2) return { courseDeg: null, source: null,
+    reason: `${q.length} qualified GPS course observation(s) (need ≥2 at ≥${MIN_COURSE_SPEED_MPS} m/s, ≤${MAX_COURSE_ACCURACY_M} m)` };
+  if ((q[q.length - 1].t! - q[0].t!) / 1000 > MAX_OBS_GAP_S)
+    return { courseDeg: null, source: null, reason: "GPS course observations too far apart in time" };
+  const { mean, spread } = circularMean(q.map((o) => o.course!));
+  if (spread > MAX_COURSE_SPREAD_DEG) return { courseDeg: null, source: null, reason: `GPS courses inconsistent (spread ${Math.round(spread)}°)` };
+  const first = q[0], last = q[q.length - 1];
+  const disp = metres(first, last);
+  if (disp < MIN_DISPLACEMENT_M) return { courseDeg: null, source: null, reason: `GPS displacement ${disp.toFixed(1)} m too small` };
+  const db = bearing(first, last);
+  if (angleDiff(db, mean) > DIRECTION_CONFLICT_DEG)
+    return { courseDeg: null, source: null, reason: "GPS displacement disagrees with reported course" };
+  return { courseDeg: mean, source: "gps_observations", reason: `${q.length} qualified GPS observations, ${disp.toFixed(1)} m` };
+}
+
+/** Travel bearing from the ordered track around a UNIQUE matching point. */
+export function travelFromTrack(pt: LatLng, track: LatLng[]): TravelEstimate {
+  const idx: number[] = [];
+  track.forEach((q, i) => { if (Math.abs(q.lat - pt.lat) < ANCHOR_EPS_DEG && Math.abs(q.lng - pt.lng) < ANCHOR_EPS_DEG) idx.push(i); });
+  if (idx.length !== 1) return { courseDeg: null, source: null, reason: idx.length ? "track point repeated" : "no exact track point" };
+  const i = idx[0];
+  const walk = (dir: 1 | -1) => {
+    let j = i, path = 0;
+    while (j + dir >= 0 && j + dir < track.length) {
+      path += metres(track[j], track[j + dir]); j += dir;
+      if (metres(track[i], track[j]) >= MIN_TRACK_SPAN_M) break;
+    }
+    return { j, path };
+  };
+  const back = walk(-1), fwd = walk(1);
+  const a = track[back.j], b = track[fwd.j];
+  const chord = metres(a, b), path = back.path + fwd.path;
+  if (metres(track[i], a) < MIN_TRACK_SPAN_M || metres(track[i], b) < MIN_TRACK_SPAN_M)
+    return { courseDeg: null, source: null, reason: `track span < ${MIN_TRACK_SPAN_M} m each side of anchor` };
+  if (path <= 0 || chord / path < MIN_TRACK_STRAIGHTNESS)
+    return { courseDeg: null, source: null, reason: "track around anchor is not straight (turn?)" };
+  return { courseDeg: bearing(a, b), source: "trip_track", reason: `ordered track ${chord.toFixed(0)} m, straight` };
 }
 
 // ---------- track anchors ----------
@@ -251,6 +388,12 @@ export interface RecoveryRow {
   segmentsLabel: string | null;
   existingMeta: string | null;
   geometry: AisleGeometry | null;
+  travel: TravelEstimate;
+  obsTravel: TravelEstimate | null;
+  trackTravel: TravelEstimate | null;
+  /** Device heading vs travel difference (deg), when both exist. */
+  headingVsTravelDeg: number | null;
+  directionConflict: string | null;
   suggestedVineRow: number | null;
   reason: string;
   status: RecoveryStatus;
@@ -327,9 +470,30 @@ export function assessPin(pin: any, ev: RecoveryEvidence): RecoveryRow {
     storedHeading, evidenceHeading, headingFresh, side, pressedSide, accuracy, evidenceState,
     observationCount, tripId, trackAnchor: anchor, segmentsState, segmentsLabel, existingMeta,
   };
-  const geometry = block && lat != null && lng != null ? aisleGeometry({ lat, lng }, block.rows) : null;
+  const geometry = block && lat != null && lng != null ? aisleGeometry({ lat, lng }, block.rows, block.polygon_points) : null;
+
+  // Travel direction: GPS movement only, never device compass.
+  const obsTravel = evRow ? travelFromObservations(evRow.observations) : null;
+  let trackTravel: TravelEstimate | null = null;
+  if (tripId && ev.trips && ev.trips !== "not_loaded" && lat != null && lng != null) {
+    const pts = ev.trips.get(tripId);
+    if (pts) trackTravel = travelFromTrack({ lat, lng }, pts);
+  }
+  let travel: TravelEstimate = { courseDeg: null, source: null, reason: "no qualified GPS travel direction" };
+  let directionConflict: string | null = null;
+  const o = obsTravel?.courseDeg ?? null, t = trackTravel?.courseDeg ?? null;
+  if (o != null && t != null && angleDiff(o, t) > DIRECTION_CONFLICT_DEG) {
+    directionConflict = `GPS observations (${Math.round(o)}°) and trip track (${Math.round(t)}°) disagree`;
+  } else if (o != null) travel = obsTravel!;
+  else if (t != null) travel = trackTravel!;
+  const devHeading = evidenceHeading ?? storedHeading;
+  const headingVsTravelDeg = devHeading != null && travel.courseDeg != null ? angleDiff(devHeading, travel.courseDeg) : null;
+  const headingNote = headingVsTravelDeg != null && headingVsTravelDeg > DIRECTION_CONFLICT_DEG
+    ? `device heading differs from travel by ${Math.round(headingVsTravelDeg)}° (phone orientation ≠ travel)` : null;
+
   const out = (status: RecoveryStatus, reason: string, suggestedVineRow: number | null = null): RecoveryRow =>
-    ({ ...base, geometry, suggestedVineRow, status, reason });
+    ({ ...base, geometry, travel, obsTravel, trackTravel, headingVsTravelDeg,
+      directionConflict: directionConflict ?? headingNote, suggestedVineRow, status, reason });
 
   if (existingMeta) return out("preserve_existing", "Existing row metadata — preserved, never auto-filled");
   // Fail closed: cannot rule out saved segments.
@@ -340,9 +504,10 @@ export function assessPin(pin: any, ev: RecoveryEvidence): RecoveryRow {
   if (!geometry?.boundingRows || geometry.aisle == null)
     return out("not_resolvable", geometry?.reason ?? "No aisle");
 
-  const heading = evidenceHeading ?? storedHeading;
-  const pair = pairVineRow(geometry, heading, side);
-  const issues: string[] = ["current geometry only"];
+  if (geometry.insidePolygon === false || geometry.withinRowExtents === false)
+    return out("not_resolvable", geometry.geometryIssues.join("; "));
+  const pair = pairVineRow(geometry, travel.courseDeg, side);
+  const issues: string[] = ["current geometry only", ...geometry.geometryIssues];
   if (!saved) issues.push("block is a suggestion");
   if (evidenceState === "unavailable") issues.push("capture evidence unavailable");
   else if (evidenceState === "none") issues.push("no capture evidence");
@@ -350,10 +515,10 @@ export function assessPin(pin: any, ev: RecoveryEvidence): RecoveryRow {
   else if (geometry.clearanceM != null && accuracy >= geometry.clearanceM)
     issues.push(`accuracy ±${accuracy.toFixed(1)} m ≥ ${geometry.clearanceM.toFixed(1)} m to nearest row line`);
   if ((geometry.clearance ?? 0) < MIN_ROW_CLEARANCE_FRACTION) issues.push("GPS near a vine row line (aisle ambiguous)");
-  if (evidenceHeading == null) issues.push(storedHeading == null ? "no heading" : "only stored pin heading (freshness unknown)");
-  else if (headingFresh !== true) issues.push(headingFresh === false ? "heading stale" : "heading freshness unknown");
+  if (travel.courseDeg == null) issues.push(directionConflict ?? `no reliable travel direction (${obsTravel?.reason ?? "no observations"}${trackTravel ? `; ${trackTravel.reason}` : ""})`);
+  if (headingNote) issues.push(headingNote);
   if (pressedSide && side && pressedSide !== side) issues.push("pressed side conflicts with pin side");
-  if (pair.row == null) issues.push(pair.reason);
+  if (pair.row == null && travel.courseDeg != null) issues.push(pair.reason);
   if (anchor !== "unique") issues.push(`track anchor: ${anchor.replace("_", " ")}`);
 
   // "current geometry only" is always present → supported only if it's the sole caveat.
@@ -361,9 +526,10 @@ export function assessPin(pin: any, ev: RecoveryEvidence): RecoveryRow {
   return out(
     corroborated ? "supported_candidate" : "requires_review",
     corroborated
-      ? "Fresh heading + side, accuracy inside aisle clearance, unique track anchor; current geometry only — still needs human review"
+      ? `Travel from ${travel.source} + side, accuracy inside aisle clearance, unique track anchor; current geometry only — still needs human review`
       : issues.join("; "),
-    pair.row,
+    // Only show a candidate row when travel direction is corroborated.
+    travel.courseDeg != null ? pair.row : null,
   );
 }
 
@@ -399,12 +565,13 @@ export function auditSummary(pins: any[], ev: RecoveryEvidence): AuditSummary {
 export interface ValidationResult {
   total: number; adjacencyValid: number; aisleMatch: number; aisleEvaluated: number;
   vineRowEvaluated: number; vineRowMatch: number; nearestDiffersFromSaved: number; falsePositives: number;
+  withSavedBlock: number;
 }
 
 export function validateKnownPins(pins: any[], paddocks: any[]): ValidationResult {
   const padById = new Map(paddocks.map((p) => [p.id, p]));
   const r: ValidationResult = { total: 0, adjacencyValid: 0, aisleMatch: 0, aisleEvaluated: 0,
-    vineRowEvaluated: 0, vineRowMatch: 0, nearestDiffersFromSaved: 0, falsePositives: 0 };
+    vineRowEvaluated: 0, vineRowMatch: 0, nearestDiffersFromSaved: 0, falsePositives: 0, withSavedBlock: 0 };
   for (const p of pins) {
     const saved = num(p.pin_row_number) ?? num(p.row_number);
     const aisle = num(p.driving_row_number);
@@ -415,9 +582,12 @@ export function validateKnownPins(pins: any[], paddocks: any[]): ValidationResul
     if (Math.abs(saved - aisle) === 0.5) r.adjacencyValid++;
     const block = p.paddock_id ? padById.get(p.paddock_id) : null;
     if (!block) continue;
-    const g = aisleGeometry({ lat, lng }, block.rows);
+    r.withSavedBlock++;
+    const g = aisleGeometry({ lat, lng }, block.rows, block.polygon_points);
     if (g.aisle != null) { r.aisleEvaluated++; if (g.aisle === aisle) r.aisleMatch++; }
     if (g.nearestPhysicalRow != null && g.nearestPhysicalRow !== saved) r.nearestDiffersFromSaved++;
+    // DIAGNOSTIC ONLY: pairs the stored device heading (phone orientation),
+    // which is NOT travel direction. Shows how often compass pairing is wrong.
     const pr = pairVineRow(g, num(p.heading), normSide(p.pin_side ?? p.side));
     if (pr.row != null) {
       r.vineRowEvaluated++;
@@ -437,7 +607,7 @@ export function recoveryCsv(rows: RecoveryRow[], notes: Record<string, string>):
     "saved_block", "suggested_block", "geometry_source", "stored_heading", "evidence_heading", "heading_fresh",
     "side", "pressed_side", "accuracy_m", "evidence", "valid_observations", "trip_id", "track_anchor",
     "saved_segments", "existing_metadata", "nearest_physical_row", "bounding_rows", "suggested_driving_aisle",
-    "suggested_vine_row", "status", "reason", "review_note"];
+    "travel_course", "travel_source", "heading_vs_travel_deg", "direction_conflict", "suggested_vine_row", "status", "reason", "review_note"];
   const lines = [head.join(",")];
   for (const r of rows) {
     lines.push([
@@ -446,6 +616,7 @@ export function recoveryCsv(rows: RecoveryRow[], notes: Record<string, string>):
       r.evidenceState, r.observationCount, r.tripId, r.trackAnchor,
       r.segmentsState === "unavailable" ? "unavailable" : r.segmentsLabel, r.existingMeta,
       r.geometry?.nearestPhysicalRow, r.geometry?.boundingRows?.join("|"), r.geometry?.aisle,
+      r.travel.courseDeg?.toFixed(1), r.travel.source, r.headingVsTravelDeg?.toFixed(1), r.directionConflict,
       r.suggestedVineRow, STATUS_LABEL[r.status], r.reason, notes[r.id] ?? "",
     ].map(esc).join(","));
   }
