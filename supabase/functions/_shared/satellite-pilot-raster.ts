@@ -1,3 +1,4 @@
+// @deno-types="./vendor/geotiff.d.ts"
 import { writeArrayBuffer, fromArrayBuffer } from './vendor/geotiff.js';
 import { encode, decode } from 'npm:fast-png@6.4.0';
 import { processNativePixels, validateNativeGrid, type ExactManifest, type NativeGrid, type PilotLayer } from './satellite-ingestion-core.ts';

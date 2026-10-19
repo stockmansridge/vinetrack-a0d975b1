@@ -1,4 +1,5 @@
 // Synthetic in-memory fixture ONLY. No catalogue, storage or provider requests.
+// @deno-types="./vendor/geotiff.d.ts"
 import { writeArrayBuffer } from './vendor/geotiff.js';
 import { renderPilot } from './satellite-pilot-raster.ts';
 import { RequestBudget } from './satellite-bounded-cog.ts';

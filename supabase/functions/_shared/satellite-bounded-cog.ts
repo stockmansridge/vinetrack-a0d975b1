@@ -1,3 +1,4 @@
+// @deno-types="./vendor/geotiff.d.ts"
 import { BaseClient, BaseResponse, fromCustomClient } from './vendor/geotiff.js';
 import { retryAfterMs } from './satellite-ingestion-core.ts';
 export class Provider429 extends Error { constructor(public retryMs: number) { super('Provider backoff required'); } }
