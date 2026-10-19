@@ -1,5 +1,11 @@
 # Roadmap
 
+## Stage 1 capture-time reconstruction hardening
+- [ ] Correct prepared 267/268 capture-history, numeric-row and isolation safeguards; no live SQL.
+- [ ] Run offline known-row holdout and historical/real-format regressions.
+- [ ] Produce live read-only proposal — blocked: shared VineTrack read access or an authorised scoped export is unavailable.
+- [ ] Document exact acceptance blockers and handoff; no approvals, writes or release.
+
 ## Replacement Crop Health ingestion
 - [ ] Complete disabled exact-item discovery, one-layer native processing, verified publication, privilege hardening and synthetic end-to-end tests; deploy only dormant ingestion/manifest functions.
 - [ ] Supply an opt-in external scheduler artifact without registering or enabling a schedule.
