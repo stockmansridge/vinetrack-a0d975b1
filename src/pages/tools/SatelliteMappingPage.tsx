@@ -2925,6 +2925,7 @@ export default function SatelliteMappingPage() {
                 <div className="text-foreground">{d.layer} · {d.paddockId?.slice(0, 8) ?? "—"}</div>
                 <div>asset: <span className="text-foreground">{d.assetId.slice(0, 8)}…</span> · HTTP <span className="text-foreground">{d.endpointStatus ?? "—"}</span> · blob <span className="text-foreground">{d.blobSize ?? "—"}</span> · {d.mimeType ?? "—"}</div>
                 <div>object URL: <span className="text-foreground">{d.objectUrlCreated ? "yes" : "no"}</span> · image: <span className="text-foreground">{d.imageStatus}</span> · final: <span className="text-foreground">{d.finalStatus}</span></div>
+                <div>Signer: {d.signerResult ?? "not checked"} · HTTP {d.signerStatus ?? "—"} · Bounds: {d.bounds}</div>
                 {d.error && <div className="text-destructive">{d.error}</div>}
               </div>
             ))}

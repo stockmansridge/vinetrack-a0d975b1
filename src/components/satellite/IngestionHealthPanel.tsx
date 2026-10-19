@@ -13,7 +13,7 @@ export default function IngestionHealthPanel({ vineyardId }: { vineyardId: strin
       if (!session) throw new Error('Not signed in');
       const { data, error } = await supabase.functions.invoke('satellite-ingestion-status', { body: { vineyard_id: vineyardId }, headers: { Authorization: `Bearer ${session.access_token}` }, signal: child });
       if (error) throw new Error('Ingestion diagnostics unavailable'); return data as Health;
-    }, signal, 10000, 'Ingestion diagnostics') });
+    }, signal ?? new AbortController().signal, 10000, 'Ingestion diagnostics') });
   if (vineyardId !== PILOT_VINEYARD) return null;
   const data = query.data;
   return <section className="border-t pt-2 space-y-2 text-xs text-muted-foreground">

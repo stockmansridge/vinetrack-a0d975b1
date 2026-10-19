@@ -54,3 +54,10 @@ it.each([401,403])("an authenticated URL endpoint HTTP %i is terminal", async (s
   await expect(retrySaved((signal) => fetchAssetBytes("fixture-asset", null, signal), new AbortController().signal)).rejects.toThrow("Restricted");
   expect(api.invoke).toHaveBeenCalledTimes(1); expect(fetch).not.toHaveBeenCalled();
 });
+it('delivery diagnostics distinguish signer rejection without exposing a URL', async () => {
+  api.session.mockResolvedValue({data:{session:{access_token:'offline-fixture'}}});
+  api.invoke.mockResolvedValue({data:null,error:{message:'Restricted',context:new Response(null,{status:403})}});
+  const diagnostic=vi.fn();
+  await expect(fetchAssetBytes('asset',null,new AbortController().signal,diagnostic)).rejects.toThrow();
+  expect(diagnostic.mock.calls.map(c=>c[0])).toEqual([{stage:'signer',status:null,result:'pending'},{stage:'signer',status:403,result:'failed'}]);
+});
