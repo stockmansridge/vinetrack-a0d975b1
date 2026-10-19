@@ -44,32 +44,29 @@ $$;
 -- span ≤15 s; course spread ≤20°; displacement ≥2 m and within 30° of mean course.
 create or replace function public.vt_pbf_travel_obs(p_obs jsonb)
 returns jsonb language plpgsql immutable set search_path = public as $$
-declare q record; n int := 0; total int := 0; t0 timestamptz; t1 timestamptz; sx double precision := 0; cx double precision := 0;
-  mean double precision; spread double precision := 0; f record; l record; disp double precision; db double precision;
+declare n int; total int; t0 timestamptz; t1 timestamptz; mean double precision; spread double precision; q jsonb; f jsonb; l jsonb; disp double precision; db double precision;
 begin
   if p_obs is null or jsonb_typeof(p_obs) <> 'array' then return jsonb_build_object('ok',false,'available',false,'reason','no observation array'); end if;
   total := jsonb_array_length(p_obs);
-  create temp table if not exists _pbf_obs(t timestamptz, lat double precision, lon double precision, c double precision) on commit drop;
-  delete from _pbf_obs;
-  insert into _pbf_obs
-    select (o->>'observedAt')::timestamptz, (o->>'latitude')::double precision, (o->>'longitude')::double precision, (o->>'courseDegrees')::double precision
+  select coalesce(jsonb_agg(jsonb_build_object('t',t,'lat',lat,'lon',lon,'c',c) order by t),'[]') into q from (
+    select (o->>'observedAt')::timestamptz t, (o->>'latitude')::double precision lat, (o->>'longitude')::double precision lon, (o->>'courseDegrees')::double precision c
       from jsonb_array_elements(p_obs) o
      where o->>'observedAt' is not null and o->>'latitude' is not null and o->>'longitude' is not null
        and coalesce((o->>'courseDegrees')::double precision,-1) >= 0
        and coalesce((o->>'speedMps')::double precision,0) >= 0.8
-       and coalesce((o->>'horizontalAccuracyM')::double precision, 999) <= 5;
-  select count(*), min(t), max(t) into n, t0, t1 from _pbf_obs;
-  if n < 2 then return jsonb_build_object('ok',false,'available',true,'samples',total,'qualified',n,'reason',n||' qualified course sample(s); need ≥2'); end if;
+       and coalesce((o->>'horizontalAccuracyM')::double precision, 999) <= 5) z;
+  n := jsonb_array_length(q);
+  if n < 2 then return jsonb_build_object('ok',false,'available',true,'samples',total,'qualified',n,'reason',n||' qualified course sample(s); need >=2 at >=0.8 m/s, <=5 m'); end if;
+  f := q->0; l := q->(n-1); t0 := (f->>'t')::timestamptz; t1 := (l->>'t')::timestamptz;
   if extract(epoch from t1 - t0) > 15 then return jsonb_build_object('ok',false,'available',true,'qualified',n,'reason','qualified samples span > 15 s'); end if;
-  select sum(sin(radians(c))), sum(cos(radians(c))) into sx, cx from _pbf_obs;
-  mean := mod((degrees(atan2(sx, cx)) + 360)::numeric, 360);
-  select max(public.vt_pbf_angle_diff(c, mean)) into spread from _pbf_obs;
-  if spread > 20 then return jsonb_build_object('ok',false,'available',true,'qualified',n,'reason','conflicting courses (spread '||round(spread::numeric)||'°)'); end if;
-  select * into f from _pbf_obs order by t limit 1; select * into l from _pbf_obs order by t desc limit 1;
-  disp := public.vt_pbf_metres(f.lat, f.lon, l.lat, l.lon);
+  select mod((degrees(atan2(sum(sin(radians((x->>'c')::double precision))), sum(cos(radians((x->>'c')::double precision))))) + 360)::numeric, 360)
+    into mean from jsonb_array_elements(q) x;
+  select max(public.vt_pbf_angle_diff((x->>'c')::double precision, mean)) into spread from jsonb_array_elements(q) x;
+  if spread > 20 then return jsonb_build_object('ok',false,'available',true,'qualified',n,'conflict',true,'reason','conflicting courses (spread '||round(spread::numeric)||' deg)'); end if;
+  disp := public.vt_pbf_metres((f->>'lat')::float8,(f->>'lon')::float8,(l->>'lat')::float8,(l->>'lon')::float8);
   if disp < 2 then return jsonb_build_object('ok',false,'available',true,'qualified',n,'reason','stationary: displacement '||round(disp::numeric,1)||' m'); end if;
-  db := public.vt_pbf_bearing(f.lat, f.lon, l.lat, l.lon);
-  if public.vt_pbf_angle_diff(db, mean) > 30 then return jsonb_build_object('ok',false,'available',true,'qualified',n,'reason','displacement disagrees with reported course'); end if;
+  db := public.vt_pbf_bearing((f->>'lat')::float8,(f->>'lon')::float8,(l->>'lat')::float8,(l->>'lon')::float8);
+  if public.vt_pbf_angle_diff(db, mean) > 30 then return jsonb_build_object('ok',false,'available',true,'qualified',n,'conflict',true,'reason','displacement disagrees with reported course'); end if;
   return jsonb_build_object('ok',true,'available',true,'source','gps_observations','course_deg',mean,'qualified',n,'displacement_m',disp,'spread_deg',spread);
 end $$;
 
@@ -130,8 +127,7 @@ begin
     px := (p_lon - s.lon) * kx; py := (p_lat - s.lat) * ky;
     t := (px*dx + py*dy) / (len*len); sd := (px*dy - py*dx) / len; -- >0 = point is right of row (axis-relative)
     a := degrees(atan2(dx, dy)); maxdev := greatest(maxdev, public.vt_pbf_angle_diff(a, ax0));
-    acc := acc || jsonb_build_object('n',(r->>'number')::int,'off',sd,'t',t,'d',abs(sd),
-      'fx', (p_lon - s.lon) * kx - px + t*dx, 'fy', t*dy - py);
+    acc := acc || jsonb_build_object('n',(r->>'number')::int,'off',sd,'t',t,'d',abs(sd));
   end loop;
   select x into lo from jsonb_array_elements(acc) x where (x->>'off')::double precision >= 0 order by (x->>'off')::double precision limit 1;
   select x into hi from jsonb_array_elements(acc) x where (x->>'off')::double precision < 0 order by (x->>'off')::double precision desc limit 1;
@@ -225,20 +221,20 @@ begin
   elsif exists (select 1 from public.pin_row_backfill_audit a where a.pin_id = p.id and a.decision_source = 'manual_field_check') then tier := 'field_confirmed';
   elsif v_block is null then tier := 'missing_block';
   elsif (side_c->>'conflict')::boolean or side is null then tier := 'missing_side';
-    if (side_c->>'conflict')::boolean then hold := hold || 'side sources conflict'; else hold := hold || 'no recorded Left/Right — field confirmation required'; end if;
-  elsif course is null then tier := 'missing_direction'; hold := hold || coalesce(trv->>'reason','no travel');
+    if (side_c->>'conflict')::boolean then hold := array_append(hold, 'side sources conflict'); else hold := array_append(hold, 'no recorded Left/Right — field confirmation required'); end if;
+  elsif course is null then tier := 'missing_direction'; hold := array_append(hold, coalesce(trv->>'reason','no travel'));
   else
-    if block_src <> 'saved' then hold := hold || 'block is a polygon suggestion, not saved'; end if;
-    if (geo->>'inside_polygon')::boolean is distinct from true then hold := hold || 'raw GPS outside block polygon'; end if;
-    if coalesce((geo->>'block_updated_after_capture')::boolean, false) then hold := hold || 'block geometry changed after capture (historical geometry unavailable)'; end if;
-    if not coalesce((bnd->>'ok')::boolean,false) then hold := hold || coalesce(bnd->>'reason','no bounding rows');
+    if block_src <> 'saved' then hold := array_append(hold, 'block is a polygon suggestion, not saved'); end if;
+    if (geo->>'inside_polygon')::boolean is distinct from true then hold := array_append(hold, 'raw GPS outside block polygon'); end if;
+    if coalesce((geo->>'block_updated_after_capture')::boolean, false) then hold := array_append(hold, 'block geometry changed after capture (historical geometry unavailable)'); end if;
+    if not coalesce((bnd->>'ok')::boolean,false) then hold := array_append(hold, coalesce(bnd->>'reason','no bounding rows'));
     else
-      if (bnd->>'row_divergence_deg')::double precision > 10 then hold := hold || 'rows diverge (contour) — straight-row model unsafe'; end if;
-      if least((bnd->>'t_a')::double precision,(bnd->>'t_b')::double precision) < 0.05 or greatest((bnd->>'t_a')::double precision,(bnd->>'t_b')::double precision) > 0.95 then hold := hold || 'headland / row end'; end if;
-      if acc is null then hold := hold || 'GPS accuracy unknown';
-      elsif acc >= least((bnd->>'dist_a_m')::double precision,(bnd->>'dist_b_m')::double precision) then hold := hold || 'GPS accuracy circle crosses a bounding row (aisle ambiguous)'; end if;
+      if (bnd->>'row_divergence_deg')::double precision > 10 then hold := array_append(hold, 'rows diverge (contour) — straight-row model unsafe'); end if;
+      if least((bnd->>'t_a')::double precision,(bnd->>'t_b')::double precision) < 0.05 or greatest((bnd->>'t_a')::double precision,(bnd->>'t_b')::double precision) > 0.95 then hold := array_append(hold, 'headland / row end'); end if;
+      if acc is null then hold := array_append(hold, 'GPS accuracy unknown');
+      elsif acc >= least((bnd->>'dist_a_m')::double precision,(bnd->>'dist_b_m')::double precision) then hold := array_append(hold, 'GPS accuracy circle crosses a bounding row (aisle ambiguous)'); end if;
       vx := public.vt_pbf_angle_diff(course, (bnd->>'row_axis_deg')::double precision);
-      if least(vx, 180 - vx) > 30 then hold := hold || 'travel not along rows';
+      if least(vx, 180 - vx) > 30 then hold := array_append(hold, 'travel not along rows');
       else
         -- row_a is on the axis-right of the point; travel along axis → row_a is on the LEFT of the traveller.
         if (vx <= 90) = (side = 'left') then chosen := (bnd->>'row_a')::int; else chosen := (bnd->>'row_b')::int; end if;
@@ -250,7 +246,7 @@ begin
   end if;
 
   if tier = 'technically_supported' then proj := public.vt_pbf_project(p.latitude, p.longitude, pad.rows::jsonb, chosen);
-    if not coalesce((proj->>'ok')::boolean,false) then tier := 'needs_review'; hold := hold || ('projection: '||coalesce(proj->>'reason','failed')); end if;
+    if not coalesce((proj->>'ok')::boolean,false) then tier := 'needs_review'; hold := array_append(hold, ('projection: '||coalesce(proj->>'reason','failed'))); end if;
   end if;
 
   return jsonb_build_object('algorithm_version','pbf-recon-v1','pin_id',p.id,'tier',tier,'combination',combo,
@@ -302,19 +298,19 @@ begin
   rhash := encode(sha256(convert_to((rc - 'sync_version' - 'updated_at')::text,'UTF8')),'hex');
   if src in ('measured','reviewed_track') then
     if rc->>'tier' <> 'technically_supported' then
-      fails := fails || ('REVIEW-BYPASS: server reconstruction is '||(rc->>'tier')||' — needs server-supported travel+side+geometry or manual_field_check');
+      fails := array_append(fails, ('REVIEW-BYPASS: server reconstruction is '||(rc->>'tier')||' — needs server-supported travel+side+geometry or manual_field_check'));
     else
-      if (rc->'suggestion'->>'vine_row')::int is distinct from (it->>'pin_row_number')::int then fails := fails || 'row differs from server reconstruction'; end if;
-      if nullif(it->>'driving_row_number','') is not null and (rc->'suggestion'->>'driving_aisle')::numeric <> (it->>'driving_row_number')::numeric then fails := fails || 'aisle differs from server reconstruction'; end if;
-      if nullif(it->>'pin_side','') is not null and lower(it->>'pin_side') <> rc->'side'->>'value' then fails := fails || 'side differs from recorded side'; end if;
+      if (rc->'suggestion'->>'vine_row')::int is distinct from (it->>'pin_row_number')::int then fails := array_append(fails, 'row differs from server reconstruction'); end if;
+      if nullif(it->>'driving_row_number','') is not null and (rc->'suggestion'->>'driving_aisle')::numeric <> (it->>'driving_row_number')::numeric then fails := array_append(fails, 'aisle differs from server reconstruction'); end if;
+      if nullif(it->>'pin_side','') is not null and lower(it->>'pin_side') <> rc->'side'->>'value' then fails := array_append(fails, 'side differs from recorded side'); end if;
     end if;
   elsif src = 'manual_field_check' then
     if fc is null or jsonb_typeof(fc) <> 'object' or coalesce(btrim(fc->>'observed_by'),'') = '' or (fc->>'observed_at') is null
        or coalesce(btrim(fc->>'method'),'') = '' or coalesce(btrim(fc->>'note'),'') = '' then
-      fails := fails || 'manual_field_check requires recorded field_confirmation {observed_by, observed_at, method, note}';
+      fails := array_append(fails, 'manual_field_check requires recorded field_confirmation {observed_by, observed_at, method, note}');
     end if;
   end if;
-  if it ? 'expected_reconstruction_hash' and it->>'expected_reconstruction_hash' <> rhash then fails := fails || 'server reconstruction changed since approval'; end if;
+  if it ? 'expected_reconstruction_hash' and it->>'expected_reconstruction_hash' <> rhash then fails := array_append(fails, 'server reconstruction changed since approval'); end if;
   return base || jsonb_build_object('ok', cardinality(fails) = 0, 'fails', fails,
     'outcome', case when cardinality(fails) > 0 then 'blocked' else base->>'outcome' end,
     'projection', coalesce(base->'projection','{}'::jsonb) || jsonb_build_object('reconstruction', rc),
