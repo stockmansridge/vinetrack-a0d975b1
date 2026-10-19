@@ -2,6 +2,7 @@
 
 ## Delivered slice
 - Applied `satellite_ingestion_disabled_foundation` (`drizzle/migrations/0000_satellite_ingestion_disabled_foundation.sql`): seven service-role-only RLS tables, nullable provenance additions on scenes/assets/summaries, immutable acquisitions, unique work identity, atomic fresh-first claims, fencing/expiry, provider-global conservative reservations and durable backoff.
+- Applied `satellite_verification_fail_closed` (`drizzle/migrations/0001_satellite_verification_fail_closed.sql`): missing/NULL verification fields reject publication proofs, without changing historical rows. Isolated PostgreSQL acceptance passed after both migrations.
 - Deployed only `satellite-ingestion-worker`, `satellite-ingestion-discover`, `satellite-ingestion-status`. Browser status requires the existing canonical System Admin check. Worker/discovery accept a generated machine secret, never a person's JWT.
 - Controls are missing/disabled and budget ceilings default to zero. The released entrypoints deliberately write idle receipts only; no catalogue, pixels, geometry, claim, storage, publication or legacy job calls. A second compile-time lock prevents accidental execution even if controls change.
 - Timeline legacy outcomes are paused/not-checked backlog, not active spinners; saved manifest dates win. Legacy backfill controls are disabled. Added bounded read-only admin diagnostics and separated signer HTTP status from byte delivery/cache state.
@@ -24,6 +25,7 @@
 6. **Authenticated UI acceptance:** owner System Admin session/Stockman's Ridge map and diagnostics acceptance remain to be checked; no other vineyard is touched.
 
 ## Rollback
+Verified source checkpoint after foundation/hardening and tests: `10e6ee6cd356b7454e5a43e622d909e597f1ddde` (subsequent documentation/publication bookkeeping may have a later checkpoint).
 No rollback DDL or historical deletion. Keep controls absent/OFF and provider execution lock false; disable or independently redeploy the three new functions. Revert only the frontend corrections to the pre-foundation source checkpoint. Keep additive tables/columns inert. The old manifest/signer functions were not explicitly deployed here. Exact previous deployed bundles cannot be exported by available Cloud tooling; repository checkpoints are not verified deployed bundle backups.
 
 ## Submitted function bundle checksums

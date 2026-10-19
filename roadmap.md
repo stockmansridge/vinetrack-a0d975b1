@@ -7,7 +7,7 @@
 - [x] Implement exact-item native-grid primitives and offline rejection/golden tests; disclose operational runner/publication blockers.
 - [ ] Register schedules — blocked: existing project has no managed cron-auth helper/structured HTTP scheduling capability.
 - [ ] Activate a production-capable exact raster runner — blocked: hard budget, runtime benchmark and compatible publication contract acceptance.
-- [ ] Publish narrowly corrected frontend after tests; record rollback and remaining capped-pilot requirements.
+- [x] Request publication of corrected frontend after tests; rollback and remaining capped-pilot requirements recorded in docs/crop-health-ingestion-foundation-release.md. Hosted publication completion remains unverified.
 
 ## Irrigation valve import
 - [x] Add valve-only file preview and import using existing valve creation permissions and RPC; no sessions, systems or connections imported.
