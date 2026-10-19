@@ -205,7 +205,7 @@ function PinRowRecoveryInner() {
   }, [rows, segMap]);
   const preflight = useMemo(() => base.data ? writebackPreflight(Object.values(decisions), currentMap, base.data.paddocks) : null, [decisions, currentMap, base.data]);
   const reviewSummary = useMemo(() => {
-    const c: Record<string, number> = { unreviewed: 0, approve_for_writeback: 0, hold: 0, needs_field_verification: 0, preserve_existing: 0 };
+    const c = { unreviewed: 0, approve_for_writeback: 0, hold: 0, needs_field_verification: 0, preserve_existing: 0 } as Record<"unreviewed" | DecisionKind, number>;
     rows.forEach((r) => { c[decisions[r.id]?.decision ?? "unreviewed"]++; });
     const pri = rows.filter(isPriorityPin);
     return { ...c, priorityReviewed: pri.filter((r) => decisions[r.id]).length, priorityTotal: pri.length };
