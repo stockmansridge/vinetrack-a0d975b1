@@ -58,9 +58,14 @@ export type CropHealthAvailabilityReason =
   | "selected_layer_missing"
   | "scene_incomplete"
   | "asset_load_failed"
+  | "stored_blank"
+  | "stored_invalid"
   | "overlay_mount_failed"
   | "cell_data_incomplete"
   | "package_upgrade_required";
+
+/** Decoded-byte verdict; "unchecked" until the saved bytes were inspected. */
+export type CropHealthRasterVerification = "unchecked" | "verified" | "legacy" | "blank" | "invalid";
 
 export interface CropHealthPaddockViewState {
   paddockId: string;
