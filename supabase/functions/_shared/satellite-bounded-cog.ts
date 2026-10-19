@@ -8,7 +8,7 @@ class BytesResponse extends BaseResponse {
 }
 export class RequestBudget {
   requests = 0; transferred = 0;
-  constructor(public readonly signal: AbortSignal, public readonly maxRequests = 24, public readonly maxBytes = 16 * 1024 * 1024) {}
+  constructor(public readonly signal: AbortSignal, public readonly maxRequests = 24, public readonly maxBytes = 16 * 1024 * 1024, public readonly transport: typeof fetch = fetch) {}
 }
 class BoundedCogClient extends BaseClient {
   constructor(url: string, private budget: RequestBudget) { super(url); }
@@ -19,7 +19,7 @@ class BoundedCogClient extends BaseClient {
     if (!range || !/^bytes=\d+-\d+$/.test(range)) throw new Error('Single bounded range required');
     const [start, end] = range.slice(6).split('-').map(Number), requested = end - start + 1;
     if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || requested < 1 || requested > this.budget.maxBytes - this.budget.transferred) throw new Error('Transfer reservation exceeded');
-    const res = await fetch(this.url, { ...options, redirect: 'error', signal: this.budget.signal });
+    const res = await this.budget.transport(this.url, { ...options, redirect: 'error', signal: this.budget.signal });
     if (res.status === 429) { await res.body?.cancel(); throw new Provider429(retryAfterMs(res.headers.get('Retry-After')) ?? 60000); }
     const contentRange = /^bytes (\d+)-(\d+)\/\d+$/.exec(res.headers.get('Content-Range') ?? '');
     if (res.status !== 206 || !contentRange || Number(contentRange[1]) !== start || Number(contentRange[2]) > end || !res.body) { await res.body?.cancel(); throw new Error('Unverified COG range response'); }
@@ -33,6 +33,7 @@ class BoundedCogClient extends BaseClient {
         chunks.push(value);
       }
     } finally { reader.releaseLock(); }
+    if(size !== Number(contentRange[2])-start+1) throw new Error('Truncated COG range');
     const bytes = new Uint8Array(size); let offset = 0;
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
     return new BytesResponse(res.status, res.headers, bytes.buffer);
