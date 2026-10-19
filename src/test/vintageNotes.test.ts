@@ -95,6 +95,46 @@ describe("buildVintageNoteInsert", () => {
   });
 });
 
+describe("sameVintageNotePayload (retry reconciliation)", () => {
+  const base = {
+    vineyardId: "vy1",
+    draft: { noteDate: "2026-02-10", noteTypeId: "t1", notes: "25 mm" },
+    observerUserId: "u1",
+    observerName: "Jane",
+    noteType: type(),
+    clientId: "11111111-1111-4111-8111-111111111111",
+  };
+
+  it("accepts an unchanged retry readback as the same note", () => {
+    const payload = buildVintageNoteInsert(base);
+    expect(sameVintageNotePayload(payload, note())).toBe(true);
+  });
+
+  it("rejects a same-id row whose content differs from the frozen payload", () => {
+    const payload = buildVintageNoteInsert(base);
+    // User edited the text after an ambiguous failure and retried.
+    expect(sameVintageNotePayload(payload, note({ notes: "edited text" }))).toBe(false);
+    expect(sameVintageNotePayload(payload, note({ note_date: "2026-02-11" }))).toBe(false);
+    expect(sameVintageNotePayload(payload, note({ note_type_id: null, note_type_label: null }))).toBe(false);
+    expect(sameVintageNotePayload(payload, note({ observed_by_user_id: "u2" }))).toBe(false);
+    expect(sameVintageNotePayload(payload, note({ vineyard_id: "vy2" }))).toBe(false);
+  });
+
+  it("treats null and missing text/type equivalently", () => {
+    const payload = buildVintageNoteInsert({
+      ...base,
+      draft: { noteDate: "2026-02-10", noteTypeId: null, notes: "" },
+      noteType: null,
+    });
+    expect(
+      sameVintageNotePayload(
+        payload,
+        note({ note_type_id: null, note_type_label: null, notes: null }),
+      ),
+    ).toBe(true);
+  });
+});
+
 describe("groupNoteTypes", () => {
   it("orders groups by the contract order and types by sort_order", () => {
     const groups = groupNoteTypes([
