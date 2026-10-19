@@ -1,6 +1,19 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { getAssetBlob, readCachedAsset } from "./satelliteCache";
+import { getAssetBlob, readCachedAsset, readCachedManifest } from "./satelliteCache";
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
+
+it("cached manifest retains its August acquisition date rather than its October cache timestamp", async () => {
+  const manifest = { manifest_version: "v3", vineyard_id: "fixture", paddocks: [], newest_saved_date: "2026-08-01", recommended_default_date: "2026-08-01", updated_at: "2026-10-19" };
+  const db = { close: vi.fn(), transaction: () => {
+    const tx: any = { objectStore: () => ({ get: () => {
+      const request: any = {};
+      queueMicrotask(() => { request.result = { manifest, cachedAt: "2026-10-19" }; request.onsuccess(); tx.oncomplete(); });
+      return request;
+    } }) }; return tx;
+  } };
+  vi.stubGlobal("indexedDB", { open: () => { const request: any = {}; queueMicrotask(() => { request.result = db; request.onsuccess(); }); return request; } });
+  expect((await readCachedManifest("fixture"))?.recommended_default_date).toBe("2026-08-01");
+});
 
 it("returns an IndexedDB hit without asset network calls", async () => {
   const blob = new Blob(["fixture"]); const close = vi.fn();
