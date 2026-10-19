@@ -1,0 +1,35 @@
+CREATE FUNCTION public.satellite_publish_pilot(p_work uuid,p_token uuid,p_output jsonb) RETURNS uuid LANGUAGE plpgsql SET search_path=public AS $$
+DECLARE w public.satellite_work_items; a public.satellite_acquisitions; s public.satellite_scenes; asset jsonb; st jsonb; chosen uuid;
+BEGIN
+SELECT * INTO STRICT w FROM public.satellite_work_items WHERE id=p_work FOR UPDATE;
+SELECT * INTO STRICT a FROM public.satellite_acquisitions WHERE id=w.acquisition_id;
+IF w.status<>'leased' OR w.lease_token IS DISTINCT FROM p_token OR w.lease_expires_at<=now() THEN RAISE EXCEPTION 'Stale lease'; END IF;
+IF NOT public.satellite_pipeline_enabled(w.vineyard_id,a.provider,true) OR NOT EXISTS(SELECT 1 FROM public.satellite_ingestion_control WHERE scope='publisher' AND scope_key='all' AND enabled) THEN RAISE EXCEPTION 'Publisher disabled'; END IF;
+IF NOT COALESCE(p_output->>'schema_version'='1' AND p_output->>'verified'='true' AND p_output->>'boundary_hash'=w.boundary_hash AND p_output->>'acquisition_id'=a.id::text AND p_output->>'source_manifest_hash'=a.source_manifest_hash AND p_output->>'layer'=w.layer AND p_output->>'processing_version'=w.processing_version AND jsonb_typeof(p_output->'assets')='array',false) THEN RAISE EXCEPTION 'Invalid publication proof'; END IF;
+SELECT acquisition_id INTO chosen FROM public.satellite_pilot_day_selection WHERE vineyard_id=w.vineyard_id AND paddock_id=w.paddock_id AND acquisition_day=(a.acquired_at AT TIME ZONE 'UTC')::date;
+IF chosen IS DISTINCT FROM a.id THEN RAISE EXCEPTION 'Unselected acquisition'; END IF;
+IF jsonb_array_length(p_output->'assets')<>(CASE WHEN w.layer='NDVI' THEN 2 ELSE 1 END) THEN RAISE EXCEPTION 'Incomplete output package'; END IF;
+IF (SELECT count(*) FROM jsonb_array_elements(p_output->'assets') x WHERE x->>'kind'='DISPLAY_RASTER')<>1 OR (w.layer='NDVI' AND (SELECT count(*) FROM jsonb_array_elements(p_output->'assets') x WHERE x->>'kind'='ANALYTICAL_RASTER')<>1) THEN RAISE EXCEPTION 'Missing required asset kind'; END IF;
+PERFORM pg_advisory_xact_lock(hashtextextended(w.vineyard_id::text||w.paddock_id::text||a.provider||(a.acquired_at AT TIME ZONE 'UTC')::date::text,0));
+SELECT * INTO s FROM public.satellite_scenes WHERE vineyard_id=w.vineyard_id AND paddock_id=w.paddock_id AND provider=a.provider AND (acquired_at AT TIME ZONE 'UTC')::date=(a.acquired_at AT TIME ZONE 'UTC')::date FOR UPDATE;
+IF FOUND AND s.acquisition_id IS DISTINCT FROM a.id THEN RAISE EXCEPTION 'Same-day scene conflict: historical scene preserved'; END IF;
+IF s.id IS NULL THEN
+INSERT INTO public.satellite_scenes(vineyard_id,paddock_id,provider,collection,provider_scene_id,acquired_at,scene_cloud_cover_pct,paddock_valid_coverage_pct,paddock_cloud_cover_pct,spatial_resolution_m,quality_status,processing_status,source_metadata,acquisition_id) VALUES(w.vineyard_id,w.paddock_id,a.provider,a.collection,a.provider_scene_id,a.acquired_at,(a.source_manifest->>'cloud_cover')::numeric,(p_output->>'valid_coverage_percent')::numeric,(p_output->>'cloud_percent')::numeric,10,'partial','complete',a.source_manifest,a.id) RETURNING * INTO s;
+END IF;
+FOR asset IN SELECT value FROM jsonb_array_elements(p_output->'assets') LOOP
+IF NOT COALESCE(asset->>'kind' IN ('DISPLAY_RASTER','ANALYTICAL_RASTER') AND (asset->>'bytes')::bigint>0 AND asset->>'sha256' ~ '^[a-f0-9]{64}$' AND asset->>'path' LIKE w.vineyard_id::text||'/'||w.paddock_id::text||'/'||a.id::text||'/'||w.processing_version||'/'||w.layer||'/%' AND (asset->>'width')::integer BETWEEN 1 AND 512 AND (asset->>'height')::integer BETWEEN 1 AND 512 AND (asset->>'native_resolution_m')::integer=10 AND (asset->'bounds'->>'north')::numeric>(asset->'bounds'->>'south')::numeric AND (asset->'bounds'->>'east')::numeric>(asset->'bounds'->>'west')::numeric,false) THEN RAISE EXCEPTION 'Invalid asset proof'; END IF;
+INSERT INTO public.satellite_raster_assets(satellite_scene_id,index_type,asset_type,storage_path,mime_type,bounds,native_resolution_m,display_resolution_m,processing_version,raster_width,raster_height,data_type,scale_factor,no_data_sentinel,row_orientation,acquisition_date,provenance,verified_at,byte_size,content_sha256) VALUES(s.id,w.layer,asset->>'kind',asset->>'path',asset->>'mime',asset->'bounds',10,(asset->>'display_resolution_m')::numeric,w.processing_version,(asset->>'width')::integer,(asset->>'height')::integer,CASE WHEN asset->>'kind'='ANALYTICAL_RASTER' THEN 'float32' ELSE 'uint8' END,1,-9999,'north_to_south',(a.acquired_at AT TIME ZONE 'UTC')::date,p_output,now(),(asset->>'bytes')::bigint,asset->>'sha256') ON CONFLICT(satellite_scene_id,index_type,asset_type,processing_version) DO NOTHING;
+END LOOP;
+IF w.layer='NDVI' THEN
+st:=p_output->'summary';
+IF NOT COALESCE((st->>'valid_pixel_count')::integer>0 AND (st->>'minimum_value')::numeric>=-1 AND (st->>'maximum_value')::numeric<=1 AND (st->>'mean_value')::numeric BETWEEN (st->>'minimum_value')::numeric AND (st->>'maximum_value')::numeric,false) THEN RAISE EXCEPTION 'Invalid statistics'; END IF;
+INSERT INTO public.satellite_index_summaries(satellite_scene_id,index_type,processing_version,mean_value,median_value,minimum_value,maximum_value,standard_deviation,percentile_10,percentile_25,percentile_75,percentile_90,valid_pixel_count,no_data_pixel_count,analysis_provenance) VALUES(s.id,w.layer,w.processing_version,(st->>'mean_value')::numeric,(st->>'median_value')::numeric,(st->>'minimum_value')::numeric,(st->>'maximum_value')::numeric,(st->>'standard_deviation')::numeric,(st->>'percentile_10')::numeric,(st->>'percentile_25')::numeric,(st->>'percentile_75')::numeric,(st->>'percentile_90')::numeric,(st->>'valid_pixel_count')::integer,(p_output->>'no_data_pixel_count')::integer,p_output) ON CONFLICT(satellite_scene_id,index_type,processing_version) DO NOTHING;
+END IF;
+IF NOT public.satellite_finish_work(w.id,p_token,'verified',p_output) THEN RAISE EXCEPTION 'Lease expired during publication'; END IF;
+PERFORM public.refresh_paddock_manifest(w.paddock_id);
+INSERT INTO public.satellite_freshness(vineyard_id,paddock_id,provider,processing_version,newest_usable_at,newest_verified_complete_at) VALUES(w.vineyard_id,w.paddock_id,a.provider,w.processing_version,a.acquired_at,CASE WHEN NOT EXISTS(SELECT 1 FROM public.satellite_work_items WHERE vineyard_id=w.vineyard_id AND paddock_id=w.paddock_id AND acquisition_id=a.id AND status<>'verified') THEN a.acquired_at END) ON CONFLICT(vineyard_id,paddock_id,provider,processing_version) DO UPDATE SET newest_usable_at=greatest(satellite_freshness.newest_usable_at,EXCLUDED.newest_usable_at),newest_verified_complete_at=greatest(satellite_freshness.newest_verified_complete_at,EXCLUDED.newest_verified_complete_at);
+RETURN s.id;
+END $$;
+REVOKE ALL ON FUNCTION public.satellite_publish_pilot(uuid,uuid,jsonb) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.satellite_publish_pilot(uuid,uuid,jsonb) TO service_role;
+COMMENT ON FUNCTION public.satellite_publish_pilot(uuid,uuid,jsonb) IS 'Service-only fenced pilot publication. Server verifies immutable private storage readback; conflicts preserve history. Rollback disables publisher controls, retains all data.';

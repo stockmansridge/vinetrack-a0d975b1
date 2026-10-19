@@ -1745,6 +1745,10 @@ export type Database = {
         Args: { p_pixels?: boolean; p_provider: string; p_vineyard: string }
         Returns: boolean
       }
+      satellite_publish_pilot: {
+        Args: { p_output: Json; p_token: string; p_work: string }
+        Returns: string
+      }
       satellite_release_provider: {
         Args: { p_provider: string; p_retry_ms?: number; p_token: string }
         Returns: boolean

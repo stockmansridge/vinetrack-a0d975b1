@@ -29,6 +29,13 @@
       "when": 1792388711001,
       "tag": "0003_satellite_pilot_day_selection",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792388838888,
+      "tag": "0004_satellite_pilot_fenced_publish",
+      "breakpoints": true
     }
   ]
 }
