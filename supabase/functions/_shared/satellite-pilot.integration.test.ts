@@ -19,7 +19,7 @@ async function setup() {
   const old=await file('supabase/migrations/20260713020438_89d7f076-416f-4140-ad1d-f5332cc08a3c.sql');
   await db.exec(old.slice(0,old.indexOf('-- ============ satellite_refresh_jobs')));
   await db.exec(old.slice(old.indexOf('CREATE OR REPLACE FUNCTION public.refresh_paddock_manifest'),old.indexOf('CREATE OR REPLACE FUNCTION public.satellite_scenes_manifest_sync')));
-  for(const p of ['0000_satellite_ingestion_disabled_foundation.sql','0001_satellite_verification_fail_closed.sql','0002_satellite_service_privilege_hardening.sql','0003_satellite_pilot_day_selection.sql','0004_satellite_pilot_fenced_publish.sql','0005_satellite_v7_manifest_compatibility.sql','0006_satellite_reservation_null_rejection.sql','0007_satellite_raster_identity_and_blank_guard.sql']) await db.exec(await file('drizzle/migrations/'+p));
+  for(const p of ['0000_satellite_ingestion_disabled_foundation.sql','0001_satellite_verification_fail_closed.sql','0002_satellite_service_privilege_hardening.sql','0003_satellite_pilot_day_selection.sql','0004_satellite_pilot_fenced_publish.sql','0005_satellite_v7_manifest_compatibility.sql','0006_satellite_reservation_null_rejection.sql','0007_satellite_raster_identity_and_blank_guard.sql','0008_satellite_terminal_quality_statuses.sql','0009_satellite_work_items_terminal_quality_check.sql']) await db.exec(await file('drizzle/migrations/'+p));
   await db.exec(`CREATE UNIQUE INDEX satellite_scenes_unique_capture_idx ON satellite_scenes(vineyard_id,paddock_id,provider,((acquired_at AT TIME ZONE 'UTC')::date));`);
   return db;
 }
@@ -113,16 +113,53 @@ Deno.test('same-day alternative acquisition cannot replace authorised product; l
     assert.equal((await db.query('select * from satellite_scenes')).rows.length,0);
   }finally{await db.close();}
 });
-Deno.test('all-cloud SCL fails closed before any storage write or verified asset (NDVI and True Colour)',async()=>{
+Deno.test('all-cloud SCL is terminal cloud_obscured after SCL preflight, before any spectral band read or storage write',async()=>{
   const f=pilotFixture(9);
-  for(const layer of ['NDVI','TRUE_COLOUR'] as const) await assert.rejects(()=>renderPilot(f.manifest,f.ring,layer,new RequestBudget(AbortSignal.timeout(10000),24,1048576,f.transport)),/No valid paddock pixels/);
+  for(const layer of ['NDVI','TRUE_COLOUR'] as const) await assert.rejects(()=>renderPilot(f.manifest,f.ring,layer,new RequestBudget(AbortSignal.timeout(10000),24,1048576,f.transport)),/Cloud-obscured paddock/);
+  assert.equal(f.reads.red??0,0);assert.equal(f.reads.nir??0,0);assert.equal(f.reads.blue??0,0);assert.ok((f.reads.scl??0)>0);
   const db=await setup();try{
     await enable(db);const storage=new Map<string,Uint8Array>();const deps=dependencies(db,storage,{scl:9});
     assert.equal((await runPilot('discovery',deps as any,AbortSignal.timeout(20000))).reason,'discovered');
     const run=await runPilot('worker',deps as any,AbortSignal.timeout(20000)) as any;
-    assert.equal(run.failed,true);assert.match(run.reason,/No valid paddock pixels/);
+    assert.equal(run.failed,true);assert.equal(run.terminal,true);assert.equal(run.reason,'cloud_obscured');
+    assert.equal(run.scl_histogram['9'],16);
     assert.equal(storage.size,0);
     assert.equal((await db.query('select * from satellite_raster_assets')).rows.length,0);
+    const w=await db.query<any>("select status,attempts,output_manifest->>'quality' q,output_manifest->'scl_histogram'->>'9' h from satellite_work_items where status<>'queued'");
+    assert.equal(w.rows[0].status,'cloud_obscured');assert.equal(w.rows[0].attempts,1);assert.equal(w.rows[0].q,'cloud_obscured');assert.equal(w.rows[0].h,'16');
+    // Terminal quality work is never re-claimed: the next worker run picks a different queued item.
+    const again=await runPilot('worker',deps as any,AbortSignal.timeout(20000)) as any;
+    assert.equal(again.reason,'cloud_obscured');
+    assert.equal((await db.query<any>("select count(*) c from satellite_work_items where status='cloud_obscured'")).rows[0].c,2);
+  } finally { await db.close(); }
+});
+Deno.test('cirrus (SCL 10) and all-nodata are terminal without retry; mixed cloud publishes honest partial coverage',async()=>{
+  for(const scl of [10,[9,9,9,9]]) await assert.rejects(()=>{const f=pilotFixture(scl as any);return renderPilot(f.manifest,f.ring,'NDVI',new RequestBudget(AbortSignal.timeout(10000),24,1048576,f.transport));},/Cloud-obscured paddock/);
+  // All spectral cells nodata (0) with valid SCL: preflight passes, calibration yields zero usable pixels.
+  const nf=pilotFixture(4,0);
+  await assert.rejects(()=>renderPilot(nf.manifest,nf.ring,'NDVI',new RequestBudget(AbortSignal.timeout(10000),24,1048576,nf.transport)),/No usable pixels after calibration/);
+  // Half cloud, half vegetation: publishes with real partial coverage, no fabricated mean.
+  const mf=pilotFixture([9,9,4,4]);
+  const partial=await renderPilot(mf.manifest,mf.ring,'NDVI',new RequestBudget(AbortSignal.timeout(10000),24,1048576,mf.transport));
+  assert.equal(partial.summary?.valid_pixel_count,8);assert.equal(partial.valid_coverage_percent,50);assert.equal(partial.summary?.mean_value,.5);
+});
+Deno.test('discovery skips acquisitions already proven cloud-obscured for a paddock and queues the next newest item',async()=>{
+  const db=await setup();try{
+    await enable(db);const deps=dependencies(db);
+    assert.equal((await runPilot('discovery',deps as any,AbortSignal.timeout(20000)) as any).queued,16);
+    // Mark the discovered scene terminally clouded for one paddock, then offer a newer and an older item.
+    const acq=(await db.query<any>('select id from satellite_acquisitions')).rows[0];
+    await db.exec(`update satellite_work_items set status='cloud_obscured' where paddock_id='00000000-0000-4000-8000-000000000001' and acquisition_id='${acq.id}'`);
+    const today=new Date();today.setUTCHours(0,0,0,0);
+    const mid=stac();mid.id='S2B_55H_MINUS1';mid.properties.datetime=new Date(today.getTime()-86400000+900000).toISOString();
+    const older=stac();older.id='S2B_55H_MINUS2';older.properties.datetime=new Date(today.getTime()-2*86400000+900000).toISOString();
+    deps.fetch=async()=>new Response(JSON.stringify({features:[older,mid],links:[]}),{status:200});
+    const second=await runPilot('discovery',deps as any,AbortSignal.timeout(20000)) as any;
+    assert.equal(second.reason,'discovered');
+    // Paddock 1 must be queued against the next newest item (not the clouded one, not the older one).
+    const rows=(await db.query<any>(`select w.paddock_id,a.provider_scene_id from satellite_work_items w join satellite_acquisitions a on a.id=w.acquisition_id where w.paddock_id='00000000-0000-4000-8000-000000000001'`)).rows;
+    assert.ok(rows.some(r=>r.provider_scene_id==='S2B_55H_MINUS1'));
+    assert.ok(!rows.some(r=>r.provider_scene_id==='S2B_55H_MINUS2'));
   } finally { await db.close(); }
 });
 Deno.test('database refuses blank v7 proofs and cross-version reuse of one storage key',async()=>{

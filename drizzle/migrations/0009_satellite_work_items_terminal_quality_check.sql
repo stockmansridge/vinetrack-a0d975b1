@@ -1,0 +1,3 @@
+ALTER TABLE public.satellite_work_items DROP CONSTRAINT satellite_work_items_status_check;
+ALTER TABLE public.satellite_work_items ADD CONSTRAINT satellite_work_items_status_check CHECK(status IN ('queued','leased','retry','verified','dead','cancelled','cloud_obscured','insufficient_coverage'));
+COMMENT ON TABLE public.satellite_work_items IS 'Isolated disabled Stockmans Ridge pilot; never seed from legacy backfill. verified means staged outputs, not legacy publication. cloud_obscured/insufficient_coverage are deterministic terminal quality statuses, never re-claimed or retried for the same immutable acquisition/paddock.';

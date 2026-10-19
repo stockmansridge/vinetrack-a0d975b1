@@ -57,6 +57,20 @@
       "when": 1792394292816,
       "tag": "0007_satellite_raster_identity_and_blank_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792406082074,
+      "tag": "0008_satellite_terminal_quality_statuses",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792406184800,
+      "tag": "0009_satellite_work_items_terminal_quality_check",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { PILOT_VINEYARD, PILOT_VERSION, insidePolygon, type ExactManifest } from './satellite-ingestion-core.ts';
+import { PILOT_VINEYARD, PILOT_VERSION, insidePolygon, TerminalQualityError, type ExactManifest } from './satellite-ingestion-core.ts';
 import { productionItem, EARTH_SEARCH_URL } from './satellite-pilot-discovery.ts';
 import { canonicalRing, hashJson, sha256 } from './satellite-pilot-geometry.ts';
 import { Provider429, RequestBudget } from './satellite-bounded-cog.ts';
@@ -50,9 +50,16 @@ export async function runPilot(kind:'worker'|'discovery',deps:PipelineDependenci
       if(nextBody) throw new Error('Unbounded catalogue results');
       if(features.length>150) throw new Error('Unbounded catalogue results');
       const items=features.map(productionItem).filter((m:ExactManifest)=>Date.parse(m.acquired_at)>=since.getTime()&&Date.parse(m.acquired_at)<=now.getTime()).sort((a:ExactManifest,b:ExactManifest)=>b.acquired_at.localeCompare(a.acquired_at)||a.item_id.localeCompare(b.item_id));
+      // Acquisitions already proven cloud-obscured/insufficient for a paddock are never re-queued; try the next newest item instead.
+      const prior=await db.from('satellite_work_items').select('paddock_id,acquisition_id,status');
+      if(prior.error) throw prior.error;
+      const acq=await db.from('satellite_acquisitions').select('id,provider_scene_id');
+      if(acq.error) throw acq.error;
+      const sceneById=new Map((acq.data??[]).map((a:any)=>[a.id,a.provider_scene_id]));
+      const terminal=new Set((prior.data??[]).filter((w:any)=>w.status==='cloud_obscured'||w.status==='insufficient_coverage').map((w:any)=>`${w.paddock_id}:${sceneById.get(w.acquisition_id)}`));
       let queued=0;
       for(let i=0;i<paddocks.length;i++) {
-        const manifest=items.find((m:ExactManifest)=>m.footprint&&rings[i].every(v=>insidePolygon(v[0],v[1],[m.footprint as number[][]])));
+        const manifest=items.find((m:ExactManifest)=>m.footprint&&rings[i].every(v=>insidePolygon(v[0],v[1],[m.footprint as number[][]]))&&!terminal.has(`${paddocks[i].id}:${(m as any).item_id}`));
         if(!manifest) {
           const f=await db.from('satellite_freshness').upsert({vineyard_id:PILOT_VINEYARD,paddock_id:paddocks[i].id,provider:PILOT_PROVIDER,processing_version:PILOT_VERSION,last_provider_check_at:now.toISOString()},{onConflict:'vineyard_id,paddock_id,provider,processing_version'});if(f.error) throw f.error;
           continue;
@@ -96,6 +103,11 @@ export async function runPilot(kind:'worker'|'discovery',deps:PipelineDependenci
     const scene=await rpc(db,'satellite_publish_pilot',{p_work:work.id,p_token:work.lease_token,p_output:proof});
     return {reason:'published',scene_id:scene,provider_calls:budget.requests,no_op:false};
   } catch(error) {
+    // Deterministic acquisition-quality failure: terminal, never retried for this immutable acquisition/paddock.
+    if(error instanceof TerminalQualityError) {
+      if(work) await rpc(db,'satellite_finish_work',{p_id:work.id,p_token:work.lease_token,p_status:error.quality,p_result:{schema_version:1,quality:error.quality,scl_histogram:error.sclHistogram,acquisition_id:work.acquisition_id,boundary_hash:work.boundary_hash,layer:work.layer,processing_version:PILOT_VERSION},p_error:error.message});
+      return {reason:error.quality,quality:error.quality,scl_histogram:error.sclHistogram,provider_calls:budget.requests,no_op:false,failed:true,terminal:true};
+    }
     const retry=error instanceof Provider429?error.retryMs:null;
     if(work) await rpc(db,'satellite_finish_work',{p_id:work.id,p_token:work.lease_token,p_status:'retry',p_error:error instanceof Error?error.message:'Pipeline failure',p_retry_ms:retry??30000});
     if(retry!=null) await rpc(db,'satellite_release_provider',{p_provider:PILOT_PROVIDER,p_token:reservation,p_retry_ms:retry});
