@@ -21,9 +21,9 @@ export async function runPilot(kind:'worker'|'discovery',deps:PipelineDependenci
     if(c.error||!c.data?.enabled) return {reason:'publisher_disabled',provider_calls:0,no_op:true};
   }
   if(!Number.isFinite(deps.unitSpend)||!deps.unitSpend||deps.unitSpend<=0) return {reason:'unit_cost_not_approved',provider_calls:0,no_op:true};
-  const reservation=await rpc(db,'satellite_reserve_provider',{p_provider:PILOT_PROVIDER,p_vineyard:PILOT_VINEYARD,p_requests:kind==='discovery'?1:24,p_processing:kind==='discovery'?0:1,p_cpu:kind==='discovery'?1000:45000,p_transfer:kind==='discovery'?1048576:16777216,p_storage:kind==='discovery'?0:4194304,p_spend:deps.unitSpend,p_pixels:kind==='worker'});
+  const reservation=await rpc(db,'satellite_reserve_provider',{p_provider:PILOT_PROVIDER,p_vineyard:PILOT_VINEYARD,p_requests:kind==='discovery'?3:96,p_processing:kind==='discovery'?0:1,p_cpu:kind==='discovery'?1000:45000,p_transfer:kind==='discovery'?1048576:16777216,p_storage:kind==='discovery'?0:4194304,p_spend:deps.unitSpend,p_pixels:kind==='worker'});
   if(!reservation) return {reason:'budget_or_backoff',provider_calls:0,no_op:true};
-  let calls=0,work:any;const budget=new RequestBudget(signal,24,16777216,deps.fetch);
+  let calls=0,work:any;const budget=new RequestBudget(signal,96,16777216,deps.fetch);
   try {
     if(kind==='discovery') {
       const paddocks=await deps.canonical();
@@ -31,12 +31,25 @@ export async function runPilot(kind:'worker'|'discovery',deps:PipelineDependenci
       const rings=paddocks.map(p=>canonicalRing(p.polygon_points));
       const now=new Date(),since=new Date(now.getTime()-7*86400000);
       calls++;
-      const res=await deps.fetch(EARTH_SEARCH_URL,{method:'POST',redirect:'error',signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({collections:['sentinel-2-l2a'],bbox:[Math.min(...rings.flat().map(v=>v[0])),Math.min(...rings.flat().map(v=>v[1])),Math.max(...rings.flat().map(v=>v[0])),Math.max(...rings.flat().map(v=>v[1]))],datetime:`${since.toISOString()}/${now.toISOString()}`,limit:50,sortby:[{field:'properties.datetime',direction:'desc'}]})});
-      if(res.status===429){await res.body?.cancel();throw new Provider429(httpRetry(res.headers.get('Retry-After')));}
-      if(!res.ok) {await res.body?.cancel();throw new Error('Catalogue HTTP failure');}
-      const text=await boundedText(res,1048576);const page=JSON.parse(text);
-      if(!Array.isArray(page.features)||page.features.length>50||page.links?.some((l:any)=>l.rel==='next')) throw new Error('Unbounded catalogue results');
-      const items=page.features.map(productionItem).filter((m:ExactManifest)=>Date.parse(m.acquired_at)>=since.getTime()&&Date.parse(m.acquired_at)<=now.getTime()).sort((a:ExactManifest,b:ExactManifest)=>b.acquired_at.localeCompare(a.acquired_at)||a.item_id.localeCompare(b.item_id));
+      const searchBody={collections:['sentinel-2-l2a'],bbox:[Math.min(...rings.flat().map(v=>v[0])),Math.min(...rings.flat().map(v=>v[1])),Math.max(...rings.flat().map(v=>v[0])),Math.max(...rings.flat().map(v=>v[1]))],datetime:`${since.toISOString()}/${now.toISOString()}`,limit:50,sortby:[{field:'properties.datetime',direction:'desc'}]};
+      // Bounded pagination: at most 3 pages / 150 items, 1MB per page, GET next-links only.
+      const features:any[]=[];let nextBody:unknown=searchBody;
+      for(let pageIndex=0;pageIndex<3&&nextBody;pageIndex++) {
+        calls++;
+        const res=await deps.fetch(EARTH_SEARCH_URL,{method:'POST',redirect:'error',signal,headers:{'Content-Type':'application/json'},body:JSON.stringify(nextBody)});
+        if(res.status===429){await res.body?.cancel();throw new Provider429(httpRetry(res.headers.get('Retry-After')));}
+        if(!res.ok) {await res.body?.cancel();throw new Error('Catalogue HTTP failure');}
+        const text=await boundedText(res,1048576);const page=JSON.parse(text);
+        if(!Array.isArray(page.features)||page.features.length>50) throw new Error('Unbounded catalogue results');
+        features.push(...page.features);
+        const next=(page.links??[]).find((l:any)=>l.rel==='next');
+        // Earth Search paginates via POST next-links carrying a body; follow only those.
+        nextBody=next&&(next.method??'POST')==='POST'&&next.body&&typeof next.body==='object'?next.body:null;
+        if(next&&!nextBody) throw new Error('Unbounded catalogue results');
+      }
+      if(nextBody) throw new Error('Unbounded catalogue results');
+      if(features.length>150) throw new Error('Unbounded catalogue results');
+      const items=features.map(productionItem).filter((m:ExactManifest)=>Date.parse(m.acquired_at)>=since.getTime()&&Date.parse(m.acquired_at)<=now.getTime()).sort((a:ExactManifest,b:ExactManifest)=>b.acquired_at.localeCompare(a.acquired_at)||a.item_id.localeCompare(b.item_id));
       let queued=0;
       for(let i=0;i<paddocks.length;i++) {
         const manifest=items.find((m:ExactManifest)=>m.footprint&&rings[i].every(v=>insidePolygon(v[0],v[1],[m.footprint as number[][]])));
