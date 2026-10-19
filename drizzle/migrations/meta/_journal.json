@@ -15,6 +15,13 @@
       "when": 1792388277455,
       "tag": "0001_satellite_verification_fail_closed",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792388600868,
+      "tag": "0002_satellite_service_privilege_hardening",
+      "breakpoints": true
     }
   ]
 }
