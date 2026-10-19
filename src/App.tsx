@@ -39,6 +39,9 @@ import SprayEquipmentPage from "./pages/setup/SprayEquipmentPage";
 import NewPaddockPage from "./pages/setup/NewPaddockPage";
 import PinsPage from "./pages/setup/PinsPage";
 import DamageRecordsPage from "./pages/setup/DamageRecordsPage";
+import ScoutReportsPage from "./pages/observations/ScoutReportsPage";
+import ScoutReportDetailPage from "./pages/observations/ScoutReportDetailPage";
+import VintageNotesPage from "./pages/observations/VintageNotesPage";
 import SprayRecordsPage from "./pages/setup/SprayRecordsPage";
 import ManualSprayEntryPage from "./pages/setup/ManualSprayEntryPage";
 import WorkTasksPage from "./pages/setup/WorkTasksPage";
@@ -227,6 +230,9 @@ const App = () => (
                     <Route path="/trips" element={<TripsPage />} />
                     <Route path="/yield" element={<YieldReportsPage />} />
                     <Route path="/damage-records" element={<DamageRecordsPage />} />
+                    <Route path="/observations/scout-reports" element={<ScoutReportsPage />} />
+                    <Route path="/observations/scout-reports/:visitId" element={<ScoutReportDetailPage />} />
+                    <Route path="/observations/vintage-notes" element={<VintageNotesPage />} />
                     <Route path="/fuel" element={<FuelPage />} />
                     <Route path="/feature-requests" element={<FeatureRequestsPage />} />
                     <Route path="/fuel-purchases" element={<FuelPurchasesPage />} />
