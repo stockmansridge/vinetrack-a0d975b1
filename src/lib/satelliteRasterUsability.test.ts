@@ -98,7 +98,7 @@ describe("analytical usability", () => {
 });
 
 describe("timeline and status gating", () => {
-  const entry = { date: "2026-08-01", status: "available", paddockCount: 8, activeCount: 8, coveragePercent: 100 };
+  const entry: { date: string; status: string; paddockCount: number; activeCount: number; coveragePercent: number; note?: string | null } = { date: "2026-08-01", status: "available", paddockCount: 8, activeCount: 8, coveragePercent: 100 };
   const ids = Array.from({ length: 8 }, (_, i) => `a${i}`);
   const blank: RasterVerdict = { kind: "blank", message: "0 visible" };
   it("8/8 saved but all blank becomes stored_blank with 0 usable", () => {

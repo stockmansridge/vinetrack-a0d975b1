@@ -1219,13 +1219,6 @@ export default function SatelliteMappingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortedDatesAsc, selectedSceneKey, layer, derivedFromManifest, dateCoverage]);
 
-  // Saved dates only count as available once their bytes decode to real pixels.
-  const verifiedTimelineEntries = useMemo(
-    () => applyRasterVerdicts(timelineEntries, (d) => buildAssetPairsFor(d).map((p) => p.displayAsset.id), rasterVerdicts),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [timelineEntries, rasterVerdicts, derivedFromManifest, layer, dateCoverage, paddockId],
-  );
-
   // Are any preview-date display assets still loading? Drives the loading
   // caption shown near the map during a scrub.
   const previewPending = useMemo(() => {
@@ -1444,6 +1437,13 @@ export default function SatelliteMappingPage() {
     rasterVerdictsRef.current.set(assetId, verdict);
     setRasterVerdicts(new Map(rasterVerdictsRef.current));
   };
+
+  // Saved dates only count as available once their bytes decode to real pixels.
+  const verifiedTimelineEntries = useMemo(
+    () => applyRasterVerdicts(timelineEntries, (d) => buildAssetPairsFor(d).map((p) => p.displayAsset.id), rasterVerdicts),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [timelineEntries, rasterVerdicts, derivedFromManifest, layer, dateCoverage, paddockId],
+  );
 
   // Visible displays settle first (concurrency 3); analysis/prefetch cannot starve the map.
   useEffect(() => {
