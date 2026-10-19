@@ -512,13 +512,11 @@ export default function SatelliteMap(props: SatelliteMapProps) {
         // Lifecycle callbacks — invoked once per <img> instance.
         const boundKey = key;
         img.addEventListener("load", () => {
+          if (imgRefs.current.get(boundKey) !== img) return;
           try { onOverlayLoadRef.current?.(makeInfo(boundKey)); } catch { /* noop */ }
-          if (!mountedKeysRef.current.has(boundKey)) {
-            mountedKeysRef.current.add(boundKey);
-            try { onOverlayMountedRef.current?.(makeInfo(boundKey)); } catch { /* noop */ }
-          }
         }, { once: false });
         img.addEventListener("error", () => {
+          if (imgRefs.current.get(boundKey) !== img) return;
           try { onOverlayErrorRef.current?.(makeInfo(boundKey)); } catch { /* noop */ }
         }, { once: false });
         layer.appendChild(img);
@@ -557,6 +555,11 @@ export default function SatelliteMap(props: SatelliteMapProps) {
           img.style.transform = `translate(${x}px, ${y}px)`;
           img.style.width = `${Math.max(0, w)}px`;
           img.style.height = `${Math.max(0, h)}px`;
+          // Decode alone is not proof of display: require positioned non-zero geometry.
+          if (img.complete && img.naturalWidth > 0 && w > 0 && h > 0 && !mountedKeysRef.current.has(key)) {
+            mountedKeysRef.current.add(key);
+            try { onOverlayMountedRef.current?.(makeInfo(key)); } catch { /* noop */ }
+          }
         }
         const cr = cellRectValueRef.current;
         const cellEl = cellRectRef.current;
@@ -591,6 +594,14 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     requestAnimationFrame(tick);
     return () => { running = false; };
   }, [ready, effectiveOverlays, overlayOpacity, overlayTransitionMs]);
+
+  useEffect(() => () => {
+    for (const [key, image] of imgRefs.current) {
+      image.remove();
+      if (mountedKeysRef.current.has(key)) onOverlayUnmountedRef.current?.(makeInfo(key));
+    }
+    imgRefs.current.clear(); mountedKeysRef.current.clear(); metaByKeyRef.current.clear();
+  }, []);
 
   // Sync the highlighted-cell rectangle into the animation loop.
   useEffect(() => {

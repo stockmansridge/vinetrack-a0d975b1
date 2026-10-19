@@ -5,20 +5,26 @@
 import { supabase } from "@/integrations/supabase/client";
 import { supabase as iosSupabase } from "@/integrations/ios-supabase/client";
 import type { SatelliteIndexType } from "@/types/satellite";
+import { SavedAssetError } from "./satelliteSavedLoader";
 
-async function invoke<T = any>(name: string, body: unknown): Promise<T> {
+async function invoke<T = any>(name: string, body: unknown, signal?: AbortSignal): Promise<T> {
   const { data: { session } } = await iosSupabase.auth.getSession();
-  if (!session?.access_token) throw new Error("Not signed in to VineTrack");
+  if (!session?.access_token) throw new SavedAssetError("Not signed in to VineTrack", 401);
+  if (signal?.aborted) throw new DOMException("Selection cancelled", "AbortError");
   const { data, error } = await supabase.functions.invoke(name, {
     body,
     headers: { Authorization: `Bearer ${session.access_token}` },
+    signal,
   });
-  if (error) throw error;
+  if (error) {
+    const status = error.context instanceof Response ? error.context.status : undefined;
+    throw new SavedAssetError(error.message, status);
+  }
   return data as T;
 }
 
-// Fetch bytes from the stable authenticated asset endpoint. Supports
-// If-None-Match / 304 so cached blobs are reused without re-download.
+// Obtain a fresh authorised URL, then download saved bytes. IDB cache hits
+// are handled before this call; this signed-download path does not return 304.
 export interface AssetFetchResult {
   status: 200 | 304;
   blob: Blob | null;   // present on 200, null on 304
@@ -29,6 +35,7 @@ export interface AssetFetchResult {
 export async function fetchAssetBytes(
   assetId: string,
   ifNoneMatch?: string | null,
+  signal?: AbortSignal,
 ): Promise<AssetFetchResult> {
   // Use the same authenticated function-invocation path as the manifest.
   // The former direct GET mixed a VineTrack JWT with this project's raw
@@ -37,11 +44,13 @@ export async function fetchAssetBytes(
   const signed = await invoke<{ signed_url: string; expires_in: number }>(
     "satellite-get-asset-url",
     { asset_id: assetId },
+    signal,
   );
   if (!signed?.signed_url) throw new Error("asset URL was not returned");
 
-  const res = await fetch(signed.signed_url, { method: "GET" });
-  if (!res.ok) throw new Error(`asset download failed (${res.status})`);
+  // A fresh URL is minted for each bounded retry. Never persist an expiring URL.
+  const res = await fetch(signed.signed_url, { method: "GET", signal });
+  if (!res.ok) throw new SavedAssetError(`Saved asset download failed (HTTP ${res.status})`, res.status);
   const blob = await res.blob();
   const etag = res.headers.get("ETag") ?? ifNoneMatch ?? null;
   return { status: 200, blob, etag, contentType: res.headers.get("Content-Type") };
@@ -228,11 +237,12 @@ export interface AssetUrlResponse {
 export function fetchManifest(
   vineyardId: string,
   activePaddockIds?: string[],
+  signal?: AbortSignal,
 ): Promise<ManifestResponse> {
   return invoke<ManifestResponse>("satellite-get-manifest", {
     vineyard_id: vineyardId,
     active_paddock_ids: activePaddockIds,
-  });
+  }, signal);
 }
 
 export function fetchRefreshStatus(

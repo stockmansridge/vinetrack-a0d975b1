@@ -231,7 +231,9 @@ export function deriveCropHealthViewModel(
 
     const sceneId = dp?.scene_id ?? null;
     const displayAssetId = layerBundle?.display?.asset_id ?? null;
-    const analyticalAssetId = layerBundle?.analytical?.asset_id ?? null;
+    // Older manifest servers can return independently ranked generations.
+    const analyticalAssetId = layerBundle?.display && layerBundle.analytical?.processing_version === layerBundle.display.processing_version
+      ? layerBundle.analytical.asset_id : null;
 
     const displayKey = displayKeyFor(paddockId, selectedDate, selectedLayer, displayAssetId);
     const analyticalKey = analyticalKeyFor(paddockId, sceneId, selectedLayer, analyticalAssetId);

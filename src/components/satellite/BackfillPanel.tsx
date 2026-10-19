@@ -33,6 +33,8 @@ export default function BackfillPanel({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [running, setRunning] = useState(false);
   const [runnerCycle, setRunnerCycle] = useState(0);
+  // Reading a persisted job is not consent to resume provider work.
+  const [authorisedVineyard, setAuthorisedVineyard] = useState<string | null>(null);
 
   const statusQuery = useQuery({
     queryKey: ["satellite-backfill-status", vineyardId],
@@ -48,7 +50,7 @@ export default function BackfillPanel({
   // server call, so a refresh simply picks the job back up.
   useEffect(() => {
     // Only one instance drives the batch runner, so batches never overlap.
-    if (!canManage || !vineyardId || !active || running) return;
+    if (!canManage || !vineyardId || authorisedVineyard !== vineyardId || !active || running) return;
     let cancelled = false;
     let resumeTimer: ReturnType<typeof setTimeout> | null = null;
     setRunning(true);
@@ -83,7 +85,7 @@ export default function BackfillPanel({
       if (resumeTimer) clearTimeout(resumeTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vineyardId, active, canManage, runnerCycle]);
+  }, [vineyardId, active, canManage, runnerCycle, authorisedVineyard]);
 
   const discover = useMutation({
     mutationFn: () => discoverBackfill({
@@ -92,6 +94,7 @@ export default function BackfillPanel({
       historyDays: HISTORY_DAYS,
     }),
     onSuccess: (res) => {
+      if (!res.already_running) setAuthorisedVineyard(vineyardId);
       statusQuery.refetch();
       toast({
         title: res.already_running ? "Backfill already running" : "Backfill started",
@@ -157,7 +160,7 @@ export default function BackfillPanel({
       {active && (
         <div className="inline-flex items-center gap-1.5 text-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Filling missing dates in the background — current imagery is still usable.
+          {authorisedVineyard === vineyardId ? "Processing explicitly started backfill." : "Stored job marked active; not resumed by this page."}
         </div>
       )}
 

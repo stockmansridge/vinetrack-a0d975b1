@@ -1,5 +1,11 @@
 # Roadmap
 
+## Crop Health emergency recovery (source/offline only)
+- [x] Prioritise bounded saved-display loading, cancellation, validation and honest failures.
+- [x] Preserve same-version pairing and incomplete-summary reporting; stop mount-triggered backfill.
+- [x] Run focused offline regressions; report authenticated acceptance and deployment/commit boundaries.
+- [ ] Live Stockman's Ridge acceptance — blocked by source-only authorisation; deployed manifest read still expires jobs until separately approved function deployment.
+
 - [x] Remove Target Nutrient's System Admin selector gate; retain non-saving preview and unsupported-record safeguards.
 - [x] Remove Analysis Details; contextual label/liquid questions, preserve inputs and validate nitrogen/live results (99 tests passed).
 - [x] Simplify Target Nutrient preview; validate immediate calculations, known-basis safety and existing modes (92 tests passed).
