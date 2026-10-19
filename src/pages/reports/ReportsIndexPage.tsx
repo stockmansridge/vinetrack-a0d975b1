@@ -44,7 +44,7 @@ export default function ReportsIndexPage() {
   const reports = reportDestinations(viewer);
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl">
+    <div className="w-full p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Reports &amp; Exports</h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -52,7 +52,7 @@ export default function ReportsIndexPage() {
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,280px),1fr))] gap-3">
         {reports.map((r) => {
           const Icon = REPORT_ICONS[r.path] ?? r.activity.icon;
           return (
