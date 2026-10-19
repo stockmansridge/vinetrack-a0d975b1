@@ -48,6 +48,12 @@ export function insidePolygon(x: number, y: number, rings: number[][][]): boolea
   return rings.length > 0 && pointInRing(x, y, rings[0]) && !rings.slice(1).some((r) => pointInRing(x, y, r));
 }
 export function validScl(scl: number): boolean { return [4, 5, 6].includes(scl); }
+// Deterministic acquisition-quality failure: never retried for the same immutable acquisition/paddock.
+export class TerminalQualityError extends Error {
+  constructor(public readonly quality: "cloud_obscured" | "insufficient_coverage", public readonly sclHistogram: Record<string, number>, message: string) { super(message); }
+}
+// Below this share of usable inside-paddock pixels a raster is reported as insufficient coverage, not published.
+export const MIN_VALID_COVERAGE_PERCENT = 10;
 export function summary(values: number[]) {
   if (!values.length) return null;
   const sorted = [...values].sort((a, b) => a - b), n = sorted.length;
