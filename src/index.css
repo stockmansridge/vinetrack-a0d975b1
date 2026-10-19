@@ -44,6 +44,20 @@
 
     --map-accent: 210 90% 50%;
 
+    /* Report destinations: distinct, accessible accents in both themes. */
+    --report-trips: 212 76% 40%;
+    --report-tasks: 28 85% 36%;
+    --report-pruning: 151 65% 29%;
+    --report-spray: 180 78% 28%;
+    --report-rainfall: 202 85% 35%;
+    --report-growth: 88 65% 29%;
+    --report-yield: 288 52% 40%;
+    --report-comparison: 327 65% 41%;
+    --report-irrigation: 227 65% 45%;
+    --report-levy: 42 85% 30%;
+    --report-costs: 162 74% 28%;
+    --report-documents: 10 70% 41%;
+
     /* Borders / inputs / focus */
     --border: 96 13% 90%;                 /* #E3E8E1 */
     --input: 96 17% 88%;                  /* #DDE5DA */
@@ -97,6 +111,19 @@
     --warning-foreground: 30 30% 12%;
 
     --map-accent: 210 90% 60%;
+
+    --report-trips: 212 85% 70%;
+    --report-tasks: 28 90% 66%;
+    --report-pruning: 151 62% 62%;
+    --report-spray: 180 62% 60%;
+    --report-rainfall: 202 85% 68%;
+    --report-growth: 88 65% 62%;
+    --report-yield: 288 65% 74%;
+    --report-comparison: 327 78% 73%;
+    --report-irrigation: 227 85% 75%;
+    --report-levy: 42 85% 65%;
+    --report-costs: 162 64% 60%;
+    --report-documents: 10 85% 72%;
 
     --border: 213 12% 20%;                /* subtle slate */
     --input: 213 12% 22%;
@@ -285,4 +312,20 @@
 /* System Admin-only pages: orange page heading so they're easy to identify. */
 .system-admin-page h1 {
   color: hsl(var(--warning));
+}
+
+@layer components {
+  .report-tile { --report-accent: var(--report-trips); background: hsl(var(--report-accent) / 0.07); border-color: hsl(var(--report-accent) / 0.25); border-left: 4px solid hsl(var(--report-accent)); }
+  .report-tile:hover { background: hsl(var(--report-accent) / 0.13); border-color: hsl(var(--report-accent) / 0.55); }
+  .report-tile[data-report="work-tasks"] { --report-accent: var(--report-tasks); }
+  .report-tile[data-report="pruning-activity"] { --report-accent: var(--report-pruning); }
+  .report-tile[data-report="spray"] { --report-accent: var(--report-spray); }
+  .report-tile[data-report="rainfall"] { --report-accent: var(--report-rainfall); }
+  .report-tile[data-report="growth-stage"] { --report-accent: var(--report-growth); }
+  .report-tile[data-report="yield"] { --report-accent: var(--report-yield); }
+  .report-tile[data-report="yield-comparison"] { --report-accent: var(--report-comparison); }
+  .report-tile[data-report="irrigation"] { --report-accent: var(--report-irrigation); }
+  .report-tile[data-report="wine-grape-levy"] { --report-accent: var(--report-levy); }
+  .report-tile[data-report="costs"] { --report-accent: var(--report-costs); }
+  .report-tile[data-report="documents"] { --report-accent: var(--report-documents); }
 }

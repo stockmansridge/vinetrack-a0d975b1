@@ -41,6 +41,7 @@ export default {
           foreground: "hsl(var(--warning-foreground))",
         },
         "map-accent": "hsl(var(--map-accent))",
+        report: "hsl(var(--report-accent))",
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
