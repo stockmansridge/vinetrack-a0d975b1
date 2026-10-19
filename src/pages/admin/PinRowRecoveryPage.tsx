@@ -371,6 +371,7 @@ function PinRowRecoveryInner() {
             </Card>
           )}
 
+          <div id="pin-review-detail" />
           {selected && base.data && (
             <PinRowReviewDetail
               r={selected} paddocks={base.data.paddocks}
@@ -414,7 +415,7 @@ function PinRowRecoveryInner() {
               <tbody className="divide-y">
                 {pageRows.map((r) => (
                   <tr key={r.id} className="align-top">
-                    <td className="p-2 font-mono"><Button size="sm" variant={selectedId === r.id ? "default" : "outline"} className="h-6 px-2 text-xs" onClick={() => { setSelectedId(r.id); window.scrollTo({ top: 0, behavior: "smooth" }); }}>{r.id.slice(0, 8)}</Button></td>
+                    <td className="p-2 font-mono"><Button size="sm" variant={selectedId === r.id ? "default" : "outline"} className="h-6 px-2 text-xs" onClick={() => { setSelectedId(r.id); setTimeout(() => document.getElementById("pin-review-detail")?.scrollIntoView({ behavior: "smooth" }), 0); }}>{r.id.slice(0, 8)}</Button></td>
                     <td className="p-2">{r.title}<br />{r.mode}<br />{r.createdAt?.slice(0, 10)}</td>
                     <td className="p-2">{r.savedBlockName ?? (r.suggestedBlockName ? <span className="italic">Suggested: {r.suggestedBlockName}</span> : "—")}
                       {!r.savedBlockName && <div className="text-muted-foreground">{r.suggestedBlockNote}</div>}</td>
@@ -439,6 +440,7 @@ function PinRowRecoveryInner() {
                     <td className="p-2">{r.suggestedVineRow != null ? `Candidate Row ${r.suggestedVineRow}` : "—"}</td>
                     <td className="p-2"><Badge variant="outline">{STATUS_LABEL[r.status]}</Badge><div className="text-muted-foreground mt-1">{r.reason}</div></td>
                     <td className="p-2"><Input value={notes[r.id] ?? ""} onChange={(e) => setNotes({ ...notes, [r.id]: e.target.value })} className="h-7 text-xs" /></td>
+                    <td className="p-2">{decisions[r.id] ? DECISION_LABEL[decisions[r.id].decision] : "Unreviewed"}</td>
                   </tr>
                 ))}
               </tbody>
