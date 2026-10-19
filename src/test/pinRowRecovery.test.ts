@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   aisleGeometry, pairVineRow, assessPin, isMissingRowPin, validateKnownPins, recoveryCsv,
-  countValidObservations, auditSummary, latestEvidenceByPin, trackAnchor,
+  countValidObservations, auditSummary, latestEvidenceByPin, trackAnchor, travelFromTrack,
 } from "@/lib/pinRowRecovery";
 import { SYSTEM_ADMIN_GROUPS, searchDestinations } from "@/lib/navigationConfig";
 
