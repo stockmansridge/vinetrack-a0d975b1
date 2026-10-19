@@ -1,7 +1,7 @@
 // Backfill progress + controls for Crop Health Maps.
 // Shows how many historical imagery dates are missing, lets an admin start the
-// automatic backfill, and keeps reporting progress (it polls the server, so the
-// job continues and stays visible across page refreshes).
+// browser-driven backfill, and polls stored progress. Polling does not process
+// imagery; leaving/unmounting this page stops scheduling further batches.
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, History, AlertTriangle } from "lucide-react";
@@ -46,8 +46,8 @@ export default function BackfillPanel({
   const status = statusQuery.data;
   const active = isBackfillActive(status);
 
-  // Drive the batch runner while a job is active. Each batch is a separate
-  // server call, so a refresh simply picks the job back up.
+  // Drive batches only after explicit consent in this mounted session.
+  // A persisted active job or page refresh never grants that consent.
   useEffect(() => {
     // Only one instance drives the batch runner, so batches never overlap.
     if (!canManage || !vineyardId || authorisedVineyard !== vineyardId || !active || running) return;
@@ -187,7 +187,9 @@ export default function BackfillPanel({
               VineTrack will check the last {HISTORY_DAYS} days for every selected block, then
               download and process any date that is missing — newest first. This can take a while
               and uses satellite provider quota. Your current imagery stays available the whole time,
-              and progress continues if you leave this page.
+              but processing is driven by this page. Keep it open while processing;
+              leaving or refreshing stops further batches. An in-flight batch may finish,
+              but processing does not reliably continue unattended. Returning does not automatically resume it.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
