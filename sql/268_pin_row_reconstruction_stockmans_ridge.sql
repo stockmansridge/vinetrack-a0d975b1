@@ -281,6 +281,7 @@ begin
   if preserved then tier:='preserved'; end if;
   return jsonb_build_object('diagnostic',jsonb_build_object('predicted_vine_row',chosen,'projected_aisle',bnd->'aisle',
     'quality_ok',cardinality(hold)=0 and chosen is not null,'saved_vine_row',coalesce(p.pin_row_number,p.row_number),
+    'projected_snap',case when (proj->>'ok')::boolean then jsonb_build_object('latitude',proj->'snapped_latitude','longitude',proj->'snapped_longitude') end,
     'saved_driving_aisle',p.driving_row_number,'saved_aisle_matches',p.driving_row_number=(bnd->>'aisle')::numeric,
     'raw_snap_distance_m',case when p.snapped_latitude is not null and p.snapped_longitude is not null then
       public.vt_pbf_metres(p.latitude,p.longitude,p.snapped_latitude,p.snapped_longitude) end), 'algorithm_version','pbf-recon-v2','pin_id',p.id,'tier',tier,'combination',combo,

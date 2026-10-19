@@ -27,6 +27,15 @@ select pg_temp.eq('31 May pins have unique anchors',(vt_pbf_validation(:VY)->>'c
 select pg_temp.eq('31 May pins unavailable before September history',(vt_pbf_validation(:VY)->>'unavailable')::int,31);
 select pg_temp.eq('May cohort must not be called validated',(vt_pbf_validation(:VY)->>'passed')::boolean,false);
 select pg_temp.eq('no May current-map automatic batch',pin_row_reconstruction_report(:VY)->'supported_batch','[]'::jsonb);
+-- Even if a real capture-era snapshot became available, 12/31 matches cannot pass.
+insert into pin_location_geometry_history(paddock_id,vineyard_id,valid_from,valid_to,polygon_points,rows,geometry_hash)
+ select id,vineyard_id,'2026-05-01','2026-06-01',polygon_points,rows,'legacy-test' from paddocks;
+update pin_capture_evidence set geometry_hash=(select pin_geometry_identity(polygon_points,rows) from paddocks limit 1)
+ where pin_id::text like '20000000%';
+select pg_temp.eq('31 known-row cohort predicts 19 mismatches',(vt_pbf_validation(:VY)->>'mismatches')::int,19);
+select pg_temp.eq('31 known-row cohort predicts only 12 matches',
+ (vt_pbf_validation(:VY)->>'cohort_size')::int-(vt_pbf_validation(:VY)->>'mismatches')::int,12);
+select pg_temp.eq('12/31 never validates automatic proposals',(vt_pbf_validation(:VY)->>'passed')::boolean,false);
 rollback;
 
 begin;
@@ -45,6 +54,14 @@ begin;
 select pg_temp.eq('rowNumber/start/end format projects row 4',
  (vt_pbf_project(-33.9995,(select 150+7*m from k),(select jsonb_agg(jsonb_build_object('rowNumber',r->'number','start',r->'endPoint','end',r->'startPoint')) from paddocks,jsonb_array_elements(rows) r),4)->>'aisle')::numeric,3.5);
 select pg_temp.eq('southbound course reversal is preserved',round((vt_pbf_travel_track(-33.9995,(select 150+7*m from k),pg_temp.track(-33.9995,(select 150+7*m from k),array[12,8,4,0,-4,-8,-12]))->>'course_deg')::numeric),180::numeric);
+update pin_capture_evidence set observations=pg_temp.obs(-33.9995,(select 150+7*m from k),180,1.2,1)
+ where pin_id='00000000-0000-0000-0000-000000000009';
+-- Observations must move south as well as report south; reverse array coordinates.
+update pin_capture_evidence set observations=(select jsonb_agg(o||jsonb_build_object('latitude',-33.9995-(ord-2)*1.5/110574.0) order by ord)
+ from jsonb_array_elements(observations) with ordinality x(o,ord))
+ where pin_id='00000000-0000-0000-0000-000000000009';
+select pg_temp.eq('right southbound selects row 3, no +1 adjustment',
+ (vt_pbf_reconstruct_pin('00000000-0000-0000-0000-000000000009')->'diagnostic'->>'predicted_vine_row')::int,3);
 select pg_temp.eq('malformed observations hold',(vt_pbf_travel_obs('[{"observedAt":"oops","latitude":-34,"longitude":150,"courseDegrees":0,"speedMps":1,"horizontalAccuracyM":1}]')->>'ok')::boolean,false);
 select pg_temp.eq('malformed tracks hold',(vt_pbf_travel_track(-34,150,'[{"latitude":"bad","longitude":150}]')->>'ok')::boolean,false);
 update pin_location_geometry_history set valid_to='2026-10-01';
