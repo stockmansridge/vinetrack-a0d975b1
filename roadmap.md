@@ -1,8 +1,8 @@
 # Roadmap
 
 ## Irrigation valve import
-- [ ] Add valve-only file preview and import using existing valve creation permissions and RPC; no sessions, systems or connections imported.
-- [ ] Verify validation, selected-vineyard scope and partial-import safety with focused tests.
+- [x] Add valve-only file preview and import using existing valve creation permissions and RPC; no sessions, systems or connections imported.
+- [x] Verify validation, selected-vineyard scope and partial-import safety with focused offline tests; no production imports performed.
 
 ## Admin activity drill-down
 - [x] Make activity Vineyard/User counts open named, period-matched read-only lists using existing access; disclose creator attribution and restricted results.

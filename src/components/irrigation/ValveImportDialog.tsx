@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Upload, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,8 @@ export default function ValveImportDialog({ vineyardId, systems, valves }: {
   const [attempted, setAttempted] = useState(false);
   const running = useRef(false);
   const fileSequence = useRef(0);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; fileSequence.current++; }; }, []);
   const reset = () => { fileSequence.current++; setRows([]); setSelected([]); setResults({}); setError(""); setAttempted(false); };
   const load = async (file: File) => {
     const sequence = ++fileSequence.current;
@@ -42,10 +44,13 @@ export default function ValveImportDialog({ vineyardId, systems, valves }: {
     const pending = rows.filter((r) => selected.includes(r.line) && !r.error);
     try {
       for (const row of pending) {
+        if (!mounted.current) break;
         try {
           await create.mutateAsync({ ...row.input, irrigation_system_id: systemId });
+          if (!mounted.current) break;
           setResults((r) => ({ ...r, [row.line]: "Imported" }));
         } catch (e) {
+          if (!mounted.current) break;
           setResults((r) => ({ ...r, [row.line]: `Not confirmed: ${e instanceof Error ? e.message : "Save failed"}` }));
           setError("Import stopped. Check the valve list before retrying with a new file; an unconfirmed save may have reached the server.");
           break;

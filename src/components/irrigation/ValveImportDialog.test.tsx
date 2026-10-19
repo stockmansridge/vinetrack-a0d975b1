@@ -12,7 +12,7 @@ async function upload(text: string) {
   await waitFor(() => expect(screen.getByRole("button", { name: "Import 2 valves" })).toBeEnabled());
 }
 function setup() {
-  render(<ValveImportDialog vineyardId="selected-vineyard" systems={[{ id: "system", vineyard_id: "selected-vineyard", name: "Pump", is_active: true, water_source: null, controller_provider: null, controller_name: null, external_controller_id: null, notes: null }]} valves={[]} />);
+  return render(<ValveImportDialog vineyardId="selected-vineyard" systems={[{ id: "system", vineyard_id: "selected-vineyard", name: "Pump", is_active: true, water_source: null, controller_provider: null, controller_name: null, external_controller_id: null, notes: null }]} valves={[]} />);
 }
 it("previews without saving, then creates only selected valves in the chosen vineyard/system", async () => {
   api.save.mockResolvedValue({ id: "new" }); setup();
@@ -31,5 +31,15 @@ it("stops after an unconfirmed save, never automatically retries or imports late
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Import stopped"));
   expect(api.save).toHaveBeenCalledTimes(1);
   fireEvent.click(screen.getByRole("button", { name: "Import 2 valves" }));
+  expect(api.save).toHaveBeenCalledTimes(1);
+});
+it("stops remaining valve saves when leaving or changing vineyard", async () => {
+  let finish: ((value: unknown) => void) | undefined;
+  api.save.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+  const view = setup(); await upload("name\nNorth\nSouth");
+  fireEvent.click(screen.getByRole("button", { name: "Import 2 valves" }));
+  await waitFor(() => expect(api.save).toHaveBeenCalledTimes(1));
+  view.unmount(); finish?.({ id: "new" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
   expect(api.save).toHaveBeenCalledTimes(1);
 });
