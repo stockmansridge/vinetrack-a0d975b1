@@ -163,7 +163,7 @@ export default function VintageNotesPage() {
         noindex
       />
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="space-y-3">
         <div>
           <h1 className="text-2xl font-semibold">Vintage Notes</h1>
           <p className="text-sm text-muted-foreground">
