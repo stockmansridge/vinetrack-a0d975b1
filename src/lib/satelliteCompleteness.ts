@@ -406,9 +406,10 @@ export function reportFromManifest(
     const missingAnalyticalLayers = REQUIRED_INDICES.filter(
       (i) => requiresAnalytical(i) && !availAnalytical.has(i),
     );
-    // Manifest tracks summary count but not exact index list; approximate with
-    // the analytical-missing list truncated to the count for display purposes.
-    const missingSummaries = missingAnalyticalLayers.slice(0, m.missing_summary_count ?? 0);
+    // A count cannot identify specific missing indices; all-ten is exact.
+    const missingSummaryCount = m.missing_summary_count ?? 0;
+    const missingSummaries = missingSummaryCount === REQUIRED_INDICES.filter(requiresSummary).length
+      ? REQUIRED_INDICES.filter(requiresSummary) : [];
     const indicesRequiringWork = Array.from(new Set([
       ...missingDisplayLayers,
       ...missingAnalyticalLayers,
@@ -432,7 +433,7 @@ export function reportFromManifest(
 
     totals.missingDisplay += missingDisplayLayers.length;
     totals.missingAnalytical += missingAnalyticalLayers.length;
-    totals.missingSummaries += missingSummaries.length;
+    totals.missingSummaries += missingSummaryCount;
 
     perPaddock.push({
       paddockId: p.id,

@@ -271,7 +271,8 @@ Deno.serve(async (req) => {
       // does not guarantee row order, so "last row wins" made the selected
       // asset nondeterministic and could pair a v3 display with a v5 analysis.
       // Always retain the newest supported processing version.
-      if (!existing || versionRank(a.processing_version) < versionRank(existing.processing_version)) {
+      if (!existing || versionRank(a.processing_version) < versionRank(existing.processing_version)
+        || (a.processing_version === existing.processing_version && a.id.localeCompare(existing.id) < 0)) {
         assetByKey.set(key, a);
       }
     } else {
@@ -394,8 +395,12 @@ Deno.serve(async (req) => {
       const layerNames = Array.from(new Set<string>([...dispSet, ...analSet])).sort();
       for (const idx of layerNames) {
         const disp = assetByKey.get(`${sceneId}:${idx}:DISPLAY_RASTER`);
-        const anal = assetByKey.get(`${sceneId}:${idx}:ANALYTICAL_RASTER`);
-        const sum = summaryByKey.get(`${sceneId}:${idx}`) ?? null;
+        // Display first; other data must match its exact scene/index/version.
+        const anal = disp ? assetRows.filter((a) => a.satellite_scene_id === sceneId
+          && a.index_type === idx && inferKind(a) === "ANALYTICAL_RASTER"
+          && a.processing_version === disp.processing_version).sort((a, b) => a.id.localeCompare(b.id))[0] : undefined;
+        const sum = disp ? summaryRows.find((s) => s.satellite_scene_id === sceneId
+          && s.index_type === idx && s.processing_version === disp.processing_version) ?? null : null;
         layers.push({
           index_type: idx,
           display: disp ? toLayerAsset(disp) : null,
@@ -425,7 +430,7 @@ Deno.serve(async (req) => {
         paddock_cloud_cover_pct: bucket.best.paddock_cloud_cover_pct,
         scene_cloud_cover_pct: bucket.best.scene_cloud_cover_pct,
         available_display_layers: Array.from(dispSet).sort(),
-        available_analytical_layers: Array.from(analSet).sort(),
+        available_analytical_layers: layers.filter((l) => l.analytical).map((l) => l.index_type).sort(),
         package_version_mismatch: false,
         layers,
       });
@@ -511,8 +516,7 @@ Deno.serve(async (req) => {
   const updated_at = [manifestUpdated, sceneUpdated].filter(Boolean).sort().pop() ?? null;
 
   // ---- Provider freshness (Copernicus check state) -----------------------
-  // Best-effort: expire stale locks first so we don't report ghost 'checking'.
-  try { await (supa as any).rpc("expire_stale_refresh_jobs"); } catch { /* ignore */ }
+  // Lock expiry belongs to explicit job workflows, never this read endpoint.
   const { data: providerJobs } = await supa
     .from("satellite_refresh_jobs")
     .select("id, status, started_at, completed_at, heartbeat_at, job_type")
