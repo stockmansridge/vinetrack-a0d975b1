@@ -71,7 +71,7 @@ begin
   db := public.vt_pbf_bearing((f->>'lat')::float8,(f->>'lon')::float8,(l->>'lat')::float8,(l->>'lon')::float8);
   if public.vt_pbf_angle_diff(db, mean) > 30 then return jsonb_build_object('ok',false,'available',true,'qualified',n,'conflict',true,'reason','displacement disagrees with reported course'); end if;
   return jsonb_build_object('ok',true,'available',true,'source','gps_observations','course_deg',mean,'qualified',n,'displacement_m',disp,'spread_deg',spread);
-exception when invalid_text_representation or datetime_field_overflow then
+exception when invalid_text_representation or datetime_field_overflow or invalid_datetime_format then
   return jsonb_build_object('ok',false,'available',true,'reason','malformed observation data');
 end $$;
 
