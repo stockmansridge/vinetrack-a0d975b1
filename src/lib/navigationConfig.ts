@@ -599,6 +599,7 @@ const SYSTEM_ADMIN_ITEM_LIST: SystemAdminItem[] = [
   { label: "Vineyards", path: "/admin/vineyards", icon: Grape },
   { label: "Blocks", path: "/admin/blocks", icon: Map },
   { label: "Pins", path: "/admin/pins", icon: MapPin },
+  { label: "Pin Row Recovery", path: "/admin/pin-row-recovery", icon: MapPin },
   { label: "Spray Records", path: "/admin/spray-records", icon: Beaker },
   { label: "Work Tasks", path: "/admin/work-tasks", icon: ClipboardList },
   { label: "Trips", path: "/admin/trips", icon: Route },
@@ -652,6 +653,7 @@ export const SYSTEM_ADMIN_GROUPS: SystemAdminGroup[] = [
     items: [
       systemAdminItem("Blocks"),
       systemAdminItem("Pins"),
+      systemAdminItem("Pin Row Recovery"),
       systemAdminItem("Spray Records"),
       systemAdminItem("Work Tasks"),
       systemAdminItem("Trips"),
