@@ -60,7 +60,7 @@ const EMPTY: DecisionInput = { decision: "hold", block_id: null, vine_row: null,
 
 export function PinRowReviewDetail(props: {
   r: RecoveryRow; paddocks: any[]; track: LatLng[] | null; existing: ReviewDecision | null; reviewer: string;
-  onSave: (input: DecisionInput) => void; onClear: () => void; onPrev: () => void; onNext: () => void; position: string;
+  onSave: (input: DecisionInput) => void; readOnly?: boolean; onClear: () => void; onPrev: () => void; onNext: () => void; position: string;
 }) {
   const { r, paddocks, track, existing } = props;
   const [f, setF] = useState<DecisionInput>(EMPTY);
@@ -114,6 +114,9 @@ export function PinRowReviewDetail(props: {
             <Button key={k} size="sm" variant={f.decision === k ? "default" : "outline"} onClick={() => setF({ ...f, decision: k })}>{DECISION_LABEL[k]}</Button>
           ))}
         </div>
+        <div className="text-xs rounded border border-destructive/50 bg-destructive/5 p-2">Acknowledging a warning does not make weak GPS or travel evidence reliable. When technical evidence is insufficient, only a manual field check supports approval. A saved draft is not a confirmed row and nothing is written.</div>
+        {props.readOnly && <div className="text-xs text-destructive">Saving disabled until signed in and evidence/segments are fully loaded.</div>}
+        {f.block_id && r.pin.paddock_id && f.block_id !== r.pin.paddock_id && <div className="text-xs text-destructive">BLOCK-CONFLICT: different from the saved block — requires a separate authoritative block correction.</div>}
         {preserve && <div className="text-xs text-muted-foreground">Existing segments/aisle are preserved. Approval is not available for this pin.</div>}
         {f.decision === "approve_for_writeback" && (
           <div className="grid sm:grid-cols-4 gap-2 text-xs">
@@ -153,7 +156,7 @@ export function PinRowReviewDetail(props: {
         <Textarea className="text-xs" placeholder="Reason (required)" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
         {errors.length > 0 && <ul className="text-xs text-destructive list-disc pl-4">{errors.map((e) => <li key={e}>{e}</li>)}</ul>}
         <div className="flex gap-2 items-center">
-          <Button size="sm" disabled={errors.length > 0} onClick={() => props.onSave(f)}>Save draft decision</Button>
+          <Button size="sm" disabled={errors.length > 0 || props.readOnly} onClick={() => props.onSave(f)}>Save draft decision</Button>
           {existing && <Button size="sm" variant="outline" onClick={props.onClear}>Clear draft</Button>}
           <span className="text-xs text-muted-foreground">Reviewer: {props.reviewer}{existing ? ` · saved ${existing.reviewed_at}` : ""}</span>
         </div>
