@@ -14,10 +14,10 @@ export async function bounded<T>(
   let timer: ReturnType<typeof setTimeout> | undefined;
   let cancel = () => {};
   const stop = new Promise<never>((_, reject) => {
-    cancel = () => { child.abort(); reject(abortError()); };
+    cancel = () => { reject(abortError()); child.abort(); };
     signal.addEventListener("abort", cancel, { once: true });
     timer = setTimeout(() => {
-      child.abort(); reject(new SavedAssetError(`${label} timed out`));
+      reject(new SavedAssetError(`${label} timed out`)); child.abort();
     }, ms);
   });
   try { return await Promise.race([work(child.signal), stop]); }

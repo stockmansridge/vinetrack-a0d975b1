@@ -1226,8 +1226,7 @@ export default function SatelliteMappingPage() {
   }, [effectiveDisplayDate, selectedSceneKey, displayAssetPairs, signedUrls]);
 
   // Target overlay set for the map, sourced from the effective display date.
-  // If a preview date has assets still loading, we retain the committed-date
-  // overlays instead of blanking the map, then crossfade when preview is ready.
+  // Only the actual selected/preview acquisition is eligible for this overlay set.
   const targetMapOverlays = useMemo<SatelliteRasterOverlay[]>(() => {
     if (disableCropOverlays) return [];
     // Never label the committed-date raster as the preview acquisition.
@@ -1494,12 +1493,14 @@ export default function SatelliteMappingPage() {
         diag({ endpointStatus: cached ? 304 : 200, blobSize: blob.size, mimeType: blob.type,
           objectUrlCreated: true, imageStatus: isDisplay ? "loaded" : "not_checked", finalStatus: cached ? "cached" : "loaded" });
         state((prev) => new Map(prev).set(key, { phase: "loaded" }));
-        setSignedUrls((prev) => ({ ...prev, [asset.id]: url as string }));
+        const publishedUrl = url;
+        setSignedUrls((prev) => ({ ...prev, [asset.id]: publishedUrl }));
         bumpStats();
       } catch (error) {
         if (url) URL.revokeObjectURL(url);
         if (signal.aborted) return;
         const message = error instanceof Error ? error.message : String(error);
+        if (isDisplay && url) void deleteCachedAsset(asset.id, pv);
         diag({ finalStatus: "failed", error: message, endpointStatus: error instanceof SavedAssetError ? error.status ?? null : null });
         state((prev) => new Map(prev).set(key, { phase: "failed", errorMessage: message }));
       }
@@ -1510,6 +1511,19 @@ export default function SatelliteMappingPage() {
     // signedUrls is output, not a trigger: failures cannot restart this queue indefinitely.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAssets, activeAnalyticalAssets, preloadDisplayAssets, effectiveDisplayDate, activeVineyardId]);
+
+  // Bytes decoded but MapKit never positioned them: report a finite mount failure.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      for (const { asset, scene } of activeAssets) {
+        if (!signedUrls[asset.id]) continue;
+        const key = displayKeyFor(scene.paddock_id, effectiveDisplayDate, layer, asset.id);
+        if (overlayLifecycleRef.current.get(key)?.phase === "mounted") continue;
+        setOverlayLifecycle((prev) => new Map(prev).set(key, { phase: "error", errorMessage: "Saved PNG decoded, but map positioning timed out" }));
+      }
+    }, 12_000);
+    return () => clearTimeout(timer);
+  }, [activeAssets, signedUrls, effectiveDisplayDate, layer]);
 
   useEffect(() => () => {
     for (const url of objectUrlsRef.current.values()) URL.revokeObjectURL(url);
@@ -3234,7 +3248,7 @@ export default function SatelliteMappingPage() {
         )}
 
         {/* Playback / preview banner */}
-        {(hoverSuspended || previewPending) && (
+        {(hoverSuspended || (previewPending && viewModel.paddocks.some((p) => p.displayStatus === "loading"))) && (
           <div
             className="pointer-events-none absolute left-1/2 top-14 z-[550] -translate-x-1/2 rounded-md border bg-background/95 px-3 py-1.5 text-[11px] font-medium text-foreground shadow-md backdrop-blur"
             role="status"
