@@ -18,7 +18,7 @@ it("keeps overlay identity across opacity changes; mounts only decoded, position
   const mapkit = { Map, Coordinate, FeatureVisibility: { Hidden: "hidden", Adaptive: "adaptive" } };
   vi.stubGlobal("mapkit", mapkit); mock.init.mockResolvedValue(mapkit);
   vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
-  vi.spyOn(document, "elementFromPoint").mockReturnValue(null);
+  Object.defineProperty(document, "elementFromPoint", { configurable: true, value: () => null });
   const mounted = vi.fn(), loaded = vi.fn(), removed = vi.fn();
   const first = { paddockId: "p1", sceneId: "s1", indexType: "NDVI", assetId: "a1", key: "p1|2026-08-01|NDVI|a1",
     url: "blob:a1", bounds: { north: 1, south: 0, east: 1, west: 0 }, opacity: 0.7 };
