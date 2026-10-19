@@ -43,6 +43,13 @@
       "when": 1792388862585,
       "tag": "0005_satellite_v7_manifest_compatibility",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792389387806,
+      "tag": "0006_satellite_reservation_null_rejection",
+      "breakpoints": true
     }
   ]
 }
