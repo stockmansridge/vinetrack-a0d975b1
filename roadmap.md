@@ -1,5 +1,13 @@
 # Roadmap
 
+## Replacement Crop Health ingestion
+- [ ] Correct backlog/activity truth and bound saved-delivery diagnostics.
+- [ ] Apply isolated additive service-only queue/control/budget/provenance foundation.
+- [ ] Implement and deploy inert machine worker/discovery and admin diagnostics; verify disabled receipts without provider calls.
+- [ ] Implement exact-item native-grid processing and offline rejection/golden tests; disclose activation blockers.
+- [ ] Register schedules only if supported machine-auth dispatch can be verified safely.
+- [ ] Publish narrowly corrected frontend after tests; record rollback and remaining capped-pilot requirements.
+
 ## Irrigation valve import
 - [x] Add valve-only file preview and import using existing valve creation permissions and RPC; no sessions, systems or connections imported.
 - [x] Verify validation, selected-vineyard scope and partial-import safety with focused offline tests; no production imports performed.
