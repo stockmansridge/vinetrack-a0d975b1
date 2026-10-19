@@ -34,8 +34,8 @@ export default {
       headers: { Authorization: `Bearer ${env.MACHINE_TOKEN}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ correlation_id: correlation, vineyard_id: VINEYARD }),
     });
-    const body = await res.json() as { run_id?: string; provider_calls?: number; no_op?: boolean };
     if (!res.ok) throw new Error(`Scheduler callback HTTP ${res.status}`);
+    const body = await res.json() as { run_id?: string; provider_calls?: number; no_op?: boolean };
     console.log(JSON.stringify({ kind: route.kind, run_id: body.run_id, provider_calls: body.provider_calls, no_op: body.no_op }));
   },
 };
