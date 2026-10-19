@@ -150,15 +150,16 @@ Deno.test('discovery skips acquisitions already proven cloud-obscured for a padd
     // Mark the discovered scene terminally clouded for one paddock, then offer a newer and an older item.
     const acq=(await db.query<any>('select id from satellite_acquisitions')).rows[0];
     await db.exec(`update satellite_work_items set status='cloud_obscured' where paddock_id='00000000-0000-4000-8000-000000000001' and acquisition_id='${acq.id}'`);
-    const older=stac();older.id='S2B_55H_20261017';older.properties.datetime=new Date(Date.now()-2*86400000).toISOString();
-    const newer=stac();newer.id='S2B_55H_20261019B';newer.properties.datetime=new Date(Date.now()-30000).toISOString();
-    deps.fetch=async()=>new Response(JSON.stringify({features:[older,newer],links:[]}),{status:200});
+    const today=new Date();today.setUTCHours(0,0,0,0);
+    const mid=stac();mid.id='S2B_55H_MINUS1';mid.properties.datetime=new Date(today.getTime()-86400000+900000).toISOString();
+    const older=stac();older.id='S2B_55H_MINUS2';older.properties.datetime=new Date(today.getTime()-2*86400000+900000).toISOString();
+    deps.fetch=async()=>new Response(JSON.stringify({features:[older,mid],links:[]}),{status:200});
     const second=await runPilot('discovery',deps as any,AbortSignal.timeout(20000)) as any;
     assert.equal(second.reason,'discovered');
-    // Paddock 1 must be queued against the NEWER item (not the clouded one); other paddocks already have queued work for that day.
+    // Paddock 1 must be queued against the next newest item (not the clouded one, not the older one).
     const rows=(await db.query<any>(`select w.paddock_id,a.provider_scene_id from satellite_work_items w join satellite_acquisitions a on a.id=w.acquisition_id where w.paddock_id='00000000-0000-4000-8000-000000000001'`)).rows;
-    assert.ok(rows.some(r=>r.provider_scene_id==='S2B_55H_20261019B'));
-    assert.ok(!rows.some(r=>r.provider_scene_id==='S2B_55H_20261017'));
+    assert.ok(rows.some(r=>r.provider_scene_id==='S2B_55H_MINUS1'));
+    assert.ok(!rows.some(r=>r.provider_scene_id==='S2B_55H_MINUS2'));
   } finally { await db.close(); }
 });
 Deno.test('database refuses blank v7 proofs and cross-version reuse of one storage key',async()=>{
