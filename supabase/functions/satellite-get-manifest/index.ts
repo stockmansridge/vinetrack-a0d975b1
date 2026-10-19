@@ -12,6 +12,7 @@ import {
 // "older version" — that mismatch is what makes a date show in the timeline
 // while the map has no overlay to draw.
 const SUPPORTED_PROCESSING_VERSIONS = [
+  "sentinel2-v7-exact-native-pilot",
   "sentinel2-v6-native-10m",
   "sentinel2-v5-smooth-display",
   "sentinel2-v5-supersampled",

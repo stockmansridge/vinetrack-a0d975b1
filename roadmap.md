@@ -1,6 +1,8 @@
 # Roadmap
 
 ## Replacement Crop Health ingestion
+- [ ] Complete disabled exact-item discovery, one-layer native processing, verified publication, privilege hardening and synthetic end-to-end tests; deploy only dormant ingestion/manifest functions.
+- [ ] Supply an opt-in external scheduler artifact without registering or enabling a schedule.
 - [x] Correct backlog/activity truth and bound saved-delivery diagnostics.
 - [x] Apply isolated additive service-only queue/control/budget/provenance foundation.
 - [x] Implement and deploy inert machine worker/discovery and admin diagnostics; verify disabled receipts without provider calls.

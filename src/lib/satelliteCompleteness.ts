@@ -13,6 +13,7 @@ import type { SatelliteIndexType } from "@/types/satellite";
 // and SUPPORTED_PROCESSING_VERSIONS in satellite-get-manifest. Rasters written by
 // any supported version are usable — only unknown/older versions need rework.
 export const SUPPORTED_PROCESSING_VERSIONS = [
+  "sentinel2-v7-exact-native-pilot",
   "sentinel2-v6-native-10m",
   "sentinel2-v5-smooth-display",
   "sentinel2-v5-supersampled",

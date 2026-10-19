@@ -8,6 +8,7 @@ import { fetchBackfillStatus } from "@/lib/satelliteBackfill";
 import CropHealthDateTimeline, { type TimelineDateEntry, type TimelineStatus } from "@/components/satellite/CropHealthDateTimeline";
 import RefreshProgressPanel from "@/components/satellite/RefreshProgressPanel";
 import { fromArrayBuffer } from "geotiff";
+import { nativeCell } from "@/lib/satelliteNativeCell";
 import SatelliteMap, { type SatelliteRasterOverlay, type OverlayCallbackInfo, type SatelliteMapDiagnostics } from "@/components/SatelliteMap";
 import OverlayHealthPanel from "@/components/satellite/OverlayHealthPanel";
 import IngestionHealthPanel from "@/components/satellite/IngestionHealthPanel";
@@ -469,6 +470,7 @@ type DecodedAnalyticalRaster = {
   scale: number;
   rowOrientation: string;
   processingVersion: string;
+  nativeGrid?: {epsg:number;origin:number[];resolution:number[];width:number;height:number};
 };
 
 type AssetPipelineDiagnostic = {
@@ -1596,6 +1598,7 @@ export default function SatelliteMappingPage() {
           scale: asset.scale_factor ?? 1,
           rowOrientation: asset.row_orientation ?? "north_to_south",
           processingVersion: asset.processing_version ?? "unknown",
+          nativeGrid: asset.processing_version === "sentinel2-v7-exact-native-pilot" ? {epsg:Number(image.getGeoKeys()?.ProjectedCSTypeGeoKey),origin:image.getOrigin(),resolution:image.getResolution(),width:image.getWidth(),height:image.getHeight()} : undefined,
         };
       }, controller.signal, 10_000, "Analytical decode");
 
@@ -1677,6 +1680,13 @@ export default function SatelliteMappingPage() {
     message: string | null;
     cellRect: { north: number; south: number; east: number; west: number } | null;
   } => {
+    if(raster.processingVersion === "sentinel2-v7-exact-native-pilot") {
+      if(!raster.nativeGrid)return {value:null,message:"Native measurement grid unavailable",cellRect:null};
+      const cell=nativeCell(raster.nativeGrid,lat,lng);
+      if(!cell)return {value:null,message:"Outside paddock",cellRect:null};
+      const raw=Number(raster.data[cell.index]);
+      return {value:!Number.isFinite(raw)||raw===raster.noData?null:raw*raster.scale,message:!Number.isFinite(raw)||raw===raster.noData?"Cloud, shadow or no satellite data in this cell":null,cellRect:cell.cellRect};
+    }
     const { west, east, south, north } = raster.bounds;
     const xRatio = (lng - west) / (east - west);
     const yRatio = (north - lat) / (north - south);

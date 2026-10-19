@@ -1,0 +1,10 @@
+name = "vinetrack-satellite-pilot-scheduler"
+main = "worker.ts"
+compatibility_date = "2026-10-19"
+[vars]
+SCHEDULER_ENABLED = "false"
+# Configure FUNCTION_ORIGIN and MACHINE_TOKEN through the scheduler's encrypted
+# secrets, never browser settings or source. No trigger is registered here.
+# After pilot approval only:
+# [triggers]
+# crons = ["0 2 * * *", "*/10 * * * *"]

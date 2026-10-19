@@ -22,6 +22,7 @@ export interface SourceBand { item_id: string; href: string; scale: number; offs
 export interface ExactManifest {
   schema_version: 1; item_id: string; collection: string; acquired_at: string;
   baseline: string; cloud_mask_method: "SCL"; bands: Record<string, SourceBand>;
+  product_id?: string; cloud_cover?: number; native_grid?: NativeGrid; scl_grid?: NativeGrid; footprint?: number[][];
 }
 export function validateExactManifest(manifest: ExactManifest, layer: PilotLayer): void {
   if (manifest.schema_version !== 1 || !manifest.item_id || !manifest.collection || !Number.isFinite(Date.parse(manifest.acquired_at))

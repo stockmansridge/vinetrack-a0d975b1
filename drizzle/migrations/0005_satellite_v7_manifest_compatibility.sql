@@ -1,0 +1,7 @@
+DO $patch$ DECLARE definition text; BEGIN definition:=pg_get_functiondef('public.refresh_paddock_manifest(uuid)'::regprocedure); IF position('v_required_indices constant text[]' IN definition)=0 OR position('IF v_latest_display_scene_id IS NOT NULL THEN' IN definition)=0 THEN RAISE EXCEPTION 'Unexpected deployed manifest helper; no change applied'; END IF; definition:=replace(definition,'v_required_indices constant text[]','v_required_indices text[]'); definition:=replace(definition,'v_numeric_indices constant text[]','v_numeric_indices text[]'); definition:=replace(definition,'IF v_latest_display_scene_id IS NOT NULL THEN','IF v_latest_display_scene_id IS NOT NULL THEN
+    IF EXISTS(SELECT 1 FROM public.satellite_scenes WHERE id=v_latest_display_scene_id AND acquisition_id IS NOT NULL) AND EXISTS(SELECT 1 FROM public.satellite_raster_assets WHERE satellite_scene_id=v_latest_display_scene_id AND processing_version=''sentinel2-v7-exact-native-pilot'' AND verified_at IS NOT NULL) THEN
+      v_current_version := ''sentinel2-v7-exact-native-pilot'';
+      v_required_indices := ARRAY[''NDVI'',''TRUE_COLOUR''];
+      v_numeric_indices := ARRAY[''NDVI''];
+    END IF;'); EXECUTE definition; END $patch$;
+COMMENT ON FUNCTION public.refresh_paddock_manifest(uuid) IS 'Legacy v3 semantics preserved unless latest scene has verified acquisition-bound v7 pilot outputs; v7 completeness requires NDVI display/analysis/statistics plus True Colour. No historical rows refreshed by this migration.';

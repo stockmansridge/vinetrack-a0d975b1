@@ -1040,6 +1040,38 @@ export type Database = {
         }
         Relationships: []
       }
+      satellite_pilot_day_selection: {
+        Row: {
+          acquisition_day: string
+          acquisition_id: string
+          boundary_hash: string
+          paddock_id: string
+          vineyard_id: string
+        }
+        Insert: {
+          acquisition_day: string
+          acquisition_id: string
+          boundary_hash: string
+          paddock_id: string
+          vineyard_id: string
+        }
+        Update: {
+          acquisition_day?: string
+          acquisition_id?: string
+          boundary_hash?: string
+          paddock_id?: string
+          vineyard_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "satellite_pilot_day_selection_acquisition_id_fkey"
+            columns: ["acquisition_id"]
+            isOneToOne: false
+            referencedRelation: "satellite_acquisitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       satellite_processing_jobs: {
         Row: {
           attempt_count: number
@@ -1689,6 +1721,15 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      satellite_enqueue_pilot: {
+        Args: {
+          p_acquisition: string
+          p_boundary: Json
+          p_hash: string
+          p_paddock: string
+        }
+        Returns: number
+      }
       satellite_finish_work: {
         Args: {
           p_error?: string
@@ -1703,6 +1744,10 @@ export type Database = {
       satellite_pipeline_enabled: {
         Args: { p_pixels?: boolean; p_provider: string; p_vineyard: string }
         Returns: boolean
+      }
+      satellite_publish_pilot: {
+        Args: { p_output: Json; p_token: string; p_work: string }
+        Returns: string
       }
       satellite_release_provider: {
         Args: { p_provider: string; p_retry_ms?: number; p_token: string }
