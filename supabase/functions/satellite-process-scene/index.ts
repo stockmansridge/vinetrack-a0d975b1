@@ -25,9 +25,12 @@ import {
   type IndexType,
 } from "../_shared/satellite-cdse.ts";
 import {
-  alignBboxToGrid, rasterisePolygonCoverage, maskPngToPolygonSoft,
+  alignBboxToGrid, rasterisePolygonCoverage, maskPngToPolygonSoft, decodePng,
   GRID_CRS, GRID_CRS_URI,
 } from "../_shared/satellite-grid.ts";
+// @deno-types="../_shared/vendor/geotiff.d.ts"
+import { fromArrayBuffer } from "../_shared/vendor/geotiff.js";
+import { countVisibleRgba, countValidCells } from "../_shared/satellite-raster-usability.ts";
 
 
 Deno.serve(async (req) => {
@@ -172,7 +175,7 @@ Deno.serve(async (req) => {
     provider_scene_id, acquired_at,
     scene_cloud_cover_pct: scene_cloud_cover_pct ?? null,
     paddock_valid_coverage_pct: validCoveragePct,
-    paddock_cloud_cover_pct: 100 - validCoveragePct,
+    paddock_cloud_cover_pct: validCoveragePct === null ? null : 100 - validCoveragePct,
     spatial_resolution_m: 10,
     quality_status: quality,
     processing_status: "processing",
@@ -252,7 +255,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      const path = `${vineyard_id}/${paddock_id}/${acqDateStr}/${provider_scene_id}/${idx}.png`;
+      const path = `${vineyard_id}/${paddock_id}/${acqDateStr}/${provider_scene_id}/${PROCESSING_VERSION}/${idx}.png`;
       const existingDisplay = (existingAssets ?? []).find((a: any) =>
         a.index_type === idx &&
         (a.asset_type === DISPLAY_ASSET_TYPE || (!a.asset_type && a.mime_type === "image/png"))
@@ -274,8 +277,14 @@ Deno.serve(async (req) => {
           console.error("[satellite-process-scene] polygon mask failed:", (maskErr as Error)?.message);
         }
 
+        // 1 Aug 2026 evidence: provider no-data renders decoded to 100% alpha 0
+        // and were stored as "complete". Never store a blank render.
+        const decodedDisplay = decodePng(png);
+        if (countVisibleRgba(decodedDisplay.image, 4) === 0) {
+          throw Object.assign(new Error(`Provider returned a blank ${idx} render (zero visible pixels); not stored`), { code: "blank_render" });
+        }
         const up = await supa.storage.from("satellite-assets").upload(displayPath, png, {
-          contentType: "image/png", upsert: true,
+          contentType: "image/png", upsert: false,
         });
         if (up.error) throw new Error(`Storage upload failed: ${up.error.message}`);
       }
@@ -337,7 +346,7 @@ Deno.serve(async (req) => {
       }, { onConflict: "satellite_scene_id,index_type,asset_type,processing_version" });
 
       if (idx !== "TRUE_COLOUR") {
-        const analyticalPath = `${vineyard_id}/${paddock_id}/${acqDateStr}/${provider_scene_id}/${idx}.analysis.tif`;
+        const analyticalPath = `${vineyard_id}/${paddock_id}/${acqDateStr}/${provider_scene_id}/${PROCESSING_VERSION}/${idx}.analysis.tif`;
         const existingAnalytical = (existingAssets ?? []).find((a: any) =>
           a.index_type === idx && a.asset_type === ANALYTICAL_ASSET_TYPE
         );
@@ -357,8 +366,13 @@ Deno.serve(async (req) => {
             evalscript: analyticalEvalscript(idx),
             width: analyticalSize.width, height: analyticalSize.height,
           });
+          const tif = await (await fromArrayBuffer(analytical.slice().buffer)).getImage();
+          const cells = await tif.readRasters({ interleave: true }) as ArrayLike<number>;
+          if (countValidCells(cells, ANALYTICAL_NO_DATA_SENTINEL, idx === "NDVI" ? [-1, 1] : null) === 0) {
+            throw Object.assign(new Error(`Provider returned an all no-data ${idx} analysis raster; not stored`), { code: "blank_render" });
+          }
           const analyticalUp = await supa.storage.from("satellite-assets").upload(analyticalStoragePath, analytical, {
-            contentType: "image/tiff", upsert: true,
+            contentType: "image/tiff", upsert: false,
           });
           if (analyticalUp.error) throw new Error(`Analytical storage upload failed: ${analyticalUp.error.message}`);
         }
