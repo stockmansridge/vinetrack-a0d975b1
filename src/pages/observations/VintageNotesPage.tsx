@@ -102,10 +102,11 @@ export default function VintageNotesPage() {
     [notes, vintage.scope, typeId, search],
   );
 
-  // Add form state. The client id is generated once per dialog session so a
-  // retried save cannot duplicate the note.
+  // Add form state. The client id is generated once per save attempt session
+  // so a retried save cannot duplicate the note; after a failed attempt a new
+  // id is issued so changed input never collides with a possibly-saved row.
   const [draft, setDraft] = useState<VintageNoteDraft>({
-    noteDate: localToday(),
+    noteDate: localToday(vineyardTimeZone),
     noteTypeId: null,
     notes: "",
   });
@@ -113,8 +114,10 @@ export default function VintageNotesPage() {
 
   const canAdd = !!currentRole && (FIELD_ROLES as string[]).includes(currentRole);
   const permissionDenied =
+    access === "denied" ||
     (notesQuery.error && isPermissionError(notesQuery.error)) ||
     (typesQuery.error && isPermissionError(typesQuery.error));
+  const accessUnknown = !accessQuery.isLoading && !accessQuery.error && access === "unknown";
 
   /** Preview of the vintage the server trigger will assign to note_date. */
   const vintagePreview = useMemo(() => {
