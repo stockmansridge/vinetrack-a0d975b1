@@ -5,6 +5,7 @@ import {
   filterVintageNotes,
   groupNoteTypes,
   noteTypeGroupLabel,
+  sameVintageNotePayload,
   validateVintageNote,
   type VintageNote,
   type VintageNoteType,
