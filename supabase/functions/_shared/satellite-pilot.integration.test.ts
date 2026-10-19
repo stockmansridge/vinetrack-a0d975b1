@@ -130,7 +130,7 @@ Deno.test('all-cloud SCL is terminal cloud_obscured after SCL preflight, before 
     // Terminal quality work is never re-claimed: the next worker run picks a different queued item.
     const again=await runPilot('worker',deps as any,AbortSignal.timeout(20000)) as any;
     assert.equal(again.reason,'cloud_obscured');
-    assert.equal((await db.query<any>("select count(*) c from satellite_work_items where status='cloud_obscured'")).rows[0].c,'2');
+    assert.equal((await db.query<any>("select count(*) c from satellite_work_items where status='cloud_obscured'")).rows[0].c,2);
   } finally { await db.close(); }
 });
 Deno.test('cirrus (SCL 10) and all-nodata are terminal without retry; mixed cloud publishes honest partial coverage',async()=>{
