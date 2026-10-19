@@ -1,96 +1,252 @@
-# Crop Health Maps imagery ingestion — audit and staged replacement design
+# Crop Health Maps imagery ingestion — audit and provider-independent design (rev 2)
 
-Inspection and design only. Nothing in this plan is activated until each gate below is passed and field-tested. Map layout and diagnostic UI stay unchanged.
+Design only. Nothing here is implemented, migrated, scheduled or deployed. No live provider requests were made for this revision. Map layout and diagnostic UI stay unchanged. Historical imagery, permissions and production data are preserved by every stage.
 
-## 1. Audit findings (confirmed in code this turn)
+Goal: a reliable daily background imagery service that does not depend permanently on Copernicus Sentinel Hub.
 
-- `supabase/functions/_shared/satellite-cdse.ts:650-652` — `fetchWithRetry` treats `Retry-After` as seconds (`retryAfter * 1000`, capped at 20 s). If Copernicus sends milliseconds (per your doc reading), a 5000 ms hint becomes a 20 s wait, burning the edge budget. Fix: parse as ms, accept an HTTP-date form, clamp, and never multiply.
-- `satellite-cdse.ts:72-98` — native resolutions declared correctly: TRUE_COLOUR, NDVI, EVI, GNDVI, MSAVI, GCI = 10 m (B02/B03/B04/B08); NDRE, RECI, RENDVI, NDMI, PSRI = 20 m (B05/B06/B8A/B11). Note PSRI uses B06 (20 m), so it is 20 m even though it also uses B02/B04.
-- `satellite-process-scene/index.ts:150,176` — writes `satellite_scenes.spatial_resolution_m: 10` for every scene regardless of which layers exist. The scene row therefore implies 10 m for 20 m layers. Per-asset `native_resolution_m` is correct; the scene-level field is misleading.
-- `satellite-process-scene` renders all 11 layers (display PNG + analytical GeoTIFF + statistics) in one invocation, against the ~150 s limit (comment at `satellite-backfill-analytical/index.ts:43`). Any timeout leaves a partial scene.
-- `satellite-backfill-run` and `-discover` authenticate a System Admin (`admin.ok`) and forward the human `Authorization` header to `satellite-process-scene` (`backfill-run:83,151`). They cannot run unattended.
-- `src/components/satellite/BackfillPanel.tsx:49-59` — a `useEffect` loops `runBackfillBatch({ batchSize: 2 })` only while the page is open; UI copy at line 160 says "in the background", which is not true.
-- Production state you supplied (not re-queried by me): last scene 1 Aug 2026, no satellite cron job, one backfill job stuck `processing` since 2 Aug, 337 pending expected dates, no `satellite_backfill_settings` rows. This is consistent with the code: nothing runs unless an admin keeps the page open.
-- Completeness: `refresh_paddock_manifest` already distinguishes `complete / partial / display_available / upgrade_required` per paddock, but `satellite_expected_dates.outcome = 'downloaded'` is date-level and can be set while layers are missing. Freshness (newest date) and completeness (all layers) are not reported separately.
+Evidence legend: **[code]** confirmed in repository source; **[supplied]** production figure supplied by the owner, not re-queried; **[docs]** provider documentation statement; **[confirm]** must be verified in the benchmark (section 11) before relying on it.
 
-## 2. Target architecture
+## 1. Audit findings (unchanged from rev 1)
+
+- **[code]** `supabase/functions/_shared/satellite-cdse.ts:650-652` — `fetchWithRetry` multiplies `Retry-After` by 1000 (treats it as seconds), capped at 20 s.
+- **[code]** `satellite-cdse.ts:72-98` — layer native resolutions: TRUE_COLOUR, NDVI, EVI, GNDVI, MSAVI, GCI = 10 m (B02/B03/B04/B08); NDRE, RECI, RENDVI, NDMI, PSRI = 20 m (use at least one of B05/B06/B8A/B11).
+- **[code]** `satellite-process-scene/index.ts:150,176` — writes `satellite_scenes.spatial_resolution_m: 10` for every scene, including 20 m layers.
+- **[code]** `satellite-process-scene` renders all 11 layers in one invocation against the ~150 s edge limit; a timeout leaves a partial scene.
+- **[code]** `satellite-backfill-run` / `-discover` require a System Admin and forward the human `Authorization` header (`backfill-run:83,151`) — they cannot run unattended.
+- **[code]** `src/components/satellite/BackfillPanel.tsx:49-59` loops only while the page is open; copy at line 160 says "in the background" (incorrect).
+- **[supplied]** Last scene 1 Aug 2026; 125 scene rows; pg_cron, pg_net and Vault installed; no satellite cron job; one backfill job stuck `processing`; 337 pending expected dates.
+- **[code]** `satellite_expected_dates.outcome = 'downloaded'` is date-level and can be set while layers are missing.
+
+## 2. Provider-independent architecture
+
+Three separable components behind one queue. The Crop Health page reads only VineTrack tables and storage, never a provider directly, so swapping or adding providers never changes the page.
 
 ```text
- pg_cron (daily 03:00 vineyard-agnostic)      pg_cron (every 10 min)
-        |                                            |
-  satellite-discover  ---- inserts units ---->  satellite_ingest_units (queue)
-  (catalogue search only,                            |
-   per opted-in vineyard,                    satellite-worker
-   newest-first + bounded history)           claim 1 unit (lease) -> 1 CDSE call group
-                                             -> write asset -> verify -> mark done
-                                                     |
-                                     manifest trigger (existing) -> freshness/completeness
+             +-------------------------+
+ cron  --->  | Discovery (per provider)|  catalogue only, no pixels
+             +-----------+-------------+
+                         | candidate acquisitions + paddock-local quality
+                         v
+             satellite_acquisitions  ->  satellite_work_items (queue, lanes, leases)
+                                                  |
+                                   worker claims one item
+                                                  v
+             +-------------------------+   +--------------------------+
+             | SpectralAccess          |-->| Processor (provider-free)|
+             | (per provider: bands,   |   | indices, clip, stats,    |
+             |  masks, scale/offset)   |   | verify, write assets     |
+             +-------------------------+   +--------------------------+
+                                                  |
+                         satellite_raster_assets / summaries / manifest (existing)
 ```
 
-Work unit = one (paddock, scene date, layer, asset kind). Small enough to finish in seconds, so no invocation approaches the edge limit.
+### 2.1 Interfaces (TypeScript, proposed `supabase/functions/_shared/imagery/types.ts`)
 
-## 3. Database changes (proposed SQL, not to be applied yet)
+```ts
+export type ProviderId = "copernicus_sh" | "earth_search" | "dea";
 
-New/changed objects, all in `public`, RLS on, service-role only for writes:
+export interface AcquisitionRef {
+  provider: ProviderId;
+  collection: string;            // e.g. "sentinel-2-l2a", "ga_s2bm_ard_3"
+  productId: string;             // provider's original item/product ID, verbatim
+  platform: "sentinel-2a" | "sentinel-2b" | "sentinel-2c" | string;
+  acquiredAt: string;            // sensing time UTC from provider metadata
+  processingBaseline: string | null; // e.g. "05.10"; null only when provider omits it
+  tileId: string | null;         // MGRS tile / DEA region code
+  sourceCrs: string;             // e.g. "EPSG:32755"
+  sceneCloudPct: number | null;  // informational only
+}
 
-1. `satellite_ingest_settings` (replaces unused `satellite_backfill_settings` or extends it): `vineyard_id pk`, `enabled bool default false`, `history_days int default 90`, `max_units_per_day int default 200`, `paused_reason text`, `paused_at`.
-2. `satellite_ingest_units`: `id`, `vineyard_id`, `paddock_id`, `provider_scene_id`, `acquired_at`, `acquisition_date date`, `index_type`, `asset_kind ('display'|'analytical'|'summary')`, `priority int` (recent = high), `status ('pending'|'leased'|'done'|'skipped_cloud'|'failed'|'dead')`, `attempts`, `next_attempt_at`, `lease_owner uuid`, `lease_expires_at`, `last_error`, `processing_version`. Unique `(paddock_id, provider_scene_id, index_type, asset_kind, processing_version)` = idempotency key.
-3. `satellite_provider_throttle` single-row-per-provider: `next_allowed_at`, `retry_after_until`, `tokens`, used by every worker before any CDSE call.
-4. `satellite_ingest_runs` log: worker id, started/finished, units claimed/completed/failed, http 429 count — for monitoring.
-5. Functions (SECURITY DEFINER, `search_path=public`, EXECUTE to `service_role` only):
-   - `claim_ingest_unit(p_worker uuid, p_lease interval)` — `UPDATE … WHERE id = (SELECT id … WHERE status IN ('pending','failed') AND next_attempt_at <= now() AND vineyard enabled AND not paused ORDER BY priority DESC, acquisition_date DESC FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING *`; also reclaims `leased` rows with expired lease (crash recovery).
-   - `complete_ingest_unit(id, worker, status, error)` — only succeeds if `lease_owner = worker`; failures set exponential `next_attempt_at`, `dead` after N attempts.
-   - `reserve_provider_slot(provider)` — atomically checks/advances `next_allowed_at`; returns wait ms or 0.
-   - `record_provider_backoff(provider, until)` — sets `retry_after_until` from a 429.
-6. Retire stuck state: one-off, reviewed statement to mark the 2 Aug backfill job `expired` and convert pending `satellite_expected_dates` into queue units (or leave them as history). Not run until approval.
-7. Cron jobs via the managed HTTP schedule tools (not raw SQL): `satellite-discover` daily (1/day), `satellite-worker` every 10 min (144/day — costs Cloud uptime; justified only while queue has work; worker exits immediately when empty). Created disabled-equivalent: functions return early unless a global kill-switch row says enabled.
+export interface PaddockQuality {
+  validPixelPct: number;         // inside the real paddock polygon
+  cloudPct: number;
+  shadowPct: number;
+  maskMethod: string;            // "SCL", "s2cloudless", "fmask", ...
+  pixelCount: number;
+}
 
-## 4. Edge functions
+export interface DiscoveryProvider {
+  id: ProviderId;
+  search(aoi: GeoJSON.Polygon, from: string, to: string): Promise<AcquisitionRef[]>;
+  paddockQuality(ref: AcquisitionRef, paddock: GeoJSON.Polygon): Promise<PaddockQuality>;
+}
 
-- `satellite-discover` (new): cron-auth via `authenticateCronRequest`; for each enabled vineyard, catalogue search last 10 days plus one history slice per run (newest-first, up to `history_days`); compute paddock-local cloud/valid coverage via a cheap Statistics call on SCL/dataMask clipped to the paddock; enqueue units only for scenes passing coverage; store `skipped_cloud` with the measured value otherwise. Records `provider_scene_id`, `acquired_at`, and `acquisition_date` in the vineyard's timezone (scene-date provenance).
-- `satellite-worker` (new): cron-auth; loop until ~60 s budget: `reserve_provider_slot` -> `claim_ingest_unit` -> render one layer/asset -> upload -> **verify** (HEAD storage object, size > 0, dimensions match, GeoTIFF header parse) -> upsert `satellite_raster_assets` / summaries -> `complete_ingest_unit`. On 429: read `Retry-After` as ms, call `record_provider_backoff`, release unit, stop.
-- `_shared/satellite-cdse.ts`: fix `Retry-After` (ms), make retry budget caller-controlled, remove internal long sleeps from worker paths.
-- `satellite-process-scene`: kept for manual admin use, but refactored to enqueue units and optionally drive the worker once; stop writing scene-level `spatial_resolution_m: 10` — write the minimum native resolution actually present, or null.
-- Isolated secret: cron uses the managed cron bearer only; the VineTrack service key stays server-side; no human JWT is forwarded anywhere.
+export interface BandRaster {
+  band: string;                  // provider-neutral name: "blue","red","nir","rededge1",...
+  sourceBand: string;            // provider asset key: "B04", "red", "nbart_red"
+  nativeResolutionM: 10 | 20 | 60;
+  data: Float32Array;            // surface reflectance AFTER scale/offset
+  scaleApplied: number; offsetApplied: number;
+  width: number; height: number; transform: number[]; crs: string;
+}
 
-## 5. 10 m vs 20 m handling (exact rule)
+export interface SpectralAccessProvider {
+  id: ProviderId;
+  /** Must read every band from exactly `ref.productId`. Never mosaics silently. */
+  readBands(ref: AcquisitionRef, paddock: GeoJSON.Polygon, bands: string[],
+            resolutionM: 10 | 20): Promise<{ bands: BandRaster[]; mask: Uint8Array;
+            reflectanceCorrection: string; costEstimate: ProviderCost }>;
+}
 
-- 10 m native (TRUE_COLOUR, NDVI, EVI, GNDVI, MSAVI, GCI): request at 10 m; `native_resolution_m = 10`.
-- 20 m native (NDRE, RECI, RENDVI, NDMI, PSRI): analytical GeoTIFF and statistics requested at 20 m; `native_resolution_m = 20`. Display PNG may be resampled to the shared 10 m display grid for edge alignment, stored with `display_resolution_m = 10` and `native_resolution_m = 20`. UI/diagnostics label it "20 m data shown on 10 m grid", never "10 m". Statistics are always computed on the native 20 m grid, never on the upsampled display.
-- Scene-level resolution field is not used for claims.
+export interface ProviderCost { processingUnits: number; requests: number;
+  bytesTransferred: number; }
 
-## 6. Completeness vs freshness
+export interface Processor {
+  algorithmVersion: string;      // e.g. "vt-indices/3.0.0"
+  render(layer: string, input: Awaited<ReturnType<SpectralAccessProvider["readBands"]>>,
+         paddock: GeoJSON.Polygon): Promise<ProcessedAsset[]>;
+}
+```
 
-- Freshness = newest `acquisition_date` with at least the display layer for a paddock.
-- Completeness = all required (layer, asset kind) units `done` and verified for that date.
-- A date is `downloaded` only when complete; otherwise `partial` with the missing list. Manifest already has the counts; the worker refreshes it via existing triggers.
+The Processor is provider-free: it receives reflectance already scaled, so index formulas exist once. Copernicus is the first adapter (wrapping current Evalscript calls; with Sentinel Hub the band maths can stay server-side, but the adapter still returns the same provenance). Earth Search and DEA adapters read Cloud-Optimised GeoTIFFs with range requests and feed the same Processor.
 
-## 7. Monitoring and alerts
+### 2.2 Required provenance per asset
 
-- Admin diagnostics read `satellite_ingest_runs` and queue counts (UI unchanged now; data only).
-- Alert (email via existing transactional email) when: no successful worker run in 24 h while queue non-empty; any vineyard freshness older than 10 days with clear-sky scenes available; dead units > threshold; provider paused > 6 h.
+Every `satellite_raster_assets` row records: provider, collection, original product ID, platform, processing baseline, band source (provider asset keys used), cloud-mask method, reflectance correction (e.g. `L2A_BOA_sen2cor`, `NBART`), scale/offset applied, native resolution, source CRS, display CRS and display resolution, algorithm version, and contributing product IDs (exactly one unless an explicit, labelled mosaic).
 
-## 8. Rollout (each step gated)
+## 3. Provider comparison
 
-1. Code-only: Retry-After fix + tests; no behaviour switch.
-2. Apply schema (tables/functions) with kill switch off; no cron.
-3. Deploy discover/worker; invoke manually with cron auth against one test vineyard.
-4. Field test one vineyard: enable settings row, create schedules, observe 7 days.
-5. Expand to opt-in vineyards with quotas; replace BackfillPanel loop with a read-only queue status (copy correction).
-6. Retire old backfill functions after 30 days parity.
+Values marked **[confirm]** must be measured in section 11 for our paddocks before any decision.
 
-## 9. Tests and acceptance
+| Aspect | Copernicus Sentinel Hub (CDSE) | Element 84 Earth Search (AWS) | Digital Earth Australia (DEA) |
+|---|---|---|---|
+| Product | Sentinel-2 L2A (Sen2Cor BOA) via Process/Statistics APIs | `sentinel-2-l2a` COGs on AWS Open Data, STAC API | `ga_s2am/bm/cm_ard_3` NBART + fmask, STAC + COGs |
+| Sentinel-2A/B/C | A, B, C **[confirm C in our window]** | A, B, C **[confirm C]** | A, B, C as separate collections **[confirm C]** |
+| Native bands | 10 m B02/B03/B04/B08; 20 m B05/B06/B07/B8A/B11/B12 | same native bands as COGs | same bands, Australia-wide, GA-processed |
+| Latency after sensing | typically hours **[confirm]** | typically hours to ~1 day **[confirm]** | NRT product within ~1–2 days, final ARD later **[confirm]** |
+| Quality mask | SCL, CLM/CLP (s2cloudless), dataMask | SCL asset per item | fmask, s2cloudless, NBART contiguity |
+| Processing we must do | minimal (server-side Evalscript) | read COGs, apply scale/offset, reproject, clip, mask, compute indices | read COGs, reproject, clip, mask, compute indices |
+| Service limits | processing units + requests per minute/month by plan **[confirm account]** | no API key; STAC rate limits; S3 egress from our worker | public, no key; fair-use limits **[confirm]** |
+| Estimated cost | PU consumption against plan quota; overage per plan **[confirm]** | data free; cost = worker CPU + transfer **[confirm]** | data free; cost = worker CPU + transfer **[confirm]** |
+| International vineyards | global | global | **Australia only** |
+| Licence | Copernicus open licence | Copernicus licence (Element 84 hosts) | CC BY 4.0 (GA) **[confirm attribution text]** |
 
-- Unit: Retry-After parse (ms, absent, HTTP-date, huge); claim race (two workers, one unit); expired lease reclaim; idempotent re-run produces no duplicate assets; dead after N attempts; quota stop; paused vineyard skipped.
-- Resolution: 20 m layers store native 20 and display 10; statistics on native grid; no 10 m label for 20 m layers.
-- Completeness: a missing NDMI keeps the date `partial`.
-- Acceptance: 7 consecutive days unattended with freshness ≤ revisit + cloud gap; zero overlapping leases; 429 count bounded; no human token in logs.
+### 3.1 Non-interchangeability rules
 
-## 10. Unknowns
+- **DEA NBART vs Copernicus L2A:** NBART includes BRDF and terrain illumination correction; Sen2Cor L2A does not apply the same correction. Index values from the two must **not** be assumed numerically interchangeable. A paddock's time series is single-provider by default; switching provider inserts a recorded series break (`reflectance_correction` changes) shown in diagnostics, and percentile classes are computed per provider series.
+- **Earth Search scale/offset:** reflectance DNs must be converted using each asset's STAC `raster:bands[].scale` and `offset` (processing baseline 04.00+ carries offset −0.1 with scale 0.0001). The adapter reads these per item; it never hard-codes them, records the values applied, and fails the item if the metadata is absent rather than guessing.
+- Copernicus Sentinel Hub harmonises baseline offsets in its L2A collection by default **[docs, confirm with `harmonizeValues`]**; the adapter records whether harmonisation was on.
 
-- Exact `Retry-After` unit actually returned by CDSE Processing vs Statistics APIs (verify from a logged response before trusting either).
-- CDSE quota (processing units/requests per minute) for this account.
-- Whether managed HTTP schedule tools are available on this project (pre-support projects may lack `authenticateCronRequest`).
-- Paddock geometry lives on the VineTrack backend; discover needs a stable read path and cache.
-- Whether SCL-based paddock cloud statistics fit the per-call budget for large vineyards.
-- Desired history depth and quota per vineyard (business decision).
+## 4. Processing budget (replaces the 200-unit daily quota)
+
+Rev 1's `max_units_per_day = 200` is insufficient: one complete acquisition across eight paddocks can need ~248 work units (8 paddocks × 11 layers × display + analytical + summary ≈ 264, less shared summaries). A fixed unit count also hides the real constraints.
+
+### 4.1 Budget dimensions (tracked per provider per day and per minute)
+
+| Dimension | Source | Enforcement |
+|---|---|---|
+| Provider processing units (CDSE PU) | adapter `costEstimate`, reconciled with response headers where available | hard daily and monthly cap per provider |
+| Provider requests | counted per call | per-minute token bucket (global across workers) |
+| Worker execution time | measured per item | per-run wall-clock budget (e.g. 60 s), daily CPU-seconds cap |
+| Transfer bytes | adapter | daily cap (relevant for COG providers) |
+| Storage bytes | written asset sizes | per-vineyard soft cap + alert |
+
+`satellite_provider_budget` holds limits and running totals; `reserve_budget(provider, estimate)` is atomic and returns allowed/denied.
+
+### 4.2 Lanes and priority
+
+- **Fresh lane** — acquisitions sensed in the last 10 days. Reserved share of every budget (default 70%, configurable). Order: True Colour + NDVI for all paddocks first, then remaining 10 m indices, then 20 m indices.
+- **Backfill lane** — older acquisitions, newest first. Uses only budget left after the fresh lane's reservation **and** only when the fresh lane queue is empty. Backfill can never delay fresh imagery.
+- Retry items keep their lane; dead items leave the queue.
+
+## 5. Resolution and provenance (strict)
+
+- 10 m layers (TRUE_COLOUR, NDVI, EVI, GNDVI, MSAVI, GCI) are measured from native 10 m bands at 10 m.
+- 20 m layers (NDRE, RECI, RENDVI, NDMI, PSRI) are measured at native 20 m. Where a formula mixes 10 m and 20 m bands, the 10 m bands are aggregated to 20 m and the asset is 20 m.
+- Statistics are always computed on the native measurement grid, never the display grid.
+- EPSG:3857 display output is a rendering choice: assets store `native_resolution_m`, `display_resolution_m`, `display_crs`. The UI/diagnostics never call a layer "10 m" because it is displayed on a 10 m grid.
+- `satellite_scenes.spatial_resolution_m` becomes informational and is not used for any resolution claim; per-asset metadata is authoritative.
+- **Single-acquisition rule:** every band of one asset must come from one `productId`. Copernicus requests use a time window bounded to that acquisition plus `mosaickingOrder` with a product filter **[confirm exact filter mechanism]**; COG adapters open only that item's assets. If a paddock straddles two tiles of the same pass, the composite is allowed only when both items share the sensing datatake, and every contributing product ID is recorded. Cross-date mosaics are refused.
+
+## 6. Completeness, freshness and quality
+
+Four separate, independently reported values per paddock (and rolled up per vineyard) in `satellite_freshness`:
+
+1. `last_provider_check_at` — last successful discovery call (proves the service is alive).
+2. `newest_discovered_acquisition` — newest acquisition seen in the catalogue, regardless of cloud.
+3. `newest_usable_acquisition` — newest acquisition passing paddock-local quality thresholds.
+4. `newest_complete_acquisition` — newest date with every required layer and asset kind stored and verified.
+
+Quality: cloud, shadow and valid-pixel percentages are computed inside the actual paddock polygon (not bbox, not scene). Default usable threshold: valid ≥ 80% and cloud+shadow ≤ 10% **[confirm in benchmark]**. A date is `downloaded` only when all required assets exist and pass verification (object exists, size > 0, dimensions/transform match, analytical header parses, statistics row present). Otherwise `partial` with the missing list, or `cloud_obscured` with measured values.
+
+## 7. Scheduling and security
+
+- **Auth:** pg_cron + pg_net call `satellite-discover` and `satellite-worker` with a dedicated cron secret stored in Vault (read inside the cron SQL via `vault.decrypted_secrets`) and checked by the function against an edge secret. No human JWT is ever forwarded; existing admin-only functions stay admin-only.
+- **Atomic claims:** `claim_work_item(worker, lease)` uses `FOR UPDATE SKIP LOCKED`, ordered by lane, priority, acquisition date desc; it reclaims items whose `lease_expires_at` has passed.
+- **Lease expiry:** workers heartbeat long items; expired leases return to `pending` with `attempts + 1`.
+- **Idempotent recovery:** idempotency key `(paddock_id, provider, product_id, index_type, asset_kind, algorithm_version)`; asset writes are upserts on that key, storage paths are deterministic, so a re-run overwrites rather than duplicates. Historical assets at older algorithm versions are kept.
+- **Global provider throttle:** `satellite_provider_throttle` (per provider: `next_allowed_at`, `retry_after_until`, tokens) consulted before every provider call by every worker.
+- **Kill switch:** `satellite_ingestion_control` row (global `enabled`, per-provider `enabled`, reason, changed_by/at). Checked at function start and before each claim; defaults to off. Per-vineyard opt-in remains in settings.
+- **Cadence:** discover once daily; worker every 10 min only while items are pending (unschedules itself when the queue drains and is re-armed by discover), so there is no permanent sweeper.
+
+## 8. Copernicus Retry-After correction (specified, not implemented)
+
+**[docs]** CDSE Sentinel Hub documents numeric `Retry-After` values in milliseconds.
+
+Narrow change in `_shared/satellite-cdse.ts`, `fetchWithRetry` only:
+
+- numeric header → milliseconds as given (no × 1000);
+- HTTP-date header → `date − now`;
+- missing/invalid → existing exponential backoff;
+- clamp to [250 ms, caller cap]; if wait exceeds the remaining run budget, stop and record `retry_after_until` instead of sleeping.
+
+Automated tests: `"5000"` → 5000 ms; `"0"` → 250 ms floor; HTTP date 30 s ahead → ~30 000 ms; missing header → backoff; `"abc"` → backoff; `"999999999"` → clamped and deferred, not slept.
+
+## 9. Schema and interface changes (proposed SQL outline, not applied)
+
+All additive; existing columns keep their meaning; historical rows untouched (new columns nullable, historical rows get `provider = 'copernicus_sh'` only via a reviewed backfill).
+
+- `satellite_scenes` + `provider`, `collection`, `provider_product_id`, `platform`, `processing_baseline`, `tile_id`, `source_crs`, `datatake_id`. `COMMENT ON COLUMN spatial_resolution_m IS 'DEPRECATED for claims: use satellite_raster_assets.native_resolution_m'`.
+- `satellite_raster_assets` + `native_resolution_m`, `display_resolution_m`, `display_crs`, `source_crs`, `band_source jsonb`, `cloud_mask_method`, `reflectance_correction`, `scale_offset jsonb`, `algorithm_version`, `contributing_product_ids text[]`, `verified_at`, `byte_size`.
+- New `satellite_acquisitions` (provider-neutral catalogue record + paddock quality per paddock).
+- New `satellite_work_items` (lane, priority, status, attempts, next_attempt_at, lease_owner, lease_expires_at, idempotency key unique, cost estimate/actual).
+- New `satellite_provider_budget`, `satellite_provider_throttle`, `satellite_ingestion_control`, `satellite_freshness`, `satellite_ingest_runs`.
+- Functions (SECURITY DEFINER, `search_path=public`, EXECUTE service_role only): `claim_work_item`, `heartbeat_work_item`, `complete_work_item`, `reserve_budget`, `record_provider_backoff`, `refresh_freshness`.
+- Every new table: GRANT to service_role (+ authenticated SELECT only where the existing admin gate requires), RLS enabled, policies matching current satellite tables.
+- Code: `_shared/imagery/types.ts`, `_shared/imagery/copernicus.ts` (wraps current calls), later `earthSearch.ts`, `dea.ts`; `_shared/imagery/processor.ts` (provider-free index maths).
+
+## 10. Monitoring and alerts
+
+Diagnostics data (UI unchanged now): the four freshness values, queue depth per lane, budget used, 429 counts, dead items. Alerts: no successful discovery in 24 h; fresh lane non-empty > 24 h; usable acquisition exists but not complete within 48 h; provider paused > 6 h; budget > 90%.
+
+## 11. Read-only provider benchmark and acceptance
+
+Scope: 60–90 days for Stockman's Ridge (plus other test vineyards for non-Australian or cloudier cases). **Catalogue/metadata only** until separately approved — no pixel requests, no worker activation.
+
+Measured per provider:
+
+| Metric | Acceptance threshold (proposed) |
+|---|---|
+| Scene discovery | ≥ 98% of expected Sentinel-2A/B/C passes found vs the union of all providers |
+| Asset availability | 100% of required bands + mask present for discovered items |
+| Cloud-free paddock coverage | usable-date count within 1 of best provider |
+| Native resolution | 100% of assets record correct 10/20 m; zero 20 m layers labelled 10 m |
+| Failures | < 2% items dead after retries |
+| Retries | < 10% of calls retried; zero 429 storms (> 5 consecutive) |
+| Ingestion latency | fresh usable acquisition complete ≤ 48 h after provider publication |
+| Estimated cost | within approved monthly cost per paddock |
+
+A later, separately approved stage repeats the comparison with pixel reads on a few dates to quantify NBART vs L2A index differences.
+
+## 12. Ordered implementation plan and approval gates
+
+1. **Gate A** — approve this revised design.
+2. Retry-After correction + tests (code only, no behaviour switch).
+3. **Gate B** — approve additive schema migration (kill switch off, no cron).
+4. Provider interfaces + Copernicus adapter refactor with parity tests; no change to outputs.
+5. **Gate C** — approve read-only metadata benchmark (section 11).
+6. Queue, leases, budgets, throttle, kill switch, freshness — deployed disabled.
+7. **Gate D** — enable unattended schedule for Stockman's Ridge only; 14-day field test against section 11 thresholds.
+8. **Gate E** — optional Earth Search / DEA adapters (pixel benchmark first).
+9. **Gate F** — wider opt-in rollout; retire page-driven backfill loop and correct its copy.
+
+## 13. Unknowns
+
+- CDSE account PU/request quotas and overage cost.
+- Exact Sentinel-2C coverage and latency per provider for our paddocks.
+- Copernicus mechanism to pin one product ID inside a Process request.
+- DEA fair-use limits and attribution wording; DEA cannot serve non-Australian vineyards.
+- Edge worker CPU/memory limits for COG decoding of larger paddocks.
+- Vault secret access pattern from cron on this project.
+- Stable read path for paddock geometry from the VineTrack backend.
+- Desired history depth and monthly budget per vineyard (business decision).
