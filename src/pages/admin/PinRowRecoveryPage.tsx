@@ -207,9 +207,10 @@ function PinRowRecoveryInner() {
           {validation && (
             <Card className="p-4 text-sm space-y-1">
               <div className="font-medium">Validation against retrieved pins with a saved half-row aisle (read-only)</div>
-              <div>Known pins: {validation.total} · saved vine row adjacent to saved aisle: {validation.adjacencyValid}/{validation.total}</div>
-              <div>Current-geometry aisle matches saved aisle: {validation.aisleMatch}/{validation.aisleEvaluated}</div>
-              <div>Heading+side pairing matches saved vine row: {validation.vineRowMatch}/{validation.vineRowEvaluated} · mismatches: {validation.falsePositives}</div>
+              <div>Pins with saved half-row aisle + vine row retrieved this session: {validation.total} (with saved block: {validation.withSavedBlock})</div>
+              <div>Saved vine row adjacent to saved aisle: {validation.adjacencyValid}/{validation.total} — a property of saved data, not evidence of new pairing accuracy</div>
+              <div>Current-geometry aisle matches saved aisle: {validation.aisleMatch}/{validation.aisleEvaluated} · mismatches: {validation.aisleEvaluated - validation.aisleMatch}</div>
+              <div>Diagnostic — stored device heading + side vs saved vine row: match {validation.vineRowMatch}/{validation.vineRowEvaluated}, mismatch {validation.falsePositives}. Device heading is phone orientation, not travel; it is not used for candidates.</div>
               <div>Nearest physical row differs from saved vine row: {validation.nearestDiffersFromSaved}/{validation.total}</div>
               <div className="text-muted-foreground">Calculated from data retrieved in this session only; never used to change stored rows.</div>
             </Card>
@@ -241,7 +242,7 @@ function PinRowRecoveryInner() {
           <Card className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="text-left text-muted-foreground">
-                <tr>{["Pin", "Title / mode / date", "Block", "GPS", "Heading / side", "Evidence", "Trip / anchor", "Existing", "Nearest row", "Bounding rows / aisle", "Candidate vine row", "Status / reason", "Review note (local)"].map((h) => <th key={h} className="p-2">{h}</th>)}</tr>
+                <tr>{["Pin", "Title / mode / date", "Block", "GPS", "Device heading vs GPS travel", "Evidence", "Trip / anchor", "Existing", "Nearest row", "Bounding rows / aisle", "Candidate vine row", "Status / reason", "Review note (local)"].map((h) => <th key={h} className="p-2">{h}</th>)}</tr>
               </thead>
               <tbody className="divide-y">
                 {pageRows.map((r) => (
@@ -251,10 +252,12 @@ function PinRowRecoveryInner() {
                     <td className="p-2">{r.savedBlockName ?? (r.suggestedBlockName ? <span className="italic">Suggested: {r.suggestedBlockName}</span> : "—")}
                       {!r.savedBlockName && <div className="text-muted-foreground">{r.suggestedBlockNote}</div>}</td>
                     <td className="p-2 font-mono">{r.lat?.toFixed(7)}, {r.lng?.toFixed(7)}</td>
-                    <td className="p-2">stored {r.storedHeading ?? "—"}° · evidence {r.evidenceHeading ?? "—"}°
-                      <br />fresh: {r.headingFresh == null ? "unknown" : r.headingFresh ? "yes" : "no"}
-                      <br />side {r.side ?? "—"} · pressed {r.pressedSide ?? "—"}</td>
-                    <td className="p-2">{r.evidenceState === "unavailable" ? "unavailable" : r.evidenceState === "none" ? "no evidence" : <>±{r.accuracy ?? "?"} m<br />{r.observationCount} valid obs</>}</td>
+                    <td className="p-2">device (phone) {r.evidenceHeading ?? r.storedHeading ?? "—"}°
+                      <br />travel {r.travel.courseDeg != null ? `${Math.round(r.travel.courseDeg)}° (${r.travel.source})` : "not established"}
+                      {r.headingVsTravelDeg != null && <><br />Δ {Math.round(r.headingVsTravelDeg)}°</>}
+                      {r.directionConflict && <div className="text-destructive">Direction conflict: {r.directionConflict}</div>}
+                      <div>side {r.side ?? "—"} · pressed {r.pressedSide ?? "—"}</div></td>
+                    <td className="p-2">{r.evidenceState === "unavailable" ? "unavailable" : r.evidenceState === "none" ? "no evidence" : <>±{r.accuracy ?? "?"} m<br />{r.observationCount === 0 ? "evidence present, 0 observations" : `${r.observationCount} observation point(s)`}</>}</td>
                     <td className="p-2">{r.tripId ? r.tripId.slice(0, 8) : "—"}<br />{r.trackAnchor.replace("_", " ")}</td>
                     <td className="p-2">{r.segmentsState === "unavailable" ? "segments unavailable" : r.existingMeta ?? "—"}</td>
                     <td className="p-2">{r.geometry?.nearestPhysicalRow ?? "—"}</td>
