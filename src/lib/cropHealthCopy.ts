@@ -39,6 +39,8 @@ export function reasonToCustomerMessage(
     case "selected_layer_missing": return `No ${l} layer saved for this date`;
     case "scene_incomplete": return `${l} processing incomplete`;
     case "asset_load_failed": return `${l} image could not be loaded`;
+    case "stored_blank": return `Saved ${l} image is blank (no valid pixels) · a new satellite capture is needed`;
+    case "stored_invalid": return `Saved ${l} image does not match its record · needs reprocessing`;
     case "overlay_mount_failed": return `${l} image could not be displayed`;
     case "cell_data_incomplete": return "Imagery displayed · Cell readings unavailable";
     case "package_upgrade_required": return "Imagery displayed · Update available";

@@ -26,7 +26,8 @@ export type TimelineStatus =
   | "queued"        // known date, not checked yet
   | "cloud"         // cloud or shadow — unusable
   | "no_capture"    // provider never captured this date
-  | "failed";       // attempted and failed
+  | "failed"        // attempted and failed
+  | "stored_blank"; // saved files decoded, but contain no valid pixels
 
 export interface TimelineDateEntry {
   date: string;             // YYYY-MM-DD
@@ -69,6 +70,8 @@ const STATUS_META: Record<TimelineStatus, {
   cloud:      { label: "Cloud or shadow",   icon: CloudOff,     dot: "bg-muted border-muted-foreground/40 text-muted-foreground", text: "text-muted-foreground", selectable: false },
   no_capture: { label: "No capture",        icon: Minus,        dot: "bg-muted border-muted-foreground/30 text-muted-foreground", text: "text-muted-foreground", selectable: false },
   failed:     { label: "Failed",            icon: AlertTriangle,dot: "bg-background border-destructive text-destructive", text: "text-destructive", selectable: false },
+  // Selectable so Details can explain which paddocks are blank; no overlay is drawn.
+  stored_blank: { label: "Saved but blank · no valid pixels", icon: AlertTriangle, dot: "bg-background border-destructive text-destructive", text: "text-destructive", selectable: true },
 };
 
 function formatLong(iso: string): string {
