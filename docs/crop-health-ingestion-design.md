@@ -1,10 +1,12 @@
-# Crop Health Maps imagery ingestion — audit and provider-independent design (rev 2)
+# Crop Health Maps imagery ingestion — audit and provider-independent design (rev 3 — Gate A not approved)
 
 Design only. Nothing here is implemented, migrated, scheduled or deployed. No live provider requests were made for this revision. Map layout and diagnostic UI stay unchanged. Historical imagery, permissions and production data are preserved by every stage.
 
 Goal: a reliable daily background imagery service that does not depend permanently on Copernicus Sentinel Hub.
 
-Evidence legend: **[code]** confirmed in repository source; **[supplied]** production figure supplied by the owner, not re-queried; **[docs]** provider documentation statement; **[confirm]** must be verified in the benchmark (section 11) before relying on it.
+Revision 3, 19 October 2026: **Gate A remains unapproved.** This revision changes this document only. Read-only PostgreSQL catalogue metadata and public provider documentation were inspected; no application-table rows, imagery APIs, DDL, schedules or deployed functions were changed.
+
+Evidence legend: **[code]** confirmed in repository source; **[supplied]** production figure supplied by the owner, not re-queried; **[catalog]** live Portal imagery database catalogue metadata inspected this revision; **[docs]** provider documentation statement; **[confirm]** must be verified in the benchmark (section 11) before relying on it.
 
 ## 1. Audit findings (unchanged from rev 1)
 
@@ -25,7 +27,7 @@ Three separable components behind one queue. The Crop Health page reads only Vin
              +-------------------------+
  cron  --->  | Discovery (per provider)|  catalogue only, no pixels
              +-----------+-------------+
-                         | candidate acquisitions + paddock-local quality
+                         | candidate acquisitions (quality awaits pixel stage)
                          v
              satellite_acquisitions  ->  satellite_work_items (queue, lanes, leases)
                                                   |
@@ -43,7 +45,7 @@ Three separable components behind one queue. The Crop Health page reads only Vin
 ### 2.1 Interfaces (TypeScript, proposed `supabase/functions/_shared/imagery/types.ts`)
 
 ```ts
-export type ProviderId = "copernicus_sh" | "earth_search" | "dea";
+export type ProviderId = "CDSE_SENTINEL_HUB" | "earth_search" | "dea"; // preserve existing DB value
 
 export interface AcquisitionRef {
   provider: ProviderId;
@@ -68,7 +70,7 @@ export interface PaddockQuality {
 export interface DiscoveryProvider {
   id: ProviderId;
   search(aoi: GeoJSON.Polygon, from: string, to: string): Promise<AcquisitionRef[]>;
-  paddockQuality(ref: AcquisitionRef, paddock: GeoJSON.Polygon): Promise<PaddockQuality>;
+  // Discovery is metadata-only. Measured paddock quality belongs to Processor.
 }
 
 export interface BandRaster {
@@ -78,6 +80,18 @@ export interface BandRaster {
   data: Float32Array;            // surface reflectance AFTER scale/offset
   scaleApplied: number; offsetApplied: number;
   width: number; height: number; transform: number[]; crs: string;
+  sourceProductId: string; assetIdentity: string; checksum: string | null;
+  sourceGrid: GridRef; measurementGrid: GridRef; resampling: string;
+}
+export interface GridRef {
+  crs: string; affine: [number, number, number, number, number, number];
+  width: number; height: number; cellSizeM: number; pixelConvention: "area";
+  // Affine convention: x=a*col+b*row+c, y=d*col+e*row+f (pixel corners).
+}
+export interface SourceProof {
+  contractVersion: 1; requestedProductIds: string[]; observedProductIds: string[];
+  datatakeId: string | null; requestHash: string; manifestHash: string;
+  proofMethod: "verified_tile_selection" | "individual_product_assets";
 }
 
 export interface SpectralAccessProvider {
@@ -85,24 +99,25 @@ export interface SpectralAccessProvider {
   /** Must read every band from exactly `ref.productId`. Never mosaics silently. */
   readBands(ref: AcquisitionRef, paddock: GeoJSON.Polygon, bands: string[],
             resolutionM: 10 | 20): Promise<{ bands: BandRaster[]; mask: Uint8Array;
-            reflectanceCorrection: string; costEstimate: ProviderCost }>;
+            reflectanceCorrection: string; sourceProof: SourceProof;
+            measurementGrid: GridRef; costEstimate: ProviderCost }>;
 }
 
 export interface ProviderCost { processingUnits: number; requests: number;
   bytesTransferred: number; }
 
 export interface Processor {
-  algorithmVersion: string;      // e.g. "vt-indices/3.0.0"
+  processingVersion: string;     // existing DB processing_version is the sole version key
   render(layer: string, input: Awaited<ReturnType<SpectralAccessProvider["readBands"]>>,
          paddock: GeoJSON.Polygon): Promise<ProcessedAsset[]>;
 }
 ```
 
-The Processor is provider-free: it receives reflectance already scaled, so index formulas exist once. Copernicus is the first adapter (wrapping current Evalscript calls; with Sentinel Hub the band maths can stay server-side, but the adapter still returns the same provenance). Earth Search and DEA adapters read Cloud-Optimised GeoTIFFs with range requests and feed the same Processor.
+The Processor is provider-free: it receives correctly decoded reflectance on the measurement grid, one source proof and categorical masks. It calculates paddock quality, indices and statistics from the same numerical cells, then generates display assets. Copernicus is the first adapter, **not an unconditional wrapper around current day-window requests**: the exact-source contract in section 5.2 must pass first. Server-side Evalscript maths are admissible only with proven equivalent source/grid/mask semantics; otherwise use individually addressed product bands and the shared Processor. Earth Search and DEA remain optional future adapters, not activated by this design.
 
 ### 2.2 Required provenance per asset
 
-Every `satellite_raster_assets` row records: provider, collection, original product ID, platform, processing baseline, band source (provider asset keys used), cloud-mask method, reflectance correction (e.g. `L2A_BOA_sen2cor`, `NBART`), scale/offset applied, native resolution, source CRS, display CRS and display resolution, algorithm version, and contributing product IDs (exactly one unless an explicit, labelled mosaic).
+Every `satellite_raster_assets` row records: provider, collection, original product ID, platform, processing baseline, band source (provider asset keys used), cloud-mask method, reflectance correction (e.g. `L2A_BOA_sen2cor`, `NBART`), scale/offset applied, native resolution, source CRS, display CRS and display resolution, processing version (existing `processing_version`), source/measurement/output grids and transforms, and contributing product IDs (exactly one unless an explicit, labelled mosaic).
 
 ## 3. Provider comparison
 
@@ -149,35 +164,57 @@ Rev 1's `max_units_per_day = 200` is insufficient: one complete acquisition acro
 - **Backfill lane** — older acquisitions, newest first. Uses only budget left after the fresh lane's reservation **and** only when the fresh lane queue is empty. Backfill can never delay fresh imagery.
 - Retry items keep their lane; dead items leave the queue.
 
-## 5. Resolution and provenance (strict)
+## 5. True measurement resolution and exact provenance (activation blockers)
 
-- 10 m layers (TRUE_COLOUR, NDVI, EVI, GNDVI, MSAVI, GCI) are measured from native 10 m bands at 10 m.
-- 20 m layers (NDRE, RECI, RENDVI, NDMI, PSRI) are measured at native 20 m. Where a formula mixes 10 m and 20 m bands, the 10 m bands are aggregated to 20 m and the asset is 20 m.
-- Statistics are always computed on the native measurement grid, never the display grid.
-- EPSG:3857 display output is a rendering choice: assets store `native_resolution_m`, `display_resolution_m`, `display_crs`. The UI/diagnostics never call a layer "10 m" because it is displayed on a 10 m grid.
-- `satellite_scenes.spatial_resolution_m` becomes informational and is not used for any resolution claim; per-asset metadata is authoritative.
-- **Single-acquisition rule:** every band of one asset must come from one `productId`. Copernicus requests use a time window bounded to that acquisition plus `mosaickingOrder` with a product filter **[confirm exact filter mechanism]**; COG adapters open only that item's assets. If a paddock straddles two tiles of the same pass, the composite is allowed only when both items share the sensing datatake, and every contributing product ID is recorded. Cross-date mosaics are refused.
+### 5.1 Measurement grid is not the map grid
+
+**[code]** Current code requests EPSG:3857 rasters and describes them as native; `NEAREST` alone does not make a projected 10 m pixel a native Sentinel cell. Do not retroactively correct, relabel or recompute historical assets. New processing has a distinct version and truthful metadata.
+
+- Read native tile CRS (normally UTM), affine transform, corner origin, pixel convention and band values from the exact product metadata/header. Record per-band **source grids**, the **measurement grid**, and the **output grid** separately. A cropped raster retains an integer-cell offset from its source grid; it never snaps to an arbitrary paddock bbox origin.
+- TRUE_COLOUR, NDVI, EVI, GNDVI, MSAVI and GCI use B02/B03/B04/B08 native 10 m cells. NDRE, RECI, RENDVI, NDMI and PSRI use a native 20 m grid anchored to the relevant 20 m band, never a 10 m upsampled grid.
+- For mixed inputs, aggregate aligned 10 m reflectance cells to the corresponding 20 m cell by area-weighted mean **before** computing the index (not averaging already-computed indices). On an aligned tile this is a 2×2 mean. Require all contributing cells to be valid in the initial conservative rule; otherwise mark no-data. Record kernel, mask rule, source/destination transforms and grid IDs. This proposed rule needs fixture/field acceptance; it is not asserted to match the current provider resampling.
+- Categorical SCL is native 20 m: preserve labels, use containing-parent/nearest categorical lookup at 10 m; never bilinearly interpolate mask codes or claim 10 m cloud-boundary precision. Record mask resolution separately. Mask, dataMask and finite-value validity participate in the same statistics sample set.
+- Reproject the real boundary to the measurement CRS. Initial analysis inclusion rule: cell centre inside polygon, holes excluded, deterministic boundary tie rule. Report included-cell counts and valid/cloud/shadow fractions with an explicit denominator. Missing coverage is not automatically cloud. Alternative fractional-area weighting requires an explicitly versioned change, not a silent switch. Display edge alpha is separate and cannot weight analysis.
+- Compute min/max/mean/stddev/median/percentiles and quality **once on analytical cells**. Produce EPSG:3857 overlays afterwards. Display smoothing/reprojection may change pixels but never analytical arrays, summaries or hover numerical source. Existing analytical-reader assumptions about map bounds need an approved compatibility adaptation before new assets reach the unchanged page; no UI redesign is authorised here.
+- Cross-paddock crops on the same tile share identical cell boundaries and values at shared cells. For an authorised same-pass multi-tile case, retain native tile subgrids; use a deterministic overlap owner so statistics never double-count. Cross-zone tiles are not silently described as one native UTM grid: keep per-tile measurements and combine samples, or block that case until the representation and reader are approved.
+
+**Concrete acceptance (future tests, not run):** known UTM pixel corner/centre transforms round-trip to WGS84 within 0.05 m against an independent geospatial reference; crop origins are exact integer cell offsets; 10/20 m affine lengths match headers within 1e-6 m; a 4×4 10 m fixture maps to an aligned 2×2 20 m fixture with hand-computed means; adjacent/overlapping paddocks yield identical shared-cell values and centres (1e-6 m alignment tolerance); holes/boundary ties give exact expected sample counts; coordinate sampling selects the expected cell; changing display size, reprojection or smoothing leaves analytical hashes and summaries unchanged. Mixed-resolution layers must remain labelled 20 m even on 10 m display pixels. Include tile seams, rotated affine rejection/support and both hemispheres. Position tolerance verifies processing alignment, not satellite geolocation accuracy.
+
+### 5.2 Exact acquisition/source contract
+
+**[code]** `_shared/satellite-cdse.ts:660–825` sends a day-window `timeRange` and `mosaickingOrder: leastCC` for separate Process/Statistics requests. Neither the saved `provider_scene_id` nor its diagnostic echo proves the returned pixels came from that product. This is an unresolved **activation blocker**, including for statistics and quality checks.
+
+No invented `productId` dataFilter is permitted. Supported-mechanism research and a fail-closed request/fallback contract are specified below; documentation alone is not runtime proof. Every band, mask, index, summary and display derivative must reference the same immutable source manifest/hash and processing version. Any unexpected/missing source identity fails the work item before publication. Narrowing a time interval, choosing leastCC or matching a calendar date is insufficient.
+
+Single-product is default. A multi-tile mosaic requires separate explicit authorisation, proven same sensing datatake/pass (not just same day), exact allowed product IDs, tile footprints, seam/overlap ownership and contributor records per output. Refuse cross-pass/date mosaics and unavailable datatake proof. Provider item IDs and original product identifiers may differ: preserve a verified mapping, never substitute names without evidence.
 
 ## 6. Completeness, freshness and quality
 
 Four separate, independently reported values per paddock (and rolled up per vineyard) in `satellite_freshness`:
 
-1. `last_provider_check_at` — last successful discovery call (proves the service is alive).
+1. `last_provider_check_at` — last successful discovery call (does not alone prove worker or scheduler health).
 2. `newest_discovered_acquisition` — newest acquisition seen in the catalogue, regardless of cloud.
 3. `newest_usable_acquisition` — newest acquisition passing paddock-local quality thresholds.
 4. `newest_complete_acquisition` — newest date with every required layer and asset kind stored and verified.
 
 Quality: cloud, shadow and valid-pixel percentages are computed inside the actual paddock polygon (not bbox, not scene). Default usable threshold: valid ≥ 80% and cloud+shadow ≤ 10% **[confirm in benchmark]**. A date is `downloaded` only when all required assets exist and pass verification (object exists, size > 0, dimensions/transform match, analytical header parses, statistics row present). Otherwise `partial` with the missing list, or `cloud_obscured` with measured values.
 
-## 7. Scheduling and security
+## 7. Scheduling and security — continuously registered, activation gated
 
-- **Auth:** pg_cron + pg_net call `satellite-discover` and `satellite-worker` with a dedicated cron secret stored in Vault (read inside the cron SQL via `vault.decrypted_secrets`) and checked by the function against an edge secret. No human JWT is ever forwarded; existing admin-only functions stay admin-only.
-- **Atomic claims:** `claim_work_item(worker, lease)` uses `FOR UPDATE SKIP LOCKED`, ordered by lane, priority, acquisition date desc; it reclaims items whose `lease_expires_at` has passed.
-- **Lease expiry:** workers heartbeat long items; expired leases return to `pending` with `attempts + 1`.
-- **Idempotent recovery:** idempotency key `(paddock_id, provider, product_id, index_type, asset_kind, algorithm_version)`; asset writes are upserts on that key, storage paths are deterministic, so a re-run overwrites rather than duplicates. Historical assets at older algorithm versions are kept.
-- **Global provider throttle:** `satellite_provider_throttle` (per provider: `next_allowed_at`, `retry_after_until`, tokens) consulted before every provider call by every worker.
-- **Kill switch:** `satellite_ingestion_control` row (global `enabled`, per-provider `enabled`, reason, changed_by/at). Checked at function start and before each claim; defaults to off. Per-vineyard opt-in remains in settings.
-- **Cadence:** discover once daily; worker every 10 min only while items are pending (unschedules itself when the queue drains and is re-armed by discover), so there is no permanent sweeper.
+**Proposed explicit timing trade-off:** after separate schedule/trial approval, keep one worker invocation every 10 minutes continuously registered: **144 runs/day**, plus one daily metadata discovery. No-op checks can keep the database running and incur database, invocation and logging costs even with no work. A daily-only worker is cheaper but can strand work until the next day; the proposed 10-minute interval bounds a due retry or late enqueue's scheduling delay to <10 minutes under healthy service, plus provider backoff, budget/queue wait and execution time. Monthly idle and active costs must be measured and approved. Nothing is registered now.
+
+- Discovery and worker have stable independent schedule names; discovery **never arms/disarms** the worker. Draining, disabling vineyards, backoff and delayed retries **never unschedule it**. This is an intentional permanent time-based retry/recovery check, not a claim of zero-cost event-driven handling.
+- Invocation order: validate machine auth → global kill switch → enabled providers/vineyards → provider backoff/budget → expired leases and due retries/queued units. If no eligible work, return immediately with a bounded `disabled`, `backoff`, `budget_blocked` or `idle` result, **zero provider calls and zero imagery fetches**. Disabled state does not claim or mutate work. Recover expired eligible leases atomically; do not strand them behind a pending-only filter.
+- pg_cron + pg_net use a dedicated machine secret; candidate Vault-read pattern must be validated under the executing database role in an approved stage. No human sign-in token; existing admin functions and permission checks unchanged. Never log a schedule command/header containing a secret. Edge gateway and worker must both accept/validate the selected machine-auth path; do not assume it works because a schedule exists.
+- Claims use `FOR UPDATE SKIP LOCKED`, provider-global throttle/budget reservations and a per-provider concurrency limit. Check the switch before each claim and external call. Recheck/release reservations if disabled; an already-sent call may finish, but cannot publish after disable without an explicitly permitted fenced completion. Kill switch is not cancellation of in-flight HTTP.
+- Leases heartbeat and expire. Completion is fenced by `(work_id, lease_token)` so an expired worker cannot overwrite a newer attempt. Idempotency includes vineyard/paddock, exact acquisition or authorised mosaic identity, index/asset kind and `processing_version`. Immutable, versioned content paths plus checksum/readback verification prevent partial overwrites; same-key retries verify an existing output instead of duplicating it. No overwriting older imagery versions.
+- Numeric Retry-After deadlines persist globally; due retries, late discoveries and crash recovery remain eligible for the next registered invocation. Daily discovery uses an overlapping watermark and idempotent enqueue to catch late catalogue arrivals. Neither relies on a human browser being open.
+
+### 7.1 Registration is not health proof
+
+In an approved isolated trial, verify exactly one active worker schedule with the expected cadence/target and one discovery schedule using redacted catalogue inspection. Then correlate scheduled-run records, pg_net HTTP result (including auth failures/timeouts), worker start/end/idle heartbeat and run ID. A successful cron SQL enqueue is **not** proof of successful HTTP delivery or processing. An existing job row is **not** proof of any execution.
+
+Require multiple real observed scheduled invocations, including idle/no-provider runs, and a worker receipt/completion heartbeat before marking scheduler healthy. Alert on missing schedule, inactive/duplicate/wrong target, no invocation receipt for >20 minutes plus approved clock/dispatch grace, repeated delivery/auth failure, missing completion/expired lease and daily discovery missing >24 hours plus grace. Monitor heartbeat independently of imagery freshness; route alerts through an independently running monitoring service so a stopped database schedule cannot hide its own failure. Test deleted/disabled schedule detection, scheduler dispatch outage, crash after claim/upload, future retry across drain, late enqueue after drain, backoff expiry, switch-off, simultaneous invocations and budget exhaustion. Recovery recreates a missing registration only through an approved operational repair; it is never an enqueue lifecycle.
 
 ## 8. Copernicus Retry-After correction (specified, not implemented)
 
@@ -192,20 +229,62 @@ Narrow change in `_shared/satellite-cdse.ts`, `fetchWithRetry` only:
 
 Automated tests: `"5000"` → 5000 ms; `"0"` → 250 ms floor; HTTP date 30 s ahead → ~30 000 ms; missing header → backoff; `"abc"` → backoff; `"999999999"` → clamped and deferred, not slept.
 
-## 9. Schema and interface changes (proposed SQL outline, not applied)
+## 9. Read-only live schema inventory and precise additive delta
 
-All additive; existing columns keep their meaning; historical rows untouched (new columns nullable, historical rows get `provider = 'copernicus_sh'` only via a reviewed backfill).
+**[catalog] 19 Oct 2026:** inspected `information_schema.columns`, `pg_class` ACL/RLS, `pg_constraint`, `pg_indexes`, `pg_policies`, application trigger/function definitions only. Target is the **Portal imagery store** used by `getServiceClient()`, not the shared mobile vineyard database. No application data was queried and no DDL executed. Catalogue results are the basis below; repeat the inventory immediately before any separately approved migration to reject drift rather than use `ADD IF NOT EXISTS` to mask incompatible meanings.
 
-- `satellite_scenes` + `provider`, `collection`, `provider_product_id`, `platform`, `processing_baseline`, `tile_id`, `source_crs`, `datatake_id`. `COMMENT ON COLUMN spatial_resolution_m IS 'DEPRECATED for claims: use satellite_raster_assets.native_resolution_m'`.
-- `satellite_raster_assets` + `native_resolution_m`, `display_resolution_m`, `display_crs`, `source_crs`, `band_source jsonb`, `cloud_mask_method`, `reflectance_correction`, `scale_offset jsonb`, `algorithm_version`, `contributing_product_ids text[]`, `verified_at`, `byte_size`.
-- New `satellite_acquisitions` (provider-neutral catalogue record + paddock quality per paddock).
-- New `satellite_work_items` (lane, priority, status, attempts, next_attempt_at, lease_owner, lease_expires_at, idempotency key unique, cost estimate/actual).
-- New `satellite_provider_budget`, `satellite_provider_throttle`, `satellite_ingestion_control`, `satellite_freshness`, `satellite_ingest_runs`.
-- Functions (SECURITY DEFINER, `search_path=public`, EXECUTE service_role only): `claim_work_item`, `heartbeat_work_item`, `complete_work_item`, `reserve_budget`, `record_provider_backoff`, `refresh_freshness`.
-- Every new table: GRANT to service_role (+ authenticated SELECT only where the existing admin gate requires), RLS enabled, policies matching current satellite tables.
-- Code: `_shared/imagery/types.ts`, `_shared/imagery/copernicus.ts` (wraps current calls), later `earthSearch.ts`, `dea.ts`; `_shared/imagery/processor.ts` (provider-free index maths).
+### 9.1 Already present — do not add duplicates or rewrite values
+
+| Existing object | Verified fields/contracts reused |
+|---|---|
+| `satellite_scenes` | `id, vineyard_id, paddock_id, provider, collection, provider_scene_id, acquired_at, scene_cloud_cover_pct, paddock_valid_coverage_pct, paddock_cloud_cover_pct, spatial_resolution_m, quality_status, processing_status, source_metadata, created_at, updated_at` |
+| `satellite_raster_assets` | `id, satellite_scene_id, index_type, storage_path, mime_type, bounds, native_resolution_m, display_resolution_m, minimum_value, maximum_value, colour_scale, processing_version, created_at, asset_type, raster_width, raster_height, data_type, scale_factor, no_data_sentinel, row_orientation, acquisition_date` |
+| `satellite_index_summaries` | scene/index/`processing_version`, min/max/mean/median/stddev, p10/p25/p75/p90, valid/no-data counts and timestamps already exist |
+| `satellite_paddock_manifest` | provider-check time, latest display/complete scene/date, processing version, missing asset/summary counts and existing package-status check already exist |
+| Legacy orchestration | `satellite_processing_jobs`, `satellite_backfill_jobs`, `satellite_backfill_settings`, `satellite_expected_dates`, `satellite_refresh_jobs` remain unchanged; do not reinterpret `auto_backfill` as new-worker opt-in |
+
+Reuse `provider_scene_id` as the scene's provider item identity; **do not add a duplicate `provider_product_id`**. Exact original product mapping and datatake belong to the new acquisition source manifest. Keep existing provider value `CDSE_SENTINEL_HUB`, not a historical rewrite to `copernicus_sh`. Reuse `processing_version` as algorithm/output version, not a competing `algorithm_version`. Existing `scale_factor` describes stored raster encoding, **not source reflectance calibration**. `bounds` is existing display-facing metadata, not the native affine. Native/display resolution fields already exist: their historical values are not corrected in place.
+
+Verified existing uniqueness: scenes `(provider, provider_scene_id, paddock_id)` **and an additional unique index `(vineyard_id,paddock_id,provider,UTC acquisition date)`**; assets `(satellite_scene_id,index_type,asset_type,processing_version)` (two equivalent unique indexes); summaries `(satellite_scene_id,index_type,processing_version)`; manifest `(vineyard_id,paddock_id)`. Existing asset/summary FKs cascade on scene deletion. All nine tables have RLS enabled. Policies observed are service-role ALL policies on eight tables; summaries have no policy. Catalogue ACLs give service role table access; several orchestration/summary/manifest tables also have anon/authenticated table grants, but grants alone do not bypass RLS. No permissions are widened or cleaned up in this revision.
+
+**Publication blockers found in the catalogue:** the UTC-day unique scene index prevents independently publishing multiple same-day passes/products for one paddock/provider. Never overwrite one to represent another, manufacture a provider name, or silently drop this index. The additive foundation can store each in the new acquisition queue, but publication must choose one explicitly identified single product (or approved same-pass mosaic) per day; if independent same-day scene publication is needed, a later separately approved constraint change is required. `refresh_paddock_manifest(uuid)` hard-codes `sentinel2-v3-eleven-layers`, whereas current code writes `sentinel2-v6-native-10m`. Scene/asset/summary triggers call that helper. New-version publication cannot be claimed compatible until a separately reviewed manifest/version-reader change is proven; do not implement it as part of an additive foundation or rewrite historical manifests now.
+
+### 9.2 Truly new columns (nullable; no historical backfill)
+
+- `satellite_scenes.acquisition_id uuid NULL` → new acquisition FK, `ON DELETE RESTRICT`. Other scene provenance resolves through this relation; existing `source_metadata` remains untouched.
+- `satellite_raster_assets.provenance jsonb NULL`: object with `schema_version:1`, per-band source IDs/asset identity/checksum, original product mapping, baseline and applied scale/offset/harmonisation, cloud-mask method/native grid, source grids, measurement grid and output grid, resampling and clipping rules, acquisition manifest hash and same-pass proof where authorised. Each grid has CRS, six-term affine convention, dimensions, pixel convention and cell size. Output may differ between analytical and display assets. No redundant dedicated CRS/band/calibration columns competing with this versioned object.
+- `satellite_raster_assets.verified_at timestamptz NULL`, `byte_size bigint NULL`, `content_sha256 text NULL`.
+- `satellite_index_summaries.analysis_provenance jsonb NULL`: schema version, analytical content hash, source-manifest hash, grid/validity/clipping/statistic estimator identity. This links stats to the precise analytical cells rather than a separate day-window request.
+
+Nullable-only checks for new rows: provenance is object/schema version 1 with required typed keys; size >0 when present, checksum 64 lowercase hex when present; verified rows require checksum/size/provenance; grid affine has six finite numbers and positive dimensions/cell size. New-pipeline writes require full provenance by service-only completion validation; nullable legacy fields stay valid. Do not broaden existing asset/status checks or modify historical row semantics.
+
+### 9.3 Truly new tables and constraints
+
+Names below are absent in the inspected public column catalogue; fresh inspection is mandatory before migration. UUID primary keys unless noted; timestamps are timestamptz. No new FKs into the separate vineyard database: vineyard/paddock UUIDs are externally verified together before enqueue/claim/publication.
+
+| New table | Key data / required constraints |
+|---|---|
+| `satellite_acquisitions` | `provider, collection, provider_scene_id, acquired_at, source_manifest jsonb, source_manifest_hash, provenance_version=1`; unique `(provider,collection,provider_scene_id,source_manifest_hash)` permits immutable reprocessing identity. Manifest includes original product IDs, datatake, baseline, asset references/checksums, platform, tile CRS/grids. A mosaic has an explicitly authorised source-set identity, not a forged single product ID. |
+| `satellite_work_items` | vineyard/paddock, acquisition FK RESTRICT, layer/asset kind, `processing_version`, lane/priority, status, attempts, due time, lease owner/token/expiry/heartbeat, immutable idempotency key UNIQUE, estimated/actual costs, boundary snapshot/hash. Positive lease/attempt checks, enumerated states/layers, due/lease indexes; completion requires current token and matching tenant/acquisition. |
+| `satellite_provider_budget` | provider + accounting-period key UNIQUE, daily/monthly/request/CPU/transfer/storage ceilings, reserved/used amounts; nonnegative counters, atomic reservations, hard approved spend ceiling. |
+| `satellite_provider_throttle` | provider PK, tokens/capacity/refill time, `next_allowed_at`, `retry_after_until`, concurrency limit; nonnegative tokens, positive capacity. |
+| `satellite_ingestion_control` | scope (`global/provider/vineyard`) + scope key UNIQUE, enabled=false, reason/changed_by/changed_at; explicit vineyard opt-in here, missing scope treated disabled. |
+| `satellite_freshness` | vineyard/paddock/provider/processing-version UNIQUE, successful provider check plus newest discovered/usable/verified-complete acquisition FKs/timestamps, measured quality/source hash. Separate from legacy manifest: authoritative new-worker readiness only; no silent replacement of legacy page values. |
+| `satellite_ingest_runs` | run ID, scheduler correlation ID, job kind/provider/vineyard scope, start/end/status/reason, no-op flag, units/calls/cost/error totals and heartbeat; no credentials or request auth headers. Append-only log with approved retention. |
+
+### 9.4 New functions, privileges, versioning and rollback (proposal only)
+
+Absent queue-helper names in catalogue: proposed service-only `claim_work_item`, `heartbeat_work_item`, `complete_work_item`, `reserve_budget`, `record_provider_backoff`, `refresh_freshness`; additionally `release_work_item` and `finish_ingest_run` need existence/signature inventory before migration. Claim/heartbeat/complete/release take a UUID lease token; complete checks immutable source proof, tenant binding, approved version, content verification and fenced state in one transaction. Budget reservations and throttle updates are transactional. Full signatures/bodies and constraint SQL must be reviewed at Gate B; this is an exact object delta, **not executable migration approval**.
+
+For every new public table: `CREATE TABLE` → `GRANT ALL TO service_role` → enable RLS → service-role-only ALL policy in the same migration. No anon/authenticated grants or policies in the foundation: existing authenticated admin-facing edge functions enforce the unchanged gate and return scoped data. New SECURITY DEFINER helpers have fixed `search_path`, fully qualified references, EXECUTE revoked from PUBLIC/anon/authenticated and granted to service_role only, no dynamic SQL or caller-supplied tenant bypass. Existing table grants, RLS, storage policies, auth helpers and trigger bodies remain unchanged. Test unauthenticated/member denial and authorised machine access in isolation, not by seeding production.
+
+New output gets a new `processing_version`; old objects, rows, values and version keys never overwritten. Nullable new fields leave legacy content unverified, not presumed provenance-correct. Publish through existing scene/asset tables only after the day-uniqueness and manifest/reader blockers are explicitly settled. Do not mutate existing legacy scene rows merely to attach a new acquisition.
+
+Rollback first disables the new worker/provider/vineyard controls, then uses separately authorised schedule removal and disables new entry points; preserve audit/provenance/new imagery for investigation and revert readers to legacy versions. An unused isolated foundation may drop only its newly introduced FK/checks/columns/functions/tables in dependency order, after proving no consumers/data; populated production additions are retained, never destructive `CASCADE`. Restore any later-approved manifest/constraint changes from separately captured definitions, not guessed SQL. No rollback step was run.
 
 ## 10. Monitoring and alerts
+
+Scheduler delivery/receipt/idle health is monitored separately under section 7.1; freshness alone never proves scheduling works.
 
 Diagnostics data (UI unchanged now): the four freshness values, queue depth per lane, budget used, 429 counts, dead items. Alerts: no successful discovery in 24 h; fresh lane non-empty > 24 h; usable acquisition exists but not complete within 48 h; provider paused > 6 h; budget > 90%.
 
@@ -213,7 +292,7 @@ Diagnostics data (UI unchanged now): the four freshness values, queue depth per 
 
 Scope: 60–90 days for Stockman's Ridge (plus other test vineyards for non-Australian or cloudier cases). **Catalogue/metadata only** until separately approved — no pixel requests, no worker activation.
 
-Measured per provider:
+Catalogue-only stage measures discovery, band metadata availability, advertised resolution and estimated costs. Scene-cloud metadata is not paddock-local quality. The remaining pixel/worker metrics below are deferred to Gates V/D, not claimed measurable from metadata:
 
 | Metric | Acceptance threshold (proposed) |
 |---|---|
@@ -228,25 +307,37 @@ Measured per provider:
 
 A later, separately approved stage repeats the comparison with pixel reads on a few dates to quantify NBART vs L2A index differences.
 
-## 12. Ordered implementation plan and approval gates
+## 12. Ordered implementation plan — separate explicit approvals
 
-1. **Gate A** — approve this revised design.
-2. Retry-After correction + tests (code only, no behaviour switch).
-3. **Gate B** — approve additive schema migration (kill switch off, no cron).
-4. Provider interfaces + Copernicus adapter refactor with parity tests; no change to outputs.
-5. **Gate C** — approve read-only metadata benchmark (section 11).
-6. Queue, leases, budgets, throttle, kill switch, freshness — deployed disabled.
-7. **Gate D** — enable unattended schedule for Stockman's Ridge only; 14-day field test against section 11 thresholds.
-8. **Gate E** — optional Earth Search / DEA adapters (pixel benchmark first).
-9. **Gate F** — wider opt-in rollout; retire page-driven backfill loop and correct its copy.
+**Gate A = document/architecture direction only.** It authorises no code, SQL/DDL, data migration/backfill, cron registration, paid provider/pixel calls, function deployment, release or production enablement. This message does **not** approve Gate A. Each stage requires a separately scoped explicit approval; a prior gate is not blanket approval for later stages.
 
-## 13. Unknowns
+1. **Gate A — architecture decision:** review this revision, costs and outstanding blockers; approve direction or request revision. Work remains document-only.
+2. **Gate R — small Retry-After correction:** separately approve only the narrow source fix and offline tests in section 8, no deployment/provider calls. Report evidence before any release approval.
+3. **Gate B — additive schema:** approve exact reviewed migration/rollback/privilege tests after refreshed catalogue inventory. Foundation disabled, no cron, no historical backfill. Separately approve manifest/reader or day-uniqueness changes if needed; these are not implicitly additive.
+4. **Gate P — offline processor/adapter implementation:** approve code and golden/grid/source-contract fixture tests only. No provider calls or deployed ingestion. Report numeric differences honestly; native-grid correction is not unconditional historical parity.
+5. **Gate C — metadata benchmark:** explicit approval for bounded catalogue/metadata requests, providers/window/quotas and any costs. No imagery, workers or backfill. Pixel-dependent metrics are not measurable in this stage.
+6. **Gate V — exact-source/pixel validation:** separately approve a small bounded set of product/band reads and source-lock experiments with a spend cap; prove grid, masks, provenance, parity and reader compatibility. Failure to prove exact source blocks activation. No unattended worker yet; no production history rewriting.
+7. **Gate D — controlled worker trial:** explicit deployment/schedule/provider-call approval for Stockman's Ridge only, disabled foundation first then explicitly enabled 14-day field trial. Register the continuous 10-minute worker and separate daily discovery only here, after machine-auth, schedule health, recovery, spend caps and publication blockers pass. No wider opt-in.
+8. **Gate E — optional provider change:** separately approve Earth Search/DEA adapter, metadata then bounded pixel comparison, corrections/attribution and labelled series break. No provider switch implied by Gate A or trial.
+9. **Gate F — production enablement:** explicit production release and vineyard rollout approval after trial evidence, cross-reader compatibility, alerting and monthly budgets. Retire browser-driven backfill only in an approved code stage; page layout/diagnostics remain unchanged for this revision.
 
-- CDSE account PU/request quotas and overage cost.
-- Exact Sentinel-2C coverage and latency per provider for our paddocks.
-- Copernicus mechanism to pin one product ID inside a Process request.
-- DEA fair-use limits and attribution wording; DEA cannot serve non-Australian vineyards.
-- Edge worker CPU/memory limits for COG decoding of larger paddocks.
-- Vault secret access pattern from cron on this project.
-- Stable read path for paddock geometry from the VineTrack backend.
-- Desired history depth and monthly budget per vineyard (business decision).
+### Gate A decision checklist
+
+- [ ] Accept daily discovery plus a permanently registered **144/day** worker timing/cost trade-off, pending measured costs and later activation approval.
+- [ ] Accept native tile measurement vs display separation, 20 m aggregation/mask rules and truthful versioned provenance.
+- [ ] Accept exact-source proof as a hard activation blocker, with individual-product band fallback if Sentinel Hub cannot prove selection.
+- [ ] Accept catalogue-based additive delta; acknowledge UTC-day uniqueness and manifest-version publication blockers need separate decisions.
+- [ ] Accept golden-fixture tolerances and documented/versioned differences, with **no parity claim before approved tests run**.
+- [ ] Supply/approve later quotas, fresh/backfill reservation, history depth, per-vineyard monthly spend ceiling and alert owner; unknown figures are not assumed approved defaults.
+- [ ] Confirm every later code/schema/request/trial/deployment stage needs its own explicit approval.
+
+## 13. Outstanding unknowns and activation blockers
+
+- Exact CDSE selection-to-original-product mapping, Statistics provenance capabilities and repeatability across calls; no runtime exact-source proof yet.
+- Native grid/header availability through the selected Copernicus mechanism; individual-band decoding, mask/harmonisation and baseline handling have not been exercised.
+- UTC-day unique scene index, manifest hard-coded version and analytical-reader projection assumptions block safe new-version publication until reviewed and tested.
+- CDSE account PU/request quotas, overage pricing, monthly spend ceilings, idle **144/day** invocation/database costs, worker transfer/storage costs and fresh/backfill budget values remain unapproved/unverified. Illustrative ~248 units and 70% reservation are planning examples, not measured billing or approved limits.
+- Sentinel-2C availability/latency, provider catalogue mapping, DEA fair-use/attribution, NBART vs L2A comparability and any future provider-series break remain benchmark questions.
+- Worker CPU/memory/runtime and decoding size limits; robust machine-auth/Vault path; independently monitored scheduler delivery/receipt; canonical geometry read and boundary-hash fencing remain untested.
+- Multi-tile same-pass permission, cross-zone native representation, seam/overlap policy, valid-coverage thresholds and numerical estimator agreement require explicit acceptance.
+- No golden, provider, scheduler, pixel, deployment or field-trial tests were executed in this document-only revision. Current code, imagery, permissions, schedules and Crop Health layout/diagnostics are unchanged.
