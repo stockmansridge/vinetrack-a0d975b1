@@ -719,7 +719,12 @@ export default function PinsPage() {
               )}
               {sorted.map((p) => {
                 const style = pinDisplayStyle(p as any, catColours);
-                const placement = pinPlacementDisplay(placements.get(p.id));
+                const placementRow = placements.get(p.id);
+                const placementPaddockId = placementRow?.paddock_id ?? (p as any).paddock_id ?? null;
+                const placement = pinPlacementDisplay(
+                  placementRow,
+                  placementPaddockId ? paddockRowDirById.get(placementPaddockId) ?? null : null,
+                );
                 const createdBy = resolvePerson((p as any).created_by, (p as any).created_by_user_id);
                 const completedBy = (p as any).is_completed
                   ? resolvePerson((p as any).completed_by, (p as any).completed_by_user_id)
