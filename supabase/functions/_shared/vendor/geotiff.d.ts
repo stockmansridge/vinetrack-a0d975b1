@@ -1,5 +1,5 @@
 export class BaseResponse {
-  readonly status: number;
+  get status(): number;
   getHeader(name:string): string | undefined;
   getData(): Promise<ArrayBuffer>;
 }
