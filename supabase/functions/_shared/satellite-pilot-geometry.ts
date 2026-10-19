@@ -33,7 +33,9 @@ export function nativeWindow(ring: number[][], source: NativeGrid) {
   const p=projection(source.crs), points=ring.map(v=>p.forward(v));
   const a=source.affine;
   const xs=points.map(v=>(v[0]-a[2])/a[0]), ys=points.map(v=>(v[1]-a[5])/a[4]);
-  const window=[Math.floor(Math.min(...xs)),Math.floor(Math.min(...ys)),Math.ceil(Math.max(...xs)),Math.ceil(Math.max(...ys))];
+  // Round projection floating-point noise at exact native cell boundaries only.
+  const snap=(v:number)=>Math.abs(v-Math.round(v))<1e-7?Math.round(v):v;
+  const window=[Math.floor(snap(Math.min(...xs))),Math.floor(snap(Math.min(...ys))),Math.ceil(snap(Math.max(...xs))),Math.ceil(snap(Math.max(...ys)))];
   if (window[0]<0 || window[1]<0 || window[2]>source.width || window[3]>source.height || (window[2]-window[0])*(window[3]-window[1])>65536) throw new Error('Single tile/native window ceiling');
   return { window, projected: points };
 }
