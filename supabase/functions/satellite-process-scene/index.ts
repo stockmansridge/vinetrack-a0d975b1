@@ -25,9 +25,10 @@ import {
   type IndexType,
 } from "../_shared/satellite-cdse.ts";
 import {
-  alignBboxToGrid, rasterisePolygonCoverage, maskPngToPolygonSoft, decodePng,
+  alignBboxToGrid, rasterisePolygonCoverage, maskPngToPolygonSoft,
   GRID_CRS, GRID_CRS_URI,
 } from "../_shared/satellite-grid.ts";
+import { decode as decodePngRgba } from "npm:fast-png@6.4.0";
 // @deno-types="../_shared/vendor/geotiff.d.ts"
 import { fromArrayBuffer } from "../_shared/vendor/geotiff.js";
 import { countVisibleRgba, countValidCells } from "../_shared/satellite-raster-usability.ts";
@@ -279,8 +280,8 @@ Deno.serve(async (req) => {
 
         // 1 Aug 2026 evidence: provider no-data renders decoded to 100% alpha 0
         // and were stored as "complete". Never store a blank render.
-        const decodedDisplay = decodePng(png);
-        if (countVisibleRgba(decodedDisplay.image, 4) === 0) {
+        const decodedDisplay = decodePngRgba(png);
+        if (countVisibleRgba(decodedDisplay.data as ArrayLike<number>, decodedDisplay.channels) === 0) {
           throw Object.assign(new Error(`Provider returned a blank ${idx} render (zero visible pixels); not stored`), { code: "blank_render" });
         }
         const up = await supa.storage.from("satellite-assets").upload(displayPath, png, {
