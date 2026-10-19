@@ -19,7 +19,7 @@ async function setup() {
   const old=await file('supabase/migrations/20260713020438_89d7f076-416f-4140-ad1d-f5332cc08a3c.sql');
   await db.exec(old.slice(0,old.indexOf('-- ============ satellite_refresh_jobs')));
   await db.exec(old.slice(old.indexOf('CREATE OR REPLACE FUNCTION public.refresh_paddock_manifest'),old.indexOf('CREATE OR REPLACE FUNCTION public.satellite_scenes_manifest_sync')));
-  for(const p of ['0000_satellite_ingestion_disabled_foundation.sql','0001_satellite_verification_fail_closed.sql','0002_satellite_service_privilege_hardening.sql','0003_satellite_pilot_day_selection.sql','0004_satellite_pilot_fenced_publish.sql','0005_satellite_v7_manifest_compatibility.sql','0006_satellite_reservation_null_rejection.sql']) await db.exec(await file('drizzle/migrations/'+p));
+  for(const p of ['0000_satellite_ingestion_disabled_foundation.sql','0001_satellite_verification_fail_closed.sql','0002_satellite_service_privilege_hardening.sql','0003_satellite_pilot_day_selection.sql','0004_satellite_pilot_fenced_publish.sql','0005_satellite_v7_manifest_compatibility.sql','0006_satellite_reservation_null_rejection.sql','0007_satellite_raster_identity_and_blank_guard.sql']) await db.exec(await file('drizzle/migrations/'+p));
   await db.exec(`CREATE UNIQUE INDEX satellite_scenes_unique_capture_idx ON satellite_scenes(vineyard_id,paddock_id,provider,((acquired_at AT TIME ZONE 'UTC')::date));`);
   return db;
 }
@@ -55,8 +55,8 @@ function client(db:PGlite,storage:Map<string,Uint8Array>,corrupt=false) {
 async function enable(db:PGlite){await db.exec(`INSERT INTO satellite_ingestion_control(scope,scope_key,enabled) VALUES('global','all',true),('vineyard','${PILOT_VINEYARD}',true),('provider','${PILOT_PROVIDER}',true),('pixels','all',true),('publisher','all',true);INSERT INTO satellite_provider_throttle(provider,min_interval_ms) VALUES('${PILOT_PROVIDER}',1);INSERT INTO satellite_provider_budget(provider,period_kind,period_start,request_limit,processing_limit,cpu_ms_limit,transfer_limit,storage_limit,hard_spend_limit,approved_at) VALUES('${PILOT_PROVIDER}','day',current_date,1000,100,10000000,1000000000,100000000,10,now()),('${PILOT_PROVIDER}','month',date_trunc('month',now())::date,1000,100,10000000,1000000000,100000000,10,now());`);}
 const fixtureTime=new Date(Date.now()-60000).toISOString();
 function stac(){const f=pilotFixture();return {type:'Feature',id:'S2B_55H_20261019',collection:'sentinel-2-l2a',properties:{datetime:fixtureTime,'s2:processing_baseline':'05.00','s2:product_uri':'S2B_MSIL2A_SYNTHETIC','eo:cloud_cover':0,'proj:epsg':32755},geometry:{type:'Polygon',coordinates:[[[146,-40],[149,-40],[149,-30],[146,-30],[146,-40]]]},assets:Object.fromEntries(Object.entries(f.manifest.bands).map(([k,b])=>[k,{href:b.href,'raster:bands':[{scale:b.scale,offset:b.offset,spatial_resolution:b.resolution}],'proj:epsg':32755,'proj:shape':k==='scl'?[2,2]:[4,4],'proj:transform':k==='scl'?f.manifest.scl_grid?.affine:f.manifest.native_grid?.affine}]))};}
-function dependencies(db:PGlite,storage=new Map<string,Uint8Array>(),options:{corrupt?:boolean;stale?:boolean;status?:number}={}) {
-  const f=pilotFixture();const ids=Array.from({length:8},(_,i)=>`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`);
+function dependencies(db:PGlite,storage=new Map<string,Uint8Array>(),options:{corrupt?:boolean;stale?:boolean;status?:number;scl?:number}={}) {
+  const f=pilotFixture(options.scl);const ids=Array.from({length:8},(_,i)=>`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`);
   const paddocks=ids.map(id=>({id,vineyard_id:PILOT_VINEYARD,polygon_points:f.ring.map(v=>({longitude:v[0],latitude:v[1]}))}));
   return {unitSpend:.01,db:client(db,storage,options.corrupt),canonical:async(id?:string)=>id?(options.stale?[{...paddocks[0],polygon_points:[]}]:paddocks.filter(p=>p.id===id)):paddocks,fetch:async()=>new Response(options.status===429?'':JSON.stringify({features:[stac()],links:[]}),{status:options.status??200,headers:{'Retry-After':'2'}}),render:(m: any,r:any,l:any,b:RequestBudget)=>renderPilot(m,r,l,new RequestBudget(b.signal,24,1048576,f.transport))};
 }
@@ -112,4 +112,28 @@ Deno.test('same-day alternative acquisition cannot replace authorised product; l
     await assert.rejects(()=>db.query('select satellite_publish_pilot($1,$2,$3)',[w.id,'22222222-2222-4222-8222-222222222222','{}']));
     assert.equal((await db.query('select * from satellite_scenes')).rows.length,0);
   }finally{await db.close();}
+});
+Deno.test('all-cloud SCL fails closed before any storage write or verified asset (NDVI and True Colour)',async()=>{
+  const f=pilotFixture(9);
+  for(const layer of ['NDVI','TRUE_COLOUR'] as const) await assert.rejects(()=>renderPilot(f.manifest,f.ring,layer,new RequestBudget(AbortSignal.timeout(10000),24,1048576,f.transport)),/No valid paddock pixels/);
+  const db=await setup();try{
+    await enable(db);const storage=new Map<string,Uint8Array>();const deps=dependencies(db,storage,{scl:9});
+    assert.equal((await runPilot('discovery',deps as any,AbortSignal.timeout(20000))).reason,'discovered');
+    const run=await runPilot('worker',deps as any,AbortSignal.timeout(20000)) as any;
+    assert.equal(run.failed,true);assert.match(run.reason,/No valid paddock pixels/);
+    assert.equal(storage.size,0);
+    assert.equal((await db.query('select * from satellite_raster_assets')).rows.length,0);
+  } finally { await db.close(); }
+});
+Deno.test('database refuses blank v7 proofs and cross-version reuse of one storage key',async()=>{
+  const db=await setup();try{
+    await db.exec(`INSERT INTO satellite_scenes(id,vineyard_id,paddock_id,provider,collection,provider_scene_id,acquired_at,quality_status,processing_status) VALUES('22222222-2222-4222-8222-222222222222','${PILOT_VINEYARD}','00000000-0000-4000-8000-000000000002','legacy','s2','old','2026-08-01','partial','complete');
+      INSERT INTO satellite_raster_assets(satellite_scene_id,index_type,asset_type,processing_version,storage_path,mime_type) VALUES('22222222-2222-4222-8222-222222222222','NDVI','DISPLAY_RASTER','sentinel2-v3-eleven-layers','v/p/2026-08-01/S2A/NDVI.png','image/png');`);
+    await assert.rejects(()=>db.exec(`INSERT INTO satellite_raster_assets(satellite_scene_id,index_type,asset_type,processing_version,storage_path,mime_type) VALUES('22222222-2222-4222-8222-222222222222','NDVI','DISPLAY_RASTER','sentinel2-v6-native-10m','v/p/2026-08-01/S2A/NDVI.png','image/png')`),/another processing version/);
+    const path=`v/p/a/${PILOT_VERSION}/NDVI/x.png`;
+    for(const proof of ['{"valid_pixel_count":0,"display_visible_pixel_count":0}','{"valid_pixel_count":16,"display_visible_pixel_count":0}','{}'])
+      await assert.rejects(()=>db.exec(`INSERT INTO satellite_raster_assets(satellite_scene_id,index_type,asset_type,processing_version,storage_path,mime_type,provenance) VALUES('22222222-2222-4222-8222-222222222222','TRUE_COLOUR','DISPLAY_RASTER','${PILOT_VERSION}','${path}','image/png','${proof}')`),/Blank/);
+    await assert.rejects(()=>db.exec(`INSERT INTO satellite_raster_assets(satellite_scene_id,index_type,asset_type,processing_version,storage_path,mime_type,provenance) VALUES('22222222-2222-4222-8222-222222222222','NDVI','ANALYTICAL_RASTER','${PILOT_VERSION}','v/p/a/${PILOT_VERSION}/NDVI/x.tif','image/tiff','{"valid_pixel_count":16,"analytical_valid_cell_count":15}')`),/analytical/);
+    await assert.rejects(()=>db.exec(`INSERT INTO satellite_raster_assets(satellite_scene_id,index_type,asset_type,processing_version,storage_path,mime_type,provenance) VALUES('22222222-2222-4222-8222-222222222222','NDVI','DISPLAY_RASTER','${PILOT_VERSION}','v/p/a/NDVI/x.png','image/png','{"valid_pixel_count":16,"display_visible_pixel_count":16}')`),/version-scoped/);
+  } finally { await db.close(); }
 });

@@ -5,11 +5,11 @@ import { renderPilot } from './satellite-pilot-raster.ts';
 import { RequestBudget } from './satellite-bounded-cog.ts';
 import { projection } from './satellite-pilot-geometry.ts';
 import type { ExactManifest } from './satellite-ingestion-core.ts';
-export function pilotFixture() {
+export function pilotFixture(sclValue=4) {
   const grid={crs:'EPSG:32755',affine:[10,0,500000,0,-10,6300000],width:4,height:4};
   const bands:Record<string,Uint8Array>={};const manifest:ExactManifest={schema_version:1,item_id:'synthetic-item',collection:'sentinel-2-l2a',acquired_at:'2026-10-19T00:00:00Z',baseline:'05.00',cloud_mask_method:'SCL',bands:{},native_grid:grid,scl_grid:{...grid,affine:[20,0,500000,0,-20,6300000],width:2,height:2}};
   for(const key of ['red','nir','green','blue','scl']) {
-    const scl=key==='scl',values=new Uint16Array(scl?4:16).fill(scl?4:key==='nir'?6000:2000);
+    const scl=key==='scl',values=new Uint16Array(scl?4:16).fill(scl?sclValue:key==='nir'?6000:2000);
     const size=scl?2:4,res=scl?20:10;
     bands[key]=new Uint8Array(writeArrayBuffer(values,{width:size,height:size,SampleFormat:[1],BitsPerSample:[16],ModelPixelScale:[res,res,0],ModelTiepoint:[0,0,0,500000,6300000,0],ProjectedCSTypeGeoKey:32755,GTModelTypeGeoKey:1,GTRasterTypeGeoKey:1,GDAL_NODATA:'0'}));
     manifest.bands[key]={item_id:manifest.item_id,href:`https://sentinel-cogs.s3.us-west-2.amazonaws.com/synthetic/${key}.tif`,scale:scl?1:.0001,offset:0,resolution:res};
