@@ -1,0 +1,41 @@
+name: Disabled satellite pilot dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      kind:
+        type: choice
+        options: [worker, discovery]
+        default: worker
+permissions: {}
+concurrency:
+  group: satellite-pilot-dispatch
+  cancel-in-progress: false
+jobs:
+  dispatch:
+    if: vars.SATELLITE_SCHEDULER_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    environment: satellite-pilot
+    steps:
+      - name: Machine-authenticated dispatch
+        env:
+          MACHINE_TOKEN: ${{ secrets.SATELLITE_MACHINE_TOKEN }}
+          FUNCTION_ORIGIN: ${{ secrets.SATELLITE_FUNCTION_ORIGIN }}
+          KIND: ${{ inputs.kind }}
+        run: |
+          python3 - <<'PY'
+          import json, os, uuid, urllib.request
+          origin = os.environ['FUNCTION_ORIGIN'].rstrip('/')
+          if not origin.startswith('https://') or '?' in origin:
+              raise SystemExit('Invalid function origin')
+          name = 'satellite-ingestion-worker' if os.environ['KIND'] == 'worker' else 'satellite-ingestion-discover'
+          body = json.dumps({'correlation_id':str(uuid.uuid4()),'vineyard_id':'fe952afe-437f-4be7-8cbf-fdd8e630411c'}).encode()
+          req = urllib.request.Request(origin + '/' + name, data=body, headers={'Authorization':'Bearer '+os.environ['MACHINE_TOKEN'],'Content-Type':'application/json'})
+          with urllib.request.urlopen(req, timeout=75) as response:
+              result=json.load(response)
+          print(json.dumps({key:result.get(key) for key in ['run_id','reason','no_op','provider_calls']}))
+          PY
+# No cron configured. After separately approved scheduler provisioning, add
+# daily discovery and ten-minute worker triggers with deterministic slot IDs.
+# Existing managed token is non-exportable: securely provision a separate
+# scheduler credential/rotation before configuring this external environment.
