@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1792387669521,
+      "tag": "0000_satellite_ingestion_disabled_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792388277455,
+      "tag": "0001_satellite_verification_fail_closed",
+      "breakpoints": true
+    }
+  ]
+}

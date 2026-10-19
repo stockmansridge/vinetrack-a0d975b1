@@ -65,7 +65,7 @@ const STATUS_META: Record<TimelineStatus, {
   available:  { label: "Imagery available", icon: Check,        dot: "bg-primary border-primary text-primary-foreground", text: "text-primary", selectable: true },
   partial:    { label: "Partial coverage",  icon: Minus,        dot: "bg-primary/35 border-primary text-primary", text: "text-primary", selectable: true },
   processing: { label: "Processing",        icon: Loader2,      dot: "bg-background border-warning text-warning", text: "text-warning", selectable: false },
-  queued:     { label: "Not checked yet",   icon: CircleDashed, dot: "bg-background border-muted-foreground/50 text-muted-foreground", text: "text-muted-foreground", selectable: false },
+  queued:     { label: "Historical backlog · paused / not checked", icon: CircleDashed, dot: "bg-background border-muted-foreground/50 text-muted-foreground", text: "text-muted-foreground", selectable: false },
   cloud:      { label: "Cloud or shadow",   icon: CloudOff,     dot: "bg-muted border-muted-foreground/40 text-muted-foreground", text: "text-muted-foreground", selectable: false },
   no_capture: { label: "No capture",        icon: Minus,        dot: "bg-muted border-muted-foreground/30 text-muted-foreground", text: "text-muted-foreground", selectable: false },
   failed:     { label: "Failed",            icon: AlertTriangle,dot: "bg-background border-destructive text-destructive", text: "text-destructive", selectable: false },
@@ -196,7 +196,8 @@ export default function CropHealthDateTimeline({
 
   const savedCount = sorted.filter((e) => e.status === "available" || e.status === "partial").length;
   const unusable = sorted.filter((e) => e.status === "cloud" || e.status === "no_capture" || e.status === "failed").length;
-  const busy = sorted.filter((e) => e.status === "processing" || e.status === "queued").length;
+  const busy = sorted.filter((e) => e.status === "processing").length;
+  const queued = sorted.filter((e) => e.status === "queued").length;
   const isPreviewing = previewDate != null && previewDate !== committedDate;
 
   const coverageSummary = (() => {
@@ -404,7 +405,7 @@ export default function CropHealthDateTimeline({
               <div className="hidden shrink-0 items-center gap-3 sm:flex">
                 <span className="inline-flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-primary" aria-hidden="true" />
-                  {savedCount}
+                  {savedCount} saved
                 </span>
                 {busy > 0 && (
                   <span className="inline-flex items-center gap-1 text-warning">
@@ -412,6 +413,7 @@ export default function CropHealthDateTimeline({
                     {busy}
                   </span>
                 )}
+                {queued > 0 && <span className="inline-flex items-center gap-1"><CircleDashed className="h-3 w-3" />{queued} queued</span>}
                 {unusable > 0 && (
                   <span className="inline-flex items-center gap-1">
                     <CloudOff className="h-3 w-3" aria-hidden="true" />
@@ -422,7 +424,8 @@ export default function CropHealthDateTimeline({
             </TooltipTrigger>
             <TooltipContent side="top" className="text-xs">
               <div>{savedCount} date{savedCount === 1 ? "" : "s"} with imagery</div>
-              {busy > 0 && <div>{busy} in progress</div>}
+              {busy > 0 && <div>{busy} with confirmed active processing</div>}
+              {queued > 0 && <div>{queued} queued historical dates · paused / not checked</div>}
               {unusable > 0 && <div>{unusable} unavailable (cloud or no capture)</div>}
             </TooltipContent>
           </Tooltip>

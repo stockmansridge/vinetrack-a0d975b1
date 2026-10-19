@@ -1,5 +1,14 @@
 # Roadmap
 
+## Replacement Crop Health ingestion
+- [x] Correct backlog/activity truth and bound saved-delivery diagnostics.
+- [x] Apply isolated additive service-only queue/control/budget/provenance foundation.
+- [x] Implement and deploy inert machine worker/discovery and admin diagnostics; verify disabled receipts without provider calls.
+- [x] Implement exact-item native-grid primitives and offline rejection/golden tests; disclose operational runner/publication blockers.
+- [ ] Register schedules — blocked: existing project has no managed cron-auth helper/structured HTTP scheduling capability.
+- [ ] Activate a production-capable exact raster runner — blocked: hard budget, runtime benchmark and compatible publication contract acceptance.
+- [x] Request publication of corrected frontend after tests; rollback and remaining capped-pilot requirements recorded in docs/crop-health-ingestion-foundation-release.md. Hosted publication completion remains unverified.
+
 ## Irrigation valve import
 - [x] Add valve-only file preview and import using existing valve creation permissions and RPC; no sessions, systems or connections imported.
 - [x] Verify validation, selected-vineyard scope and partial-import safety with focused offline tests; no production imports performed.
