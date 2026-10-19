@@ -30,3 +30,19 @@ iOS and Android must read `pin_row_number`, `driving_row_number`, `pin_side`, `s
 against the bumped version safely (no overwrite of the server row with a stale local copy). Confirm whether a
 pins trigger already bumps `sync_version` (sql/267 sets it explicitly) and whether `pin_placements` derives
 row/side from these columns.
+
+## sql/268 — server three-input reconstruction (algorithm `pbf-recon-v1`, prepared, NOT applied)
+- `pin_row_reconstruction_report(vineyard)` (read-only, same auth as 267): one entry per missing pin with GPS,
+  travel and Left/Right components (availability, quality, provenance), block source, current geometry,
+  bounding rows, aisle, derived vine row and snap (labelled `derived`, `authoritative=false`), plus counts
+  by combination, tier and combination×tier. Tiers: technically_supported, needs_review, missing_side,
+  missing_direction, missing_block, preserved, field_confirmed. Device heading is logged, never used.
+- Dry-run gate: `reviewed_track`/`measured` items are blocked unless the server tier is
+  technically_supported and row/aisle/side match it; `manual_field_check` requires a recorded
+  `field_confirmation {observed_by, observed_at, method, note}`. Approvals freeze the reconstruction hash;
+  apply is blocked if it changed. Audit `projection.reconstruction` stores the evidence.
+- Local tests: `sql/tests/run_268.sh` (throwaway Postgres; 53 checks).
+- Unverified against live: exact names/types of `pins.heading`, `pins.side`, `pins.trip_id`,
+  `pins.created_at`, `paddocks.updated_at`, `trips.path_points` format, observation JSON keys
+  (`observedAt`, `courseDegrees`, `speedMps`, `horizontalAccuracyM`), one-vs-many evidence rows per pin,
+  and absence of a historical block-geometry table (historical geometry reported `unavailable`).
