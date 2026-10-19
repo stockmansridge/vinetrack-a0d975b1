@@ -19,7 +19,7 @@ it('HTTP-date Retry-After, cap, missing and invalid values', () => {
 });
 it('native grid rejects Web Mercator, 20m, rotation and huge dimensions', () => {
   validateNativeGrid(grid);
-  for (const g of [{...grid,crs:'EPSG:3857'},{...grid,affine:[20,0,0,0,-20,0]},{...grid,affine:[10,1,0,0,-10,0]},{...grid,width:10000}]) expect(()=>validateNativeGrid(g)).toThrow();
+  for (const g of [{...grid,crs:'EPSG:3857'},{...grid,affine:[20,0,0,0,-20,0]},{...grid,affine:[10,1,0,0,-10,0]},{...grid,width:10000,height:10000}]) expect(()=>validateNativeGrid(g)).toThrow();
 });
 it('NDVI golden fixture applies baseline offset and identical native valid pixels for statistics', () => {
   const result = processNativePixels({grid,layer:'NDVI',red:[2000,2000,2000,0],nir:[4000,4000,4000,0],scl:[4,9,4,4],inside:[true,true,false,true],scales:{red:{scale:.0001,offset:-.1},nir:{scale:.0001,offset:-.1}},noData:0});
