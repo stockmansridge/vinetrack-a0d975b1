@@ -98,6 +98,14 @@ create trigger pbf_audit_immutable before update or delete on public.pin_row_bac
   for each row execute function public.vt_pbf_audit_immutable();
 
 -- ---------- 3. geometry helpers ----------
+-- Normalise only for geometry maths, never for canonical hashing or persisted data.
+create or replace function public.vt_pbf_rows(p_rows jsonb)
+returns jsonb language sql immutable set search_path = public as $$
+  select coalesce(jsonb_agg(r || jsonb_build_object('number',coalesce(r->'number',r->'rowNumber'))),'[]'::jsonb)
+  from jsonb_array_elements(case when jsonb_typeof(p_rows)='array' then p_rows else '[]'::jsonb end) r;
+$$;
+revoke all on function public.vt_pbf_rows(jsonb) from public, anon, authenticated;
+
 create or replace function public.vt_pbf_geometry_identity(p_polygon jsonb, p_rows jsonb)
 returns text language sql immutable set search_path = public as $$
   select 'pbf-md5:' || md5(coalesce(p_polygon::text,'null') || '|' || coalesce(p_rows::text,'null'));
@@ -142,7 +150,7 @@ declare
   ch jsonb; nb jsonb; spacing double precision;
 begin
   if p_rows is null or jsonb_typeof(p_rows) <> 'array' then return jsonb_build_object('ok',false,'reason','no rows'); end if;
-  for r in select * from jsonb_array_elements(p_rows) loop
+  for r in select * from jsonb_array_elements(public.vt_pbf_rows(p_rows)) loop
     num := (r->>'number')::int;
     select * into s from public.vt_pbf_pt(coalesce(r->'startPoint', r->'start'));
     select * into e from public.vt_pbf_pt(coalesce(r->'endPoint', r->'end'));
@@ -186,7 +194,8 @@ declare p record; pad record; proj jsonb; fails text[] := '{}'; v_row int; v_ais
 begin
   select * into p from public.pins where id = (it->>'pin_id')::uuid;
   if not found then return jsonb_build_object('pin_id',it->>'pin_id','ok',false,'fails',array['pin not found']); end if;
-  if p.vineyard_id <> p_vineyard then fails := array_append(fails, 'pin not in vineyard'); end if;
+  if not public.vt_pbf_authorized(p_vineyard) or p.vineyard_id is distinct from p_vineyard then
+    return jsonb_build_object('pin_id',it->>'pin_id','ok',false,'fails',array['pin not in authorised vineyard']); end if;
   if p.deleted_at is not null then fails := array_append(fails, 'pin deleted'); end if;
   if p.row_number is not null or p.pin_row_number is not null then fails := array_append(fails, 'pin already has a row'); end if;
   if p.driving_row_number is not null then fails := array_append(fails, 'pin already has a driving aisle (preserved)'); end if;
@@ -210,9 +219,11 @@ begin
     inside := public.vt_pbf_point_in_polygon(p.latitude, p.longitude, pad.polygon_points::jsonb);
     if inside is distinct from true then fails := array_append(fails, 'raw GPS not inside current block polygon'); end if;
   end if;
-  v_row := (it->>'pin_row_number')::int;
+  if nullif(it->>'pin_row_number','')::numeric is distinct from trunc(nullif(it->>'pin_row_number','')::numeric) then
+    return jsonb_build_object('pin_id',p.id,'ok',false,'fails',array['physical row must be an integer; no rounding']); end if;
+  v_row := nullif(it->>'pin_row_number','')::numeric::int;
   if v_row is null then fails := array_append(fails, 'pin_row_number required'); end if;
-  if pad.id is not null and v_row is not null and not exists (select 1 from jsonb_array_elements(pad.rows::jsonb) r where (r->>'number')::int = v_row)
+  if pad.id is not null and v_row is not null and not exists (select 1 from jsonb_array_elements(public.vt_pbf_rows(pad.rows::jsonb)) r where (r->>'number')::int = v_row)
     then fails := array_append(fails, 'row does not exist in block'); end if;
   -- side: never contradict, never invent without field check
   v_side := lower(nullif(it->>'pin_side',''));
@@ -293,6 +304,11 @@ begin
   if p_items_hash is distinct from a.items_hash then raise exception 'items hash mismatch'; end if;
   if p_confirm is distinct from ('APPLY ' || a.item_count || ' PIN ROWS') then raise exception 'confirmation phrase mismatch'; end if;
   if a.created_at < now() - interval '24 hours' then raise exception 'approval expired; create a new one'; end if;
+  -- Lock ALL target pins before checking (not after the check); a failure rolls back all.
+  perform 1 from public.pins p0 where p0.id in
+    (select (x->>'pin_id')::uuid from jsonb_array_elements(a.items) x) order by p0.id for update;
+  perform 1 from public.paddocks d where d.id in
+    (select (x->>'paddock_id')::uuid from jsonb_array_elements(a.items) x) order by d.id for share;
   -- Re-run every check; a single failure blocks all writes.
   for it in select * from jsonb_array_elements(a.items) loop
     chk := public.vt_pbf_check_item(a.vineyard_id, it);
