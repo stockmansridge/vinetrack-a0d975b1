@@ -1,8 +1,14 @@
 // VineTrack Crop Health pilot scheduler (Stockman's Ridge only).
-// Inert by default: with SCHEDULER_ENABLED !== 'true' every dispatch returns
-// before any network call, so scheduled receipts are HTTP 200 idle/no_op with
-// ZERO provider requests. The Lovable Cloud functions additionally refuse all
-// work while the ingestion kill switches are OFF.
+// Two distinct phases — see README.md:
+//   Phase A (SCHEDULER_ENABLED !== 'true', the default): every cron tick
+//     returns before ANY network call. The only observable evidence is the
+//     Cloudflare console log line below. There is NO HTTP call and NO
+//     satellite_ingest_runs backend receipt in this phase.
+//   Phase B (SCHEDULER_ENABLED === 'true', owner decision only): the worker
+//     POSTs to the Lovable Cloud function with the machine credential. While
+//     all five backend satellite_ingestion_control kill switches remain OFF,
+//     the backend itself returns idle/no_op with provider_calls = 0 and
+//     records the receipt. Backend activation is a separate future decision.
 interface Environment { SCHEDULER_ENABLED: string; FUNCTION_ORIGIN: string; MACHINE_TOKEN: string }
 // Distinct UTC routes per kind; unknown triggers are rejected loudly, never guessed.
 const ROUTES: Record<string, { kind: 'discovery' | 'worker'; fn: string }> = {
@@ -28,8 +34,8 @@ export default {
       headers: { Authorization: `Bearer ${env.MACHINE_TOKEN}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ correlation_id: correlation, vineyard_id: VINEYARD }),
     });
-    const body = await res.json() as { run_id?: string; provider_calls?: number; no_op?: boolean };
     if (!res.ok) throw new Error(`Scheduler callback HTTP ${res.status}`);
+    const body = await res.json() as { run_id?: string; provider_calls?: number; no_op?: boolean };
     console.log(JSON.stringify({ kind: route.kind, run_id: body.run_id, provider_calls: body.provider_calls, no_op: body.no_op }));
   },
 };

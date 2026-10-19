@@ -2,17 +2,15 @@ name = "vinetrack-satellite-pilot-scheduler"
 main = "worker.ts"
 compatibility_date = "2026-10-19"
 [vars]
+# Phase A (default): cron ticks fire and are logged in Cloudflare, but the
+# handler returns before any network call. No HTTP request, no backend
+# satellite_ingest_runs receipt — the Cloudflare log line is the only evidence.
 SCHEDULER_ENABLED = "false"
-# One-time owner setup (Cloudflare dashboard or wrangler CLI), in order:
-#   1. wrangler secret put FUNCTION_ORIGIN  →  https://<project-ref>.supabase.co/functions/v1
-#   2. wrangler secret put MACHINE_TOKEN    →  the current SATELLITE_MACHINE_TOKEN value
-#      (Project Settings → Secrets; rotate it there first if it was ever shared)
-#   3. Uncomment the [triggers] block below and run: wrangler deploy
-#   4. Verify in Cloudflare logs that each receipt shows provider_calls: 0 and
-#      no_op: true while the Lovable Cloud ingestion kill switches remain OFF.
-#   5. Only after owner approval: set SCHEDULER_ENABLED = "true" and redeploy.
-# Configure FUNCTION_ORIGIN and MACHINE_TOKEN through the scheduler's encrypted
-# secrets, never browser settings or source. No trigger is registered here.
-# After pilot approval only:
-# [triggers]
-# crons = ["0 2 * * *", "*/10 * * * *"]
+# Cron triggers are declared here so Wrangler manages them. They are safe in
+# phase A because the disabled handler makes zero outbound HTTP requests.
+# Note: commenting this block out does NOT remove already-deployed triggers;
+# only `crons = []` clears a Wrangler-managed schedule.
+[triggers]
+crons = ["0 2 * * *", "*/10 * * * *"]
+# One-time owner setup — see README.md in this directory for the full
+# dashboard-only and CLI procedures, secret rotation, and phase B criteria.
