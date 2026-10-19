@@ -10,12 +10,14 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate, formatDateTime } from "@/lib/dateFormat";
 import {
+  checkInsightsAccess,
   fetchCanonicalGrowthRecordIds,
   fetchScoutVisitDetail,
   isPermissionError,
   locationLabel,
   measuredCoord,
   signScoutPhotoUrl,
+  stopCoord,
   stopLabel,
   stopTime,
   stopWeather,
@@ -101,9 +103,17 @@ export default function ScoutReportDetailPage() {
   const { toast } = useToast();
   const [exporting, setExporting] = useState(false);
 
+  // Access preflight — RLS hides rows silently, so confirm access first.
+  const accessQuery = useQuery({
+    queryKey: ["insights-access", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => checkInsightsAccess(selectedVineyardId!),
+  });
+  const access = accessQuery.data;
+
   const detailQuery = useQuery({
     queryKey: ["scout-visit-detail", selectedVineyardId, visitId],
-    enabled: !!selectedVineyardId && !!visitId,
+    enabled: !!selectedVineyardId && !!visitId && access === "allowed",
     queryFn: () => fetchScoutVisitDetail(selectedVineyardId!, visitId!),
   });
   const detail = detailQuery.data;
@@ -123,6 +133,53 @@ export default function ScoutReportDetailPage() {
     queryFn: () => fetchCanonicalGrowthRecordIds(linkedGrowthIds),
   });
   const canonicalGrowthIds = canonicalGrowthQuery.data ?? new Set<string>();
+
+  // Linked evidence locations: vineyard pins and verified canonical E-L
+  // records. These are provenance markers, distinct from measured GPS.
+  const linkedPinIds = useMemo(() => {
+    if (!detail) return [] as string[];
+    const ids: string[] = [];
+    for (const list of detail.observationsByAssessment.values()) {
+      for (const o of list) if (o.linked_pin_id) ids.push(o.linked_pin_id);
+    }
+    return Array.from(new Set(ids));
+  }, [detail]);
+
+  const linkedPinsQuery = useQuery({
+    queryKey: ["scout-linked-pins", selectedVineyardId, linkedPinIds.join("|")],
+    enabled: linkedPinIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pins")
+        .select("id, title, latitude, longitude")
+        .in("id", linkedPinIds)
+        .is("deleted_at", null);
+      if (error) {
+        if (isPermissionError(error)) return [] as { id: string; title: string | null; latitude: number | null; longitude: number | null }[];
+        throw error;
+      }
+      return (data ?? []) as { id: string; title: string | null; latitude: number | null; longitude: number | null }[];
+    },
+  });
+
+  const growthLocationsQuery = useQuery({
+    queryKey: ["scout-growth-locations", selectedVineyardId, linkedGrowthIds.join("|")],
+    enabled: linkedGrowthIds.length > 0 && canonicalGrowthIds.size > 0,
+    queryFn: async () => {
+      const ids = linkedGrowthIds.filter((id) => canonicalGrowthIds.has(id));
+      if (!ids.length) return [] as { id: string; latitude: number | null; longitude: number | null }[];
+      const { data, error } = await supabase
+        .from("growth_stage_records" as any)
+        .select("id, latitude, longitude")
+        .in("id", ids)
+        .is("deleted_at", null);
+      if (error) {
+        if (isPermissionError(error)) return [] as { id: string; latitude: number | null; longitude: number | null }[];
+        throw error;
+      }
+      return (data ?? []) as { id: string; latitude: number | null; longitude: number | null }[];
+    },
+  });
 
   const paddocksQuery = useQuery({
     queryKey: ["paddocks-geo", selectedVineyardId],
@@ -163,6 +220,12 @@ export default function ScoutReportDetailPage() {
     if (!detail) return [];
     const out: ScoutMapMarker[] = [];
     detail.assessments.forEach((a, i) => {
+      const label = stopLabel(a, i);
+      // Measured stop GPS from stop_context (legacy stops may have none).
+      const sc = stopCoord(a);
+      if (sc) {
+        out.push({ id: `stop-${a.id}`, lat: sc.lat, lng: sc.lng, title: `${label} — measured stop`, colour: "#16A34A" });
+      }
       const obs = detail.observationsByAssessment.get(a.id) ?? [];
       for (const o of obs) {
         const c = measuredCoord(o);
@@ -171,9 +234,36 @@ export default function ScoutReportDetailPage() {
             id: o.id,
             lat: c.lat,
             lng: c.lng,
-            title: `${stopLabel(a, i)} — ${o.item_kind}`,
+            title: `${label} — ${o.item_kind} (measured)`,
             colour: "#3B82F6",
           });
+        }
+        // Linked evidence markers — provenance, not measurement.
+        if (o.linked_pin_id) {
+          const pin = (linkedPinsQuery.data ?? []).find((p) => p.id === o.linked_pin_id);
+          const pc = pin ? measuredCoord(pin) : null;
+          if (pc) {
+            out.push({
+              id: `pin-${o.linked_pin_id}`,
+              lat: pc.lat,
+              lng: pc.lng,
+              title: `${label} — linked pin${pin?.title ? `: ${pin.title}` : ""} (pin location)`,
+              colour: "#8B5CF6",
+            });
+          }
+        }
+        if (o.linked_growth_record_id && canonicalGrowthIds.has(o.linked_growth_record_id)) {
+          const rec = (growthLocationsQuery.data ?? []).find((r) => r.id === o.linked_growth_record_id);
+          const rc = rec ? measuredCoord(rec) : null;
+          if (rc) {
+            out.push({
+              id: `el-${o.linked_growth_record_id}`,
+              lat: rc.lat,
+              lng: rc.lng,
+              title: `${label} — linked growth stage record (record location)`,
+              colour: "#0D9488",
+            });
+          }
         }
         for (const p of detail.photosByObservation.get(o.id) ?? []) {
           const pc = measuredCoord(p);
@@ -182,7 +272,7 @@ export default function ScoutReportDetailPage() {
               id: p.id,
               lat: pc.lat,
               lng: pc.lng,
-              title: `${stopLabel(a, i)} — photo`,
+              title: `${label} — photo (captured)`,
               colour: "#F59E0B",
             });
           }
@@ -190,7 +280,7 @@ export default function ScoutReportDetailPage() {
       }
     });
     return out;
-  }, [detail]);
+  }, [detail, linkedPinsQuery.data, growthLocationsQuery.data, canonicalGrowthIds]);
 
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? "Vineyard";
@@ -252,7 +342,7 @@ export default function ScoutReportDetailPage() {
     }
   };
 
-  if (detailQuery.isLoading) {
+  if (accessQuery.isLoading || (access === "allowed" && detailQuery.isLoading)) {
     return (
       <div className="flex items-center gap-2 p-8 text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" /> Loading scout report…
@@ -260,7 +350,7 @@ export default function ScoutReportDetailPage() {
     );
   }
 
-  if (detailQuery.error && isPermissionError(detailQuery.error)) {
+  if (access === "denied" || (detailQuery.error && isPermissionError(detailQuery.error))) {
     return (
       <div className="p-4 sm:p-6">
         <Card>
@@ -273,6 +363,19 @@ export default function ScoutReportDetailPage() {
                 A permission update for vineyard members is awaiting approval.
               </p>
             </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (access === "unknown" || accessQuery.error) {
+    return (
+      <div className="p-4 sm:p-6">
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground">
+            We couldn't confirm your access to this report. Check your connection and try
+            again.
           </CardContent>
         </Card>
       </div>

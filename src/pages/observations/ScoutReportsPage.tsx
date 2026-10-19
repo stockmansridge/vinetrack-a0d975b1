@@ -22,6 +22,7 @@ import { formatDate } from "@/lib/dateFormat";
 import {
   ALL_BLOCKS,
   ALL_STATUSES,
+  checkInsightsAccess,
   fetchScoutVisits,
   filterScoutVisits,
   isPermissionError,
@@ -65,9 +66,18 @@ export default function ScoutReportsPage() {
   const [status, setStatus] = useState(ALL_STATUSES);
   const [blockId, setBlockId] = useState(ALL_BLOCKS);
 
+  // Access preflight: RLS SELECT silently filters disallowed rows, so an
+  // empty list is only trustworthy after the backend confirms read access.
+  const accessQuery = useQuery({
+    queryKey: ["insights-access", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => checkInsightsAccess(selectedVineyardId!),
+  });
+  const access = accessQuery.data;
+
   const visitsQuery = useQuery({
     queryKey: ["scout-visits", selectedVineyardId],
-    enabled: !!selectedVineyardId,
+    enabled: !!selectedVineyardId && access === "allowed",
     queryFn: () => fetchScoutVisits(selectedVineyardId!),
   });
 
@@ -123,7 +133,9 @@ export default function ScoutReportsPage() {
   }, [assessmentsByVisit, paddockName]);
 
   const permissionDenied =
-    visitsQuery.error && isPermissionError(visitsQuery.error);
+    access === "denied" || (visitsQuery.error && isPermissionError(visitsQuery.error));
+  // The preflight itself failed — never show an empty list in this state.
+  const accessUnknown = !accessQuery.isLoading && !accessQuery.error && access === "unknown";
 
   return (
     <div className="space-y-4 p-4 sm:p-6">
@@ -156,10 +168,17 @@ export default function ScoutReportsPage() {
             </div>
           </CardContent>
         </Card>
-      ) : visitsQuery.isLoading || vintage.isLoading ? (
+      ) : accessQuery.isLoading || (access === "allowed" && (visitsQuery.isLoading || vintage.isLoading)) ? (
         <div className="flex items-center gap-2 p-8 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading scout reports…
         </div>
+      ) : accessUnknown || accessQuery.error ? (
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground">
+            We couldn't confirm your access to Scout Reports. Check your connection and try
+            again — an empty list is only shown once access is confirmed.
+          </CardContent>
+        </Card>
       ) : visitsQuery.error ? (
         <Card>
           <CardContent className="p-6 text-sm text-muted-foreground">

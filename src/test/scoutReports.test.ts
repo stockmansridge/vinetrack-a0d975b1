@@ -6,6 +6,9 @@ import {
   isPermissionError,
   locationLabel,
   measuredCoord,
+  sortAssessmentsChronologically,
+  stopChronology,
+  stopCoord,
   stopLabel,
   stopOrder,
   visitStatuses,
@@ -36,6 +39,7 @@ const assessment = (over: Partial<ScoutAssessment> = {}): ScoutAssessment => ({
   paddock_id: "p1",
   status: "completed",
   stop_context: null,
+  created_at: null,
   deleted_at: null,
   ...over,
 });
@@ -67,6 +71,44 @@ describe("stop ordering", () => {
     expect(stopOrder(c)).toBe(Number.MAX_SAFE_INTEGER);
     expect(stopLabel(a, 0)).toBe("Stop 2");
     expect(stopLabel(c, 4)).toBe("Stop 5");
+  });
+});
+
+describe("stop chronology", () => {
+  it("orders stops by recorded capture time, not UUID", () => {
+    // Deliberately unsorted UUIDs: alphabetical order would be wrong.
+    const late = assessment({ id: "aaa", stop_context: { captured_at: "2026-02-10T10:30:00Z" } });
+    const early = assessment({ id: "zzz", stop_context: { captured_at: "2026-02-10T09:05:00Z" } });
+    const mid = assessment({ id: "mmm", created_at: "2026-02-10T09:45:00Z" });
+    const sorted = sortAssessmentsChronologically([late, early, mid]);
+    expect(sorted.map((a) => a.id)).toEqual(["zzz", "mmm", "aaa"]);
+  });
+
+  it("falls back to created_at, then recorded index, then id", () => {
+    const noTime = assessment({ id: "b", stop_context: { stop_index: 1 } });
+    const timed = assessment({ id: "a", created_at: "2026-02-10T09:00:00Z" });
+    // A stop with a recorded index keeps that position; time evidence breaks
+    // ties only between stops that both have it. A stop with neither sorts last.
+    const bare = assessment({ id: "c" });
+    const sorted = sortAssessmentsChronologically([bare, noTime, timed]);
+    expect(sorted.map((a) => a.id)).toEqual(["b", "a", "c"]);
+  });
+
+  it("keeps repeated stops in the same block as separate identities", () => {
+    const first = assessment({ id: "s1", paddock_id: "p1", stop_context: { captured_at: "2026-02-10T09:00:00Z" } });
+    const second = assessment({ id: "s2", paddock_id: "p1", stop_context: { captured_at: "2026-02-10T11:00:00Z" } });
+    const sorted = sortAssessmentsChronologically([second, first]);
+    expect(sorted.map((a) => a.id)).toEqual(["s1", "s2"]);
+    expect(sorted).toHaveLength(2);
+  });
+
+  it("reads stop capture time and GPS from stop_context", () => {
+    const a = assessment({
+      stop_context: { captured_at: "2026-02-10T09:00:00Z", latitude: -33.5, longitude: 149.7 },
+    });
+    expect(stopChronology(a)).toBe(Date.parse("2026-02-10T09:00:00Z"));
+    expect(stopCoord(a)).toEqual({ lat: -33.5, lng: 149.7 });
+    expect(stopCoord(assessment({ stop_context: null }))).toBeNull();
   });
 });
 

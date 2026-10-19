@@ -202,10 +202,32 @@ export function buildVintageNoteInsert(input: InsertVintageNoteInput): Record<st
 }
 
 /**
+ * True when a persisted row is the same note as the attempted payload.
+ * A retry is only a safe success when the stored content matches the frozen
+ * original request — a same-id row with different content is an earlier,
+ * different note and must NOT be reported as this save succeeding.
+ */
+export function sameVintageNotePayload(
+  payload: Record<string, unknown>,
+  row: VintageNote,
+): boolean {
+  return (
+    row.vineyard_id === payload.vineyard_id &&
+    row.note_date === payload.note_date &&
+    (row.note_type_id ?? null) === (payload.note_type_id ?? null) &&
+    (row.note_type_label ?? null) === (payload.note_type_label ?? null) &&
+    (row.notes ?? null) === (payload.notes ?? null) &&
+    (row.observed_by_user_id ?? null) === (payload.observed_by_user_id ?? null)
+  );
+}
+
+/**
  * Insert one note through the authenticated client (RLS is the authority).
  * Returns the persisted row so the caller can trust the server-computed
  * vintage_year. Idempotent per clientId: a retry with the same id returns
- * the existing row instead of duplicating the note.
+ * the existing row ONLY when its content matches the frozen original
+ * payload; a mismatched row throws so the caller keeps the form open and a
+ * genuinely changed note gets a new creation identity.
  */
 export async function insertVintageNote(
   input: InsertVintageNoteInput,
@@ -220,7 +242,8 @@ export async function insertVintageNote(
   if (error) throw error;
   const row = ((data ?? []) as unknown as VintageNote[])[0];
   if (row) return row;
-  // ignoreDuplicates returned nothing: the id already exists — read it back.
+  // ignoreDuplicates returned nothing: the id already exists — read it back
+  // and reconcile it against the frozen payload before claiming success.
   const { data: existing, error: readErr } = await supabase
     .from("vintage_notes" as any)
     .select(
@@ -231,7 +254,14 @@ export async function insertVintageNote(
     .maybeSingle();
   if (readErr) throw readErr;
   if (!existing) throw new Error("The note could not be saved. Please try again.");
-  return existing as unknown as VintageNote;
+  const existingRow = existing as unknown as VintageNote;
+  if (!sameVintageNotePayload(payload, existingRow)) {
+    throw new Error(
+      "A note with this save identity already exists with different content — " +
+        "your earlier attempt was saved. Review the history, then add any new note separately.",
+    );
+  }
+  return existingRow;
 }
 
 /** New stable id for one note-entry attempt session. */

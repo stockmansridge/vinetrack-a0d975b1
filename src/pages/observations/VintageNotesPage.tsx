@@ -34,6 +34,8 @@ import { useVintage } from "@/lib/useVintage";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 import { formatDate, formatDateTime } from "@/lib/dateFormat";
 import { localToday } from "@/lib/workTaskDefaultOrder";
+import { fetchVineyard } from "@/lib/vineyardSettingsQuery";
+import { checkInsightsAccess } from "@/lib/scoutReports";
 import { useToast } from "@/hooks/use-toast";
 import { FIELD_ROLES } from "@/lib/rolePermissions";
 import {
@@ -64,9 +66,26 @@ export default function VintageNotesPage() {
   const [typeId, setTypeId] = useState(ALL_NOTE_TYPES);
   const [addOpen, setAddOpen] = useState(false);
 
+  // The selected vineyard's own timezone drives "today" for the note date.
+  const vineyardQuery = useQuery({
+    queryKey: ["vineyard-settings", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchVineyard(selectedVineyardId!),
+  });
+  const vineyardTimeZone = vineyardQuery.data?.timezone ?? null;
+
+  // Access preflight: RLS SELECT silently hides rows, so an empty list is
+  // only trustworthy after the backend confirms read access.
+  const accessQuery = useQuery({
+    queryKey: ["insights-access", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => checkInsightsAccess(selectedVineyardId!),
+  });
+  const access = accessQuery.data;
+
   const notesQuery = useQuery({
     queryKey: ["vintage-notes", selectedVineyardId],
-    enabled: !!selectedVineyardId,
+    enabled: !!selectedVineyardId && access === "allowed",
     queryFn: () => fetchVintageNotes(selectedVineyardId!),
   });
   const typesQuery = useQuery({
@@ -83,10 +102,11 @@ export default function VintageNotesPage() {
     [notes, vintage.scope, typeId, search],
   );
 
-  // Add form state. The client id is generated once per dialog session so a
-  // retried save cannot duplicate the note.
+  // Add form state. The client id is generated once per save attempt session
+  // so a retried save cannot duplicate the note; after a failed attempt a new
+  // id is issued so changed input never collides with a possibly-saved row.
   const [draft, setDraft] = useState<VintageNoteDraft>({
-    noteDate: localToday(),
+    noteDate: localToday(vineyardTimeZone),
     noteTypeId: null,
     notes: "",
   });
@@ -94,8 +114,10 @@ export default function VintageNotesPage() {
 
   const canAdd = !!currentRole && (FIELD_ROLES as string[]).includes(currentRole);
   const permissionDenied =
+    access === "denied" ||
     (notesQuery.error && isPermissionError(notesQuery.error)) ||
     (typesQuery.error && isPermissionError(typesQuery.error));
+  const accessUnknown = !accessQuery.isLoading && !accessQuery.error && access === "unknown";
 
   /** Preview of the vintage the server trigger will assign to note_date. */
   const vintagePreview = useMemo(() => {
@@ -106,7 +128,7 @@ export default function VintageNotesPage() {
   }, [draft.noteDate, seasonStartMonth, seasonStartDay]);
 
   const openAdd = () => {
-    setDraft({ noteDate: localToday(), noteTypeId: null, notes: "" });
+    setDraft({ noteDate: localToday(vineyardTimeZone), noteTypeId: null, notes: "" });
     setClientId(newVintageNoteClientId());
     setAddOpen(true);
   };
@@ -141,6 +163,9 @@ export default function VintageNotesPage() {
     },
     onError: (e) => {
       // The form stays open with its contents so nothing typed is lost.
+      // Issue a fresh save identity: if the user edits and retries, the new
+      // id can never be mistaken for a possibly-saved earlier attempt.
+      setClientId(newVintageNoteClientId());
       toast({
         title: "The note could not be saved",
         description:
@@ -192,10 +217,17 @@ export default function VintageNotesPage() {
             </div>
           </CardContent>
         </Card>
-      ) : notesQuery.isLoading || vintage.isLoading ? (
+      ) : accessQuery.isLoading || (access === "allowed" && (notesQuery.isLoading || vintage.isLoading)) ? (
         <div className="flex items-center gap-2 p-8 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading vintage notes…
         </div>
+      ) : accessUnknown || accessQuery.error ? (
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground">
+            We couldn't confirm your access to Vintage Notes. Check your connection and try
+            again — an empty history is only shown once access is confirmed.
+          </CardContent>
+        </Card>
       ) : notesQuery.error ? (
         <Card>
           <CardContent className="p-6 text-sm text-muted-foreground">
@@ -299,7 +331,7 @@ export default function VintageNotesPage() {
                 id="vn-date"
                 type="date"
                 value={draft.noteDate}
-                max={localToday()}
+                max={localToday(vineyardTimeZone)}
                 onChange={(e) => setDraft((d) => ({ ...d, noteDate: e.target.value }))}
               />
               {vintagePreview != null && (

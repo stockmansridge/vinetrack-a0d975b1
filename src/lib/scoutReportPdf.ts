@@ -20,6 +20,7 @@ import {
 import { formatDate, formatDateTime } from "@/lib/dateFormat";
 import {
   locationLabel,
+  stopCoord,
   stopLabel,
   stopTime,
   stopWeather,
@@ -71,10 +72,15 @@ function line(ctx: Ctx, text: string, opts?: { size?: number; bold?: boolean; ga
   const size = opts?.size ?? 10;
   ctx.doc.setFontSize(size);
   ctx.doc.setFont("helvetica", opts?.bold ? "bold" : "normal");
-  const wrapped = ctx.doc.splitTextToSize(text, CONTENT_W);
-  ensureSpace(ctx, wrapped.length * (size + 2) + 2);
-  ctx.doc.text(wrapped, MARGIN, ctx.y);
-  ctx.y += wrapped.length * (size + 2) + (opts?.gap ?? 4);
+  const wrapped: string[] = ctx.doc.splitTextToSize(text, CONTENT_W);
+  // True line-by-line pagination: a wrapped paragraph longer than one page
+  // must flow across pages instead of overflowing past the footer.
+  for (const w of wrapped) {
+    ensureSpace(ctx, size + 2);
+    ctx.doc.text(w, MARGIN, ctx.y);
+    ctx.y += size + 2;
+  }
+  ctx.y += opts?.gap ?? 4;
 }
 
 function section(ctx: Ctx, title: string) {
@@ -205,6 +211,35 @@ export function buildScoutReportPdf(model: ScoutPdfModel, branding: SprayReportB
   } else {
     model.stops.forEach((stop, i) => renderStop(ctx, stop, i));
   }
+
+  // Location evidence: the on-screen report shows an interactive map. Map
+  // imagery cannot be embedded in this export, so every measured coordinate
+  // is listed explicitly and the omitted map is disclosed.
+  section(ctx, "Location evidence");
+  line(
+    ctx,
+    "The interactive report map is not embedded in this PDF. Every measured " +
+      "coordinate recorded during the visit is listed below; entries marked " +
+      "\u201cLocation unavailable\u201d had no GPS fix recorded.",
+    { size: 9, gap: 4 },
+  );
+  model.stops.forEach((stop, i) => {
+    const label = stopLabel(stop.assessment, i);
+    const sc = stopCoord(stop.assessment);
+    line(
+      ctx,
+      `${label}${stop.blockName ? ` (${stop.blockName})` : ""} — stop: ${
+        sc ? `${sc.lat.toFixed(6)}, ${sc.lng.toFixed(6)} (measured)` : "Location unavailable"
+      }`,
+      { size: 9, gap: 2 },
+    );
+    for (const obs of stop.observations) {
+      line(ctx, `${label} — ${obs.item_kind}: ${locationLabel(obs)}`, { size: 9, gap: 2 });
+      for (const p of stop.photosByObservation.get(obs.id) ?? []) {
+        line(ctx, `${label} — photo: ${locationLabel(p)}`, { size: 9, gap: 2 });
+      }
+    }
+  });
 
   if (model.omissions.length) {
     section(ctx, "Omissions and limitations");
