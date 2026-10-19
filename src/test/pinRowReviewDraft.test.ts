@@ -74,10 +74,10 @@ describe("export / import reconciliation", () => {
     expect(res.issues.length).toBe(0);
   });
   it("refuses stale decisions when sync_version, coordinates or map change", () => {
-    expect(importDraftJson(file, st([cur({ ...basePin, sync_version: 4 })])).issues[0].reason).toMatch(/sync_version/;
-    expect(importDraftJson(file, st([cur({ ...basePin, latitude: -33.99951 })])).issues[0].reason).toMatch(/latitude/;
+    expect(importDraftJson(file, st([cur({ ...basePin, sync_version: 4 })])).issues[0].reason).toMatch(/sync_version/);
+    expect(importDraftJson(file, st([cur({ ...basePin, latitude: -33.99951 })])).issues[0].reason).toMatch(/latitude/);
     const moved = [{ ...pad, rows: rows.slice(0, 4) }];
-    expect(importDraftJson(file, st([cur(basePin)], {}, moved)).issues[0].reason).toMatch(/geometry_fingerprint/;
+    expect(importDraftJson(file, st([cur(basePin)], {}, moved)).issues[0].reason).toMatch(/geometry_fingerprint/);
   });
   it("rejects pins that left the queue, other vineyards and malformed files", () => {
     expect(importDraftJson(file, st([])).issues[0].reason).toMatch(/not in current/);
