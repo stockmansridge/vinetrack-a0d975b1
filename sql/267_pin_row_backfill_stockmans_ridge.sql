@@ -138,7 +138,7 @@ declare
   r jsonb; s record; e record; num int;
   best jsonb := null; dists jsonb := '[]'::jsonb;
   dx double precision; dy double precision; px double precision; py double precision;
-  len2 double precision; t double precision; d double precision; cross double precision;
+  len2 double precision; t double precision; d double precision; v_cross double precision;
   ch jsonb; nb jsonb; spacing double precision;
 begin
   if p_rows is null or jsonb_typeof(p_rows) <> 'array' then return jsonb_build_object('ok',false,'reason','no rows'); end if;
@@ -152,8 +152,8 @@ begin
     len2 := dx*dx + dy*dy; continue when len2 < 1;
     t := (px*dx + py*dy) / len2;
     d := abs(px*dy - py*dx) / sqrt(len2);
-    cross := sign(dx*py - dy*px);
-    dists := dists || jsonb_build_object('n',num,'d',d,'t',t,'side',cross,
+    v_cross := sign(dx*py - dy*px);
+    dists := dists || jsonb_build_object('n',num,'d',d,'t',t,'side',v_cross,
       'sl', s.lat + (e.lat - s.lat) * t, 'so', s.lon + (e.lon - s.lon) * t, 'len', sqrt(len2));
   end loop;
   select x into ch from jsonb_array_elements(dists) x where (x->>'n')::int = p_row;
