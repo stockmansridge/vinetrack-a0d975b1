@@ -3009,6 +3009,7 @@ export default function SatelliteMappingPage() {
                 <div>asset: <span className="text-foreground">{d.assetId.slice(0, 8)}…</span> · HTTP <span className="text-foreground">{d.endpointStatus ?? "—"}</span> · blob <span className="text-foreground">{d.blobSize ?? "—"}</span> · {d.mimeType ?? "—"}</div>
                 <div>object URL: <span className="text-foreground">{d.objectUrlCreated ? "yes" : "no"}</span> · image: <span className="text-foreground">{d.imageStatus}</span> · final: <span className="text-foreground">{d.finalStatus}</span></div>
                 <div>Signer: {d.signerResult ?? "not checked"} · HTTP {d.signerStatus ?? "—"} · Bounds: {d.bounds}</div>
+                <div>Pixels: <span className="text-foreground">{d.pixelVerdict ?? "not decoded"}</span></div>
                 {d.error && <div className="text-destructive">{d.error}</div>}
               </div>
             ))}
