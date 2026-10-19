@@ -16,3 +16,4 @@
 <!-- LOVABLE:BEGIN -->
 - Target Nutrient preview derives rates via computeTargetNutrient and reuses the existing block/vine pipeline; legacy seeding requires explicit nutrient and concentration bases. Why: one calculation authority, no assumed label conventions or new persistence.
 <!-- LOVABLE:END -->
+- Crop Health saved rasters count as imagery only after their bytes decode to visible pixels / valid cells (src/lib/satelliteRasterUsability.ts; edge _shared/satellite-raster-usability.ts); v7 rows need byte-count proofs and every storage key is version-scoped and owned by one processing version (trigger satellite_raster_asset_identity_guard); why: production v3/v6 objects were overwritten in place and stored-as-complete assets were fully transparent.
