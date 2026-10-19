@@ -23,8 +23,8 @@ async function invoke<T = any>(name: string, body: unknown, signal?: AbortSignal
   return data as T;
 }
 
-// Fetch bytes from the stable authenticated asset endpoint. Supports
-// If-None-Match / 304 so cached blobs are reused without re-download.
+// Obtain a fresh authorised URL, then download saved bytes. IDB cache hits
+// are handled before this call; this signed-download path does not return 304.
 export interface AssetFetchResult {
   status: 200 | 304;
   blob: Blob | null;   // present on 200, null on 304

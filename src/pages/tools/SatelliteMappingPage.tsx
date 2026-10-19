@@ -1252,14 +1252,14 @@ export default function SatelliteMappingPage() {
   // incoming set animates in.
   const [mapOverlays, setMapOverlays] = useState<SatelliteRasterOverlay[]>([]);
   useEffect(() => {
-    const nextKeys = new Set(targetMapOverlays.map((o) => o.key!));
+    const nextKeys = new Set(targetMapOverlays.map((o) => o.key));
     setMapOverlays((prev) => {
-      const prevKeys = new Set(prev.map((o) => o.key!));
+      const prevKeys = new Set(prev.map((o) => o.key));
       const same = prevKeys.size === nextKeys.size
         && [...nextKeys].every((k) => prevKeys.has(k));
       if (same || prefersReducedMotion) return targetMapOverlays;
       const outgoing = prev
-        .filter((o) => !nextKeys.has(o.key!))
+        .filter((o) => !nextKeys.has(o.key))
         .map((o) => ({ ...o, opacity: 0 }));
       return [...outgoing, ...targetMapOverlays];
     });
@@ -1329,6 +1329,7 @@ export default function SatelliteMappingPage() {
     });
     setDisplayLoadState((prev) => {
       if (!prev.has(info.overlayKey)) return prev;
+      if (prev.get(info.overlayKey)?.phase === "failed") return prev;
       const next = new Map(prev); next.delete(info.overlayKey); return next;
     });
   }, []);
@@ -1415,7 +1416,8 @@ export default function SatelliteMappingPage() {
         // tick — the loader is downloading. We'll advance on the next tick.
         const nextPairs = buildAssetPairsFor(nextDate);
         const ready = nextPairs.every((p) => signedUrls[p.displayAsset.id]);
-        if (!ready) return prev;
+        // A failed adjacent preload must not leave playback spinning forever.
+        if (!ready) { setTimeout(() => setIsPlaying(false), 0); return prev; }
         return nextDate;
       });
     }, PLAYBACK_MS);
