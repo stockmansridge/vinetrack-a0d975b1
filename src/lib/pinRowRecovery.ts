@@ -1,13 +1,23 @@
 // Stage 1 — Existing Pin Row Recovery (REVIEW ONLY, NON-MUTATING).
 //
-// Pure client-side projections over data already readable by the signed-in
-// System Admin. Nothing here writes, confirms or queues anything. Every
-// output is a NON-AUTHORITATIVE candidate. Never call a result "confirmed".
+// Pure client-side projections over data the signed-in System Admin can
+// already read from the VineTrack backend. Nothing here writes, confirms or
+// queues anything. Every output is a NON-AUTHORITATIVE candidate.
 //
-// Key rule: the nearest physical vine row is NOT the observed/selected row.
-// A suggested vine row is only produced when the pin's heading is clearly
-// along the rows AND a left/right side is recorded, so the side can be paired
-// with one of the two rows bounding the driving aisle.
+// Real schema (VineTrack backend):
+//   pins: heading, side, pin_side, trip_id, row_number, pin_row_number,
+//         driving_row_number, location_scope, snapped_to_row, latitude,
+//         longitude, created_at  (NO accuracy columns)
+//   pin_capture_evidence: pin_id, captured_at, horizontal_accuracy_m,
+//         heading_degrees, heading_observed_at, pressed_side,
+//         observations jsonb[], geometry_hash
+//   pin_row_segments: pin_id, row_number, segment_number (member-readable)
+//   trips: id, path_points (ordered, no per-point timestamps)
+//   pin_location_geometry_history: NOT readable by the Portal → current
+//         block geometry only, always labelled as such.
+//
+// Rules: nearest physical row is never the selected row; geometry alone is
+// never enough for a supported candidate; unknown ≠ none.
 import { parsePolygonPoints, parseRows, type LatLng } from "@/lib/paddockGeometry";
 
 export const RECOVERY_VINEYARD_ID = "fe952afe-437f-4be7-8cbf-fdd8e630411c";
@@ -25,11 +35,14 @@ export const STATUS_LABEL: Record<RecoveryStatus, string> = {
   preserve_existing: "Preserve existing",
 };
 
-/** Max horizontal accuracy (m) for a supported candidate. */
-export const MAX_SUPPORTED_ACCURACY_M = 5;
+export const GEOMETRY_SOURCE_LABEL =
+  "Current block geometry only — capture-time history not readable by Portal";
+
 /** Heading must be within this angle of the row axis (degrees). */
 export const MAX_HEADING_OFF_AXIS_DEG = 30;
-/** Pins closer than this to a vine row line are ambiguous between aisles. */
+/** Heading observation must be within this many seconds of capture. */
+export const MAX_HEADING_AGE_S = 10;
+/** Pins closer than this fraction of spacing to a row line are aisle-ambiguous. */
 export const MIN_ROW_CLEARANCE_FRACTION = 0.15;
 
 const num = (v: any): number | null => {
@@ -37,32 +50,12 @@ const num = (v: any): number | null => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
-const pick = (o: any, keys: string[]): any => {
-  for (const k of keys) if (o?.[k] != null && o[k] !== "") return o[k];
-  return null;
-};
 
-export function pinHeading(p: any): number | null {
-  return num(pick(p, ["heading", "heading_degrees", "heading_deg", "course", "bearing", "true_heading"]));
-}
-export function pinAccuracy(p: any): number | null {
-  return num(pick(p, ["horizontal_accuracy", "horizontal_accuracy_m", "gps_accuracy", "accuracy_m", "accuracy"]));
-}
-export function pinSideRaw(p: any): "left" | "right" | null {
-  const s = String(pick(p, ["pin_side", "side"]) ?? "").toLowerCase();
+export function normSide(v: any): "left" | "right" | null {
+  const s = String(v ?? "").toLowerCase();
   if (s.startsWith("l")) return "left";
   if (s.startsWith("r")) return "right";
   return null;
-}
-export function pinTripId(p: any): string | null {
-  const v = pick(p, ["trip_id", "source_trip_id", "linked_trip_id"]);
-  return v ? String(v) : null;
-}
-export function pinSegmentsRaw(p: any): any[] {
-  const raw = pick(p, ["pin_row_segments", "row_segments"]);
-  let v = raw;
-  if (typeof v === "string") { try { v = JSON.parse(v); } catch { v = null; } }
-  return Array.isArray(v) ? v : [];
 }
 
 /** Missing queue: live GPS pin with neither legacy nor canonical row number. */
@@ -70,6 +63,41 @@ export function isMissingRowPin(p: any): boolean {
   if (p?.deleted_at) return false;
   if (num(p?.latitude) == null || num(p?.longitude) == null) return false;
   return num(p?.row_number) == null && num(p?.pin_row_number) == null;
+}
+
+// ---------- capture evidence ----------
+export interface CaptureEvidence {
+  pin_id: string;
+  captured_at?: string | null;
+  horizontal_accuracy_m?: number | null;
+  heading_degrees?: number | null;
+  heading_observed_at?: string | null;
+  pressed_side?: string | null;
+  observations?: any;
+  geometry_hash?: string | null;
+}
+
+/** Count JSONB observation entries that carry a finite coordinate. */
+export function countValidObservations(raw: any): number {
+  let v = raw;
+  if (typeof v === "string") { try { v = JSON.parse(v); } catch { return 0; } }
+  if (!Array.isArray(v)) return 0;
+  return v.filter((o) => {
+    if (!o || typeof o !== "object") return false;
+    const lat = num(o.latitude ?? o.lat), lng = num(o.longitude ?? o.lng ?? o.lon);
+    return lat != null && lng != null && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+  }).length;
+}
+
+/** Latest evidence row per pin. */
+export function latestEvidenceByPin(rows: CaptureEvidence[]): Map<string, CaptureEvidence> {
+  const m = new Map<string, CaptureEvidence>();
+  for (const r of rows) {
+    const k = String(r.pin_id);
+    const prev = m.get(k);
+    if (!prev || String(r.captured_at ?? "") > String(prev.captured_at ?? "")) m.set(k, r);
+  }
+  return m;
 }
 
 // ---------- geometry ----------
@@ -91,15 +119,13 @@ export function pointInPolygon(pt: LatLng, poly: LatLng[]): boolean {
 }
 
 export interface AisleGeometry {
-  /** Bounding rows, ordered [lower number, higher number]. */
   boundingRows: [number, number] | null;
   aisle: number | null;
   nearestPhysicalRow: number | null;
-  /** Fraction of spacing from nearest row (0 = on the row line, 0.5 = aisle centre). */
   clearance: number | null;
-  /** Row axis bearing in degrees (0 = north), from lower to higher row end. */
+  clearanceM: number | null;
+  spacingM: number | null;
   rowAxisDeg: number | null;
-  /** Row number to the LEFT when travelling along +axis. */
   leftWhenAlongAxis: number | null;
   outsideRows: boolean;
   reason?: string;
@@ -108,8 +134,8 @@ export interface AisleGeometry {
 export function aisleGeometry(pt: LatLng, rawRows: any): AisleGeometry {
   const rows = parseRows(rawRows).filter((r) => r.start && r.end && r.number != null);
   const empty: AisleGeometry = {
-    boundingRows: null, aisle: null, nearestPhysicalRow: null, clearance: null,
-    rowAxisDeg: null, leftWhenAlongAxis: null, outsideRows: false,
+    boundingRows: null, aisle: null, nearestPhysicalRow: null, clearance: null, clearanceM: null,
+    spacingM: null, rowAxisDeg: null, leftWhenAlongAxis: null, outsideRows: false,
   };
   if (rows.length < 2) return { ...empty, reason: "Block has fewer than two mapped rows" };
   const proj = projector(rows[0].start!);
@@ -117,13 +143,11 @@ export function aisleGeometry(pt: LatLng, rawRows: any): AisleGeometry {
   let ux = e0.x - s0.x, uy = e0.y - s0.y;
   const L = Math.hypot(ux, uy) || 1;
   ux /= L; uy /= L;
-  // Normal (left of +axis).
   const nx = -uy, ny = ux;
   const P = proj(pt);
   const offs = rows.map((r) => {
     const a = proj(r.start!), b = proj(r.end!);
-    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-    return { n: r.number!, o: mx * nx + my * ny };
+    return { n: r.number!, o: ((a.x + b.x) / 2) * nx + ((a.y + b.y) / 2) * ny };
   }).sort((a, b) => a.o - b.o);
   const po = P.x * nx + P.y * ny;
   const axisDeg = ((Math.atan2(ux, uy) * 180) / Math.PI + 360) % 360;
@@ -137,16 +161,17 @@ export function aisleGeometry(pt: LatLng, rawRows: any): AisleGeometry {
   while (i < offs.length - 2 && offs[i + 1].o < po) i++;
   const lo = offs[i], hi = offs[i + 1];
   const spacing = hi.o - lo.o || 1;
-  const clearance = Math.min(po - lo.o, hi.o - po) / spacing;
+  const clearanceM = Math.min(po - lo.o, hi.o - po);
   const a = Math.min(lo.n, hi.n), b = Math.max(lo.n, hi.n);
   const consecutive = b - a === 1;
   return {
     boundingRows: [a, b],
     aisle: consecutive ? (a + b) / 2 : null,
     nearestPhysicalRow: nearest.n,
-    clearance,
+    clearance: clearanceM / spacing,
+    clearanceM,
+    spacingM: spacing,
     rowAxisDeg: axisDeg,
-    // Higher offset = left of +axis.
     leftWhenAlongAxis: hi.n,
     outsideRows: false,
     reason: consecutive ? undefined : `Bounding rows ${a} and ${b} are not consecutive`,
@@ -154,8 +179,7 @@ export function aisleGeometry(pt: LatLng, rawRows: any): AisleGeometry {
 }
 
 function angleDiff(a: number, b: number): number {
-  const d = Math.abs((((a - b) % 360) + 540) % 360 - 180);
-  return d;
+  return Math.abs((((a - b) % 360) + 540) % 360 - 180);
 }
 
 /** Pair heading + side with one bounding row. Null when unsupported. */
@@ -164,26 +188,42 @@ export function pairVineRow(
 ): { row: number | null; reason: string } {
   if (!g.boundingRows || g.rowAxisDeg == null || g.leftWhenAlongAxis == null)
     return { row: null, reason: "No bounding aisle" };
-  if (heading == null) return { row: null, reason: "No original heading recorded" };
+  if (heading == null) return { row: null, reason: "No heading recorded" };
   if (!side) return { row: null, reason: "No left/right side recorded" };
   const dAlong = angleDiff(heading, g.rowAxisDeg);
   const dAgainst = angleDiff(heading, (g.rowAxisDeg + 180) % 360);
   const off = Math.min(dAlong, dAgainst);
   if (off > MAX_HEADING_OFF_AXIS_DEG)
     return { row: null, reason: `Heading is ${Math.round(off)}° off the row direction` };
-  const leftRow = dAlong <= dAgainst
-    ? g.leftWhenAlongAxis
-    : (g.boundingRows[0] === g.leftWhenAlongAxis ? g.boundingRows[1] : g.boundingRows[0]);
-  const rightRow = leftRow === g.boundingRows[0] ? g.boundingRows[1] : g.boundingRows[0];
-  return { row: side === "left" ? leftRow : rightRow, reason: "Heading along rows and side pair with one bounding row" };
+  const other = (r: number) => (g.boundingRows![0] === r ? g.boundingRows![1] : g.boundingRows![0]);
+  const leftRow = dAlong <= dAgainst ? g.leftWhenAlongAxis : other(g.leftWhenAlongAxis);
+  return { row: side === "left" ? leftRow : other(leftRow), reason: "Heading along rows paired with side" };
+}
+
+// ---------- track anchors ----------
+export type TrackAnchor = "unique" | "multiple" | "none" | "unavailable" | "not_loaded" | "no_trip";
+export const ANCHOR_EPS_DEG = 1e-7;
+
+export function trackAnchor(pt: LatLng, track: LatLng[]): "unique" | "multiple" | "none" {
+  let n = 0;
+  for (const q of track) {
+    if (Math.abs(q.lat - pt.lat) < ANCHOR_EPS_DEG && Math.abs(q.lng - pt.lng) < ANCHOR_EPS_DEG) n++;
+    if (n > 1) return "multiple";
+  }
+  return n === 1 ? "unique" : "none";
 }
 
 // ---------- per-pin assessment ----------
+/** null map = query unavailable (permission or error). */
 export interface RecoveryEvidence {
   paddocks: any[];
-  captureCounts: Map<string, number> | null; // null = unavailable
-  trips: Map<string, LatLng[]> | null; // null = not loaded / unavailable
+  evidence: Map<string, CaptureEvidence> | null;
+  segments: Map<string, { row_number: number; segment_number: number | null }[]> | null;
+  trips: Map<string, LatLng[]> | null | "not_loaded";
+  /** Trip ids the trips query attempted but could not read. */
 }
+
+export type EvidenceState = "present" | "none" | "unavailable";
 
 export interface RecoveryRow {
   pin: any;
@@ -197,12 +237,18 @@ export interface RecoveryRow {
   suggestedBlockName: string | null;
   suggestedBlockNote: string | null;
   geometrySource: string;
-  heading: number | null;
+  storedHeading: number | null;
+  evidenceHeading: number | null;
+  headingFresh: boolean | null;
   side: "left" | "right" | null;
+  pressedSide: "left" | "right" | null;
   accuracy: number | null;
-  captureCount: number | null;
+  evidenceState: EvidenceState;
+  observationCount: number | null;
   tripId: string | null;
-  trackAnchor: "exact" | "none" | "unavailable" | "no_trip";
+  trackAnchor: TrackAnchor;
+  segmentsState: EvidenceState;
+  segmentsLabel: string | null;
   existingMeta: string | null;
   geometry: AisleGeometry | null;
   suggestedVineRow: number | null;
@@ -210,13 +256,12 @@ export interface RecoveryRow {
   status: RecoveryStatus;
 }
 
-const EXACT_EPS = 1e-7;
-
 export function assessPin(pin: any, ev: RecoveryEvidence): RecoveryRow {
+  const id = String(pin.id);
   const lat = num(pin.latitude), lng = num(pin.longitude);
   const padById = new Map(ev.paddocks.map((p) => [p.id, p]));
-  const saved = pin.paddock_id ? padById.get(pin.paddock_id) : null;
-  let block = saved ?? null;
+  const saved = pin.paddock_id ? padById.get(pin.paddock_id) ?? null : null;
+  let block = saved;
   let suggestedBlockName: string | null = null;
   let suggestedBlockNote: string | null = null;
   if (!saved && lat != null && lng != null) {
@@ -227,87 +272,139 @@ export function assessPin(pin: any, ev: RecoveryEvidence): RecoveryRow {
     if (hits.length === 1) {
       block = hits[0];
       suggestedBlockName = hits[0].name ?? "Unnamed block";
-      suggestedBlockNote = "Suggestion: GPS inside current block polygon";
+      suggestedBlockNote = "Suggestion only: GPS inside one current block polygon";
     } else {
       suggestedBlockNote = hits.length ? `Ambiguous: inside ${hits.length} blocks` : "No current block polygon contains the GPS point";
     }
   }
-  const heading = pinHeading(pin), side = pinSideRaw(pin), accuracy = pinAccuracy(pin);
-  const tripId = pinTripId(pin);
-  let trackAnchor: RecoveryRow["trackAnchor"] = "no_trip";
+
+  // Evidence
+  const evRow = ev.evidence ? ev.evidence.get(id) ?? null : null;
+  const evidenceState: EvidenceState = ev.evidence == null ? "unavailable" : evRow ? "present" : "none";
+  const accuracy = evRow ? num(evRow.horizontal_accuracy_m) : null;
+  const evidenceHeading = evRow ? num(evRow.heading_degrees) : null;
+  let headingFresh: boolean | null = null;
+  if (evRow?.heading_observed_at && evRow?.captured_at) {
+    const dt = Math.abs(Date.parse(evRow.captured_at) - Date.parse(evRow.heading_observed_at)) / 1000;
+    headingFresh = Number.isFinite(dt) ? dt <= MAX_HEADING_AGE_S : null;
+  }
+  const observationCount = evRow ? countValidObservations(evRow.observations) : evidenceState === "none" ? 0 : null;
+  const pressedSide = evRow ? normSide(evRow.pressed_side) : null;
+  const storedHeading = num(pin.heading);
+  const side = normSide(pin.pin_side ?? pin.side);
+
+  // Trip
+  const tripId = pin.trip_id ? String(pin.trip_id) : null;
+  let anchor: TrackAnchor = "no_trip";
   if (tripId) {
-    if (!ev.trips) trackAnchor = "unavailable";
+    if (ev.trips === "not_loaded") anchor = "not_loaded";
+    else if (ev.trips == null) anchor = "unavailable";
     else {
       const pts = ev.trips.get(tripId);
-      if (!pts) trackAnchor = "unavailable";
-      else trackAnchor = lat != null && lng != null &&
-        pts.some((q) => Math.abs(q.lat - lat) < EXACT_EPS && Math.abs(q.lng - lng) < EXACT_EPS) ? "exact" : "none";
+      anchor = !pts ? "unavailable" : lat != null && lng != null ? trackAnchor({ lat, lng }, pts) : "none";
     }
   }
-  const segs = pinSegmentsRaw(pin);
+
+  // Existing metadata
+  const segs = ev.segments ? ev.segments.get(id) ?? [] : null;
+  const segmentsState: EvidenceState = segs == null ? "unavailable" : segs.length ? "present" : "none";
+  const segmentsLabel = segs?.length
+    ? segs.map((s) => `Row ${s.row_number}${s.segment_number != null ? ` seg ${s.segment_number}` : ""}`).join(", ")
+    : null;
   const driving = num(pin.driving_row_number);
-  const metaParts: string[] = [];
-  if (segs.length) metaParts.push(`Row segments: ${segs.map((s: any) => s?.row_number ?? s?.row ?? "?").join(", ")}`);
-  if (driving != null) metaParts.push(`Driving row: ${driving}`);
-  const existingMeta = metaParts.length ? metaParts.join(" · ") : null;
+  const meta: string[] = [];
+  if (segmentsLabel) meta.push(`Saved segments: ${segmentsLabel}`);
+  if (driving != null) meta.push(`Driving row: ${driving}`);
+  if (pin.location_scope === "row") meta.push("location_scope = row");
+  const existingMeta = meta.length ? meta.join(" · ") : null;
 
   const base = {
-    pin, id: String(pin.id), title: pin.title ?? pin.button_name ?? "(untitled)", mode: pin.mode ?? "—",
+    pin, id, title: pin.title ?? pin.button_name ?? "(untitled)", mode: pin.mode ?? "—",
     createdAt: pin.created_at ?? null, lat, lng,
     savedBlockName: saved ? saved.name ?? "Unnamed block" : null,
     suggestedBlockName, suggestedBlockNote,
-    geometrySource: block
-      ? "Current block geometry (historical capture-time geometry not available to Portal)"
-      : "None",
-    heading, side, accuracy,
-    captureCount: ev.captureCounts ? ev.captureCounts.get(String(pin.id)) ?? 0 : null,
-    tripId, trackAnchor, existingMeta,
+    geometrySource: block ? GEOMETRY_SOURCE_LABEL : "None",
+    storedHeading, evidenceHeading, headingFresh, side, pressedSide, accuracy, evidenceState,
+    observationCount, tripId, trackAnchor: anchor, segmentsState, segmentsLabel, existingMeta,
   };
-
   const geometry = block && lat != null && lng != null ? aisleGeometry({ lat, lng }, block.rows) : null;
+  const out = (status: RecoveryStatus, reason: string, suggestedVineRow: number | null = null): RecoveryRow =>
+    ({ ...base, geometry, suggestedVineRow, status, reason });
 
-  if (existingMeta) {
-    return { ...base, geometry, suggestedVineRow: null, status: "preserve_existing",
-      reason: "Existing row metadata recorded — preserved, no auto-fill" };
-  }
-  if (lat == null || lng == null) return { ...base, geometry, suggestedVineRow: null, status: "not_resolvable", reason: "No GPS" };
-  if (!block) return { ...base, geometry, suggestedVineRow: null, status: "not_resolvable", reason: suggestedBlockNote ?? "No block" };
+  if (existingMeta) return out("preserve_existing", "Existing row metadata — preserved, never auto-filled");
+  // Fail closed: cannot rule out saved segments.
+  if (segmentsState === "unavailable")
+    return out("requires_review", "Saved row segments unreadable (permission unknown) — cannot rule out existing metadata");
+  if (lat == null || lng == null) return out("not_resolvable", "No GPS");
+  if (!block) return out("not_resolvable", suggestedBlockNote ?? "No block");
   if (!geometry?.boundingRows || geometry.aisle == null)
-    return { ...base, geometry, suggestedVineRow: null, status: "not_resolvable", reason: geometry?.reason ?? "No aisle" };
+    return out("not_resolvable", geometry?.reason ?? "No aisle");
 
+  const heading = evidenceHeading ?? storedHeading;
   const pair = pairVineRow(geometry, heading, side);
-  const conflicts: string[] = [];
-  if (!saved) conflicts.push("block is a suggestion only");
-  if (accuracy == null) conflicts.push("horizontal accuracy unknown");
-  else if (accuracy > MAX_SUPPORTED_ACCURACY_M) conflicts.push(`accuracy ${accuracy.toFixed(1)} m > ${MAX_SUPPORTED_ACCURACY_M} m`);
-  if ((geometry.clearance ?? 0) < MIN_ROW_CLEARANCE_FRACTION) conflicts.push("GPS is close to a vine row line (aisle ambiguous)");
-  if (pair.row == null) conflicts.push(pair.reason);
-  if (trackAnchor === "none") conflicts.push("pin does not match an ordered track point");
+  const issues: string[] = ["current geometry only"];
+  if (!saved) issues.push("block is a suggestion");
+  if (evidenceState === "unavailable") issues.push("capture evidence unavailable");
+  else if (evidenceState === "none") issues.push("no capture evidence");
+  if (accuracy == null) issues.push("horizontal accuracy unknown");
+  else if (geometry.clearanceM != null && accuracy >= geometry.clearanceM)
+    issues.push(`accuracy ±${accuracy.toFixed(1)} m ≥ ${geometry.clearanceM.toFixed(1)} m to nearest row line`);
+  if ((geometry.clearance ?? 0) < MIN_ROW_CLEARANCE_FRACTION) issues.push("GPS near a vine row line (aisle ambiguous)");
+  if (evidenceHeading == null) issues.push(storedHeading == null ? "no heading" : "only stored pin heading (freshness unknown)");
+  else if (headingFresh !== true) issues.push(headingFresh === false ? "heading stale" : "heading freshness unknown");
+  if (pressedSide && side && pressedSide !== side) issues.push("pressed side conflicts with pin side");
+  if (pair.row == null) issues.push(pair.reason);
+  if (anchor !== "unique") issues.push(`track anchor: ${anchor.replace("_", " ")}`);
 
-  const status: RecoveryStatus = conflicts.length ? "requires_review" : "supported_candidate";
+  // "current geometry only" is always present → supported only if it's the sole caveat.
+  const corroborated = issues.length === 1;
+  return out(
+    corroborated ? "supported_candidate" : "requires_review",
+    corroborated
+      ? "Fresh heading + side, accuracy inside aisle clearance, unique track anchor; current geometry only — still needs human review"
+      : issues.join("; "),
+    pair.row,
+  );
+}
+
+// ---------- audit summary (for fixtures / snapshot) ----------
+export interface AuditSummary {
+  activeGps: number; missing: number; withPaddock: number; withoutPaddock: number;
+  noBlockInsideOne: number; noBlockOutside: number; tripLinks: number; withEvidence: number;
+  existingMeta: number; withHeading: number; withSide: number; uniqueAnchors: number; anchorTrips: number;
+}
+export function auditSummary(pins: any[], ev: RecoveryEvidence): AuditSummary {
+  const active = pins.filter((p) => !p.deleted_at && num(p.latitude) != null && num(p.longitude) != null);
+  const missing = active.filter(isMissingRowPin);
+  const rows = missing.map((p) => assessPin(p, ev));
+  const anchorTrips = new Set(rows.filter((r) => r.trackAnchor === "unique").map((r) => r.tripId));
   return {
-    ...base, geometry, suggestedVineRow: pair.row, status,
-    reason: conflicts.length ? conflicts.join("; ") : `${pair.reason}; current geometry only`,
+    activeGps: active.length,
+    missing: missing.length,
+    withPaddock: missing.filter((p) => p.paddock_id).length,
+    withoutPaddock: missing.filter((p) => !p.paddock_id).length,
+    noBlockInsideOne: rows.filter((r) => !r.savedBlockName && r.suggestedBlockName).length,
+    noBlockOutside: rows.filter((r) => !r.savedBlockName && !r.suggestedBlockName).length,
+    tripLinks: rows.filter((r) => r.tripId).length,
+    withEvidence: rows.filter((r) => r.evidenceState === "present").length,
+    existingMeta: rows.filter((r) => r.existingMeta).length,
+    withHeading: rows.filter((r) => r.storedHeading != null).length,
+    withSide: rows.filter((r) => r.side != null).length,
+    uniqueAnchors: rows.filter((r) => r.trackAnchor === "unique").length,
+    anchorTrips: anchorTrips.size,
   };
 }
 
 // ---------- validation against known pins ----------
 export interface ValidationResult {
-  total: number;
-  adjacencyValid: number; // |saved vine row − saved aisle| = 0.5
-  aisleMatch: number; // geometric aisle == saved driving row
-  aisleEvaluated: number;
-  vineRowEvaluated: number; // pairing produced a row
-  vineRowMatch: number;
-  nearestDiffersFromSaved: number;
-  falsePositives: number; // supported-quality pairing that disagrees
-  samples: { id: string; title: string; saved: number; aisle: number | null; geoAisle: number | null; nearest: number | null; paired: number | null }[];
+  total: number; adjacencyValid: number; aisleMatch: number; aisleEvaluated: number;
+  vineRowEvaluated: number; vineRowMatch: number; nearestDiffersFromSaved: number; falsePositives: number;
 }
 
 export function validateKnownPins(pins: any[], paddocks: any[]): ValidationResult {
   const padById = new Map(paddocks.map((p) => [p.id, p]));
   const r: ValidationResult = { total: 0, adjacencyValid: 0, aisleMatch: 0, aisleEvaluated: 0,
-    vineRowEvaluated: 0, vineRowMatch: 0, nearestDiffersFromSaved: 0, falsePositives: 0, samples: [] };
+    vineRowEvaluated: 0, vineRowMatch: 0, nearestDiffersFromSaved: 0, falsePositives: 0 };
   for (const p of pins) {
     const saved = num(p.pin_row_number) ?? num(p.row_number);
     const aisle = num(p.driving_row_number);
@@ -317,21 +414,15 @@ export function validateKnownPins(pins: any[], paddocks: any[]): ValidationResul
     r.total++;
     if (Math.abs(saved - aisle) === 0.5) r.adjacencyValid++;
     const block = p.paddock_id ? padById.get(p.paddock_id) : null;
-    let geoAisle: number | null = null, nearest: number | null = null, paired: number | null = null;
-    if (block) {
-      const g = aisleGeometry({ lat, lng }, block.rows);
-      geoAisle = g.aisle; nearest = g.nearestPhysicalRow;
-      if (g.aisle != null) { r.aisleEvaluated++; if (g.aisle === aisle) r.aisleMatch++; }
-      if (nearest != null && nearest !== saved) r.nearestDiffersFromSaved++;
-      const pr = pairVineRow(g, pinHeading(p), pinSideRaw(p));
-      paired = pr.row;
-      if (pr.row != null) {
-        r.vineRowEvaluated++;
-        if (pr.row === saved) r.vineRowMatch++;
-        else if ((g.clearance ?? 0) >= MIN_ROW_CLEARANCE_FRACTION) r.falsePositives++;
-      }
+    if (!block) continue;
+    const g = aisleGeometry({ lat, lng }, block.rows);
+    if (g.aisle != null) { r.aisleEvaluated++; if (g.aisle === aisle) r.aisleMatch++; }
+    if (g.nearestPhysicalRow != null && g.nearestPhysicalRow !== saved) r.nearestDiffersFromSaved++;
+    const pr = pairVineRow(g, num(p.heading), normSide(p.pin_side ?? p.side));
+    if (pr.row != null) {
+      r.vineRowEvaluated++;
+      if (pr.row === saved) r.vineRowMatch++; else r.falsePositives++;
     }
-    r.samples.push({ id: String(p.id), title: p.title ?? "", saved, aisle, geoAisle, nearest, paired });
   }
   return r;
 }
@@ -343,14 +434,17 @@ export function recoveryCsv(rows: RecoveryRow[], notes: Record<string, string>):
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const head = ["NON_AUTHORITATIVE_CANDIDATE", "pin_id", "title", "mode", "created_at", "latitude", "longitude",
-    "saved_block", "suggested_block", "geometry_source", "heading", "side", "accuracy_m", "capture_observations",
-    "trip_id", "track_anchor", "existing_metadata", "nearest_physical_row", "bounding_rows",
-    "suggested_driving_aisle", "suggested_vine_row", "status", "reason", "review_note"];
+    "saved_block", "suggested_block", "geometry_source", "stored_heading", "evidence_heading", "heading_fresh",
+    "side", "pressed_side", "accuracy_m", "evidence", "valid_observations", "trip_id", "track_anchor",
+    "saved_segments", "existing_metadata", "nearest_physical_row", "bounding_rows", "suggested_driving_aisle",
+    "suggested_vine_row", "status", "reason", "review_note"];
   const lines = [head.join(",")];
   for (const r of rows) {
     lines.push([
       "yes", r.id, r.title, r.mode, r.createdAt, r.lat, r.lng, r.savedBlockName, r.suggestedBlockName,
-      r.geometrySource, r.heading, r.side, r.accuracy, r.captureCount, r.tripId, r.trackAnchor, r.existingMeta,
+      r.geometrySource, r.storedHeading, r.evidenceHeading, r.headingFresh, r.side, r.pressedSide, r.accuracy,
+      r.evidenceState, r.observationCount, r.tripId, r.trackAnchor,
+      r.segmentsState === "unavailable" ? "unavailable" : r.segmentsLabel, r.existingMeta,
       r.geometry?.nearestPhysicalRow, r.geometry?.boundingRows?.join("|"), r.geometry?.aisle,
       r.suggestedVineRow, STATUS_LABEL[r.status], r.reason, notes[r.id] ?? "",
     ].map(esc).join(","));
