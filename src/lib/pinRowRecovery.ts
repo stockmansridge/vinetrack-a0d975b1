@@ -370,6 +370,8 @@ export function travelFromTrack(pt: LatLng, track: LatLng[]): TravelEstimate {
   const chord = metres(a, b), path = back.path + fwd.path;
   if (metres(track[i], a) < MIN_TRACK_SPAN_M || metres(track[i], b) < MIN_TRACK_SPAN_M)
     return { courseDeg: null, source: null, reason: `track span < ${MIN_TRACK_SPAN_M} m each side of anchor` };
+  if (angleDiff(bearing(a, track[i]), bearing(track[i], b)) > 150)
+    return { courseDeg: null, source: null, reason: "track reverses direction at anchor (side ambiguous)" };
   if (path <= 0 || chord / path < MIN_TRACK_STRAIGHTNESS)
     return { courseDeg: null, source: null, reason: "track around anchor is not straight (turn?)" };
   return { courseDeg: bearing(a, b), source: "trip_track", reason: `ordered track ${chord.toFixed(0)} m, straight` };
@@ -447,6 +449,10 @@ export interface RecoveryRow {
   directionConflict: string | null;
   /** Why not resolvable / review, with CURRENT evidence (not inherently impossible). */
   category: FailureCategory;
+  /** Raw side fields, preserved verbatim (never filled from proximity). */
+  sideFields: { pin_side: string | null; side: string | null; pressed_side: string | null };
+  sideConflict: boolean;
+  snapped: LatLng | null;
   suggestedVineRow: number | null;
   reason: string;
   status: RecoveryStatus;
@@ -487,7 +493,10 @@ export function assessPin(pin: any, ev: RecoveryEvidence): RecoveryRow {
   const observationCount = evRow ? countValidObservations(evRow.observations) : evidenceState === "none" ? 0 : null;
   const pressedSide = evRow ? normSide(evRow.pressed_side) : null;
   const storedHeading = num(pin.heading);
-  const side = normSide(pin.pin_side ?? pin.side);
+  const sideVals = [normSide(pin.pin_side), normSide(pin.side), evRow ? normSide(evRow.pressed_side) : null].filter(Boolean);
+  const sideConflict = new Set(sideVals).size > 1;
+  const side = sideConflict ? null : (sideVals[0] as "left" | "right" | undefined) ?? null;
+  const sl = num(pin.snapped_latitude), sg = num(pin.snapped_longitude);
 
   // Trip
   const tripId = pin.trip_id ? String(pin.trip_id) : null;
@@ -571,7 +580,7 @@ export function assessPin(pin: any, ev: RecoveryEvidence): RecoveryRow {
   if ((geometry.clearance ?? 0) < MIN_ROW_CLEARANCE_FRACTION) issues.push("GPS near a vine row line (aisle ambiguous)");
   if (travel.courseDeg == null) issues.push(directionConflict ?? `no reliable travel direction (${obsTravel?.reason ?? "no observations"}${trackTravel ? `; ${trackTravel.reason}` : ""})`);
   if (headingNote) issues.push(headingNote);
-  if (pressedSide && side && pressedSide !== side) issues.push("pressed side conflicts with pin side");
+  if (sideConflict) issues.push("left/right values conflict (pin_side / side / pressed_side)");
   if (pair.row == null && travel.courseDeg != null) issues.push(pair.reason);
   if (anchor !== "unique") issues.push(`track anchor: ${anchor.replace("_", " ")}`);
 
