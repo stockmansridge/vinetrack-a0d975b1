@@ -168,10 +168,17 @@ export default function ScoutReportsPage() {
             </div>
           </CardContent>
         </Card>
-      ) : visitsQuery.isLoading || vintage.isLoading ? (
+      ) : accessQuery.isLoading || (access === "allowed" && (visitsQuery.isLoading || vintage.isLoading)) ? (
         <div className="flex items-center gap-2 p-8 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading scout reports…
         </div>
+      ) : accessUnknown || accessQuery.error ? (
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground">
+            We couldn't confirm your access to Scout Reports. Check your connection and try
+            again — an empty list is only shown once access is confirmed.
+          </CardContent>
+        </Card>
       ) : visitsQuery.error ? (
         <Card>
           <CardContent className="p-6 text-sm text-muted-foreground">
