@@ -10,12 +10,14 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate, formatDateTime } from "@/lib/dateFormat";
 import {
+  checkInsightsAccess,
   fetchCanonicalGrowthRecordIds,
   fetchScoutVisitDetail,
   isPermissionError,
   locationLabel,
   measuredCoord,
   signScoutPhotoUrl,
+  stopCoord,
   stopLabel,
   stopTime,
   stopWeather,
@@ -101,9 +103,17 @@ export default function ScoutReportDetailPage() {
   const { toast } = useToast();
   const [exporting, setExporting] = useState(false);
 
+  // Access preflight — RLS hides rows silently, so confirm access first.
+  const accessQuery = useQuery({
+    queryKey: ["insights-access", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => checkInsightsAccess(selectedVineyardId!),
+  });
+  const access = accessQuery.data;
+
   const detailQuery = useQuery({
     queryKey: ["scout-visit-detail", selectedVineyardId, visitId],
-    enabled: !!selectedVineyardId && !!visitId,
+    enabled: !!selectedVineyardId && !!visitId && access === "allowed",
     queryFn: () => fetchScoutVisitDetail(selectedVineyardId!, visitId!),
   });
   const detail = detailQuery.data;
