@@ -19,6 +19,13 @@
 - [x] Make activity Vineyard/User counts open named, period-matched read-only lists using existing access; disclose creator attribution and restricted results.
 - [x] Verify aggregation, access/error states and dashboard click flow with offline tests (9 passed); authenticated shared-data access remains unverified.
 
+## Crop Health blank saved imagery
+- [x] Decode real 1 Aug 2026 Stockman's Ridge bytes (read-only): display PNGs 100% transparent, NDVI TIFFs 100% -9999; v3/v6 rows share overwritten storage keys.
+- [x] Usable-imagery gate: decoded pixel/cell verdicts drive date coverage, per-paddock status and Admin diagnostics ("saved but blank" vs "no capture" vs "loading").
+- [x] v7 publication fails closed on blank output (worker + DB trigger); cross-version storage-key reuse refused; legacy processor source fixed (blank render, version-scoped keys, null coverage).
+- [ ] Deploy legacy satellite-process-scene fix — needs owner approval (calls paid provider; prior bundle not exportable).
+- [ ] Coloured imagery — needs a real recent provider acquisition and processing run under an approved hard budget and SATELLITE_RUNTIME_ACCEPTED.
+
 ## Crop Health emergency recovery release
 - [x] Prioritise bounded saved-display loading, cancellation, validation and honest failures.
 - [x] Preserve same-version pairing and incomplete-summary reporting; stop mount-triggered backfill.

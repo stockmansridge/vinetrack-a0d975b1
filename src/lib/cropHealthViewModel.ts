@@ -58,9 +58,14 @@ export type CropHealthAvailabilityReason =
   | "selected_layer_missing"
   | "scene_incomplete"
   | "asset_load_failed"
+  | "stored_blank"
+  | "stored_invalid"
   | "overlay_mount_failed"
   | "cell_data_incomplete"
   | "package_upgrade_required";
+
+/** Decoded-byte verdict; "unchecked" until the saved bytes were inspected. */
+export type CropHealthRasterVerification = "unchecked" | "verified" | "legacy" | "blank" | "invalid";
 
 export interface CropHealthPaddockViewState {
   paddockId: string;
@@ -83,6 +88,10 @@ export interface CropHealthPaddockViewState {
 
   displayMounted: boolean;
   cellHoverReady: boolean;
+  /** Decoded-byte verdict for the selected display asset. */
+  rasterVerification: CropHealthRasterVerification;
+  /** Decoded-byte verdict for the matching analytical asset. */
+  analyticalVerification: CropHealthRasterVerification;
 
   sceneCloudCoverPct: number | null;
   validCoveragePct: number | null;
@@ -111,6 +120,15 @@ export interface CropHealthSelectedDateSummary {
   analyticalMissing: number;
   analyticalFailed: number;
 
+  /** Stored, decodable, but zero visible pixels / zero valid cells. */
+  storedBlank: number;
+  /** Bytes contradict their record (dimensions, decode, grid). */
+  storedInvalid: number;
+  /** Display bytes proved usable (verified or legacy). */
+  usableDisplays: number;
+  /** Display bytes proved usable on the verified native pipeline. */
+  verifiedDisplays: number;
+
   // Customer-facing coverage: mounted overlays / active paddocks × 100.
   coveragePercent: number;
 }
@@ -119,6 +137,8 @@ export type AssetLoadPhase = "loading" | "loaded" | "failed";
 export interface AssetLoadState {
   phase: AssetLoadPhase;
   errorMessage?: string | null;
+  /** Result of decoding the saved bytes, when known. */
+  verdict?: "verified" | "legacy" | "blank" | "invalid";
 }
 
 export type OverlayLifecyclePhase = "mounted" | "unmounted" | "error";
@@ -279,6 +299,10 @@ export function deriveCropHealthViewModel(
 
     const displayMounted = displayStatus === "mounted";
     const cellHoverReady = analyticalStatus === "ready";
+    const displayVerdict = displayAssetId ? displayLoadState.get(displayKey)?.verdict : undefined;
+    const analyticalVerdict = analyticalAssetId ? analyticalLoadState.get(analyticalKey)?.verdict : undefined;
+    const rasterVerification: CropHealthRasterVerification = displayVerdict ?? "unchecked";
+    const analyticalVerification: CropHealthRasterVerification = analyticalVerdict ?? "unchecked";
 
     // Availability reason — deterministic priority.
     let availabilityReason: CropHealthAvailabilityReason;
@@ -290,6 +314,10 @@ export function deriveCropHealthViewModel(
       availabilityReason = "selected_layer_missing";
     } else if (sceneStatus === "incomplete") {
       availabilityReason = "scene_incomplete";
+    } else if (rasterVerification === "blank") {
+      availabilityReason = "stored_blank";
+    } else if (rasterVerification === "invalid") {
+      availabilityReason = "stored_invalid";
     } else if (displayStatus === "failed") {
       availabilityReason = overlayLifecycle.get(displayKey)?.phase === "error"
         ? "overlay_mount_failed"
@@ -322,6 +350,8 @@ export function deriveCropHealthViewModel(
       availabilityReason,
       displayMounted,
       cellHoverReady,
+      rasterVerification,
+      analyticalVerification,
       sceneCloudCoverPct: dp?.paddock_cloud_cover_pct ?? null,
       validCoveragePct: dp?.paddock_valid_coverage_pct ?? null,
       nativeResolutionM: layerBundle?.display?.native_resolution_m ?? null,
@@ -345,6 +375,10 @@ export function deriveCropHealthViewModel(
     analyticalReady: 0,
     analyticalMissing: 0,
     analyticalFailed: 0,
+    storedBlank: 0,
+    storedInvalid: 0,
+    usableDisplays: 0,
+    verifiedDisplays: 0,
     coveragePercent: 0,
   };
 
@@ -365,6 +399,13 @@ export function deriveCropHealthViewModel(
     else if (p.analyticalStatus === "missing" || p.analyticalStatus === "not_available") {
       summary.analyticalMissing += 1;
     } else if (p.analyticalStatus === "failed") summary.analyticalFailed += 1;
+
+    if (p.rasterVerification === "blank") summary.storedBlank += 1;
+    else if (p.rasterVerification === "invalid") summary.storedInvalid += 1;
+    else if (p.rasterVerification === "verified" || p.rasterVerification === "legacy") {
+      summary.usableDisplays += 1;
+      if (p.rasterVerification === "verified") summary.verifiedDisplays += 1;
+    }
   }
 
   summary.coveragePercent =

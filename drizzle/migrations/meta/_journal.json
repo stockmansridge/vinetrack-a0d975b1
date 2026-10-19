@@ -50,6 +50,13 @@
       "when": 1792389387806,
       "tag": "0006_satellite_reservation_null_rejection",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792394292816,
+      "tag": "0007_satellite_raster_identity_and_blank_guard",
+      "breakpoints": true
     }
   ]
 }
