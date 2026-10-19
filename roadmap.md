@@ -1,5 +1,9 @@
 # Roadmap
 
+## Admin activity drill-down
+- [ ] Make activity Vineyard/User counts open named, period-matched read-only lists using existing access; disclose creator attribution and restricted results.
+- [ ] Verify aggregation, access/error states and dashboard click flow with offline tests.
+
 ## Crop Health emergency recovery (source/offline only)
 - [x] Prioritise bounded saved-display loading, cancellation, validation and honest failures.
 - [x] Preserve same-version pairing and incomplete-summary reporting; stop mount-triggered backfill.
