@@ -13,6 +13,7 @@
 - Worker receipt `84489870-ba92-480a-a682-3bbcb18b61ac`; discovery receipt `3a8d28de-45bb-4a30-9517-607f05d537f1`. These are manual dispatch receipts, NOT cron evidence.
 - After foundation application: 127 scenes, 2387 assets, zero summaries, empty new queue, zero enabled controls. Old jobs/backlog were not seeded or changed.
 - Automatic preview compilation reported `build OK`; no manual production build or standalone TypeScript check was run (platform-managed compilation only).
+- Full offline suite: 2846 passed, ten failures in the same five previously identified chemical UI suites; unrelated files were not changed. Isolated database suite is run separately with `vitest.satellite-db.config.ts`.
 
 ## Known unfinished work — no activation claim
 1. **Scheduler:** existing project lacks generated `cron-auth.ts` and structured managed HTTP scheduling tools. Extensions alone do not establish dispatch/auth safety. Per platform rules, no hand-authored HTTP cron SQL was used. No schedule registered; no schedule IDs or cron receipts. Platform enablement/support is required for managed callback scheduling, then verify real daily and ten-minute inert receipts.

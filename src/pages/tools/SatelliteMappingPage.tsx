@@ -1499,7 +1499,7 @@ export default function SatelliteMappingPage() {
         if (signal.aborted) return;
         const message = error instanceof Error ? error.message : String(error);
         if (isDisplay && url) void deleteCachedAsset(asset.id, pv);
-        diag({ finalStatus: "failed", error: message, endpointStatus: error instanceof SavedAssetError ? error.status ?? null : null });
+        diag({ finalStatus: "failed", error: message });
         state((prev) => new Map(prev).set(key, { phase: "failed", errorMessage: message }));
       }
     };
