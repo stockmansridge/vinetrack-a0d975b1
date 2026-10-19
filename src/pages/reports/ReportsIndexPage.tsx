@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Route, ClipboardList, Scissors, SprayCan, CloudRain, Sprout, Grape, ChartNoAxesCombined, Droplets, Receipt, CircleDollarSign, Files, type LucideIcon } from "lucide-react";
 import { useNavViewer } from "@/hooks/useNavViewer";
 import { reportDestinations } from "@/lib/navigationConfig";
 
@@ -25,6 +24,21 @@ const DESCRIPTIONS: Record<string, string> = {
   "/reports/documents": "Central launcher for Trip, Spray and Rainfall report PDFs/CSVs.",
 };
 
+const REPORT_ICONS: Record<string, LucideIcon> = {
+  "/reports/trips": Route,
+  "/reports/work-tasks": ClipboardList,
+  "/reports/pruning-activity": Scissors,
+  "/reports/spray": SprayCan,
+  "/reports/rainfall": CloudRain,
+  "/reports/growth-stage": Sprout,
+  "/reports/yield": Grape,
+  "/reports/yield-comparison": ChartNoAxesCombined,
+  "/reports/irrigation": Droplets,
+  "/reports/wine-grape-levy": Receipt,
+  "/reports/costs": CircleDollarSign,
+  "/reports/documents": Files,
+};
+
 export default function ReportsIndexPage() {
   const viewer = useNavViewer();
   const reports = reportDestinations(viewer);
@@ -40,23 +54,25 @@ export default function ReportsIndexPage() {
 
       <div className="grid gap-3 sm:grid-cols-2">
         {reports.map((r) => {
-          const Icon = r.activity.icon;
+          const Icon = REPORT_ICONS[r.path] ?? r.activity.icon;
           return (
-            <Link key={r.path} to={r.path}>
-              <Card className="p-4 h-full hover:bg-accent/30 transition-colors space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Icon className="h-4 w-4" />
-                    <h2 className="font-medium">
+            <Link key={r.path} to={r.path} className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+              <Card data-report={r.path.split("/").pop()} className="report-tile p-4 h-full transition-colors space-y-3 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-report/15 text-report" aria-hidden="true">
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="font-semibold leading-snug">
                       {r.activity.label} — {r.title}
                     </h2>
+                    <span className="text-xs font-medium text-report">Available</span>
                   </div>
-                  <Badge variant="default">Available</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {DESCRIPTIONS[r.path] ?? `Open the ${r.title.toLowerCase()} report.`}
                 </p>
-                <div className="text-xs text-primary flex items-center gap-1 pt-1">
+                <div className="text-xs font-semibold text-report flex items-center gap-1 pt-1">
                   Open <ArrowRight className="h-3 w-3" />
                 </div>
               </Card>
