@@ -6,28 +6,71 @@ import { requireAlignedScl, sampleSclNearest } from './satellite-exact-adapter.t
 import { nativeWindow, pixelMask, projection, sha256, hashJson } from './satellite-pilot-geometry.ts';
 import { readExactNativeWindow, RequestBudget } from './satellite-bounded-cog.ts';
 import { countVisibleRgba, countValidCells } from './satellite-raster-usability.ts';
-export async function renderPilot(manifest: ExactManifest, ring: number[][], layer: PilotLayer, budget: RequestBudget) {
-  // Source grid is recorded by discovery and must match the TIFF itself.
+export interface SclPreflight {
+  grid: NativeGrid;
+  inside: boolean[];
+  mask: number[];
+  histogram: Record<string, number>;
+  paddockPixels: number;
+  validSclCount: number;
+  sclWindow: number[];
+  sclCells: number[];
+}
+// Bounded native 20m SCL classification over the exact paddock geometry, before any spectral band read.
+// The result is persisted per immutable acquisition/paddock/boundary so NDVI and True Colour share one SCL read.
+export async function preflightScl(manifest: ExactManifest, ring: number[][], budget: RequestBudget): Promise<SclPreflight> {
   const source=manifest.native_grid;
   if (!source) throw new Error('Missing signed native source grid');
   const {window,projected}=nativeWindow(ring,source);
-  // Measurement grid derived from the immutable STAC grid + window; verified against each TIFF below.
   const grid:NativeGrid={crs:source.crs,affine:[source.affine[0],0,source.affine[2]+window[0]*source.affine[0],0,source.affine[4],source.affine[5]+window[1]*source.affine[4]],width:window[2]-window[0],height:window[3]-window[1]};
   validateNativeGrid(grid);
   const inside=pixelMask(grid,projected);
-  // SCL-first preflight: classify the exact paddock geometry before any spectral band read.
   const sclSource=manifest.scl_grid;
   if (!sclSource) throw new Error('Missing SCL source grid');
   requireAlignedScl(source,sclSource);
   const sclWindow=nativeWindow(ring,sclSource).window;
   const scl=await readExactNativeWindow(manifest.bands.scl.href,sclWindow,budget);
   if (await hashJson(scl.source_grid)!==await hashJson(sclSource)) throw new Error('SCL native grid mismatch');
-  const mask=Array.from({length:grid.width*grid.height},(_,i)=>sampleSclNearest(grid.affine[2]+(i%grid.width+.5)*10,grid.affine[5]-(Math.floor(i/grid.width)+.5)*10,{affine:scl.measurement_grid.affine,width:scl.measurement_grid.width,height:scl.measurement_grid.height,values:Array.from(scl.data as ArrayLike<number>)}));
+  const sclCells=Array.from(scl.data as ArrayLike<number>);
+  const mask=Array.from({length:grid.width*grid.height},(_,i)=>sampleSclNearest(grid.affine[2]+(i%grid.width+.5)*10,grid.affine[5]-(Math.floor(i/grid.width)+.5)*10,{affine:scl.measurement_grid.affine,width:scl.measurement_grid.width,height:scl.measurement_grid.height,values:sclCells}));
   const histogram:Record<string,number>={};let validSclCount=0,paddockPixels=0;
   for(let i=0;i<mask.length;i++){if(!inside[i])continue;paddockPixels++;histogram[String(mask[i])]=(histogram[String(mask[i])]??0)+1;if(validScl(mask[i]))validSclCount++;}
   if(paddockPixels===0)throw new TerminalQualityError('insufficient_coverage',histogram,'Paddock boundary covers no native cells');
   // Terminal cloud/shadow/snow occlusion: skip spectral bands entirely, never retried for this acquisition.
   if(validSclCount===0)throw new TerminalQualityError('cloud_obscured',histogram,`Cloud-obscured paddock: 0/${paddockPixels} usable SCL cells (${JSON.stringify(histogram)})`);
+  return {grid,inside,mask,histogram,paddockPixels,validSclCount,sclWindow,sclCells};
+}
+// Rebuild a preflight from a persisted row; grid identity is re-derived from the immutable manifest, never trusted from storage.
+export function preflightFromPersisted(manifest: ExactManifest, ring: number[][], row: { scl_window: unknown; scl_cells: unknown; histogram: unknown; paddock_pixels: number; valid_scl_count: number }): SclPreflight {
+  const source=manifest.native_grid;
+  if (!source) throw new Error('Missing signed native source grid');
+  const {window,projected}=nativeWindow(ring,source);
+  const grid:NativeGrid={crs:source.crs,affine:[source.affine[0],0,source.affine[2]+window[0]*source.affine[0],0,source.affine[4],source.affine[5]+window[1]*source.affine[4]],width:window[2]-window[0],height:window[3]-window[1]};
+  validateNativeGrid(grid);
+  const inside=pixelMask(grid,projected);
+  const sclSource=manifest.scl_grid;
+  if (!sclSource) throw new Error('Missing SCL source grid');
+  requireAlignedScl(source,sclSource);
+  const sclWindow=nativeWindow(ring,sclSource).window;
+  const persistedWindow=row.scl_window as number[];
+  if (!Array.isArray(persistedWindow)||persistedWindow.length!==4||persistedWindow.some((v,i)=>v!==sclWindow[i])) throw new Error('Persisted SCL window mismatch');
+  const sclCells=row.scl_cells as number[];
+  const expectedCells=(sclWindow[2]-sclWindow[0])*(sclWindow[3]-sclWindow[1]);
+  if (!Array.isArray(sclCells)||sclCells.length!==expectedCells||sclCells.some((v)=>!Number.isInteger(v)||v<0||v>255)) throw new Error('Persisted SCL cells invalid');
+  const sclAffine=[sclSource.affine[0],0,sclSource.affine[2]+sclWindow[0]*sclSource.affine[0],0,sclSource.affine[4],sclSource.affine[5]+sclWindow[1]*sclSource.affine[4]];
+  const mask=Array.from({length:grid.width*grid.height},(_,i)=>sampleSclNearest(grid.affine[2]+(i%grid.width+.5)*10,grid.affine[5]-(Math.floor(i/grid.width)+.5)*10,{affine:sclAffine,width:sclWindow[2]-sclWindow[0],height:sclWindow[3]-sclWindow[1],values:sclCells}));
+  const histogram:Record<string,number>={};let validSclCount=0,paddockPixels=0;
+  for(let i=0;i<mask.length;i++){if(!inside[i])continue;paddockPixels++;histogram[String(mask[i])]=(histogram[String(mask[i])]??0)+1;if(validScl(mask[i]))validSclCount++;}
+  // Recomputed classification must match the persisted row exactly; otherwise the cache is corrupt.
+  if (paddockPixels!==row.paddock_pixels||validSclCount!==row.valid_scl_count||JSON.stringify(histogram)!==JSON.stringify(row.histogram)) throw new Error('Persisted SCL preflight mismatch');
+  return {grid,inside,mask,histogram,paddockPixels,validSclCount,sclWindow,sclCells};
+}
+export async function renderPilot(manifest: ExactManifest, ring: number[][], layer: PilotLayer, budget: RequestBudget, preflight?: SclPreflight) {
+  const pf=preflight??await preflightScl(manifest,ring,budget);
+  const {grid,inside,mask,histogram}=pf;
+  const source=manifest.native_grid;
+  if (!source) throw new Error('Missing signed native source grid');
+  const {window}=nativeWindow(ring,source);
   const keys=layer==='NDVI'?['red','nir']:['red','green','blue'];
   const bands: Record<string, Awaited<ReturnType<typeof readExactNativeWindow>>>={};
   for (const key of keys) {

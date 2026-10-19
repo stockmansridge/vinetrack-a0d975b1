@@ -71,6 +71,13 @@
       "when": 1792406184800,
       "tag": "0009_satellite_work_items_terminal_quality_check",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792406655178,
+      "tag": "0010_satellite_scl_preflight_cache",
+      "breakpoints": true
     }
   ]
 }

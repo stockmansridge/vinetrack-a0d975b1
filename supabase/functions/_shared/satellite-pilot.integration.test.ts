@@ -19,7 +19,7 @@ async function setup() {
   const old=await file('supabase/migrations/20260713020438_89d7f076-416f-4140-ad1d-f5332cc08a3c.sql');
   await db.exec(old.slice(0,old.indexOf('-- ============ satellite_refresh_jobs')));
   await db.exec(old.slice(old.indexOf('CREATE OR REPLACE FUNCTION public.refresh_paddock_manifest'),old.indexOf('CREATE OR REPLACE FUNCTION public.satellite_scenes_manifest_sync')));
-  for(const p of ['0000_satellite_ingestion_disabled_foundation.sql','0001_satellite_verification_fail_closed.sql','0002_satellite_service_privilege_hardening.sql','0003_satellite_pilot_day_selection.sql','0004_satellite_pilot_fenced_publish.sql','0005_satellite_v7_manifest_compatibility.sql','0006_satellite_reservation_null_rejection.sql','0007_satellite_raster_identity_and_blank_guard.sql','0008_satellite_terminal_quality_statuses.sql','0009_satellite_work_items_terminal_quality_check.sql']) await db.exec(await file('drizzle/migrations/'+p));
+  for(const p of ['0000_satellite_ingestion_disabled_foundation.sql','0001_satellite_verification_fail_closed.sql','0002_satellite_service_privilege_hardening.sql','0003_satellite_pilot_day_selection.sql','0004_satellite_pilot_fenced_publish.sql','0005_satellite_v7_manifest_compatibility.sql','0006_satellite_reservation_null_rejection.sql','0007_satellite_raster_identity_and_blank_guard.sql','0008_satellite_terminal_quality_statuses.sql','0009_satellite_work_items_terminal_quality_check.sql','0010_satellite_scl_preflight_cache.sql']) await db.exec(await file('drizzle/migrations/'+p));
   await db.exec(`CREATE UNIQUE INDEX satellite_scenes_unique_capture_idx ON satellite_scenes(vineyard_id,paddock_id,provider,((acquired_at AT TIME ZONE 'UTC')::date));`);
   return db;
 }
@@ -38,7 +38,7 @@ function client(db:PGlite,storage:Map<string,Uint8Array>,corrupt=false) {
     async execute(){try{
       const values:unknown[]=[];let sql='';
       if(this.operation==='select') {sql=`SELECT ${this.columns} FROM ${this.table}`;if(this.filters.length)sql+=' WHERE '+this.filters.map(f=>{values.push(f.value);return `${f.key}=$${values.length}`;}).join(' AND ');}
-      else {const keys=Object.keys(this.value);keys.forEach(k=>values.push(typeof this.value[k]==='object'?JSON.stringify(this.value[k]):this.value[k]));sql=`INSERT INTO ${this.table}(${keys.join(',')}) VALUES(${keys.map((_,i)=>'$'+(i+1)).join(',')})`;if(this.operation==='upsert')sql+=' ON CONFLICT(vineyard_id,paddock_id,provider,processing_version) DO UPDATE SET last_provider_check_at=EXCLUDED.last_provider_check_at,newest_discovered_at=EXCLUDED.newest_discovered_at';sql+=' RETURNING '+this.columns;}
+      else {const keys=Object.keys(this.value);keys.forEach(k=>values.push(this.value[k]!==null&&typeof this.value[k]==='object'?JSON.stringify(this.value[k]):this.value[k]));sql=`INSERT INTO ${this.table}(${keys.join(',')}) VALUES(${keys.map((_,i)=>'$'+(i+1)).join(',')})`;if(this.operation==='upsert')sql+=' ON CONFLICT(vineyard_id,paddock_id,provider,processing_version) DO UPDATE SET last_provider_check_at=EXCLUDED.last_provider_check_at,newest_discovered_at=EXCLUDED.newest_discovered_at';sql+=' RETURNING '+this.columns;}
       const r=await db.query(sql,values);return {data:this.singleResult?r.rows[0]:r.rows,error:null};
     }catch(error){return {data:null,error};}}
   }
@@ -55,10 +55,10 @@ function client(db:PGlite,storage:Map<string,Uint8Array>,corrupt=false) {
 async function enable(db:PGlite){await db.exec(`INSERT INTO satellite_ingestion_control(scope,scope_key,enabled) VALUES('global','all',true),('vineyard','${PILOT_VINEYARD}',true),('provider','${PILOT_PROVIDER}',true),('pixels','all',true),('publisher','all',true);INSERT INTO satellite_provider_throttle(provider,min_interval_ms) VALUES('${PILOT_PROVIDER}',1);INSERT INTO satellite_provider_budget(provider,period_kind,period_start,request_limit,processing_limit,cpu_ms_limit,transfer_limit,storage_limit,hard_spend_limit,approved_at) VALUES('${PILOT_PROVIDER}','day',current_date,10000,100,10000000,1000000000,100000000,10,now()),('${PILOT_PROVIDER}','month',date_trunc('month',now())::date,10000,100,10000000,1000000000,100000000,10,now());`);}
 const fixtureTime=new Date(Date.now()-60000).toISOString();
 function stac(){const f=pilotFixture();return {type:'Feature',id:'S2B_55H_20261019',collection:'sentinel-2-l2a',properties:{datetime:fixtureTime,'s2:processing_baseline':'05.00','s2:product_uri':'S2B_MSIL2A_SYNTHETIC','eo:cloud_cover':0,'proj:epsg':32755},geometry:{type:'Polygon',coordinates:[[[146,-40],[149,-40],[149,-30],[146,-30],[146,-40]]]},assets:Object.fromEntries(Object.entries(f.manifest.bands).map(([k,b])=>[k,{href:b.href,'raster:bands':[k==='scl'?{spatial_resolution:b.resolution,data_type:'uint8',nodata:0}:{scale:b.scale,offset:b.offset,spatial_resolution:b.resolution,data_type:'uint16',nodata:0}],'proj:epsg':32755,'proj:shape':k==='scl'?[2,2]:[4,4],'proj:transform':k==='scl'?f.manifest.scl_grid?.affine:f.manifest.native_grid?.affine}]))};}
-function dependencies(db:PGlite,storage=new Map<string,Uint8Array>(),options:{corrupt?:boolean;stale?:boolean;status?:number;scl?:number}={}) {
+function dependencies(db:PGlite,storage=new Map<string,Uint8Array>(),options:{corrupt?:boolean;stale?:boolean;status?:number;scl?:number|number[]}={}) {
   const f=pilotFixture(options.scl);const ids=Array.from({length:8},(_,i)=>`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`);
   const paddocks=ids.map(id=>({id,vineyard_id:PILOT_VINEYARD,polygon_points:f.ring.map(v=>({longitude:v[0],latitude:v[1]}))}));
-  return {unitSpend:.01,db:client(db,storage,options.corrupt),canonical:async(id?:string)=>id?(options.stale?[{...paddocks[0],polygon_points:[]}]:paddocks.filter(p=>p.id===id)):paddocks,fetch:async()=>new Response(options.status===429?'':JSON.stringify({features:[stac()],links:[]}),{status:options.status??200,headers:{'Retry-After':'2'}}),render:(m: any,r:any,l:any,b:RequestBudget)=>renderPilot(m,r,l,new RequestBudget(b.signal,24,1048576,f.transport))};
+  return {unitSpend:.01,fixture:f,db:client(db,storage,options.corrupt),canonical:async(id?:string)=>id?(options.stale?[{...paddocks[0],polygon_points:[]}]:paddocks.filter(p=>p.id===id)):paddocks,fetch:async()=>new Response(options.status===429?'':JSON.stringify({features:[stac()],links:[]}),{status:options.status??200,headers:{'Retry-After':'2'}}),pixels:f.transport,render:(m: any,r:any,l:any,b:RequestBudget,pf?:any)=>renderPilot(m,r,l,new RequestBudget(b.signal,24,1048576,f.transport),pf)};
 }
 Deno.test('native Deno parser PNG and float GeoTIFF synthetic 10m fixture',async()=>{assert.equal((await runRasterFixture()).mean,.5);});
 Deno.test('discovery -> actual atomic queue -> native NDVI -> immutable storage -> fenced v7 manifest; v6 preserved',async()=>{
@@ -173,4 +173,40 @@ Deno.test('database refuses blank v7 proofs and cross-version reuse of one stora
     await assert.rejects(()=>db.exec(`INSERT INTO satellite_raster_assets(satellite_scene_id,index_type,asset_type,processing_version,storage_path,mime_type,provenance) VALUES('22222222-2222-4222-8222-222222222222','NDVI','ANALYTICAL_RASTER','${PILOT_VERSION}','v/p/a/${PILOT_VERSION}/NDVI/x.tif','image/tiff','{"valid_pixel_count":16,"analytical_valid_cell_count":15}')`),/analytical/);
     await assert.rejects(()=>db.exec(`INSERT INTO satellite_raster_assets(satellite_scene_id,index_type,asset_type,processing_version,storage_path,mime_type,provenance) VALUES('22222222-2222-4222-8222-222222222222','NDVI','DISPLAY_RASTER','${PILOT_VERSION}','v/p/a/NDVI/x.png','image/png','{"valid_pixel_count":16,"display_visible_pixel_count":16}')`),/version-scoped/);
   } finally { await db.close(); }
+});
+Deno.test('SCL preflight is read once per acquisition/paddock and shared by NDVI and True Colour',async()=>{
+  const db=await setup();try{
+    await enable(db);const storage=new Map<string,Uint8Array>();const deps=dependencies(db,storage,{scl:[9,9,4,4]});
+    assert.equal((await runPilot('discovery',deps as any,AbortSignal.timeout(20000))).reason,'discovered');
+    const first=await runPilot('worker',deps as any,AbortSignal.timeout(20000));
+    assert.equal(first.reason,'published');
+    const sclReadsAfterFirst=deps.fixture.reads.scl??0;assert.ok(sclReadsAfterFirst>0);
+    const second=await runPilot('worker',deps as any,AbortSignal.timeout(20000));
+    assert.equal(second.reason,'published');
+    // The sibling layer reused the persisted classification: no second SCL provider read.
+    assert.equal(deps.fixture.reads.scl,sclReadsAfterFirst);
+    const rows=await db.query<any>('select paddock_pixels,valid_scl_count,terminal_quality from satellite_scl_preflight');
+    assert.equal(rows.rows.length,1);assert.equal(rows.rows[0].paddock_pixels,16);assert.equal(rows.rows[0].valid_scl_count,8);assert.equal(rows.rows[0].terminal_quality,null);
+  }finally{await db.close();}
+});
+Deno.test('terminal cloud classification is persisted: sibling layers finish terminally with zero provider calls',async()=>{
+  const db=await setup();try{
+    await enable(db);const deps=dependencies(db,new Map(),{scl:9});
+    assert.equal((await runPilot('discovery',deps as any,AbortSignal.timeout(20000))).reason,'discovered');
+    let zeroCallTerminal=0,total=0;
+    for(let i=0;i<16;i++){const r=await runPilot('worker',deps as any,AbortSignal.timeout(20000)) as any;if(r.reason==='idle')break;total++;assert.equal(r.reason,'cloud_obscured');if(r.provider_calls===0)zeroCallTerminal++;}
+    assert.equal(total,16);assert.equal(zeroCallTerminal,8);
+    assert.equal((await db.query<any>('select count(*) c from satellite_scl_preflight where terminal_quality=$1',['cloud_obscured'])).rows[0].c,8);
+    assert.equal((await db.query<any>("select count(*) c from satellite_work_items where status='cloud_obscured'")).rows[0].c,16);
+  }finally{await db.close();}
+});
+Deno.test('exhausted request budget blocks the worker before any provider call',async()=>{
+  const db=await setup();try{
+    await enable(db);const deps=dependencies(db);
+    await runPilot('discovery',deps as any,AbortSignal.timeout(20000));
+    await db.exec('update satellite_provider_budget set requests_reserved=request_limit');
+    const r=await runPilot('worker',deps as any,AbortSignal.timeout(20000)) as any;
+    assert.equal(r.reason,'budget_or_backoff');assert.equal(r.provider_calls,0);
+    assert.equal(deps.fixture.reads.scl??0,0);
+  }finally{await db.close();}
 });
