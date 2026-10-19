@@ -9,6 +9,7 @@ beforeAll(async()=>{
     CREATE TABLE satellite_scenes(id uuid PRIMARY KEY); CREATE TABLE satellite_raster_assets(id uuid PRIMARY KEY);
     CREATE TABLE satellite_index_summaries(id uuid PRIMARY KEY);`);
   await db.exec(readFileSync('drizzle/migrations/0000_satellite_ingestion_disabled_foundation.sql','utf8'));
+  await db.exec(readFileSync('drizzle/migrations/0001_satellite_verification_fail_closed.sql','utf8'));
 },30000);
 afterAll(()=>db.close());
 it('actual schema denies browser table access, all controls default OFF, and disabled claims return no work',async()=>{
@@ -28,6 +29,7 @@ it('actual queue enforces idempotency, fresh priority, lease fencing and expired
   const [first,second]=await Promise.all([db.query<any>('select * from satellite_claim_work($1,$2)',[vineyard,provider]),db.query<any>('select * from satellite_claim_work($1,$2)',[vineyard,provider])]);
   expect(first.rows[0].lane).toBe('fresh'); expect(second.rows[0].lane).toBe('backfill'); expect(first.rows[0].id).not.toBe(second.rows[0].id);
   const work=first.rows[0];
+  await expect(db.query('select satellite_finish_work($1,$2,$3,$4)',[work.id,work.lease_token,'verified',{}])).rejects.toThrow();
   await expect(db.exec(`INSERT INTO satellite_work_items(vineyard_id,paddock_id,acquisition_id,layer,boundary_snapshot,boundary_hash) VALUES('${vineyard}','33333333-3333-4333-8333-333333333333','22222222-2222-4222-8222-222222222222','NDVI','{}','${'c'.repeat(64)}')`)).rejects.toThrow();
   const bad=await db.query<{ok:boolean}>('select satellite_finish_work($1,$2,$3) ok',[work.id,'44444444-4444-4444-8444-444444444444','dead']); expect(bad.rows[0].ok).toBe(false);
   await db.query("update satellite_work_items set lease_expires_at=now()-interval '1 second' where id=$1",[work.id]);
