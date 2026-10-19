@@ -107,7 +107,7 @@ describe("sameVintageNotePayload (retry reconciliation)", () => {
 
   it("accepts an unchanged retry readback as the same note", () => {
     const payload = buildVintageNoteInsert(base);
-    expect(sameVintageNotePayload(payload, note())).toBe(true);
+    expect(sameVintageNotePayload(payload, note({ notes: "25 mm" }))).toBe(true);
   });
 
   it("rejects a same-id row whose content differs from the frozen payload", () => {

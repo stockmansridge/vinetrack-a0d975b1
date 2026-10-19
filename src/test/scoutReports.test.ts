@@ -87,10 +87,11 @@ describe("stop chronology", () => {
   it("falls back to created_at, then recorded index, then id", () => {
     const noTime = assessment({ id: "b", stop_context: { stop_index: 1 } });
     const timed = assessment({ id: "a", created_at: "2026-02-10T09:00:00Z" });
-    // A stop with time evidence precedes one with neither time nor index.
+    // A stop with a recorded index keeps that position; time evidence breaks
+    // ties only between stops that both have it. A stop with neither sorts last.
     const bare = assessment({ id: "c" });
     const sorted = sortAssessmentsChronologically([bare, noTime, timed]);
-    expect(sorted.map((a) => a.id)).toEqual(["a", "b", "c"]);
+    expect(sorted.map((a) => a.id)).toEqual(["b", "a", "c"]);
   });
 
   it("keeps repeated stops in the same block as separate identities", () => {
