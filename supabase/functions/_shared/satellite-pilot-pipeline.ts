@@ -28,7 +28,7 @@ export async function runPilot(kind:'worker'|'discovery',deps:PipelineDependenci
     :{requests:8,processing:0,cpu:5000,transfer:2097152,storage:0,spend:deps.unitSpend*0.2};
   const reservation=await rpc(db,'satellite_reserve_provider',{p_provider:PILOT_PROVIDER,p_vineyard:PILOT_VINEYARD,p_requests:stage.requests,p_processing:stage.processing,p_cpu:stage.cpu,p_transfer:stage.transfer,p_storage:stage.storage,p_spend:stage.spend,p_pixels:kind==='worker'});
   if(!reservation) return {reason:'budget_or_backoff',provider_calls:0,no_op:true};
-  let calls=0,work:any,spectralReservation:string|null=null;const budget=new RequestBudget(signal,96,16777216,kind==='worker'?(deps.pixels??deps.fetch):deps.fetch);
+  let calls=0,work:any,spectralReservation:string|null=null,stageAReleased=false;const budget=new RequestBudget(signal,96,16777216,kind==='worker'?(deps.pixels??deps.fetch):deps.fetch);
   try {
     if(kind==='discovery') {
       const paddocks=await deps.canonical();
@@ -101,6 +101,8 @@ export async function runPilot(kind:'worker'|'discovery',deps:PipelineDependenci
       if(save.error&&save.error.code!=='23505') throw save.error;
     }
     // Spectral stage: separately authorised envelope, reserved only after the paddock is proven usable.
+    // The tiny SCL-stage reservation (and its throttle slot) is released first so it never blocks this stage.
+    await rpc(db,'satellite_release_provider',{p_provider:PILOT_PROVIDER,p_token:reservation});stageAReleased=true;
     spectralReservation=await rpc(db,'satellite_reserve_provider',{p_provider:PILOT_PROVIDER,p_vineyard:PILOT_VINEYARD,p_requests:88,p_processing:1,p_cpu:40000,p_transfer:14680064,p_storage:4194304,p_spend:deps.unitSpend*0.8,p_pixels:true});
     if(!spectralReservation) { await rpc(db,'satellite_finish_work',{p_id:work.id,p_token:work.lease_token,p_status:'retry',p_error:'Spectral stage budget or backoff',p_retry_ms:300000}); return {reason:'budget_or_backoff',provider_calls:budget.requests,no_op:budget.requests===0}; }
     const rendered=await deps.render(a.data.source_manifest,work.boundary_snapshot,work.layer,budget,preflight);
@@ -138,7 +140,7 @@ export async function runPilot(kind:'worker'|'discovery',deps:PipelineDependenci
     if(work) await rpc(db,'satellite_finish_work',{p_id:work.id,p_token:work.lease_token,p_status:'retry',p_error:error instanceof Error?error.message:'Pipeline failure',p_retry_ms:retry??30000});
     if(retry!=null) await rpc(db,'satellite_release_provider',{p_provider:PILOT_PROVIDER,p_token:reservation,p_retry_ms:retry});
     return {reason:error instanceof Error?error.message:'Pipeline failure',provider_calls:kind==='worker'?budget.requests:calls,no_op:calls+budget.requests===0,failed:true};
-  } finally { if(spectralReservation) await rpc(db,'satellite_release_provider',{p_provider:PILOT_PROVIDER,p_token:spectralReservation}); await rpc(db,'satellite_release_provider',{p_provider:PILOT_PROVIDER,p_token:reservation}); }
+  } finally { if(spectralReservation) await rpc(db,'satellite_release_provider',{p_provider:PILOT_PROVIDER,p_token:spectralReservation}); if(!stageAReleased) await rpc(db,'satellite_release_provider',{p_provider:PILOT_PROVIDER,p_token:reservation}); }
 }
 function httpRetry(value:string|null){const numeric=Number(value);if(value&&Number.isFinite(numeric)&&numeric>=0)return Math.min(86400000,numeric*1000);const t=value?Date.parse(value):NaN;return Number.isFinite(t)?Math.min(86400000,Math.max(0,t-Date.now())):60000;}
 async function boundedText(res:Response,max:number){if(!res.body)throw new Error('Missing catalogue body');const reader=res.body.getReader();let n=0;const chunks=[];try{while(true){const r=await reader.read();if(r.done)break;n+=r.value.length;if(n>max){await reader.cancel();throw new Error('Catalogue byte ceiling');}chunks.push(r.value);}}finally{reader.releaseLock();}const out=new Uint8Array(n);let i=0;for(const c of chunks){out.set(c,i);i+=c.length;}return new TextDecoder().decode(out);}
