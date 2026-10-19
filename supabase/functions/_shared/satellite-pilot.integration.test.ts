@@ -73,6 +73,11 @@ Deno.test('discovery -> actual atomic queue -> native NDVI -> immutable storage 
     const manifest=await db.query<any>('select * from satellite_paddock_manifest where latest_processing_version=$1',[PILOT_VERSION]);assert.equal(manifest.rows.length,1);assert.equal(manifest.rows[0].package_status,'display_available');assert.equal(manifest.rows[0].missing_summary_count,0);
     assert.equal((await db.query('select * from satellite_raster_assets where processing_version=$1',['sentinel2-v6-native-10m'])).rows.length,1);
     assert.equal((await db.query('select * from satellite_raster_assets where native_resolution_m=10 and verified_at is not null')).rows.length,2);
+    const two=await Promise.all([runPilot('worker',deps as any,AbortSignal.timeout(20000)),runPilot('worker',deps as any,AbortSignal.timeout(20000))]);
+    assert.equal(two.filter(r=>r.reason==='published').length,1);assert.equal(two.filter(r=>r.reason==='budget_or_backoff').length,1);
+    for(let i=0;i<15;i++) await runPilot('worker',deps as any,AbortSignal.timeout(20000));
+    const complete=await db.query<any>('select * from satellite_paddock_manifest where latest_processing_version=$1',[PILOT_VERSION]);
+    assert.equal(complete.rows.length,8);assert.ok(complete.rows.every(r=>r.package_status==='complete'&&r.missing_summary_count===0));
   }finally{await db.close();}
 });
 Deno.test('quota ZERO and switches OFF cause zero HTTP and no queue; service grants reject browsers',async()=>{

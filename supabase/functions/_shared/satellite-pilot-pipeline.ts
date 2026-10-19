@@ -21,7 +21,7 @@ export async function runPilot(kind:'worker'|'discovery',deps:PipelineDependenci
   }
   const reservation=await rpc(db,'satellite_reserve_provider',{p_provider:PILOT_PROVIDER,p_vineyard:PILOT_VINEYARD,p_requests:kind==='discovery'?1:24,p_processing:kind==='discovery'?0:1,p_cpu:kind==='discovery'?1000:45000,p_transfer:kind==='discovery'?1048576:16777216,p_storage:kind==='discovery'?0:4194304,p_spend:0,p_pixels:kind==='worker'});
   if(!reservation) return {reason:'budget_or_backoff',provider_calls:0,no_op:true};
-  let calls=0,work:any;const budget=new RequestBudget(signal,24,16777216);
+  let calls=0,work:any;const budget=new RequestBudget(signal,24,16777216,deps.fetch);
   try {
     if(kind==='discovery') {
       const paddocks=await deps.canonical();
@@ -38,7 +38,10 @@ export async function runPilot(kind:'worker'|'discovery',deps:PipelineDependenci
       let queued=0;
       for(let i=0;i<paddocks.length;i++) {
         const manifest=items.find((m:ExactManifest)=>m.footprint&&rings[i].every(v=>insidePolygon(v[0],v[1],[m.footprint as number[][]])));
-        if(!manifest) continue;
+        if(!manifest) {
+          const f=await db.from('satellite_freshness').upsert({vineyard_id:PILOT_VINEYARD,paddock_id:paddocks[i].id,provider:PILOT_PROVIDER,processing_version:PILOT_VERSION,last_provider_check_at:now.toISOString()},{onConflict:'vineyard_id,paddock_id,provider,processing_version'});if(f.error) throw f.error;
+          continue;
+        }
         const hash=await hashJson(manifest);
         const row={provider:PILOT_PROVIDER,collection:manifest.collection,provider_scene_id:manifest.item_id,acquired_at:manifest.acquired_at,source_manifest:manifest,source_manifest_hash:hash};
         const inserted=await db.from('satellite_acquisitions').insert(row).select('id').single();
@@ -62,16 +65,19 @@ export async function runPilot(kind:'worker'|'discovery',deps:PipelineDependenci
     // Re-read canonical boundary after potentially slow decoding, before publication.
     const fresh=await deps.canonical(work.paddock_id);if(fresh.length!==1||await hashJson(canonicalRing(fresh[0].polygon_points))!==work.boundary_hash) throw new Error('Boundary changed during processing');
     const assets=[];
+    if(rendered.assets.reduce((n,a)=>n+a.bytes.length,0)>4194304) throw new Error('Storage byte reservation exceeded');
     for(const asset of rendered.assets) {
       const path=`${PILOT_VINEYARD}/${work.paddock_id}/${work.acquisition_id}/${PILOT_VERSION}/${work.layer}/${asset.sha256}.${asset.kind==='DISPLAY_RASTER'?'png':'tif'}`;
       const storage=db.storage.from('satellite-assets');const upload=await storage.upload(path,asset.bytes,{contentType:asset.mime,upsert:false});
       if(upload.error&&!['Duplicate','409'].includes(String(upload.error.statusCode))&&!String(upload.error.message).includes('already exists')) throw new Error('Immutable storage write failed');
       const readback=await storage.download(path);if(readback.error||!readback.data) throw new Error('Storage readback failed');
+      if(readback.data.size!==asset.bytes.length) throw new Error('Storage content checksum mismatch');
       const bytes=new Uint8Array(await readback.data.arrayBuffer());
       if(bytes.length!==asset.bytes.length||await sha256(bytes)!==asset.sha256) throw new Error('Storage content checksum mismatch');
       assets.push({...asset,bytes:bytes.length,path});
     }
     const proof={schema_version:1,verified:true,acquisition_id:work.acquisition_id,source_manifest_hash:a.data.source_manifest_hash,boundary_hash:work.boundary_hash,layer:work.layer,processing_version:PILOT_VERSION,assets,summary:rendered.summary,measurement_grid:rendered.grid,display_crs:'EPSG:4326',source:a.data.source_manifest,cloud_percent:rendered.cloud_percent,valid_coverage_percent:rendered.valid_coverage_percent,no_data_pixel_count:rendered.no_data_pixel_count};
+    if(signal.aborted) throw new Error('Publication deadline');
     const scene=await rpc(db,'satellite_publish_pilot',{p_work:work.id,p_token:work.lease_token,p_output:proof});
     return {reason:'published',scene_id:scene,provider_calls:budget.requests,no_op:false};
   } catch(error) {

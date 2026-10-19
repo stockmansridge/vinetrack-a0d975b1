@@ -51,6 +51,7 @@ export async function readExactNativeWindow(url: string, window: number[], budge
   const origin = image.getOrigin(), resolution = image.getResolution(), keys = image.getGeoKeys();
   const epsg = keys?.ProjectedCSTypeGeoKey;
   if (!epsg || image.getFileDirectory().getValue('ModelTransformation')) throw new Error('Missing native CRS or unsupported rotated source');
+  if(image.getTileWidth()*image.getTileHeight()*image.getBytesPerPixel()>4194304 || image.getSamplesPerPixel()!==1) throw new Error('Decoded COG block memory ceiling');
   const data = await image.readRasters({ window, samples: [0], interleave: true, signal: budget.signal });
   return { data, source_grid: { crs: `EPSG:${epsg}`, affine: [resolution[0],0,origin[0],0,resolution[1],origin[1]], width:image.getWidth(),height:image.getHeight() },
     measurement_grid: { crs: `EPSG:${epsg}`, affine: [resolution[0],0,origin[0]+window[0]*resolution[0],0,resolution[1],origin[1]+window[1]*resolution[1]],width:window[2]-window[0],height:window[3]-window[1] },
