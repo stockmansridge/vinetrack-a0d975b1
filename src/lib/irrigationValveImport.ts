@@ -1,6 +1,11 @@
 import { parseCsv } from "./paddockImportExport";
 
-export const VALVE_TEMPLATE = "name,valve_number,configured_flow_litres_per_hour,measured_flow_litres_per_hour,notes\n";
+export const VALVE_TEMPLATE = "Valve Name (required),Number (optional),Config flow L/hour (optional),Measured flow L/hour (optional)\n";
+const HEADER_KEYS: Record<string, string> = {
+  "valve name": "name", "number": "valve_number",
+  "config flow l/hour": "configured_flow_litres_per_hour",
+  "measured flow l/hour": "measured_flow_litres_per_hour",
+};
 export interface ValveImportInput {
   name: string;
   valve_number: string | null;
@@ -12,9 +17,12 @@ export interface ValveImportRow { line: number; input: ValveImportInput; error: 
 
 export function parseValveImport(text: string, existingNames: string[]): ValveImportRow[] {
   const grid = parseCsv(text.replace(/^\uFEFF/, ""));
-  const headers = (grid.shift() ?? []).map((s) => s.trim().toLowerCase());
-  const allowed = VALVE_TEMPLATE.trim().split(",");
-  if (!headers.includes("name")) throw new Error("The CSV must include a name column.");
+  const headers = (grid.shift() ?? []).map((s) => {
+    const label = s.trim().toLowerCase().replace(/\s*\((?:required|optional)\)\s*$/, "");
+    return HEADER_KEYS[label] ?? label;
+  });
+  const allowed = ["name", "valve_number", "configured_flow_litres_per_hour", "measured_flow_litres_per_hour", "notes"];
+  if (!headers.includes("name")) throw new Error("The CSV must include a Valve Name column.");
   if (new Set(headers).size !== headers.length || headers.some((h) => !allowed.includes(h))) {
     throw new Error("Use the valve template columns only; sessions, systems and connections cannot be imported here.");
   }
