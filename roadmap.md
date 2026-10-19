@@ -1,11 +1,12 @@
 # Roadmap
 
 ## Replacement Crop Health ingestion
-- [ ] Correct backlog/activity truth and bound saved-delivery diagnostics.
-- [ ] Apply isolated additive service-only queue/control/budget/provenance foundation.
-- [ ] Implement and deploy inert machine worker/discovery and admin diagnostics; verify disabled receipts without provider calls.
-- [ ] Implement exact-item native-grid processing and offline rejection/golden tests; disclose activation blockers.
-- [ ] Register schedules only if supported machine-auth dispatch can be verified safely.
+- [x] Correct backlog/activity truth and bound saved-delivery diagnostics.
+- [x] Apply isolated additive service-only queue/control/budget/provenance foundation.
+- [x] Implement and deploy inert machine worker/discovery and admin diagnostics; verify disabled receipts without provider calls.
+- [x] Implement exact-item native-grid primitives and offline rejection/golden tests; disclose operational runner/publication blockers.
+- [ ] Register schedules — blocked: existing project has no managed cron-auth helper/structured HTTP scheduling capability.
+- [ ] Activate a production-capable exact raster runner — blocked: hard budget, runtime benchmark and compatible publication contract acceptance.
 - [ ] Publish narrowly corrected frontend after tests; record rollback and remaining capped-pilot requirements.
 
 ## Irrigation valve import
