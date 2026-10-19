@@ -226,7 +226,8 @@ export function aisleGeometry(pt: LatLng, rawRows: any, polygonRaw?: any): Aisle
   const l1 = lenOf(lo), l2 = lenOf(hi);
   const variableLength = Math.max(l1, l2) / Math.max(1e-6, Math.min(l1, l2)) > 1.2;
   const midAisle = consecutive ? (a + b) / 2 : null;
-  const methodDisagree = local.aisle != null && midAisle != null ? local.aisle !== midAisle : local.aisle == null ? null : true;
+  // null when no rows locally cover the point on both sides (can't compare).
+  const methodDisagree = local.rows == null ? null : local.rows[0] !== a || local.rows[1] !== b;
   const issues: string[] = [];
   if (methodDisagree) issues.push(`midpoint aisle ${midAisle ?? "—"} ≠ local segment aisle ${local.aisle ?? "—"} (global projection invalid here)`);
   if (variableLength) issues.push("bounding rows differ >20% in length");
