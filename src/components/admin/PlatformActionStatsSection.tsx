@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { iosSupabase } from "@/integrations/ios-supabase/client";
+import { ActionParticipantsDialog, type ParticipantSelection } from "./ActionParticipantsDialog";
 
 export interface PlatformActionStat {
   action_key: string;
@@ -37,7 +38,9 @@ const fmt = (v: number | null | undefined) => (v == null ? "—" : Number(v).toL
 
 export function PlatformActionStatsSection() {
   const [range, setRange] = useState<(typeof ACTION_RANGES)[number]["key"]>("1");
-  const days = ACTION_RANGES.find((r) => r.key === range)!.days;
+  const [selection, setSelection] = useState<ParticipantSelection | null>(null);
+  const selectedRange = ACTION_RANGES.find((r) => r.key === range) ?? ACTION_RANGES[0];
+  const days = selectedRange.days;
   const q = useQuery({
     queryKey: ["admin", "platform-action-stats", days],
     staleTime: 60_000,
@@ -68,7 +71,7 @@ export function PlatformActionStatsSection() {
               size="sm"
               variant={range === r.key ? "default" : "outline"}
               className="h-7 px-2 text-xs"
-              onClick={() => setRange(r.key)}
+              onClick={() => { setSelection(null); setRange(r.key); }}
             >
               {r.label}
             </Button>
@@ -122,8 +125,12 @@ export function PlatformActionStatsSection() {
                       <td className="py-1.5 pr-3 text-right tabular-nums">{fmt(r.created_count)}</td>
                       <td className="py-1.5 pr-3 text-right tabular-nums">{fmt(r.edited_count)}</td>
                       <td className="py-1.5 pr-3 text-right tabular-nums">{fmt(r.deleted_count)}</td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums">{fmt(r.vineyard_count)}</td>
-                      <td className="py-1.5 text-right tabular-nums">{fmt(r.user_count)}</td>
+                      {(["vineyards", "users"] as const).map((kind) => {
+                        const count = kind === "vineyards" ? r.vineyard_count : r.user_count;
+                        return <td key={kind} className={`py-1.5 text-right tabular-nums ${kind === "vineyards" ? "pr-3" : ""}`}>
+                          {count == null ? "—" : <Button variant="link" className="h-auto min-w-8 p-0 tabular-nums" aria-label={`${r.label}: ${fmt(count)} ${kind}`} onClick={() => setSelection({ action: r.action_key, label: r.label, kind, expected: Number(count), days, period: selectedRange.label })}>{fmt(count)}</Button>}
+                        </td>;
+                      })}
                     </tr>
                   );
                 })}
@@ -135,6 +142,7 @@ export function PlatformActionStatsSection() {
           </p>
         </>
       )}
+      {selection && <ActionParticipantsDialog selection={selection} onClose={() => setSelection(null)} />}
     </Card>
   );
 }
