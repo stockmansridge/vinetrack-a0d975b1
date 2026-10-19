@@ -198,7 +198,7 @@ export default function CropHealthDateTimeline({
   }
 
   const savedCount = sorted.filter((e) => e.status === "available" || e.status === "partial").length;
-  const unusable = sorted.filter((e) => e.status === "cloud" || e.status === "no_capture" || e.status === "failed").length;
+  const unusable = sorted.filter((e) => e.status === "cloud" || e.status === "no_capture" || e.status === "failed" || e.status === "stored_blank").length;
   const busy = sorted.filter((e) => e.status === "processing").length;
   const queued = sorted.filter((e) => e.status === "queued").length;
   const isPreviewing = previewDate != null && previewDate !== committedDate;
@@ -215,6 +215,7 @@ export default function CropHealthDateTimeline({
     const total = selected.activeCount || totalPaddocks;
     const meta = STATUS_META[selected.status];
     if (!meta?.selectable) return meta?.label ?? "";
+    if (selected.status === "stored_blank") return `0/${total} usable · saved images are blank`;
     return `${selected.paddockCount}/${total} paddock${total === 1 ? "" : "s"}`;
   })();
 
