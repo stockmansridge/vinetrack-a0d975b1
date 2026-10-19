@@ -15,7 +15,7 @@ export function pilotFixture() {
   }
   const transport:typeof fetch=async(url,init)=>{
     const key=String(url).split('/').at(-1)?.replace('.tif','');const data=key?bands[key]:null;
-    const match=/^bytes=(\d+)-(\d+)$/.exec(new Headers(init?.headers).get('Range')??'');
+    const match=/^bytes=(\d+)-(\d+)$/.exec(new Headers((init as RequestInit | undefined)?.headers).get('Range')??'');
     if(!data||!match) throw new Error('Fixture range required');
     const start=Number(match[1]),end=Math.min(Number(match[2]),data.length-1);
     return new Response(data.slice(start,end+1),{status:206,headers:{'Content-Range':`bytes ${start}-${end}/${data.length}`}});

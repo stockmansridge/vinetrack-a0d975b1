@@ -21,7 +21,7 @@ export function canonicalRing(raw: unknown): number[][] {
   return ring;
 }
 export async function sha256(bytes: Uint8Array): Promise<string> {
-  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b=>b.toString(16).padStart(2,'0')).join('');
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(bytes).buffer))].map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 // PostgreSQL jsonb reorders object keys; content identity must survive readback.
 function canonicalJson(value: unknown): unknown {

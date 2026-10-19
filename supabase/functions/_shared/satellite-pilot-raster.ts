@@ -2,7 +2,7 @@ import { writeArrayBuffer, fromArrayBuffer } from 'npm:geotiff@3.0.5';
 import { encode, decode } from 'npm:fast-png@6.4.0';
 import { processNativePixels, validateNativeGrid, type ExactManifest, type NativeGrid, type PilotLayer } from './satellite-ingestion-core.ts';
 import { requireAlignedScl, sampleSclNearest } from './satellite-exact-adapter.ts';
-import { nativeWindow, pixelMask, projection, sha256 } from './satellite-pilot-geometry.ts';
+import { nativeWindow, pixelMask, projection, sha256, hashJson } from './satellite-pilot-geometry.ts';
 import { readExactNativeWindow, RequestBudget } from './satellite-bounded-cog.ts';
 export async function renderPilot(manifest: ExactManifest, ring: number[][], layer: PilotLayer, budget: RequestBudget) {
   // Source grid is recorded by discovery and must match the TIFF itself.
@@ -13,7 +13,7 @@ export async function renderPilot(manifest: ExactManifest, ring: number[][], lay
   const bands: Record<string, Awaited<ReturnType<typeof readExactNativeWindow>>>={};
   for (const key of keys) {
     const b=await readExactNativeWindow(manifest.bands[key].href,window,budget);
-    if (JSON.stringify(b.source_grid)!==JSON.stringify(source)) throw new Error('COG native grid differs from immutable STAC');
+    if (await hashJson(b.source_grid)!==await hashJson(source)) throw new Error('COG native grid differs from immutable STAC');
     bands[key]=b;
   }
   const grid=bands.red.measurement_grid; validateNativeGrid(grid);
@@ -22,7 +22,7 @@ export async function renderPilot(manifest: ExactManifest, ring: number[][], lay
   requireAlignedScl(source,sclSource);
   const sclWindow=nativeWindow(ring,sclSource).window;
   const scl=await readExactNativeWindow(manifest.bands.scl.href,sclWindow,budget);
-  if (JSON.stringify(scl.source_grid)!==JSON.stringify(sclSource)) throw new Error('SCL native grid mismatch');
+  if (await hashJson(scl.source_grid)!==await hashJson(sclSource)) throw new Error('SCL native grid mismatch');
   const mask=Array.from({length:grid.width*grid.height},(_,i)=>sampleSclNearest(grid.affine[2]+(i%grid.width+.5)*10,grid.affine[5]-(Math.floor(i/grid.width)+.5)*10,{affine:scl.measurement_grid.affine,width:scl.measurement_grid.width,height:scl.measurement_grid.height,values:Array.from(scl.data as ArrayLike<number>)}));
   const noData=bands.red.no_data;
   if (noData==null || keys.some(k=>bands[k].no_data!==noData)) throw new Error('Missing/mismatched nodata');

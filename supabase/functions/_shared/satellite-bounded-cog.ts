@@ -2,9 +2,10 @@ import { BaseClient, BaseResponse, fromCustomClient } from 'npm:geotiff@3.0.5';
 import { retryAfterMs } from './satellite-ingestion-core.ts';
 export class Provider429 extends Error { constructor(public retryMs: number) { super('Provider backoff required'); } }
 class BytesResponse extends BaseResponse {
-  constructor(readonly status: number, private headers: Headers, private bytes: ArrayBuffer) { super(); }
-  getHeader(name: string) { return this.headers.get(name) ?? undefined; }
-  async getData() { return this.bytes; }
+  constructor(private code: number, private headers: Headers, private bytes: ArrayBuffer) { super(); }
+  override get status() { return this.code; }
+  override getHeader(name: string) { return this.headers.get(name) ?? undefined; }
+  override async getData() { return this.bytes; }
 }
 export class RequestBudget {
   requests = 0; transferred = 0;
@@ -12,7 +13,7 @@ export class RequestBudget {
 }
 class BoundedCogClient extends BaseClient {
   constructor(url: string, private budget: RequestBudget) { super(url); }
-  async request(options: RequestInit = {}) {
+  override async request(options: RequestInit = {}) {
     if (this.budget.signal.aborted) throw new Error('Raster deadline/cancellation');
     if (++this.budget.requests > this.budget.maxRequests) throw new Error('Provider request ceiling');
     const range = new Headers(options.headers).get('range');
