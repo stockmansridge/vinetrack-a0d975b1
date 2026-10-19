@@ -8,11 +8,13 @@
 - [x] Make activity Vineyard/User counts open named, period-matched read-only lists using existing access; disclose creator attribution and restricted results.
 - [x] Verify aggregation, access/error states and dashboard click flow with offline tests (9 passed); authenticated shared-data access remains unverified.
 
-## Crop Health emergency recovery (source/offline only)
+## Crop Health emergency recovery release
 - [x] Prioritise bounded saved-display loading, cancellation, validation and honest failures.
 - [x] Preserve same-version pairing and incomplete-summary reporting; stop mount-triggered backfill.
 - [x] Run focused offline regressions; report authenticated acceptance and deployment/commit boundaries.
-- [ ] Live Stockman's Ridge acceptance — blocked by source-only authorisation; deployed manifest read still expires jobs until separately approved function deployment.
+- [x] Deploy only satellite-get-manifest after authorised release; 51/51 offline tests passed and hosted preview build succeeded at source 5369d3df23aa38920eec694d3437f77fa734d656. Frontend publication requested; completion not yet verified.
+- [ ] Live Stockman's Ridge acceptance — needs an authenticated shared-vineyard System Admin session; eight NDVI overlays, v6 pairing, 1 Aug acquisition, partial packages and no job activation remain unverified.
+- [ ] Automatic daily imagery ingestion — requires separately approved implementation and defined usage budgets; no schedules or processing activated.
 
 - [x] Remove Target Nutrient's System Admin selector gate; retain non-saving preview and unsupported-record safeguards.
 - [x] Remove Analysis Details; contextual label/liquid questions, preserve inputs and validate nitrogen/live results (99 tests passed).
