@@ -53,7 +53,10 @@ export async function runPilot(kind:'worker'|'discovery',deps:PipelineDependenci
       // Acquisitions already proven cloud-obscured/insufficient for a paddock are never re-queued; try the next newest item instead.
       const prior=await db.from('satellite_work_items').select('paddock_id,acquisition_id,status');
       if(prior.error) throw prior.error;
-      const terminal=new Set((prior.data??[]).filter((w:any)=>w.status==='cloud_obscured'||w.status==='insufficient_coverage').map((w:any)=>`${w.paddock_id}:${w.acquisition_id}`));
+      const acq=await db.from('satellite_acquisitions').select('id,provider_scene_id');
+      if(acq.error) throw acq.error;
+      const sceneById=new Map((acq.data??[]).map((a:any)=>[a.id,a.provider_scene_id]));
+      const terminal=new Set((prior.data??[]).filter((w:any)=>w.status==='cloud_obscured'||w.status==='insufficient_coverage').map((w:any)=>`${w.paddock_id}:${sceneById.get(w.acquisition_id)}`));
       let queued=0;
       for(let i=0;i<paddocks.length;i++) {
         const manifest=items.find((m:ExactManifest)=>m.footprint&&rings[i].every(v=>insidePolygon(v[0],v[1],[m.footprint as number[][]]))&&!terminal.has(`${paddocks[i].id}:${(m as any).item_id}`));
