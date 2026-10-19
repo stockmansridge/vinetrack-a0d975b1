@@ -36,8 +36,15 @@ function hasIdb(): boolean {
 function openDb(): Promise<IDBDatabase | null> {
   if (!hasIdb()) return Promise.resolve(null);
   return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => { settled = true; resolve(null); }, 500);
+    const finish = (db: IDBDatabase | null) => {
+      clearTimeout(timer);
+      if (settled) { db?.close(); return; }
+      settled = true; resolve(db);
+    };
     let req: IDBOpenDBRequest;
-    try { req = indexedDB.open(DB_NAME, DB_VERSION); } catch { resolve(null); return; }
+    try { req = indexedDB.open(DB_NAME, DB_VERSION); } catch { finish(null); return; }
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(MANIFEST_STORE)) {
@@ -47,9 +54,9 @@ function openDb(): Promise<IDBDatabase | null> {
         db.createObjectStore(ASSET_STORE, { keyPath: "key" });
       }
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => resolve(null);
-    req.onblocked = () => resolve(null);
+    req.onsuccess = () => finish(req.result);
+    req.onerror = () => finish(null);
+    req.onblocked = () => finish(null);
   });
 }
 
@@ -61,18 +68,24 @@ function withStore<T>(
   return openDb().then((db) => {
     if (!db) return null;
     return new Promise<T | null>((resolve) => {
+      const timer = setTimeout(() => { db.close(); resolve(null); }, 500);
+      const finish = (value: T | null) => { clearTimeout(timer); db.close(); resolve(value); };
       try {
         const tx = db.transaction(storeName, mode);
+        tx.onabort = () => finish(null);
+        tx.onerror = () => finish(null);
         const store = tx.objectStore(storeName);
         const result = fn(store);
         if (result instanceof Promise) {
-          result.then((v) => resolve(v)).catch(() => resolve(null));
+          result.then((v) => finish(v)).catch(() => finish(null));
         } else {
-          result.onsuccess = () => resolve(result.result as T);
-          result.onerror = () => resolve(null);
+          let value: T | null = null;
+          result.onsuccess = () => { value = result.result as T; };
+          tx.oncomplete = () => finish(value);
+          result.onerror = () => finish(null);
         }
       } catch {
-        resolve(null);
+        finish(null);
       }
     });
   });
