@@ -64,6 +64,10 @@ import {
 import { fetchManifest, fetchAssetBytes, type ManifestResponse } from "@/lib/satelliteManifest";
 import { deleteCachedAsset, readCachedAsset, writeCachedAsset, readCachedManifest, writeCachedManifest } from "@/lib/satelliteCache";
 import { bounded, retrySaved, runSavedQueue, validatePng, validRasterBounds, decodeSavedImage, SavedAssetError } from "@/lib/satelliteSavedLoader";
+import {
+  inspectDisplayPng, judgeDisplay, inspectAnalyticalValues, judgeAnalytical, analyticalRangeFor,
+  applyRasterVerdicts, UnusableRasterError, type RasterVerdict,
+} from "@/lib/satelliteRasterUsability";
 import { selectSavedPair } from "@/lib/satelliteSavedSelection";
 
 // Satellite edge functions live in the Lovable Cloud project but authorize the
@@ -485,6 +489,8 @@ type AssetPipelineDiagnostic = {
   etag: string | null;
   objectUrlCreated: boolean;
   imageStatus: "not_checked" | "loaded" | "error";
+  /** Decoded pixel evidence, e.g. "0 of 528 pixels visible". */
+  pixelVerdict?: string | null;
   bounds: string;
   finalStatus: "pending" | "cached" | "loaded" | "failed";
   error: string | null;
@@ -1213,6 +1219,13 @@ export default function SatelliteMappingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortedDatesAsc, selectedSceneKey, layer, derivedFromManifest, dateCoverage]);
 
+  // Saved dates only count as available once their bytes decode to real pixels.
+  const verifiedTimelineEntries = useMemo(
+    () => applyRasterVerdicts(timelineEntries, (d) => buildAssetPairsFor(d).map((p) => p.displayAsset.id), rasterVerdicts),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [timelineEntries, rasterVerdicts, derivedFromManifest, layer, dateCoverage, paddockId],
+  );
+
   // Are any preview-date display assets still loading? Drives the loading
   // caption shown near the map during a scrub.
   const previewPending = useMemo(() => {
@@ -1424,6 +1437,14 @@ export default function SatelliteMappingPage() {
   useEffect(() => { setIsPlaying(false); setPreviewDate(null); }, [activeVineyardId, paddockId, layer]);
 
 
+  // Decoded-byte verdicts per asset id (session only; bytes are re-checked each visit).
+  const rasterVerdictsRef = useRef(new Map<string, RasterVerdict>());
+  const [rasterVerdicts, setRasterVerdicts] = useState<ReadonlyMap<string, RasterVerdict>>(new Map());
+  const rememberVerdict = (assetId: string, verdict: RasterVerdict) => {
+    rasterVerdictsRef.current.set(assetId, verdict);
+    setRasterVerdicts(new Map(rasterVerdictsRef.current));
+  };
+
   // Visible displays settle first (concurrency 3); analysis/prefetch cannot starve the map.
   useEffect(() => {
     const controller = new AbortController();
@@ -1476,6 +1497,21 @@ export default function SatelliteMappingPage() {
         if (signal.aborted) return;
         if (isDisplay) await bounded(() => validatePng(blob), signal, 2_000, "PNG validation");
         if (signal.aborted) return;
+        // A valid header is not imagery: decode every pixel before publishing.
+        let displayVerdict: RasterVerdict | null = null;
+        if (isDisplay) {
+          const bytes = new Uint8Array(await blob.arrayBuffer());
+          if (signal.aborted) return;
+          displayVerdict = judgeDisplay(inspectDisplayPng(bytes), {
+            width: asset.raster_width, height: asset.raster_height, processingVersion: pv,
+          });
+          rememberVerdict(asset.id, displayVerdict);
+          diag({ pixelVerdict: displayVerdict.message });
+          if (displayVerdict.kind === "blank" || displayVerdict.kind === "invalid") {
+            if (cached) void deleteCachedAsset(asset.id, pv);
+            throw new UnusableRasterError(displayVerdict.kind, displayVerdict.message);
+          }
+        }
         url = URL.createObjectURL(blob);
         if (isDisplay) await decodeSavedImage(url, signal);
         if (signal.aborted) { URL.revokeObjectURL(url); return; }
@@ -1492,7 +1528,7 @@ export default function SatelliteMappingPage() {
         }
         diag({ endpointStatus: cached ? null : 200, signerResult: cached ? "cache — signer not called" : "ok", blobSize: blob.size, mimeType: blob.type,
           objectUrlCreated: true, imageStatus: isDisplay ? "loaded" : "not_checked", finalStatus: cached ? "cached" : "loaded" });
-        state((prev) => new Map(prev).set(key, { phase: "loaded" }));
+        state((prev) => new Map(prev).set(key, { phase: "loaded", verdict: displayVerdict?.kind as "verified" | "legacy" | undefined }));
         const publishedUrl = url;
         setSignedUrls((prev) => ({ ...prev, [asset.id]: publishedUrl }));
         bumpStats();
@@ -1502,7 +1538,8 @@ export default function SatelliteMappingPage() {
         const message = error instanceof Error ? error.message : String(error);
         if (isDisplay && url) void deleteCachedAsset(asset.id, pv);
         diag({ finalStatus: "failed", error: message });
-        state((prev) => new Map(prev).set(key, { phase: "failed", errorMessage: message }));
+        const verdict = error instanceof UnusableRasterError ? error.kind : undefined;
+        state((prev) => new Map(prev).set(key, { phase: "failed", errorMessage: message, verdict }));
       }
     };
     void runSavedQueue(activeAssets, [...activeAnalyticalAssets, ...preloadDisplayAssets],
@@ -1587,6 +1624,14 @@ export default function SatelliteMappingPage() {
         const tiff = await fromArrayBuffer(buf);
         const image = await tiff.getImage();
         const rasters: any = await image.readRasters({ interleave: true });
+        const grid = { epsg: Number(image.getGeoKeys()?.ProjectedCSTypeGeoKey), resolution: image.getResolution() };
+        const verdict = judgeAnalytical(
+          inspectAnalyticalValues(rasters as ArrayLike<number>, image.getWidth(), image.getHeight(),
+            asset.no_data_sentinel ?? -9999, analyticalRangeFor(asset.index_type)),
+          { width: asset.raster_width, height: asset.raster_height, processingVersion: asset.processing_version, grid },
+        );
+        rememberVerdict(asset.id, verdict);
+        if (verdict.kind === "blank" || verdict.kind === "invalid") throw new UnusableRasterError(verdict.kind, verdict.message);
         return {
           key,
           assetId: asset.id,
@@ -1613,13 +1658,15 @@ export default function SatelliteMappingPage() {
         if (cancelled) return;
         analyticalCacheRef.current.set(key, decoded);
         setAnalyticalLoadState((prev) => {
-          const next = new Map(prev); next.set(vmKey, { phase: "loaded" }); return next;
+          const kind = rasterVerdictsRef.current.get(asset.id)?.kind as "verified" | "legacy" | undefined;
+          const next = new Map(prev); next.set(vmKey, { phase: "loaded", verdict: kind }); return next;
         });
       } catch (e: any) {
         if (cancelled) return;
         analyticalCacheRef.current.set(key, { error: String(e?.message ?? e) });
+        const verdict = e instanceof UnusableRasterError ? e.kind : undefined;
         setAnalyticalLoadState((prev) => {
-          const next = new Map(prev); next.set(vmKey, { phase: "failed", errorMessage: String(e?.message ?? e) }); return next;
+          const next = new Map(prev); next.set(vmKey, { phase: "failed", errorMessage: String(e?.message ?? e), verdict }); return next;
         });
       } finally {
         if (!cancelled) setRasterCacheVersion((v) => v + 1);
@@ -2689,7 +2736,8 @@ export default function SatelliteMappingPage() {
             const badge = reasonToCustomerMessage(p.availabilityReason, p.selectedLayer);
             const tone: "ok" | "warn" | "err" =
               p.availabilityReason === "displayed" ? "ok"
-              : (p.availabilityReason === "asset_load_failed" || p.availabilityReason === "overlay_mount_failed") ? "err"
+              : (p.availabilityReason === "asset_load_failed" || p.availabilityReason === "overlay_mount_failed"
+                || p.availabilityReason === "stored_blank" || p.availabilityReason === "stored_invalid") ? "err"
               : "warn";
             const toneCls = tone === "err" ? "text-destructive"
               : tone === "warn" ? "text-amber-600 dark:text-amber-400"
@@ -3445,7 +3493,7 @@ export default function SatelliteMappingPage() {
               : false;
             return (
               <CropHealthDateTimeline
-                entries={timelineEntries}
+                entries={verifiedTimelineEntries}
                 committedDate={selectedSceneKey}
                 previewDate={previewDate}
                 onPreviewChange={(d) => setPreviewDate(d)}
