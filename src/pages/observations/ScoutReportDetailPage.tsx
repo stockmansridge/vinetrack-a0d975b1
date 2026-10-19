@@ -342,7 +342,7 @@ export default function ScoutReportDetailPage() {
     }
   };
 
-  if (detailQuery.isLoading) {
+  if (accessQuery.isLoading || (access === "allowed" && detailQuery.isLoading)) {
     return (
       <div className="flex items-center gap-2 p-8 text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" /> Loading scout report…
@@ -350,7 +350,7 @@ export default function ScoutReportDetailPage() {
     );
   }
 
-  if (detailQuery.error && isPermissionError(detailQuery.error)) {
+  if (access === "denied" || (detailQuery.error && isPermissionError(detailQuery.error))) {
     return (
       <div className="p-4 sm:p-6">
         <Card>
@@ -363,6 +363,19 @@ export default function ScoutReportDetailPage() {
                 A permission update for vineyard members is awaiting approval.
               </p>
             </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (access === "unknown" || accessQuery.error) {
+    return (
+      <div className="p-4 sm:p-6">
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground">
+            We couldn't confirm your access to this report. Check your connection and try
+            again.
           </CardContent>
         </Card>
       </div>
