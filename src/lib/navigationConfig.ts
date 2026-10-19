@@ -170,6 +170,19 @@ export const ACTIVITIES: NavActivity[] = [
         keywords: ["damage", "loss", "frost", "hail"],
       },
       {
+        id: "observations.scoutReports",
+        label: "Scout Reports",
+        path: "/observations/scout-reports",
+        family: ["/observations/scout-reports"],
+        keywords: ["scout", "scouting", "scout report", "vineyard insights", "field scout"],
+      },
+      {
+        id: "observations.vintageNotes",
+        label: "Vintage Notes",
+        path: "/observations/vintage-notes",
+        keywords: ["vintage notes", "season notes", "vineyard notes", "vineyard diary"],
+      },
+      {
         id: "observations.crophealth",
         label: "Crop Health Maps",
         path: "/tools/satellite-mapping",
