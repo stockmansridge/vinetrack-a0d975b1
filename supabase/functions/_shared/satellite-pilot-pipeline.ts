@@ -103,6 +103,11 @@ export async function runPilot(kind:'worker'|'discovery',deps:PipelineDependenci
     const scene=await rpc(db,'satellite_publish_pilot',{p_work:work.id,p_token:work.lease_token,p_output:proof});
     return {reason:'published',scene_id:scene,provider_calls:budget.requests,no_op:false};
   } catch(error) {
+    // Deterministic acquisition-quality failure: terminal, never retried for this immutable acquisition/paddock.
+    if(error instanceof TerminalQualityError) {
+      if(work) await rpc(db,'satellite_finish_work',{p_id:work.id,p_token:work.lease_token,p_status:error.quality,p_result:{schema_version:1,quality:error.quality,scl_histogram:error.sclHistogram,acquisition_id:work.acquisition_id,boundary_hash:work.boundary_hash,layer:work.layer,processing_version:PILOT_VERSION},p_error:error.message});
+      return {reason:error.quality,quality:error.quality,scl_histogram:error.sclHistogram,provider_calls:budget.requests,no_op:false,failed:true,terminal:true};
+    }
     const retry=error instanceof Provider429?error.retryMs:null;
     if(work) await rpc(db,'satellite_finish_work',{p_id:work.id,p_token:work.lease_token,p_status:'retry',p_error:error instanceof Error?error.message:'Pipeline failure',p_retry_ms:retry??30000});
     if(retry!=null) await rpc(db,'satellite_release_provider',{p_provider:PILOT_PROVIDER,p_token:reservation,p_retry_ms:retry});
