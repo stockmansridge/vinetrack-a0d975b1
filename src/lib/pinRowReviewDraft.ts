@@ -6,6 +6,7 @@
 import { parseRows } from "@/lib/paddockGeometry";
 import { RECOVERY_VINEYARD_ID, type RecoveryRow, triadOf, pointInPolygon } from "@/lib/pinRowRecovery";
 import { parsePolygonPoints } from "@/lib/paddockGeometry";
+import { candidateMatchesPin, supportedCandidate, type ServerReconstructionReport } from "@/lib/pinRowReconstruction";
 
 export type DecisionKind = "approve_for_writeback" | "hold" | "needs_field_verification" | "preserve_existing";
 export type DecisionSource = "measured" | "reviewed_track" | "manual_field_check";
@@ -59,6 +60,7 @@ export interface PinSnapshot {
 }
 
 export interface ReviewDecision {
+  field_confirmation?: { observed_by: string; observed_at: string; method: string; note: string };
   authority: typeof AUTHORITY;
   pin_id: string;
   decision: DecisionKind;
@@ -124,6 +126,7 @@ export function requiredWarnings(r: RecoveryRow): WarningKey[] {
 }
 
 export interface DecisionInput {
+  field_confirmation?: { observed_by: string; observed_at: string; method: string; note: string };
   decision: DecisionKind;
   block_id: string | null;
   vine_row: number | null;
@@ -135,7 +138,7 @@ export interface DecisionInput {
 }
 
 /** Validate a draft decision. Returns errors; empty = valid. */
-export function validateDecision(r: RecoveryRow, input: DecisionInput, paddocks: any[]): string[] {
+export function validateDecision(r: RecoveryRow, input: DecisionInput, paddocks: any[], report?: ServerReconstructionReport | null): string[] {
   const e: string[] = [];
   if (!input.reason.trim()) e.push("A reason is required.");
   if (r.status === "preserve_existing" && input.decision === "approve_for_writeback")
@@ -176,6 +179,10 @@ export function validateDecision(r: RecoveryRow, input: DecisionInput, paddocks:
   if (input.side && !r.side && input.source !== "manual_field_check") e.push("No side was recorded — only a manual field check may supply one.");
   // Pairing against current geometry, unless verified in the field.
   if (input.source !== "manual_field_check") {
+    const server = supportedCandidate(report ?? null, r.id);
+    if (server && candidateMatchesPin(server, r) && input.block_id === server.proposed_block_id &&
+        input.vine_row === server.suggestion?.vine_row && input.driving_aisle === server.suggestion?.driving_aisle && input.side === server.side?.value)
+      return e;
     const g = r.geometry;
     const sameBlock = !input.block_id || input.block_id === (r.pin?.paddock_id ?? null);
     if (sameBlock && g?.aisle != null && input.driving_aisle != null && input.driving_aisle !== g.aisle)
@@ -205,6 +212,7 @@ export function buildDecision(
     decision: input.decision, block_id: input.block_id, vine_row: input.vine_row, driving_aisle: input.driving_aisle,
     side: input.side, source: input.source, acknowledged_warnings: [...input.acknowledged_warnings],
     reason: input.reason.trim(),
+    ...(input.field_confirmation ? { field_confirmation: { ...input.field_confirmation } } : {}),
     reviewer,
     reviewer_user_id: reviewerUserId,
     reviewed_at: now.toISOString(),
@@ -280,7 +288,7 @@ const isNumOrNull = (v: any) => v === null || (typeof v === "number" && Number.i
 const isStrOrNull = (v: any) => v === null || typeof v === "string";
 const SOURCES: DecisionSource[] = ["measured", "reviewed_track", "manual_field_check"];
 const DECISION_KEYS = ["authority", "pin_id", "decision", "block_id", "vine_row", "driving_aisle", "side", "reason",
-  "source", "acknowledged_warnings", "reviewer", "reviewer_user_id", "reviewed_at", "snapshot"];
+  "source", "acknowledged_warnings", "reviewer", "reviewer_user_id", "reviewed_at", "snapshot", "field_confirmation"];
 const SNAP_KEYS: (keyof PinSnapshot)[] = ["pin_id", "vineyard_id", "latitude", "longitude", "sync_version", "updated_at",
   "paddock_id", "row_number", "pin_row_number", "driving_row_number", "pin_side", "side", "location_scope",
   "snapped_latitude", "snapped_longitude", "segments", "geometry_fingerprint", "geometry_source"];
@@ -298,6 +306,7 @@ export function schemaError(d: any): string | null {
   if (!isNumOrNull(d.driving_aisle)) return "driving_aisle";
   if (!(d.side === null || d.side === "left" || d.side === "right")) return "side";
   if (!isStr(d.reason)) return "reason";
+  if (d.field_confirmation != null && (!d.field_confirmation || ["observed_by", "observed_at", "method", "note"].some((k) => typeof d.field_confirmation[k] !== "string" || !d.field_confirmation[k].trim()) || Number.isNaN(Date.parse(d.field_confirmation.observed_at)))) return "field_confirmation";
   if (!(d.source === null || SOURCES.includes(d.source))) return "source";
   if (!Array.isArray(d.acknowledged_warnings) || d.acknowledged_warnings.some((w: any) => !(typeof w === "string" && w in WARNING_LABEL))) return "acknowledged_warnings";
   if (!isStr(d.reviewer)) return "reviewer";
@@ -312,6 +321,7 @@ export function schemaError(d: any): string | null {
 }
 
 export interface CurrentState {
+  serverReport?: ServerReconstructionReport | null;
   current: Map<string, CurrentPin>;
   paddocks: any[];
   /** Signed-in auth user id. */
@@ -346,7 +356,7 @@ export function reconcileDrafts(raw: unknown[], st: CurrentState): ReconcileResu
     const now = snapshotOf(c.pin, reviewPaddock(c.pin, dec.block_id, st.paddocks), c.segs, c.row.geometrySource);
     const diff = snapshotDiff(dec.snapshot, now);
     if (diff.length) { out.issues.push({ pin_id: pid, kind: "stale", reason: `changed since review (${diff.join(", ")})` }); continue; }
-    const v = validateDecision(c.row, dec, st.paddocks);
+    const v = validateDecision(c.row, dec, st.paddocks, st.serverReport);
     if (v.length) { out.issues.push({ pin_id: pid, kind: "invalid", reason: v.join(" ") }); continue; }
     out.accepted.push(dec);
   }
@@ -375,7 +385,7 @@ export type PreflightOutcome = "structurally_eligible" | "conflict" | "not_appro
 export interface PreflightItem { pin_id: string; outcome: PreflightOutcome; checks: string[] }
 export interface PreflightReport { items: PreflightItem[]; eligible: number; conflict: number; notApproval: number; ready: boolean }
 export const PREFLIGHT_NOTICE =
-  "Structurally eligible means the draft passes format, ownership, queue, snapshot and geometry checks only. It does NOT mean the row is position-correct, and it is NOT an approval. A separate, explicit signed-in owner approval and a guarded server writeback (not built) are required.";
+  "Structurally eligible means the local draft passes safety checks, not that it is applied. Server dry-run, explicit owner approval and typed apply are required.";
 
 export function writebackPreflight(raw: unknown[], st: CurrentState): PreflightReport {
   const items: PreflightItem[] = [];
@@ -404,7 +414,7 @@ export function writebackPreflight(raw: unknown[], st: CurrentState): PreflightR
       const diff = snapshotDiff(d.snapshot, snapshotOf(p, reviewPaddock(p, d.block_id, st.paddocks), c.segs, c.row?.geometrySource ?? d.snapshot.geometry_source));
       if (diff.length) fails.push(`changed since review (${diff.join(", ")}) — re-review`);
       if (!c.row) fails.push("pin not assessable");
-      else fails.push(...validateDecision(c.row, d, st.paddocks));
+      else fails.push(...validateDecision(c.row, d, st.paddocks, st.serverReport));
     }
     items.push({ pin_id: d.pin_id, outcome: fails.length ? "conflict" : "structurally_eligible",
       checks: fails.length ? fails : ["format ok", "own account", "row exists in block", "inside current block polygon", "adjacency ok", "side not contradicted", "snapshot unchanged", "no saved row/segments"] });
