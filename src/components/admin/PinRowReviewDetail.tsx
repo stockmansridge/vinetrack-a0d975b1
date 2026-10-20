@@ -56,9 +56,12 @@ function ReviewMap({ r, paddock, track }: { r: RecoveryRow; paddock: any | null;
   );
 }
 
+import type { ServerReconstructionReport } from "@/lib/pinRowReconstruction";
+
 const EMPTY: DecisionInput = { decision: "hold", block_id: null, vine_row: null, driving_aisle: null, side: null, reason: "", source: null, acknowledged_warnings: [] };
 
 export function PinRowReviewDetail(props: {
+  serverReport?: ServerReconstructionReport | null;
   r: RecoveryRow; paddocks: any[]; track: LatLng[] | null; existing: ReviewDecision | null; reviewer: string;
   onSave: (input: DecisionInput) => void; readOnly?: boolean; onClear: () => void; onPrev: () => void; onNext: () => void; position: string;
 }) {
@@ -67,14 +70,17 @@ export function PinRowReviewDetail(props: {
   useEffect(() => {
     setF(existing ? { decision: existing.decision, block_id: existing.block_id, vine_row: existing.vine_row,
       driving_aisle: existing.driving_aisle, side: existing.side, reason: existing.reason, source: existing.source,
-      acknowledged_warnings: existing.acknowledged_warnings }
+      acknowledged_warnings: existing.acknowledged_warnings, field_confirmation: existing.field_confirmation }
       // Never pre-select a row. Block defaults to the SAVED block only.
       : { ...EMPTY, decision: r.status === "preserve_existing" ? "preserve_existing" : "hold", block_id: r.pin.paddock_id ?? null });
   }, [r.id, existing]);
   const paddock = paddocks.find((p) => p.id === (f.block_id ?? r.pin.paddock_id)) ?? null;
-  const errors = useMemo(() => validateDecision(r, f, paddocks), [r, f, paddocks]);
+  const errors = useMemo(() => validateDecision(r, f, paddocks, props.serverReport), [r, f, paddocks, props.serverReport]);
   const warnings = requiredWarnings(r);
   const t = triadOf(r);
+  const fieldErrors = f.decision === "approve_for_writeback" && f.source === "manual_field_check" &&
+    (!f.field_confirmation || ["observed_by", "observed_at", "method", "note"].some((k) => !f.field_confirmation?.[k as keyof typeof f.field_confirmation]?.trim()) || Number.isNaN(Date.parse(f.field_confirmation.observed_at)))
+    ? ["Record who observed the row, when, the field-check method and note."] : [];
   const preserve = r.status === "preserve_existing";
   const kinds: DecisionKind[] = preserve ? ["preserve_existing", "hold"] : ["approve_for_writeback", "hold", "needs_field_verification"];
 
@@ -142,6 +148,9 @@ export function PinRowReviewDetail(props: {
                 <option value="">Choose…</option><option value="measured">Measured</option><option value="reviewed_track">Reviewed track</option><option value="manual_field_check">Manual field check</option>
               </select>
             </label>
+            {f.source === "manual_field_check" && <fieldset className="sm:col-span-4 grid sm:grid-cols-2 gap-2"><legend>Individual field confirmation (observed in the field, not inferred)</legend>
+              {(["observed_by", "observed_at", "method", "note"] as const).map((k) => <label key={k}>{k.replace(/_/g, " ")}<Input type={k === "observed_at" ? "datetime-local" : "text"} value={f.field_confirmation?.[k] ?? ""} onChange={(e) => setF({ ...f, field_confirmation: { observed_by: "", observed_at: "", method: "", note: "", ...f.field_confirmation, [k]: e.target.value } })} /></label>)}
+            </fieldset>}
             <div className="sm:col-span-4 space-y-1">
               {warnings.map((w) => (
                 <label key={w} className="flex gap-2 items-center">
@@ -154,9 +163,9 @@ export function PinRowReviewDetail(props: {
           </div>
         )}
         <Textarea className="text-xs" placeholder="Reason (required)" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
-        {errors.length > 0 && <ul className="text-xs text-destructive list-disc pl-4">{errors.map((e) => <li key={e}>{e}</li>)}</ul>}
+        {[...errors, ...fieldErrors].length > 0 && <ul className="text-xs text-destructive list-disc pl-4">{[...errors, ...fieldErrors].map((e) => <li key={e}>{e}</li>)}</ul>}
         <div className="flex gap-2 items-center">
-          <Button size="sm" disabled={errors.length > 0 || props.readOnly} onClick={() => props.onSave(f)}>Save draft decision</Button>
+          <Button size="sm" disabled={errors.length > 0 || fieldErrors.length > 0 || props.readOnly} onClick={() => props.onSave(f)}>Save draft decision</Button>
           {existing && <Button size="sm" variant="outline" onClick={props.onClear}>Clear draft</Button>}
           <span className="text-xs text-muted-foreground">Reviewer: {props.reviewer}{existing ? ` · saved ${existing.reviewed_at}` : ""}</span>
         </div>

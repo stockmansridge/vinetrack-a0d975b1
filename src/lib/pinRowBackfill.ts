@@ -3,9 +3,11 @@
 // Authorisation, CAS, projection and snapping are decided by the server only.
 import { RECOVERY_VINEYARD_ID, normSide, triadOf, type RecoveryRow } from "@/lib/pinRowRecovery";
 import { csvCell, type ReviewDecision } from "@/lib/pinRowReviewDraft";
+import { candidateMatchesPin, supportedCandidate, type ServerReconstructionReport } from "@/lib/pinRowReconstruction";
 
 export type BatchClass = "defensible_technical" | "manual_field_confirmed";
 export interface BackfillItem {
+  field_confirmation?: ReviewDecision["field_confirmation"];
   pin_id: string; paddock_id: string; pin_row_number: number; driving_row_number: number | null;
   pin_side: "left" | "right" | null; source: string; reason: string;
   expected_sync_version: string; expected_updated_at: string | null;
@@ -26,7 +28,7 @@ export function isDefensible(r: RecoveryRow, d: ReviewDecision): boolean {
  * Build the batch ONLY from drafts already re-validated for this account (accepted map).
  * Never fills a row from nearest geometry, never applies offsets, never invents a side.
  */
-export function buildBatch(rows: RecoveryRow[], accepted: Record<string, ReviewDecision>): ProposedBatch {
+export function buildBatch(rows: RecoveryRow[], accepted: Record<string, ReviewDecision>, report?: ServerReconstructionReport | null): ProposedBatch {
   const entries: BatchEntry[] = []; const hold: HoldEntry[] = [];
   for (const r of rows) {
     const d = accepted[r.id];
@@ -34,8 +36,17 @@ export function buildBatch(rows: RecoveryRow[], accepted: Record<string, ReviewD
       hold.push({ pin_id: r.id, title: r.title, why: d ? `draft: ${d.decision}` : r.status === "preserve_existing" ? "preserve existing metadata" : "no owner-reviewed row" });
       continue;
     }
-    const defensible = isDefensible(r, d);
+    if (r.status === "preserve_existing" || r.pin.row_number != null || r.pin.pin_row_number != null || r.pin.driving_row_number != null || r.pin.location_scope === "row") {
+      hold.push({ pin_id: r.id, title: r.title, why: "preserve existing metadata" }); continue;
+    }
+    const server = supportedCandidate(report ?? null, r.id);
+    const defensible = report !== undefined ? !!server && candidateMatchesPin(server, r) && d.block_id === server.proposed_block_id &&
+      d.vine_row === server.suggestion?.vine_row && d.driving_aisle === server.suggestion?.driving_aisle && d.side === server.side?.value : isDefensible(r, d);
     if (!defensible && d.source !== "manual_field_check") { hold.push({ pin_id: r.id, title: r.title, why: "evidence insufficient and not field-confirmed" }); continue; }
+    if (report !== undefined && d.source === "manual_field_check" && (!d.field_confirmation ||
+        [d.field_confirmation.observed_by, d.field_confirmation.observed_at, d.field_confirmation.method, d.field_confirmation.note].some((v) => !v?.trim()) || Number.isNaN(Date.parse(d.field_confirmation.observed_at)))) {
+      hold.push({ pin_id: r.id, title: r.title, why: "explicit field confirmation missing" }); continue;
+    }
     if (r.lat == null || r.lng == null || !d.block_id || d.vine_row == null) { hold.push({ pin_id: r.id, title: r.title, why: "incomplete" }); continue; }
     // Side: only send when it equals the recorded pin_side, or a field check supplies it.
     const recorded = normSide(r.pin.pin_side);
@@ -44,7 +55,8 @@ export function buildBatch(rows: RecoveryRow[], accepted: Record<string, ReviewD
       cls: defensible ? "defensible_technical" : "manual_field_confirmed", title: r.title, block: r.savedBlockName,
       item: {
         pin_id: r.id, paddock_id: d.block_id, pin_row_number: d.vine_row, driving_row_number: d.driving_aisle,
-        pin_side: side, source: d.source!, reason: d.reason,
+        pin_side: side, source: d.source ?? "", reason: d.reason,
+        ...(d.field_confirmation ? { field_confirmation: d.field_confirmation } : {}),
         expected_sync_version: String(r.pin.sync_version ?? ""), expected_updated_at: r.pin.updated_at ?? null,
         expected_latitude: Number(r.pin.latitude), expected_longitude: Number(r.pin.longitude),
       },
@@ -69,9 +81,11 @@ export function batchCsv(b: ProposedBatch, dry?: Map<string, any>): string {
 export const isMissingRpc = (e: any) => e?.code === "PGRST202" || /could not find the function/i.test(e?.message ?? "");
 
 export async function dryRun(db: any, items: BackfillItem[]) {
+  if (!items.length) return { data: null, error: { message: "No owner-approved items; no request sent." } };
   return db.rpc("pin_row_backfill_dry_run", { p_vineyard: RECOVERY_VINEYARD_ID, p_items: items });
 }
 export async function createApproval(db: any, items: BackfillItem[]) {
+  if (!items.length) return { data: null, error: { message: "No owner-approved items; no approval created." } };
   return db.rpc("pin_row_backfill_create_approval", { p_vineyard: RECOVERY_VINEYARD_ID, p_items: items });
 }
 export async function applyApproval(db: any, approvalId: string, hash: string, phrase: string) {
@@ -89,11 +103,11 @@ export async function verifyApplied(db: any, approvalId: string, receipts: { pin
   const err = pins.error?.message ?? audit.error?.message ?? null;
   const pm = new Map((pins.data ?? []).map((p: any) => [String(p.id), p]));
   const am = new Map((audit.data ?? []).map((a: any) => [String(a.pin_id), a]));
-  const verified = receipts.filter((r) => {
+  const verifiedReceipts = receipts.filter((r) => {
     const p: any = pm.get(r.pin_id); const a: any = am.get(r.pin_id);
     return p && a && p.pin_row_number != null && a.after?.pin_row_number === p.pin_row_number
       && (r.outcome !== "assigned_snapped" || p.snapped_to_row === true);
-  }).length;
-  return { verified, total: receipts.length, placementRows: placements.error ? null : (placements.data ?? []).length,
+  });
+  return { verified: verifiedReceipts.length, failedIds: receipts.filter((r) => !verifiedReceipts.includes(r)).map((r) => r.pin_id), total: receipts.length, placementRows: placements.error ? null : (placements.data ?? []).length,
     placementError: placements.error?.message ?? null, error: err };
 }

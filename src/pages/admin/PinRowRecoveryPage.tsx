@@ -1,5 +1,5 @@
 // Stage 1 Existing Pin Row Recovery — System Admin, Stockman's Ridge only.
-// REVIEW ONLY: no writes, no queue, no confirmations. Notes stay in this tab.
+// Reconstruction is read-only; writes require explicit owner drafts, dry-run and typed server apply.
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
@@ -23,7 +23,11 @@ import {
   importDraftJson, parseStoredDrafts, reconcileDrafts, writebackPreflight,
   type CurrentPin, type CurrentState, type DecisionKind, type ReviewDecision,
 } from "@/lib/pinRowReviewDraft";
-import { applyApproval, batchCsv, buildBatch, createApproval, dryRun, isMissingRpc, verifyApplied } from "@/lib/pinRowBackfill";
+import { applyApproval, batchCsv, buildBatch, createApproval, dryRun, verifyApplied } from "@/lib/pinRowBackfill";
+
+import { PinRowServerReconstruction } from "@/components/admin/PinRowServerReconstruction";
+import { candidateMatchesPin, fetchServerReconstruction, reconstructionError, supportedCandidate, type ServerReconstructionReport } from "@/lib/pinRowReconstruction";
+import { requiredWarnings } from "@/lib/pinRowReviewDraft";
 
 type MissingInput = "any" | "gps" | "direction" | "side" | "block";
 function download(name: string, text: string, type: string) {
@@ -73,7 +77,8 @@ function PinRowRecoveryInner() {
   const isMember = memberships.some((m: any) => (m.vineyard_id ?? m.id ?? m.vineyard?.id) === RECOVERY_VINEYARD_ID);
 
   const base = useQuery({
-    queryKey: ["pin-row-recovery", "base"],
+    queryKey: ["pin-row-recovery", user?.id, "base"],
+    enabled: !!user,
     staleTime: 5 * 60_000,
     queryFn: async () => {
       const [pins, paddocks] = await Promise.all([
@@ -87,7 +92,7 @@ function PinRowRecoveryInner() {
   const missingIds = useMemo(() => missing.map((p) => String(p.id)), [missing]);
 
   const evidence = useQuery({
-    queryKey: ["pin-row-recovery", "evidence", missingIds.length],
+    queryKey: ["pin-row-recovery", user?.id, "evidence", missingIds.join(",")],
     enabled: missingIds.length > 0,
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<{ map: Map<string, CaptureEvidence> | null; error: string | null }> => {
@@ -105,7 +110,7 @@ function PinRowRecoveryInner() {
   });
 
   const segments = useQuery({
-    queryKey: ["pin-row-recovery", "segments", missingIds.length],
+    queryKey: ["pin-row-recovery", user?.id, "segments", missingIds.join(",")],
     enabled: missingIds.length > 0,
     staleTime: 5 * 60_000,
     queryFn: async () => {
@@ -127,7 +132,7 @@ function PinRowRecoveryInner() {
 
   const [loadTrips, setLoadTrips] = useState(false);
   const trips = useQuery({
-    queryKey: ["pin-row-recovery", "trips", missingIds.length],
+    queryKey: ["pin-row-recovery", user?.id, "trips", missingIds.join(",")],
     enabled: loadTrips && missingIds.length > 0,
     staleTime: 30 * 60_000,
     queryFn: async () => {
@@ -201,6 +206,10 @@ function PinRowRecoveryInner() {
     setRawDrafts(d); try { localStorage.setItem(draftKey, JSON.stringify(d)); } catch { /* ignore */ }
   };
 
+  const [serverState, setServerState] = useState<{ userId: string; report: ServerReconstructionReport } | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [serverBusy, setServerBusy] = useState(false);
+  const serverReport = serverState?.userId === userId ? serverState.report : null;
   const segMap = segments.data?.map ?? null;
   const currentMap = useMemo(() => {
     const m = new Map<string, CurrentPin>();
@@ -209,15 +218,15 @@ function PinRowRecoveryInner() {
   }, [rows, segMap]);
   const refreshing = base.isFetching || evidence.isFetching || segments.isFetching;
   const evidenceReady = !!base.data && !refreshing && !!evidence.data?.map && !!segments.data?.map;
-  const draftState: CurrentState = useMemo(() => ({ current: currentMap, paddocks: base.data?.paddocks ?? [], userId, evidenceReady }),
-    [currentMap, base.data, userId, evidenceReady]);
+  const draftState: CurrentState = useMemo(() => ({ current: currentMap, paddocks: base.data?.paddocks ?? [], userId, evidenceReady, serverReport }),
+    [currentMap, base.data, userId, evidenceReady, serverReport]);
   const reconciled = useMemo(() => reconcileDrafts(Object.values(rawDrafts), draftState), [rawDrafts, draftState]);
   const decisions = useMemo(() => {
     const m: Record<string, ReviewDecision> = {};
     reconciled.accepted.forEach((d) => { m[d.pin_id] = d; });
     return m;
   }, [reconciled]);
-  const batch = useMemo(() => buildBatch(rows, decisions), [rows, decisions]);
+  const batch = useMemo(() => buildBatch(rows, decisions, serverReport), [rows, decisions, serverReport]);
   const [dry, setDry] = useState<{ map: Map<string, any>; ok: number; blocked: number; at: string } | null>(null);
   const [approval, setApproval] = useState<{ approval_id: string; items_hash: string; item_count: number; confirm_phrase: string } | null>(null);
   const [phrase, setPhrase] = useState("");
@@ -225,10 +234,12 @@ function PinRowRecoveryInner() {
   const [bfMsg, setBfMsg] = useState<string | null>(null);
   const [applied, setApplied] = useState<{ receipts: any[]; missingBefore: number; verify: any } | null>(null);
   // Any change to the batch or live state invalidates a previous dry-run/approval.
-  const batchKey = JSON.stringify(batch.entries.map((e) => e.item));
+  const batchKey = JSON.stringify([userId, serverReport, batch.entries.map((e) => e.item)]);
   useEffect(() => { setDry(null); setApproval(null); setPhrase(""); }, [batchKey]);
-  const rpcErr = (e: any) => isMissingRpc(e) ? "Backfill functions are not installed on the VineTrack database yet (sql/267 not applied)." : e?.message ?? String(e);
+  const rpcErr = reconstructionError;
   const runDry = async () => {
+    if (!userId || !evidenceReady || !batch.entries.length || serverBusy) return;
+    setDry(null);
     setBusy("dry"); setBfMsg(null); setApproval(null);
     const { data, error } = await dryRun(db, batch.entries.map((e) => e.item));
     setBusy(null);
@@ -236,6 +247,7 @@ function PinRowRecoveryInner() {
     setDry({ map: new Map((data.items ?? []).map((x: any) => [String(x.pin_id), x])), ok: data.ok, blocked: data.blocked, at: new Date().toISOString() });
   };
   const runApprove = async () => {
+    if (!userId || !evidenceReady || !batch.entries.length || !dry || dry.blocked || dry.ok !== batch.entries.length || serverBusy) return;
     setBusy("approve"); setBfMsg(null);
     const { data, error } = await createApproval(db, batch.entries.map((e) => e.item));
     setBusy(null);
@@ -243,17 +255,40 @@ function PinRowRecoveryInner() {
     setApproval(data);
   };
   const runApply = async () => {
-    if (!approval) return;
+    if (!userId || !approval || phrase !== approval.confirm_phrase || !evidenceReady || serverBusy) return;
     setBusy("apply"); setBfMsg(null);
     const missingBefore = rows.length;
     const { data, error } = await applyApproval(db, approval.approval_id, approval.items_hash, phrase);
     if (error) { setBusy(null); setBfMsg(`Nothing written: ${rpcErr(error)}`); return; }
     const verify = await verifyApplied(db, approval.approval_id, data.receipts ?? []);
     await base.refetch();
+    setServerState(null);
     setBusy(null);
     setApplied({ receipts: data.receipts ?? [], missingBefore, verify });
   };
-  const refreshCurrent = () => { void base.refetch(); void evidence.refetch(); void segments.refetch(); };
+  const runServer = async () => {
+    if (!userId || busy) return;
+    setServerState(null); setServerError(null); setServerBusy(true); setDry(null); setApproval(null); setPhrase("");
+    try {
+      const [report] = await Promise.all([fetchServerReconstruction(db, userId), base.refetch(), evidence.refetch(), segments.refetch()]);
+      setServerState({ userId, report });
+    } catch (e: any) { setServerError(e?.message ?? String(e)); }
+    finally { setServerBusy(false); }
+  };
+  const approveServerSelection = (ids: string[]) => {
+    if (!userId || !evidenceReady || !serverReport || busy || serverBusy) return;
+    const next = { ...rawDrafts };
+    for (const id of ids) {
+      const p = supportedCandidate(serverReport, id); const r = rows.find((r) => r.id === id);
+      if (!p || !r || !candidateMatchesPin(p, r)) return;
+      next[id] = buildDecision(r, { decision: "approve_for_writeback", block_id: p.proposed_block_id ?? null,
+        vine_row: p.suggestion?.vine_row ?? null, driving_aisle: p.suggestion?.driving_aisle ?? null,
+        side: p.side?.value ?? null, source: "reviewed_track", reason: `Owner selected exact server reconstruction ${serverReport.algorithm_version} (${serverReport.generated_at})`,
+        acknowledged_warnings: requiredWarnings(r) }, reviewer, userId, base.data?.paddocks ?? [], segMap?.get(id) ?? []);
+    }
+    persist(next); setApplied(null);
+  };
+  const refreshCurrent = () => { setServerState(null); setDry(null); setApproval(null); void base.refetch(); void evidence.refetch(); void segments.refetch(); };
   const shown = (filter === "priority"
     ? rows.filter(isPriorityPin)
     : [...rows.filter((r) => filter === "all" || r.status === filter)].sort((a, b) => Number(isPriorityPin(b)) - Number(isPriorityPin(a))))
@@ -303,8 +338,7 @@ function PinRowRecoveryInner() {
       <div>
         <h1 className="text-2xl font-semibold">Pin Row Recovery (Stage 1 review)</h1>
         <p className="text-sm text-muted-foreground">
-          Stockman's Ridge only. Review only — nothing here changes pins, rows, segments or evidence.
-          Every suggestion is a non-authoritative candidate; none are confirmed.
+          Stockman's Ridge only. Reconstruction and review do not write pins. Only explicit owner approval followed by typed server apply can assign rows.
         </p>
       </div>
 
@@ -316,6 +350,10 @@ function PinRowRecoveryInner() {
         <div>Geometry: {GEOMETRY_SOURCE_LABEL}.</div>
       </Card>
 
+      <PinRowServerReconstruction report={serverReport} error={serverError} busy={serverBusy}
+        runDisabled={!userId || !!busy}
+        disabled={!userId || !!busy || !evidenceReady} rows={rows} paddocks={base.data?.paddocks ?? []}
+        onRun={() => void runServer()} onApprove={approveServerSelection} />
       {base.error && <Card className="p-4 text-sm text-destructive">Pins/blocks unavailable: {(base.error as any).message}</Card>}
       {base.isLoading && <Card className="p-4 text-sm text-muted-foreground">Loading pins and blocks…</Card>}
 
@@ -433,7 +471,7 @@ function PinRowRecoveryInner() {
 
           {preflight && (
             <Card className="p-4 text-sm space-y-1">
-              <div className="font-medium flex items-center gap-2 flex-wrap">Writeback preflight (read-only — no write path exists yet)
+              <div className="font-medium flex items-center gap-2 flex-wrap">Local draft preflight (read-only)
                 <Button size="sm" variant="outline" onClick={refreshCurrent} disabled={refreshing}>{refreshing ? "Refreshing…" : "Refresh current state"}</Button></div>
               <div className="rounded border border-destructive/50 bg-destructive/5 p-2 text-xs"><b>NOT position-verified · NOT approved.</b> {PREFLIGHT_NOTICE}</div>
               {!preflight.ready && <div className="text-xs text-destructive">Evidence/segments loading or unavailable — nothing can be eligible.</div>}
@@ -441,26 +479,26 @@ function PinRowRecoveryInner() {
               {preflight.items.filter((i) => i.outcome === "conflict").map((i) => (
                 <div key={i.pin_id} className="text-xs text-destructive font-mono">{i.pin_id.slice(0, 8)}: {i.checks.join("; ")}</div>
               ))}
-              <div className="text-xs text-muted-foreground">Applying decisions needs a future audited server writeback (see design doc) and owner sign-off. Nothing has been written.</div>
+              <div className="text-xs text-muted-foreground">Local checks are not server validation. Use server dry-run and explicit owner confirmation below.</div>
             </Card>
           )}
 
           <Card className="p-4 text-sm space-y-2">
             <div className="font-medium">Owner-approved row backfill (server, Stockman's Ridge only)</div>
             <div>Proposed batch: <b>{batch.entries.length}</b> (technically defensible {batch.defensible} · manual field-confirmed {batch.fieldConfirmed}) · held / unresolved: {batch.hold.length}</div>
-            <div className="text-xs text-muted-foreground">Built only from your re-validated "Approve" drafts. Rows are never filled from the nearest row, no offset is applied, side is never invented. Snapping is decided by the server and only when the projection onto the chosen row is verified; otherwise the row is assigned but unsnapped. Raw GPS is never moved.</div>
+            <div className="text-xs text-muted-foreground">Built only from your re-validated "Approve" drafts matching eligible server rows, or explicit individual field confirmations. Rows are never filled from the nearest row, no offset is applied, side is never invented. Snapping is decided by the server and only when the projection onto the chosen row is verified; otherwise the row is assigned but unsnapped. Raw GPS is never moved.</div>
             <div className="flex gap-2 flex-wrap">
               <Button size="sm" variant="outline" onClick={() => download("pin-row-backfill-PROPOSED.csv", batchCsv(batch, dry?.map), "text/csv")}>Export proposed batch (CSV)</Button>
               <Button size="sm" variant="outline" onClick={() => download("pin-row-backfill-PROPOSED.json", JSON.stringify({ vineyard_id: RECOVERY_VINEYARD_ID, status: "proposed_not_applied", items: batch.entries.map((e) => ({ ...e.item, class: e.cls })), hold: batch.hold }, null, 2), "application/json")}>Export (JSON)</Button>
-              <Button size="sm" disabled={!evidenceReady || !batch.entries.length || !!busy} onClick={runDry}>{busy === "dry" ? "Running…" : "1. Server dry-run (no writes)"}</Button>
-              <Button size="sm" disabled={!dry || dry.blocked > 0 || dry.ok !== batch.entries.length || !!busy || !!approval} onClick={runApprove}>{busy === "approve" ? "Creating…" : "2. Create approval"}</Button>
+              <Button size="sm" disabled={!evidenceReady || !batch.entries.length || !!busy || serverBusy} onClick={runDry}>{busy === "dry" ? "Running…" : "1. Server dry-run (no writes)"}</Button>
+              <Button size="sm" disabled={!evidenceReady || serverBusy || !batch.entries.length || !dry || dry.blocked > 0 || dry.ok !== batch.entries.length || !!busy || !!approval} onClick={runApprove}>{busy === "approve" ? "Creating…" : "2. Create approval"}</Button>
             </div>
             {dry && <div>Dry-run {dry.at}: passes <b>{dry.ok}</b> · blocked <b className={dry.blocked ? "text-destructive" : ""}>{dry.blocked}</b>{dry.blocked > 0 && " — remove or fix blocked pins; writes are blocked."}</div>}
             {dry && (
               <div className="max-h-72 overflow-auto border rounded">
                 <table className="w-full text-xs"><thead className="text-left text-muted-foreground"><tr>{["Pin", "Title", "Class", "Row", "Aisle", "Side", "Source", "Server result", "Snap"].map((h) => <th key={h} className="p-1">{h}</th>)}</tr></thead>
                   <tbody className="divide-y">{batch.entries.map((e) => { const r = dry.map.get(e.item.pin_id); return (
-                    <tr key={e.item.pin_id}><td className="p-1 font-mono">{e.item.pin_id.slice(0, 8)}</td><td className="p-1">{e.title}</td><td className="p-1">{e.cls === "defensible_technical" ? "defensible" : "field-confirmed"}</td>
+                    <tr key={e.item.pin_id}><td className="p-1 font-mono">{e.item.pin_id}</td><td className="p-1">{e.title}</td><td className="p-1">{e.cls === "defensible_technical" ? "defensible" : "field-confirmed"}</td>
                       <td className="p-1">{e.item.pin_row_number}</td><td className="p-1">{e.item.driving_row_number ?? "—"}</td><td className="p-1">{e.item.pin_side ?? "—"}</td><td className="p-1">{e.item.source}</td>
                       <td className={`p-1 ${r?.ok ? "" : "text-destructive"}`}>{r ? (r.ok ? r.outcome.replace(/_/g, " ") : (r.fails ?? []).join("; ")) : "missing"}</td>
                       <td className="p-1">{r?.projection?.ok ? `${Number(r.projection.distance_m).toFixed(2)} m` : r?.projection?.reason ?? "—"}</td></tr>); })}</tbody></table>
@@ -477,6 +515,7 @@ function PinRowRecoveryInner() {
               <div className="space-y-1">
                 <div>Server receipts: {applied.receipts.length} (snapped {applied.receipts.filter((r) => r.outcome === "assigned_snapped").length} · row assigned, unsnapped {applied.receipts.filter((r) => r.outcome === "assigned_unsnapped").length})</div>
                 <div>Read-back verified (pins + audit): <b>{applied.verify.verified}/{applied.verify.total}</b>{applied.verify.error && ` — ${applied.verify.error}`} · placement rows read: {applied.verify.placementRows ?? `unavailable (${applied.verify.placementError})`}</div>
+                {applied.verify.failedIds?.map((id: string) => <div key={id} className="text-destructive font-mono">Read-back failed: {id}</div>)}
                 <div>Missing-row pins: {applied.missingBefore} → {rows.length} {applied.missingBefore - rows.length === applied.verify.verified ? "(decrease matches verified writes)" : <span className="text-destructive">(does NOT match verified writes — investigate)</span>}</div>
               </div>
             )}
@@ -492,8 +531,8 @@ function PinRowRecoveryInner() {
               position={selIdx >= 0 ? `${selIdx + 1} of ${shown.length} in current filter` : "outside current filter"}
               onPrev={() => go(-1)} onNext={() => go(1)}
               onClear={() => { const n = { ...rawDrafts }; delete n[selected.id]; persist(n); }}
-              readOnly={!userId || !evidenceReady}
-              onSave={(input) => { if (!userId || !evidenceReady) return; persist({ ...rawDrafts, [selected.id]: buildDecision(selected, input, reviewer, userId, base.data!.paddocks, segMap ? segMap.get(selected.id) ?? [] : null) }); }}
+              readOnly={!userId || !evidenceReady || !!busy || serverBusy} serverReport={serverReport}
+              onSave={(input) => { if (!userId || !evidenceReady) return; persist({ ...rawDrafts, [selected.id]: buildDecision(selected, input, reviewer, userId, base.data.paddocks, segMap ? segMap.get(selected.id) ?? [] : null) }); }}
             />
           )}
 
