@@ -91,6 +91,17 @@ describe("signed-in Portal server reconstruction", () => {
     expect(buildBatch([row], {}, report()).entries).toHaveLength(0);
     await dryRun(api, []); await createApproval(api, []); expect(api.rpc).not.toHaveBeenCalled();
   });
+  it("requires the current server report for technical drafts and actual field-confirmation details for unresolved rows", () => {
+    const input = { decision: "approve_for_writeback" as const, block_id: blockId, vine_row: 4, driving_aisle: 3.5, side: "right" as const,
+      source: "reviewed_track" as const, reason: "owner selected", acknowledged_warnings: requiredWarnings(row) };
+    const d = buildDecision(row, input, "owner", "owner", [paddock], []);
+    expect(buildBatch([row], { [id]: d }, report()).entries).toHaveLength(1);
+    expect(buildBatch([row], { [id]: d }, null).entries).toHaveLength(0);
+    const manual = { ...d, source: "manual_field_check" as const };
+    expect(buildBatch([row], { [id]: manual }, null).entries).toHaveLength(0);
+    const confirmed = { ...manual, field_confirmation: { observed_by: "Owner", observed_at: "2026-10-20T01:22:00Z", method: "Walked the physical row", note: "Confirmed row 4" } };
+    expect(buildBatch([row], { [id]: confirmed }, null).entries[0].item.field_confirmation).toEqual(confirmed.field_confirmation);
+  });
   it("selection invalidates when the server report is refreshed", () => {
     const approve = vi.fn(); const props = { error: null, busy: false, disabled: false, rows: [row], paddocks: [paddock], onRun: vi.fn(), onApprove: approve };
     const r = render(<PinRowServerReconstruction {...props} report={report()} />);
