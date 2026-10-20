@@ -351,6 +351,7 @@ function PinRowRecoveryInner() {
       </Card>
 
       <PinRowServerReconstruction report={serverReport} error={serverError} busy={serverBusy}
+        runDisabled={!userId || !!busy}
         disabled={!userId || !!busy || !evidenceReady} rows={rows} paddocks={base.data?.paddocks ?? []}
         onRun={() => void runServer()} onApprove={approveServerSelection} />
       {base.error && <Card className="p-4 text-sm text-destructive">Pins/blocks unavailable: {(base.error as any).message}</Card>}

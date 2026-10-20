@@ -43,6 +43,10 @@ export function buildBatch(rows: RecoveryRow[], accepted: Record<string, ReviewD
     const defensible = report !== undefined ? !!server && candidateMatchesPin(server, r) && d.block_id === server.proposed_block_id &&
       d.vine_row === server.suggestion?.vine_row && d.driving_aisle === server.suggestion?.driving_aisle && d.side === server.side?.value : isDefensible(r, d);
     if (!defensible && d.source !== "manual_field_check") { hold.push({ pin_id: r.id, title: r.title, why: "evidence insufficient and not field-confirmed" }); continue; }
+    if (report !== undefined && d.source === "manual_field_check" && (!d.field_confirmation ||
+        [d.field_confirmation.observed_by, d.field_confirmation.observed_at, d.field_confirmation.method, d.field_confirmation.note].some((v) => !v?.trim()) || Number.isNaN(Date.parse(d.field_confirmation.observed_at)))) {
+      hold.push({ pin_id: r.id, title: r.title, why: "explicit field confirmation missing" }); continue;
+    }
     if (r.lat == null || r.lng == null || !d.block_id || d.vine_row == null) { hold.push({ pin_id: r.id, title: r.title, why: "incomplete" }); continue; }
     // Side: only send when it equals the recorded pin_side, or a field check supplies it.
     const recorded = normSide(r.pin.pin_side);

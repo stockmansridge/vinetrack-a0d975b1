@@ -3,9 +3,10 @@ import { Button } from "@/components/ui/button";
 import { candidateMatchesPin, reconstructionCsv, supportedCandidate, type ServerReconstructionReport } from "@/lib/pinRowReconstruction";
 import type { RecoveryRow } from "@/lib/pinRowRecovery";
 
-export function PinRowServerReconstruction({ report, error, busy, disabled, rows, paddocks, onRun, onApprove }: {
+export function PinRowServerReconstruction({ report, error, busy, disabled, runDisabled = disabled, rows, paddocks, onRun, onApprove }: {
   report: ServerReconstructionReport | null; error: string | null; busy: boolean; disabled: boolean;
   rows: RecoveryRow[]; paddocks: any[]; onRun: () => void; onApprove: (ids: string[]) => void;
+  runDisabled?: boolean;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [selectionReport, setSelectionReport] = useState<ServerReconstructionReport | null>(null);
@@ -20,7 +21,7 @@ export function PinRowServerReconstruction({ report, error, busy, disabled, rows
   return <section className="space-y-3 border-y py-4 text-sm" aria-label="Server reconstruction">
     <h2 className="font-semibold">Server reconstruction — Stockman's Ridge</h2>
     <div className="flex flex-wrap gap-2">
-      <Button size="sm" disabled={busy || disabled} onClick={() => { setSelected([]); setSelectionReport(null); onRun(); }}>{busy ? "Running server reconstruction…" : "Run server reconstruction"}</Button>
+      <Button size="sm" disabled={busy || runDisabled} onClick={() => { setSelected([]); setSelectionReport(null); onRun(); }}>{busy ? "Running server reconstruction…" : "Run server reconstruction"}</Button>
       <Button size="sm" variant="outline" disabled={!report || busy} onClick={() => exportFile("csv")}>Export server CSV</Button>
       <Button size="sm" variant="outline" disabled={!report || busy} onClick={() => exportFile("json")}>Export exact server JSON</Button>
     </div>
