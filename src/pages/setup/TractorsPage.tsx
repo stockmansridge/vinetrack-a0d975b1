@@ -1,5 +1,6 @@
 import EquipmentImportExportDialog from "@/components/equipment/EquipmentImportExportDialog";
 import TractorReferencePhoto from "@/components/equipment/TractorReferencePhoto";
+import TractorPhotoPicker from "@/components/equipment/TractorPhotoPicker";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -457,7 +458,7 @@ export default function TractorsPage() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <form onSubmit={handleSubmit} className="space-y-4">
             <DialogHeader>
               <DialogTitle>{editing ? "Edit tractor" : "New tractor"}</DialogTitle>
@@ -587,6 +588,7 @@ export default function TractorsPage() {
                 )}
               </div>
             </div>
+            <TractorPhotoPicker tractor={{ brand: form.brand, model: form.model, model_year: form.model_year ? Number(form.model_year) : null }} />
             <DialogFooter>
               <Button
                 type="button"
