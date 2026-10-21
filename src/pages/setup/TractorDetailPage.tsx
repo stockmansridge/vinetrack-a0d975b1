@@ -6,7 +6,7 @@ import { fetchOne } from "@/lib/queries";
 import { useVineyard } from "@/context/VineyardContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import TractorReferencePhoto from "@/components/equipment/TractorReferencePhoto";
+import TractorPhoto from "@/components/equipment/TractorPhoto";
 import { formatFuelUsage } from "@/lib/tractorFuel";
 
 
@@ -125,7 +125,9 @@ export default function TractorDetailPage() {
                   <h1 className="text-2xl font-semibold text-foreground">{t.name || "Unnamed tractor"}</h1>
                   {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
                 </div>
-                <TractorReferencePhoto
+                <TractorPhoto
+                  tractorId={t.id}
+                  size="lg"
                   tractor={{ brand: t.brand ?? null, model: t.model ?? null, model_year: t.model_year ?? null }}
                 />
               </div>

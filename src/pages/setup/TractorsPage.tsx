@@ -1,5 +1,5 @@
 import EquipmentImportExportDialog from "@/components/equipment/EquipmentImportExportDialog";
-import TractorReferencePhoto from "@/components/equipment/TractorReferencePhoto";
+import TractorPhoto from "@/components/equipment/TractorPhoto";
 import TractorPhotoPicker from "@/components/equipment/TractorPhotoPicker";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -426,7 +426,7 @@ export default function TractorsPage() {
                 className="cursor-pointer"
                 onClick={() => navigate(`/setup/tractors/${r.id}`)}
               >
-                <TableCell><TractorReferencePhoto tractor={r} /></TableCell>
+                <TableCell><TractorPhoto tractorId={r.id} tractor={r} /></TableCell>
                 <TableCell className="font-medium">
                   <div>{fmtCell(r.name)}</div>
                   {equipmentIdSubtitle(r.serial_number, r.vin_number) && (
@@ -601,7 +601,7 @@ export default function TractorsPage() {
                 )}
               </div>
             </div>
-            <TractorPhotoPicker />
+            <TractorPhotoPicker tractorId={editing?.id} vineyardId={editing?.vineyard_id ?? selectedVineyardId} />
             <DialogFooter>
               <Button
                 type="button"
