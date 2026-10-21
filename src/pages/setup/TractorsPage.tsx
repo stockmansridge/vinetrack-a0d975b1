@@ -588,7 +588,7 @@ export default function TractorsPage() {
                 )}
               </div>
             </div>
-            <TractorPhotoPicker tractor={{ brand: form.brand, model: form.model, model_year: form.model_year ? Number(form.model_year) : null }} />
+            <TractorPhotoPicker />
             <DialogFooter>
               <Button
                 type="button"
