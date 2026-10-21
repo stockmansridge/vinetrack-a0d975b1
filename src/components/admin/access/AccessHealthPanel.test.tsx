@@ -23,7 +23,7 @@ function healthy(): AccessHealth {
 }
 
 function result(overrides: Record<string, unknown> = {}) {
-  query.mockReturnValue({ data: healthy(), error: null, isLoading: false, isFetching: false, refetch, ...overrides } as ReturnType<typeof useAccessHealth>);
+  query.mockReturnValue({ data: healthy(), error: null, isLoading: false, isFetching: false, refetch, ...overrides } as unknown as ReturnType<typeof useAccessHealth>);
 }
 
 beforeEach(() => { vi.clearAllMocks(); result(); });
