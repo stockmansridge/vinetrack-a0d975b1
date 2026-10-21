@@ -1,7 +1,8 @@
 # Roadmap
 
 ## Tractor photo automation
-- [ ] Gather and verify attachment-free exact-match images for Stockman's Ridge only — needs its authorised tractor brand/model/year list; leave unmatched images blank.
+- [ ] Gather and verify attachment-free exact-match images for Stockman's Ridge only — blocked: actual vineyard sign-in/list unavailable; public Fendt research found no verified eligible replacement. Need authorised brand/model/year list.
+- [x] Leave unmatched photo cells blank and reject unverified/attached photos; removed ineligible Fendt from live catalogue; 15 tests and preview build passed; unpublished.
 - [ ] Extend to Tamburlaine after successful Stockman's Ridge acceptance, then all equipment after successful Tamburlaine acceptance — waiting on pilot results.
 - [ ] Find verified photos automatically for newly added tractors and retrofit existing tractors — Parallel connected, owner-approved A$20 combined monthly ceiling; blocked on a durable shared photo cache/atomic spending guard (ChatGPT owns all SQL); no paid searches or activation, no shared tractor record changes.
 - [x] Remove the existing verified reference photo background; transparent PNG confirmed, 12 focused tests passed, preview build OK; unpublished.
