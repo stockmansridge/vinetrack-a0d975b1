@@ -1,32 +1,17 @@
 import { useState } from "react";
-import { ImageOff } from "lucide-react";
-import fendtCutout from "@/assets/tractors/fendt-211v-cutout.png";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { matchTractorReferencePhoto, type TractorPhotoIdentity, type TractorReferencePhoto } from "@/lib/tractorReferencePhotos";
 
-export const TRACTOR_REFERENCE_PHOTOS: readonly TractorReferencePhoto[] = [{
-  brands: ["Fendt"], models: ["211V", "211 V", "211 V Vario", "211V Vario"],
-  // Original generation: https://www.tractordata.com/farm-tractors/010/8/5/10858-fendt-211v.html
-  firstYear: 2010, lastYear: 2016,
-  url: fendtCutout,
-  sourceUrl: "https://commons.wikimedia.org/wiki/File:Fendt_211_V_Vario,_Nidderdonwen-102.jpg",
-  attribution: "Jwh · CC BY-SA 3.0 LU · Wikimedia Commons · Background removed",
-  label: "Fendt 211 V Vario",
-}];
+// The previous Fendt source includes a rear implement and is not eligible.
+export const TRACTOR_REFERENCE_PHOTOS: readonly TractorReferencePhoto[] = [];
 
-export default function TractorReferencePhoto({ tractor }: { tractor: TractorPhotoIdentity }) {
-  const photo = matchTractorReferencePhoto(tractor, TRACTOR_REFERENCE_PHOTOS);
+export default function TractorReferencePhoto({ tractor, catalogue = TRACTOR_REFERENCE_PHOTOS }: { tractor: TractorPhotoIdentity; catalogue?: readonly TractorReferencePhoto[] }) {
+  const photo = matchTractorReferencePhoto(tractor, catalogue);
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const missingIdentity = !tractor.brand?.trim() || !tractor.model?.trim() || tractor.model_year == null;
   if (!photo || failedUrl === photo.url) {
-    const reason = missingIdentity ? "Brand, model and year needed" : "No verified reference photo available";
-    return (
-      <div className="flex h-16 w-24 items-center justify-center rounded border border-border bg-muted text-muted-foreground" title={reason} role="img" aria-label={reason}>
-        <ImageOff className="h-5 w-5" aria-hidden="true" />
-      </div>
-    );
+    return <div className="h-16 w-24" aria-hidden="true" />;
   }
   return (
     <div onClick={(event) => event.stopPropagation()}>
