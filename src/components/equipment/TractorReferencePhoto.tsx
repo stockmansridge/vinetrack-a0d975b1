@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ImageOff } from "lucide-react";
-import fendtAsset from "@/assets/tractors/fendt-211v.jpg.asset.json";
+import fendtCutout from "@/assets/tractors/fendt-211v-cutout.png";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { matchTractorReferencePhoto, type TractorPhotoIdentity, type TractorReferencePhoto } from "@/lib/tractorReferencePhotos";
@@ -9,9 +9,9 @@ export const TRACTOR_REFERENCE_PHOTOS: readonly TractorReferencePhoto[] = [{
   brands: ["Fendt"], models: ["211V", "211 V", "211 V Vario", "211V Vario"],
   // Original generation: https://www.tractordata.com/farm-tractors/010/8/5/10858-fendt-211v.html
   firstYear: 2010, lastYear: 2016,
-  url: fendtAsset.url,
+  url: fendtCutout,
   sourceUrl: "https://commons.wikimedia.org/wiki/File:Fendt_211_V_Vario,_Nidderdonwen-102.jpg",
-  attribution: "Jwh · CC BY-SA 3.0 LU · Wikimedia Commons",
+  attribution: "Jwh · CC BY-SA 3.0 LU · Wikimedia Commons · Background removed",
   label: "Fendt 211 V Vario",
 }];
 

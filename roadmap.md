@@ -1,5 +1,9 @@
 # Roadmap
 
+## Tractor photo automation
+- [ ] Find verified photos automatically for newly added tractors and retrofit existing tractors — requires approval for a photo lookup service and its running costs; no shared tractor record changes.
+- [x] Remove the existing verified reference photo background; transparent PNG confirmed, 12 focused tests passed, preview build OK; unpublished.
+
 ## Stage 1 capture-time reconstruction hardening
 - [x] Correct prepared 267/268 capture-history, numeric-row and isolation safeguards; no live SQL.
 - [x] Run offline known-row holdout and historical/real-format regressions (83 SQL checks, 70 Portal tests).
