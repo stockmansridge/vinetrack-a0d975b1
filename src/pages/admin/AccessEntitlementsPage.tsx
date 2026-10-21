@@ -43,6 +43,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AdminGate, AdminPageHeader } from "./_shared";
 import { UserAccessDrawer } from "@/components/admin/access/UserAccessDrawer";
+import { AccessHealthPanel } from "@/components/admin/access/AccessHealthPanel";
 import { AcknowledgeAlertDialog } from "@/components/admin/access/accessDialogs";
 import {
   Tooltip,
@@ -492,6 +493,8 @@ export default function AccessEntitlementsPage() {
           </Button>
         }
       />
+
+      <AccessHealthPanel />
 
       {/* Billing health */}
       <section className="mb-6">
@@ -954,3 +957,4 @@ export default function AccessEntitlementsPage() {
     </AdminGate>
   );
 }
+
