@@ -167,7 +167,7 @@ export function UserAccessDrawer({
 
           {detail && ea && identity && (
             <div className="space-y-4">
-              <Card className="p-4">
+              <Card className="p-4" role="region" aria-label="Effective access">
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <h3 className="text-sm font-semibold">Effective access</h3>
                   {ea.has_access ? (
@@ -180,6 +180,13 @@ export function UserAccessDrawer({
                     </Badge>
                   )}
                 </div>
+                <p className="mb-3 text-sm">
+                  {ea.has_access
+                    ? ea.access_source === "vineyard" || ea.access_source === "vineyard_only"
+                      ? "Current access is active through a vineyard entitlement."
+                      : "Current access is active."
+                    : "There is no current access entitlement."}
+                </p>
                 <dl>
                   <Row
                     label="Reason"
@@ -213,7 +220,9 @@ export function UserAccessDrawer({
                   <Row label="Billing provider" value={billingSourceLabel(ea.billing_provider)} />
                   <Row label="Purchase platform" value={purchasePlatformLabel(ea.purchase_platform)} />
                   <Row label="Access expires" value={fmtDateTime(ea.expires_at)} />
-                  <Row label="Trial ends" value={fmtDateTime(ea.trial_end)} />
+                  {isTrialSource(ea.access_source) && (
+                    <Row label="Trial ends" value={fmtDateTime(ea.trial_end)} />
+                  )}
                   <Row label="Grace period ends" value={fmtDateTime(ea.grace_period_end)} />
                   <Row label="Current period ends" value={fmtDateTime(ea.current_period_end)} />
                   <Row label="Grant expiry" value={fmtDateTime(ea.manual_grant_expires_at)} />
@@ -235,9 +244,9 @@ export function UserAccessDrawer({
               </Card>
 
               {detail.account_trial && (
-                <Card className="p-4">
+                <Card className="p-4" role="region" aria-label="Original account trial">
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <h3 className="text-sm font-semibold">Account trial</h3>
+                    <h3 className="text-sm font-semibold">Original account trial</h3>
                     <Badge
                       variant="outline"
                       className={
@@ -246,11 +255,18 @@ export function UserAccessDrawer({
                           : "text-muted-foreground"
                       }
                     >
-                      {detail.account_trial.is_currently_valid ? "Active" : "Expired"}
+                      {detail.account_trial.is_currently_valid
+                        ? "Active"
+                        : detail.account_trial.status === "revoked" ? "Revoked" : "Expired"}
                     </Badge>
                   </div>
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    {ea.has_access && !isTrialSource(ea.access_source)
+                      ? "Current access comes from the entitlement above. This original trial is retained as account history."
+                      : "This records the original account trial. Current access is shown above."}
+                  </p>
                   <dl>
-                    <Row label="Status" value={humanise(detail.account_trial.status)} />
+                    <Row label="Recorded status" value={humanise(detail.account_trial.status)} />
                     <Row label="Started" value={fmtDateTime(detail.account_trial.trial_started_at)} />
                     <Row label="Ends" value={fmtDateTime(detail.account_trial.trial_ends_at)} />
                     <Row label="Trial type" value={humanise(detail.account_trial.source_type)} />
@@ -508,3 +524,4 @@ export function UserAccessDrawer({
     </>
   );
 }
+
