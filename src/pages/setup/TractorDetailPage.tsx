@@ -1,12 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Pencil, Tractor as TractorIcon } from "lucide-react";
+import { ArrowLeft, ChevronDown, Pencil, Tractor as TractorIcon, Wrench } from "lucide-react";
 import { fetchOne } from "@/lib/queries";
 import { useVineyard } from "@/context/VineyardContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import TractorReferencePhoto from "@/components/equipment/TractorReferencePhoto";
 import { formatFuelUsage } from "@/lib/tractorFuel";
+
 
 interface TractorRow {
   id: string;
