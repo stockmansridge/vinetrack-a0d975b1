@@ -46,7 +46,9 @@ export default function TractorDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { currentRole } = useVineyard();
+  const [showSystemInfo, setShowSystemInfo] = useState(false);
   const canEdit = currentRole === "owner" || currentRole === "manager";
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["detail", "tractors", id],
     enabled: !!id,
