@@ -28,9 +28,6 @@ const fmtDateTime = (v?: string | null) =>
   v ? new Date(v).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }) : null;
 
 
-const fmtDate = (v?: string | null) =>
-  v ? new Date(v).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : null;
-
 function Item({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-border bg-muted/30 p-4">
