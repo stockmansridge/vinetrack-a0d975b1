@@ -11,6 +11,7 @@
 - Wine Grape Levy worksheet (/reports/wine-grape-levy, owner/manager) is preparatory and in-memory only: maths/source reconciliation in src/lib/wineGrapeLevy.ts reuses picking precedence (supersedeActualYield), filters picks by picked_at within the 1 Jul–30 Jun levy year, never uses estimates, shows indicative levy only for years in VERIFIED_RATE_YEARS, and is Australia-only via isAustralianVineyard (src/lib/wineGrapeLevyAccess.ts, vineyards.country only, fail closed) in nav and WineGrapeLevyGate; why: levy is on fruit used in winemaking, and VineTrack must not lodge, persist or guess rates.
 
 - Subdirectories have their own AGENTS.md (e.g. src/components/paddocks, src/lib, src/lib/contourRows); read it before changing files there.
+- Tractor reference photos use an exact curated brand/model/generation catalogue with licensed CDN assets and explicit unavailable states; why: prevent fabricated model matches without changing shared equipment data or write contracts.
 <!-- LOVABLE:BEGIN -->
 - Target Nutrient preview derives rates via computeTargetNutrient and reuses the existing block/vine pipeline; legacy seeding requires explicit nutrient and concentration bases. Why: one calculation authority, no assumed label conventions or new persistence.
 <!-- LOVABLE:END -->

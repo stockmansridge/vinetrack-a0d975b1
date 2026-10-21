@@ -1,4 +1,5 @@
 import EquipmentImportExportDialog from "@/components/equipment/EquipmentImportExportDialog";
+import TractorReferencePhoto from "@/components/equipment/TractorReferencePhoto";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -363,6 +364,7 @@ export default function TractorsPage() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-28">Photo</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Brand</TableHead>
               <TableHead>Model</TableHead>
@@ -376,21 +378,21 @@ export default function TractorsPage() {
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground">
+                <TableCell colSpan={9} className="text-center text-muted-foreground">
                   Loading…
                 </TableCell>
               </TableRow>
             )}
             {error && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-destructive">
+                <TableCell colSpan={9} className="text-center text-destructive">
                   {(error as Error).message}
                 </TableCell>
               </TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                   No tractors yet.{" "}
                   {canEdit && (
                     <button
@@ -410,6 +412,7 @@ export default function TractorsPage() {
                 className="cursor-pointer"
                 onClick={() => navigate(`/setup/tractors/${r.id}`)}
               >
+                <TableCell><TractorReferencePhoto tractor={r} /></TableCell>
                 <TableCell className="font-medium">
                   <div>{fmtCell(r.name)}</div>
                   {equipmentIdSubtitle(r.serial_number, r.vin_number) && (
