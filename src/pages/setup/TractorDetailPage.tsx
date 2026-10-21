@@ -19,9 +19,14 @@ interface TractorRow {
   fuel_usage_l_per_hour?: number | null;
   serial_number?: string | null;
   vin_number?: string | null;
+  vineyard_id?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 }
+
+const fmtDateTime = (v?: string | null) =>
+  v ? new Date(v).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }) : null;
+
 
 const fmtDate = (v?: string | null) =>
   v ? new Date(v).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : null;
