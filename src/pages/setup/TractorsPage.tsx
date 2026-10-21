@@ -1,9 +1,9 @@
 import EquipmentImportExportDialog from "@/components/equipment/EquipmentImportExportDialog";
 import TractorReferencePhoto from "@/components/equipment/TractorReferencePhoto";
 import TractorPhotoPicker from "@/components/equipment/TractorPhotoPicker";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
@@ -179,6 +179,19 @@ export default function TractorsPage() {
     setSuggestion(null);
     setDialogOpen(true);
   };
+
+  // Opened from the Tractor detail page via ?edit=<id>.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const editParam = searchParams.get("edit");
+  useEffect(() => {
+    if (!editParam || !data || !canEdit) return;
+    const t = data.find((r) => r.id === editParam);
+    if (t) openEdit(t);
+    const next = new URLSearchParams(searchParams);
+    next.delete("edit");
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editParam, data, canEdit]);
 
   const handleSuggest = async () => {
     const brand = form.brand.trim();
