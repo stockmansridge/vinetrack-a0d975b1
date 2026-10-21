@@ -1,7 +1,7 @@
 # Roadmap
 
 ## Tractor photo automation
-- [ ] Find verified photos automatically for newly added tractors and retrofit existing tractors — service approved; blocked on provider connection and agreed spending limit before paid searches; no shared tractor record changes.
+- [ ] Find verified photos automatically for newly added tractors and retrofit existing tractors — Parallel connected; blocked on agreed photo-service spending limit before paid searches or activation; no shared tractor record changes.
 - [x] Remove the existing verified reference photo background; transparent PNG confirmed, 12 focused tests passed, preview build OK; unpublished.
 
 ## Stage 1 capture-time reconstruction hardening
