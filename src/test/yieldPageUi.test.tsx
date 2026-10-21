@@ -104,7 +104,7 @@ function renderPage() {
 }
 
 const openEstimations = async () => {
-  const tab = await screen.findByRole("tab", { name: /Bunch Count Trips/ });
+  const tab = await screen.findByRole("tab", { name: /Yield Estimate Trips/ });
   fireEvent.mouseDown(tab);
   fireEvent.click(tab);
   await waitFor(() => expect(tab.getAttribute("data-state")).toBe("active"));
@@ -147,13 +147,13 @@ describe("Yields page", () => {
   it("marks the active tab and renders inactive tabs distinctly", async () => {
     renderPage();
     const overview = await screen.findByRole("tab", { name: "Overview" });
-    const estimations = screen.getByRole("tab", { name: /Bunch Count Trips/ });
+    const estimations = screen.getByRole("tab", { name: /Yield Estimate Trips/ });
     expect(overview.getAttribute("data-state")).toBe("active");
     expect(estimations.getAttribute("data-state")).toBe("inactive");
     expect(overview.className).toContain("data-[state=active]:bg-primary");
   });
 
-  it("shows estimated tonnes and block detail in the Bunch Count Trips history", async () => {
+  it("shows estimated tonnes and block detail in the Yield Estimate Trips history", async () => {
     renderPage();
     await openEstimations();
     const row = await screen.findByTestId("trip-row-s1");

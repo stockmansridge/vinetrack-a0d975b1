@@ -748,7 +748,7 @@ export default function YieldReportsPage() {
           <TabsTrigger
             value="sessions"
           >
-            Bunch Count Trips ({sessions.length})
+            Yield Estimate Trips ({sessions.length})
           </TabsTrigger>
           <TabsTrigger
             value="historical"
