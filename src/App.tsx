@@ -22,6 +22,7 @@ import Team from "./pages/Team";
 import ComingSoon from "./pages/ComingSoon";
 import ListPage from "./pages/setup/ListPage";
 import DetailPage from "./pages/setup/DetailPage";
+import TractorDetailPage from "./pages/setup/TractorDetailPage";
 import PaddockDetailPage from "./pages/setup/PaddockDetailPage";
 import ContourRowMappingPage from "./pages/setup/ContourRowMappingPage";
 import BlockDetailPage from "./pages/BlockDetailPage";
@@ -207,7 +208,7 @@ const App = () => (
                     />
                     <Route
                       path="/setup/tractors/:id"
-                      element={<DetailPage table="tractors" title="Tractor detail" basePath="/setup/tractors" />}
+                      element={<TractorDetailPage />}
                     />
                     <Route
                       path="/setup/vineyard-machines"
