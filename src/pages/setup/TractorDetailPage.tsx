@@ -140,10 +140,7 @@ export default function TractorDetailPage() {
                 <Item label="Serial number" value={t.serial_number} />
                 <Item label="VIN" value={t.vin_number} />
               </dl>
-              <p className="text-xs text-muted-foreground">
-                {fmtDate(t.created_at) && <>Added {fmtDate(t.created_at)}</>}
-                {fmtDate(t.updated_at) && <> · Last updated {fmtDate(t.updated_at)}</>}
-              </p>
+
             </div>
           )}
         </CardContent>
