@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Tractor photo automation
+- [ ] Check the owner-supplied Google/New Holland image results directly for attachment-free appearance, 2021 generation and reuse permission; do not treat the prior unsuccessful search as proof images do not exist.
 - [ ] Gather and verify attachment-free exact-match images for Stockman's Ridge only — owner screenshot supplies Kubota 7580 (1996) and New Holland T4.N (2021). Public-source checks found no compliant licensed match: T4.N is a series requiring its exact numbered N badge; Kubota 7580 cannot yet be verified as M7580 or tied to the 1996 generation. Waiting on exact model badges/confirmation and licensed attachment-free sources. No paid searches or processing until the shared spending guard is enforced.
 - [x] Leave unmatched photo cells blank and reject unverified/attached photos; removed ineligible Fendt from live catalogue; 15 tests and preview build passed; unpublished.
 - [ ] Extend to Tamburlaine after successful Stockman's Ridge acceptance, then all equipment after successful Tamburlaine acceptance — waiting on pilot results.
