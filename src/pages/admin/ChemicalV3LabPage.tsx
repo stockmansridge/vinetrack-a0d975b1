@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { ChemicalSearchDialog } from "@/components/chemicals/ChemicalSearchDialog";
 import { V3ReSearchButton } from "@/components/chemicals/V3ReSearchButton";
 import { canReSearch, needsReSearch } from "@/lib/chemicalV3";
+import { useAdminVineyards } from "@/lib/adminApi";
 import { Link } from "react-router-dom";
 import { useQueryClient as useQC } from "@tanstack/react-query";
 import { V3ReviewDecisions, FrontLabelUploadButton, LabelUrlEditor, frontLabelReloadKeys } from "@/components/chemicals/V3ReviewDecisions";
@@ -33,10 +34,10 @@ import { V3RateEditor } from "@/components/chemicals/V3RateEditor";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { useAuth } from "@/context/AuthContext";
 import { useVineyard } from "@/context/VineyardContext";
-import { VINEYARD_COUNTRIES, resolveVineyardCountry } from "@/lib/vineyardCountries";
+import { VINEYARD_COUNTRIES, resolveVineyardCountry, VINEYARD_COUNTRY_NAME } from "@/lib/vineyardCountries";
 import {
   FRESHNESS_LABEL, V3_BACKEND_MISSING, V3_REUSED_MESSAGE, V3_TERMINAL_STATUSES,
-  approveV3, asList, fetchV3Job, fetchV3Revision, freshnessNote, freshnessOf, humaniseStage,
+  approveV3, asList, fetchV3Job, fetchV3RequesterInfo, fetchV3Revision, freshnessNote, freshnessOf, humaniseStage,
   isApprovedResult, labelOf, pick, rejectV3, searchV3, signedV3MediaUrl, splitRates,
   startV3Discovery, uploadV3SearchPhoto, v3ReviewQueue,
   deleteV3RateOption, draftFromOption, emptyRateDraft, formatRateOption, isV3RevisionEditable, saveV3RateOption,
