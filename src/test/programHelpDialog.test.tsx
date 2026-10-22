@@ -43,7 +43,9 @@ describe("Program help dialog", () => {
     }
     expect(within(dlg).getByText("Program = what you plan to do.")).toBeTruthy();
     expect(within(dlg).getByText(/reflected in the vineyard/i)).toBeTruthy();
-    fireEvent.click(within(dlg).getByRole("button", { name: "Close" }));
+    // Dialog's built-in X button also carries the name "Close"; click the footer one.
+    const closeButtons = within(dlg).getAllByRole("button", { name: "Close" });
+    fireEvent.click(closeButtons[closeButtons.length - 1]);
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
