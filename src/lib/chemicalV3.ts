@@ -184,6 +184,41 @@ export async function v3ReviewQueue(): Promise<Row[]> {
   }
 }
 
+/** Provenance of one pending/needs-attention revision (sql/260), for the review sheet. */
+export interface V3RequesterInfo {
+  name: string | null;
+  email: string | null;
+  vineyardId: string | null;
+  vineyardName: string | null;
+}
+
+/**
+ * Who requested this revision and for which vineyard. Read-only provenance
+ * from the same admin-only RPC the queue uses; never the currently selected
+ * vineyard. Missing/unavailable service → null (the sheet stays silent).
+ */
+export async function fetchV3RequesterInfo(revisionId: string): Promise<V3RequesterInfo | null> {
+  if (requestersUnavailable) return null;
+  try {
+    const { data, error } = await sb.rpc("chemical_v3_admin_review_queue_requesters");
+    if (error) {
+      if (PERMANENT_RPC_ERRORS.has(String((error as any).code ?? ""))) requestersUnavailable = true;
+      return null;
+    }
+    if (!Array.isArray(data)) return null;
+    const w = data.find((row: Row) => String(row?.revision_id ?? "") === revisionId) as Row | undefined;
+    if (!w) return null;
+    return {
+      name: w.requested_by_name ?? null,
+      email: w.requested_by_email ?? null,
+      vineyardId: w.vineyard_id ?? null,
+      vineyardName: w.vineyard_name ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function approveV3(revisionId: string, note: string | null): Promise<void> {
   const { error } = await sb.rpc(V3_RPC.approve, { p_revision_id: revisionId, p_note: note || null });
   if (error) throw error;

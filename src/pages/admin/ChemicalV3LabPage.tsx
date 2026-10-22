@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { ChemicalSearchDialog } from "@/components/chemicals/ChemicalSearchDialog";
 import { V3ReSearchButton } from "@/components/chemicals/V3ReSearchButton";
 import { canReSearch, needsReSearch } from "@/lib/chemicalV3";
+import { useAdminVineyards } from "@/lib/adminApi";
 import { Link } from "react-router-dom";
 import { useQueryClient as useQC } from "@tanstack/react-query";
 import { V3ReviewDecisions, FrontLabelUploadButton, LabelUrlEditor, frontLabelReloadKeys } from "@/components/chemicals/V3ReviewDecisions";
@@ -33,10 +34,10 @@ import { V3RateEditor } from "@/components/chemicals/V3RateEditor";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { useAuth } from "@/context/AuthContext";
 import { useVineyard } from "@/context/VineyardContext";
-import { VINEYARD_COUNTRIES, resolveVineyardCountry } from "@/lib/vineyardCountries";
+import { VINEYARD_COUNTRIES, resolveVineyardCountry, VINEYARD_COUNTRY_NAME } from "@/lib/vineyardCountries";
 import {
   FRESHNESS_LABEL, V3_BACKEND_MISSING, V3_REUSED_MESSAGE, V3_TERMINAL_STATUSES,
-  approveV3, asList, fetchV3Job, fetchV3Revision, freshnessNote, freshnessOf, humaniseStage,
+  approveV3, asList, fetchV3Job, fetchV3RequesterInfo, fetchV3Revision, freshnessNote, freshnessOf, humaniseStage,
   isApprovedResult, labelOf, pick, rejectV3, searchV3, signedV3MediaUrl, splitRates,
   startV3Discovery, uploadV3SearchPhoto, v3ReviewQueue,
   deleteV3RateOption, draftFromOption, emptyRateDraft, formatRateOption, isV3RevisionEditable, saveV3RateOption,
@@ -258,6 +259,12 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
   });
   const reviewBusy = approveMut.isPending || rejectMut.isPending;
   const { isAdmin } = useIsSystemAdmin();
+  const requesterQ = useQuery({
+    queryKey: ["chemical-v3-requester", revisionId],
+    enabled: !!revisionId && isAdmin,
+    queryFn: () => fetchV3RequesterInfo(revisionId!),
+  });
+  const vineyardsQ = useAdminVineyards();
   const [draft, setDraft] = useState<V3RateDraft | null>(null);
   const [rateErr, setRateErr] = useState<string | null>(null);
   const [rateMsg, setRateMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
@@ -358,6 +365,30 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
                   <Button size="sm" asChild><a href={pick(r, "manufacturer_product_url")} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-1 h-4 w-4" />Open Manufacturer Product URL</a></Button>
                 ) : <Badge className="border-transparent bg-destructive/15 text-destructive">Manufacturer product URL missing</Badge>}
               </div>
+              {(() => {
+                if (requesterQ.isLoading) return null;
+                const req = requesterQ.data;
+                const vy = req?.vineyardId
+                  ? (vineyardsQ.data ?? []).find((av) => av.id === req.vineyardId)
+                  : undefined;
+                const rawCountry = vy?.country ? String(vy.country) : null;
+                const region = rawCountry
+                  ? (VINEYARD_COUNTRY_NAME[rawCountry.toUpperCase()] ?? rawCountry)
+                  : null;
+                return (
+                  <div className="rounded border bg-muted/40 p-3 text-sm" data-testid="v3-requester">
+                    <div className="font-medium">
+                      Requested by {req?.name ?? "Unknown user"}{req?.email ? ` (${req.email})` : ""}
+                    </div>
+                    <div className="text-muted-foreground">
+                      Requested for vineyard {req?.vineyardName ?? "Unknown"}{region ? ` — region ${region}` : ""}
+                    </div>
+                    {req?.vineyardId && !region && (
+                      <div className="text-xs text-muted-foreground">Vineyard region/country not recorded</div>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="flex flex-wrap items-center gap-2">
                 {isAdmin && revisionId && <HeaderLabelUrlEditor revisionId={revisionId} current={labelUrl ?? null} />}
                 {isAdmin && revisionId && <HeaderLabelUrlEditor kind="product" revisionId={revisionId} current={pick(r, "manufacturer_product_url") ?? null} />}
