@@ -1,31 +1,26 @@
-import { vi } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
 // Program help control: info icon beside the heading, help dialog opens on
 // click and closes; content uses existing Portal labels and never writes data.
 import { describe, it, expect } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import SprayJobsPage from "@/pages/setup/SprayJobsPage";
 import ProgramHelpDialog from "@/components/spray/ProgramHelpDialog";
 
-vi.mock("@/lib/sprayJobsQuery", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("@/lib/sprayJobsQuery")>();
-  return {
-    ...mod,
-    useSprayJobs: () => ({ data: [], isLoading: false }),
-  };
-});
-
-vi.mock("@/context/VineyardContext", () => ({
-  useVineyard: () => ({ selectedVineyardId: "fe952afe-437f-4be7-8cbf-fdd8e630411c", currentRole: "owner", memberships: [] }),
-}));
-
-describe("Program help dialog", () => {
-  it("shows a visually secondary info control labelled 'How the Program works' beside the heading, closed by default", () => {
-    render(
+function renderPage() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={["/spray-jobs"]}>
         <Routes><Route path="/spray-jobs" element={<SprayJobsPage />} /></Routes>
-      </MemoryRouter>,
-    );
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+describe("Program help dialog", () => {
+  it("shows an info control labelled 'How the Program works' beside the heading, closed by default", () => {
+    renderPage();
     expect(screen.getByRole("heading", { name: /Spray Program/i })).toBeTruthy();
     const btn = screen.getByRole("button", { name: "How the Program works" });
     expect(btn).toBeTruthy();
@@ -42,7 +37,7 @@ describe("Program help dialog", () => {
       expect(within(dlg).getByText(t)).toBeTruthy();
     }
     // Existing Portal tab names only.
-    expect(within(dlg).getByText("Planned Sprays")).toBeTruthy();
+    expect(within(dlg).getAllByText("Planned Sprays").length).toBeGreaterThan(0);
     for (const s of ["Upcoming", "In Progress", "Completed", "All"]) {
       expect(within(dlg).getAllByText(s).length).toBeGreaterThan(0);
     }
@@ -53,11 +48,7 @@ describe("Program help dialog", () => {
   });
 
   it("does not open automatically", () => {
-    render(
-      <MemoryRouter initialEntries={["/spray-jobs"]}>
-        <Routes><Route path="/spray-jobs" element={<SprayJobsPage />} /></Routes>
-      </MemoryRouter>,
-    );
+    renderPage();
     expect(screen.queryByText("How the Program Works")).toBeNull();
   });
 });
