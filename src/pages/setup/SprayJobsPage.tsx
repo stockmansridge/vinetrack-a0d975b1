@@ -10,6 +10,7 @@ import { SprayProgramImportDialog } from "@/components/spray/SprayProgramImportD
 import { ProgramStepDetailDialog } from "@/components/spray/ProgramStepDetailDialog";
 import { ProgramStepPickerDialog } from "@/components/spray/ProgramStepPickerDialog";
 import { PlanSprayFromProgramStep } from "@/components/spray/PlanSprayFromProgramStep";
+import ProgramHelpDialog from "@/components/spray/ProgramHelpDialog";
 import { growthStageOrder, chemicalLineRateText, programLines } from "@/lib/sprayProgramStep";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -206,7 +207,10 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
     <div className="space-y-4">
       <div className="flex flex-col items-start gap-3">
         <div>
+        <div className="flex items-center gap-1.5">
           <h1 className="text-2xl font-semibold">Spray Program</h1>
+          <ProgramHelpDialog />
+        </div>
           <p className="text-sm text-muted-foreground">
             Build your vineyard spray program, maintain reusable Program Steps, and plan
             upcoming spray applications.
