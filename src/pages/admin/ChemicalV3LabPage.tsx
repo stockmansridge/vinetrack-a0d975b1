@@ -259,6 +259,12 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
   });
   const reviewBusy = approveMut.isPending || rejectMut.isPending;
   const { isAdmin } = useIsSystemAdmin();
+  const requesterQ = useQuery({
+    queryKey: ["chemical-v3-requester", revisionId],
+    enabled: !!revisionId && isAdmin,
+    queryFn: () => fetchV3RequesterInfo(revisionId!),
+  });
+  const vineyardsQ = useAdminVineyards();
   const [draft, setDraft] = useState<V3RateDraft | null>(null);
   const [rateErr, setRateErr] = useState<string | null>(null);
   const [rateMsg, setRateMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
