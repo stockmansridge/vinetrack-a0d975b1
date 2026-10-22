@@ -365,6 +365,30 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
                   <Button size="sm" asChild><a href={pick(r, "manufacturer_product_url")} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-1 h-4 w-4" />Open Manufacturer Product URL</a></Button>
                 ) : <Badge className="border-transparent bg-destructive/15 text-destructive">Manufacturer product URL missing</Badge>}
               </div>
+              {(() => {
+                if (requesterQ.isLoading) return null;
+                const req = requesterQ.data;
+                const vy = req?.vineyardId
+                  ? (vineyardsQ.data ?? []).find((av) => av.id === req.vineyardId)
+                  : undefined;
+                const rawCountry = vy?.country ? String(vy.country) : null;
+                const region = rawCountry
+                  ? (VINEYARD_COUNTRY_NAME[rawCountry.toUpperCase()] ?? rawCountry)
+                  : null;
+                return (
+                  <div className="rounded border bg-muted/40 p-3 text-sm" data-testid="v3-requester">
+                    <div className="font-medium">
+                      Requested by {req?.name ?? "Unknown user"}{req?.email ? ` (${req.email})` : ""}
+                    </div>
+                    <div className="text-muted-foreground">
+                      Requested for vineyard {req?.vineyardName ?? "Unknown"}{region ? ` — region ${region}` : ""}
+                    </div>
+                    {req?.vineyardId && !region && (
+                      <div className="text-xs text-muted-foreground">Vineyard region/country not recorded</div>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="flex flex-wrap items-center gap-2">
                 {isAdmin && revisionId && <HeaderLabelUrlEditor revisionId={revisionId} current={labelUrl ?? null} />}
                 {isAdmin && revisionId && <HeaderLabelUrlEditor kind="product" revisionId={revisionId} current={pick(r, "manufacturer_product_url") ?? null} />}
