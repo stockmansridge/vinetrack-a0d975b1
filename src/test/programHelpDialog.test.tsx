@@ -1,0 +1,63 @@
+import { vi } from "vitest";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+// Program help control: info icon beside the heading, help dialog opens on
+// click and closes; content uses existing Portal labels and never writes data.
+import { describe, it, expect } from "vitest";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import SprayJobsPage from "@/pages/setup/SprayJobsPage";
+import ProgramHelpDialog from "@/components/spray/ProgramHelpDialog";
+
+vi.mock("@/lib/sprayJobsQuery", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@/lib/sprayJobsQuery")>();
+  return {
+    ...mod,
+    useSprayJobs: () => ({ data: [], isLoading: false }),
+  };
+});
+
+vi.mock("@/context/VineyardContext", () => ({
+  useVineyard: () => ({ selectedVineyardId: "fe952afe-437f-4be7-8cbf-fdd8e630411c", currentRole: "owner", memberships: [] }),
+}));
+
+describe("Program help dialog", () => {
+  it("shows a visually secondary info control labelled 'How the Program works' beside the heading, closed by default", () => {
+    render(
+      <MemoryRouter initialEntries={["/spray-jobs"]}>
+        <Routes><Route path="/spray-jobs" element={<SprayJobsPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("heading", { name: /Spray Program/i })).toBeTruthy();
+    const btn = screen.getByRole("button", { name: "How the Program works" });
+    expect(btn).toBeTruthy();
+    // Dialog content is not rendered until opened.
+    expect(screen.queryByText("How the Program Works")).toBeNull();
+  });
+
+  it("opens with all required sections and the existing Portal labels, and closes", () => {
+    render(<ProgramHelpDialog />);
+    fireEvent.click(screen.getByRole("button", { name: "How the Program works" }));
+    const dlg = screen.getByRole("dialog");
+    expect(within(dlg).getByText("How the Program Works")).toBeTruthy();
+    for (const t of ["Foliar Spray", "Banded Spray", "Spreader", "Fertigation"]) {
+      expect(within(dlg).getByText(t)).toBeTruthy();
+    }
+    // Existing Portal tab names only.
+    expect(within(dlg).getByText("Planned Sprays")).toBeTruthy();
+    for (const s of ["Upcoming", "In Progress", "Completed", "All"]) {
+      expect(within(dlg).getAllByText(s).length).toBeGreaterThan(0);
+    }
+    expect(within(dlg).getByText("Program = what you plan to do.")).toBeTruthy();
+    expect(within(dlg).getByText(/reflected in the vineyard/i)).toBeTruthy();
+    fireEvent.click(within(dlg).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("does not open automatically", () => {
+    render(
+      <MemoryRouter initialEntries={["/spray-jobs"]}>
+        <Routes><Route path="/spray-jobs" element={<SprayJobsPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText("How the Program Works")).toBeNull();
+  });
+});
