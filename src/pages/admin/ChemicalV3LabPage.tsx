@@ -225,12 +225,6 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
   const editorRef = useRef<HTMLDivElement>(null);
   const q = useQuery({ queryKey: ["chemical-v3-revision", revisionId], enabled: !!revisionId, queryFn: () => fetchV3Revision(revisionId!) });
   const issuesQ = useQuery({ queryKey: ["chemical-v3-issues", revisionId], enabled: !!revisionId, queryFn: () => fetchReviewIssues(revisionId!) });
-  const requesterQ = useQuery({
-    queryKey: ["chemical-v3-requester", revisionId],
-    enabled: !!revisionId && isAdmin,
-    queryFn: () => fetchV3RequesterInfo(revisionId!),
-  });
-  const vineyardsQ = useAdminVineyards();
   useEffect(() => { setNote(""); setMsg(null); setNeedDecisions(false); setInvOpen(false); }, [revisionId]);
   const refreshAfterReview = () => {
     qc.invalidateQueries({ queryKey: ["chemical-v3-queue"] });
