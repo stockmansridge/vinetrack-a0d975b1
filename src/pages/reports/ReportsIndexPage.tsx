@@ -24,6 +24,11 @@ const DESCRIPTIONS: Record<string, string> = {
   "/reports/documents": "Central launcher for Trip, Spray and Rainfall report PDFs/CSVs.",
 };
 
+/** Card headings that break the default "{activity label} — {view title}" order. */
+const CARD_TITLES: Record<string, string> = {
+  "/reports/costs": "Vineyard Costings - Reports & Exports",
+};
+
 const REPORT_ICONS: Record<string, LucideIcon> = {
   "/reports/trips": Route,
   "/reports/work-tasks": ClipboardList,
