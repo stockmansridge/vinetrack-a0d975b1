@@ -103,6 +103,45 @@ describe("active-parent trip allocation reporting", () => {
     warning.mockRestore();
   });
 
+  it("excludes soft-deleted allocation rows from fetch results", async () => {
+    state.allocations = [
+      allocation("live", "trip-live", 10),
+      allocation("history", "trip-live", 99, "2026-10-01T00:00:00Z"),
+    ];
+    state.parents = [{ id: "trip-live", deleted_at: null }];
+    expect((await fetchTripCostAllocationsForVineyard(vineyard)).map((row) => row.id)).toEqual(["live"]);
+    expect(state.calls[0].activeOnly).toBe(true);
+  });
+
+  it("treats a completed Trip whose only allocation is soft-deleted as uncosted presence", async () => {
+    const t = completedTrip("trip-only-deleted");
+    state.allocations = [allocation("history", t.id, 99, "2026-10-01T00:00:00Z")];
+    state.parents = [{ id: t.id, deleted_at: null }];
+    const tripAllocations = await fetchTripCostAllocationsForVineyard(vineyard);
+    expect(tripAllocations).toEqual([]);
+    const dataset = buildUnifiedCostDataset({ vineyardId: vineyard, trips: [t], tripAllocations, seasonStart: { month: 7, day: 1 } });
+    const presence = dataset.rows.filter((row) => row.source_type === "trip" && row.source_id === t.id);
+    expect(presence).toHaveLength(1);
+    expect(presence[0].status).toBe("uncosted");
+    expect(presence[0].total_cost).toBe(0);
+  });
+
+  it("still suppresses presence when an active allocation exists alongside deleted history", async () => {
+    const t = completedTrip("trip-costed");
+    state.allocations = [
+      allocation("live", t.id, 70),
+      allocation("history", t.id, 99, "2026-10-01T00:00:00Z"),
+    ];
+    state.parents = [{ id: t.id, deleted_at: null }];
+    const tripAllocations = await fetchTripCostAllocationsForVineyard(vineyard);
+    expect(tripAllocations.map((row) => row.id)).toEqual(["live"]);
+    const dataset = buildUnifiedCostDataset({ vineyardId: vineyard, trips: [t], tripAllocations, seasonStart: { month: 7, day: 1 } });
+    const rows = dataset.rows.filter((row) => row.source_type === "trip" && row.source_id === t.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).not.toBe("uncosted");
+    expect(rows[0].total_cost).toBe(70);
+  });
+
   it("bounds parent reads without losing active allocations across batches", async () => {
     state.parents = Array.from({ length: 405 }, (_, i) => ({ id: `trip-${i}`, deleted_at: null }));
     state.allocations = state.parents.map((row, i) => allocation(`a-${i}`, row.id, 1));
