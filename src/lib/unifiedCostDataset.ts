@@ -27,8 +27,11 @@
 // from field trips.
 import type { TripCostAllocation } from "@/lib/tripCostAllocationsQuery";
 import type { PruningActivityRow } from "@/lib/pruningActivityQuery";
+import { buildWorkTaskCostRollup, type WorkTaskCostRollupInput } from "@/lib/workTaskCostRollup";
+import { resolveWorkTaskReportAllocation, pruningTaskIds, type ReportBlock } from "@/lib/workTaskReportAllocation";
+import type { WorkTask, WorkTaskPaddock } from "@/lib/workTasksQuery";
 
-export type CostSourceType = "trip" | "pruning_activity";
+export type CostSourceType = "trip" | "pruning_activity" | "work_task";
 
 export interface UnifiedCostRow {
   // --- identity / provenance ---
@@ -209,6 +212,9 @@ export interface BuildUnifiedCostArgs {
   vineyardId: string;
   tripAllocations?: TripCostAllocation[];
   pruningRows?: PruningActivityRow[];
+  workTasks?: Array<WorkTaskCostRollupInput & { task: WorkTask; vintageYear?: number | null }>;
+  taskPaddocks?: WorkTaskPaddock[];
+  blocks?: ReportBlock[];
   /** Include reversed pruning activities (default false). */
   includeReversed?: boolean;
 }
@@ -220,6 +226,9 @@ export function buildUnifiedCostDataset({
   vineyardId,
   tripAllocations = [],
   pruningRows = [],
+  workTasks = [],
+  taskPaddocks = [],
+  blocks = [],
   includeReversed = false,
 }: BuildUnifiedCostArgs): UnifiedCostDataset {
   const rows: UnifiedCostRow[] = [];
@@ -243,10 +252,65 @@ export function buildUnifiedCostDataset({
   // 2) Trip allocations. A trip whose cost is already claimed by a pruning
   //    activity's Work Task must not be imported a second time.
   for (const t of tripAllocations) {
+    if (t.vineyard_id !== vineyardId) continue;
     const row = tripAllocationToUnified(t);
     if (seen.has(row.dedup_key)) continue;
     seen.add(row.dedup_key);
     rows.push(row);
+  }
+
+  // Component-level ownership: pruning owns linked-task LABOUR only; trip
+  // allocations own GPS costs. The task still owns manual machine and frozen
+  // materials. Never subtract unrelated components or drop an entire task.
+  const taskSeen = new Set<string>();
+  for (const input of workTasks) {
+    const task = input.task;
+    if (task.deleted_at || taskSeen.has(task.id) || task.vineyard_id !== vineyardId) continue;
+    taskSeen.add(task.id);
+    const rollup = buildWorkTaskCostRollup(input);
+    const ownsLabour = !linkedWorkTaskIds.has(task.id);
+    const labour = ownsLabour ? rollup.labourCost : 0;
+    const total = labour + rollup.machineCost + rollup.materialCost;
+    const allocation = resolveWorkTaskReportAllocation(task, taskPaddocks, blocks, pruningRows);
+    const linkedPruning = rows.filter((r) => r.source_type === "pruning_activity"
+      && pruningTaskIds(r.raw as PruningActivityRow).includes(task.id));
+    // Assign the task area exactly once to its owning pruning allocations,
+    // across repeated activities for the same task, not once per cost source.
+    for (const a of allocation.allocations) {
+      const matches = linkedPruning.filter((r) => r.block_id === a.blockId);
+      const weight = matches.reduce((s, r) => s + num(r.row_equivalents), 0);
+      for (const r of matches) {
+        r.allocation_area_ha += (a.areaHa ?? 0) * (weight > 0 ? num(r.row_equivalents) / weight : 1 / matches.length);
+        r.warnings.push(...allocation.warnings.filter((w) => !r.warnings.includes(w)));
+      }
+    }
+    if (!ownsLabour && total === 0) continue;
+    for (const a of allocation.allocations) {
+      const block = blocks.find((b) => b.id === a.blockId);
+      const key = `work_task:${task.id}:${a.blockId ?? "unallocated"}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const warnings = [...allocation.warnings];
+      if (rollup.missingRate && ownsLabour) warnings.push("A labour rate is missing.");
+      if (rollup.overlapRisk) warnings.push("Review manual machine work that may overlap a linked GPS trip.");
+      rows.push({
+        source_type: "work_task", source_id: task.id, allocation_id: key, dedup_key: key,
+        vineyard_id: vineyardId, activity_date: task.start_date ?? task.date ?? null,
+        vintage_year: task.vintage_year ?? input.vintageYear ?? null,
+        operation_year: yearOf(task.start_date ?? task.date), block_id: a.blockId,
+        block_name: block?.name ?? task.paddock_name ?? (a.blockId ? null : "Unallocated"),
+        variety: null, function: (task.task_type ?? "unknown").toLowerCase(), worker: null,
+        work_task_id: task.id,
+        allocation_area_ha: linkedPruning.length ? 0 : a.areaHa ?? 0,
+        yield_tonnes: 0, labour_cost: labour * a.share, fuel_cost: rollup.machineFuel * a.share,
+        chemical_cost: 0, input_cost: 0,
+        other_cost: (rollup.machineCharge + rollup.materialCost) * a.share,
+        total_cost: total * a.share, parent_labour_hours: ownsLabour ? rollup.labourHours : 0,
+        parent_total_cost: total, allocated_labour_hours: ownsLabour ? rollup.labourHours * a.share : 0,
+        row_equivalents: null, vines: null, allocation_basis: allocation.basis,
+        warnings, status: task.status ?? null, reversed: false, raw: task,
+      });
+    }
   }
 
   const vintageYears = Array.from(
