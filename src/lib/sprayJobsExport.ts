@@ -290,6 +290,7 @@ export function exportYearlySprayProgramPdf(
   vineyardName: string | null,
   year: number,
   formatters?: RegionFormatters,
+  periodLabel?: string,
 ) {
   const fmt = formatters ?? AU_FORMATTERS;
   const fmtDate = (v?: string | null) => (v ? fmt.date(v) || v : NR);
@@ -301,7 +302,7 @@ export function exportYearlySprayProgramPdf(
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
-  doc.text(`Spray Program ${year}`, margin, 44);
+  doc.text(`Spray Program ${periodLabel ?? year}`, margin, 44);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
@@ -353,7 +354,7 @@ export function exportYearlySprayProgramPdf(
       "Chemicals", `Water ${fmt.sprayRateUnitLabel}`, `Rate ${fmt.sprayRateUnitLabel}`,
       "CF", "Equipment", "Tractor", "Operator",
     ]],
-    body: body.length ? body : [["", "", "No spray jobs for this year.", "", "", "", "", "", "", "", "", "", "", ""]],
+    body: body.length ? body : [["", "", periodLabel ? `No spray jobs for ${periodLabel}.` : "No spray jobs for this year.", "", "", "", "", "", "", "", "", "", "", ""]],
     theme: "striped",
     styles: { fontSize: 8, cellPadding: 3, valign: "top", overflow: "linebreak" },
     headStyles: { fillColor: [60, 90, 60], textColor: 255, fontSize: 8 },
@@ -402,6 +403,7 @@ export function exportYearlySprayProgramCsv(
   vineyardName: string | null,
   year: number,
   formatters?: RegionFormatters,
+  periodLabel?: string,
 ) {
   const fmt = formatters ?? AU_FORMATTERS;
   const fmtDate = (v?: string | null) => (v ? fmt.date(v) || v : "");
@@ -448,7 +450,7 @@ export function exportYearlySprayProgramCsv(
   });
 
   const lines = [
-    `# Spray Program ${year} — ${vineyardName ?? ""}`.trim(),
+    `# Spray Program ${periodLabel ?? year} — ${vineyardName ?? ""}`.trim(),
     `# Total spray jobs: ${jobs.length}`,
     headers.join(","),
     ...rows.map((r) => r.map(csvCell).join(",")),
@@ -482,6 +484,7 @@ export function exportYearlySprayProgramXlsx(
   vineyardName: string | null,
   year: number,
   formatters?: RegionFormatters,
+  periodLabel?: string,
 ) {
   const fmt = formatters ?? AU_FORMATTERS;
   const fmtDate = (v?: string | null) => (v ? fmt.date(v) || v : "");
