@@ -96,6 +96,7 @@ const SPRAY = "__spray__";
 const MAINT = "__maint__";
 
 import { TRIP_FUNCTION_LABELS, tripFunctionLabel } from "@/lib/tripFunctionLabels";
+import { tripFunctionBadgeClass, tripFunctionDotClass } from "@/lib/tripFunctionColor";
 import { useVintageFilter } from "@/hooks/useVintageFilter";
 import { VintageSelect } from "@/components/VintageSelect";
 import {
@@ -443,7 +444,10 @@ export default function TripsPage() {
               <SelectItem value={SPRAY}>Spraying only</SelectItem>
               <SelectItem value={MAINT}>Maintenance (non-spray)</SelectItem>
               {Object.entries(TRIP_FUNCTION_LABELS).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v}</SelectItem>
+                <SelectItem key={k} value={k}>
+                  <span className={`mr-2 inline-block h-2 w-2 rounded-full align-middle ${tripFunctionDotClass(k)}`} />
+                  {v}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -526,7 +530,7 @@ export default function TripsPage() {
                   </TableCell>
                 ),
                 start: <TableCell>{fmtDate(t.start_time)}</TableCell>,
-                function: <TableCell>{fnLabel ? <Badge variant="outline">{fnLabel}</Badge> : "—"}</TableCell>,
+                function: <TableCell>{fnLabel ? <Badge variant="outline" className={tripFunctionBadgeClass(t.trip_function)}>{fnLabel}</Badge> : "—"}</TableCell>,
                 paddock: <TableCell>{fmt(padName)}</TableCell>,
                 pattern: <TableCell>{t.tracking_pattern ? <Badge variant="secondary">{formatTripPatternLabel(t.tracking_pattern)}</Badge> : "—"}</TableCell>,
                 person: <TableCell>{fmt(t.person_name)}</TableCell>,
