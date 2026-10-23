@@ -1398,15 +1398,23 @@ export default function CostReportsPage() {
                   {drill.contributing.map((r) => {
                     const warns = warningsList(r.warnings);
                     const stale = !!(r.calculated_at && r.trip_updated_at && r.trip_updated_at > r.calculated_at);
+                    const uncostedTrip = (r as CostRecord).unified?.source_type === "trip"
+                      && (r as CostRecord).unified?.status === "uncosted";
                     return (
                       <Card key={r.id} className="p-3 text-xs space-y-1">
                         <div className="flex items-center justify-between gap-2">
                           <div className="font-mono text-[11px] truncate">{r.trip_id ?? "—"}</div>
+                          {uncostedTrip && (
+                            <Badge variant="outline" className="text-amber-700 border-amber-400">Uncosted trip</Badge>
+                          )}
                           {stale && <Badge variant="outline">Stale</Badge>}
                         </div>
                         <div className="text-muted-foreground">
                           {tripFunctionLabel(r.trip_function) ?? "trip"} · {r.calculated_at ? rf.dateTime(r.calculated_at) : "—"}
                         </div>
+                        {uncostedTrip && (
+                          <div className="text-amber-700">Cost allocation missing — counted as completed work, excluded from cost totals.</div>
+                        )}
                         <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-1">
                           <DetailRow label="Area" value={fmtArea(r.allocation_area_ha)} small />
                           <DetailRow label="Total" value={fmtMoney(r.total_cost)} small bold />
