@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Portal costing/report correction
+- [ ] Correct headline Cost / ha to unique physical scope area; preserve cumulative treated area and totals, test filters and unavailable scope, verify preview without publication.
 - [x] Exclude retained allocations of soft-deleted parent trips from shared reporting reads; verify active-trip preservation and focused regressions without data writes or publication.
 - [x] Include normal Work Tasks with component-level pruning/trip deduplication.
 - [x] Share evidence-based area/block allocation resolution across both reports; no conversion of row equivalents to invented hectares.
