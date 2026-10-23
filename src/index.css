@@ -59,16 +59,16 @@
     --report-documents: 10 70% 41%;
 
     /* Work Task type families: distinct, accessible accents in both themes. */
-    --task-canopy: 151 65% 29%;
+    --task-canopy: 148 70% 28%;
     --task-ground: 88 65% 29%;
-    --task-spray: 180 78% 28%;
-    --task-water: 227 65% 45%;
-    --task-nutrient: 42 85% 30%;
-    --task-harvest: 288 52% 40%;
-    --task-planting: 327 65% 41%;
-    --task-repair: 10 70% 41%;
-    --task-inspection: 202 85% 35%;
-    --task-machine: 28 85% 36%;
+    --task-spray: 178 80% 27%;
+    --task-water: 240 72% 45%;
+    --task-nutrient: 48 95% 30%;
+    --task-harvest: 290 55% 40%;
+    --task-planting: 330 68% 42%;
+    --task-repair: 5 75% 42%;
+    --task-inspection: 205 88% 34%;
+    --task-machine: 25 45% 32%;
     --task-other: 138 8% 40%;
 
     /* Borders / inputs / focus */
@@ -139,16 +139,16 @@
     --report-documents: 10 85% 72%;
 
     /* Work Task type families: distinct, accessible accents in both themes. */
-    --task-canopy: 151 62% 62%;
+    --task-canopy: 148 62% 60%;
     --task-ground: 88 65% 62%;
-    --task-spray: 180 62% 60%;
-    --task-water: 227 85% 75%;
-    --task-nutrient: 42 85% 65%;
-    --task-harvest: 288 65% 74%;
-    --task-planting: 327 78% 73%;
-    --task-repair: 10 85% 72%;
-    --task-inspection: 202 85% 68%;
-    --task-machine: 28 90% 66%;
+    --task-spray: 178 65% 58%;
+    --task-water: 240 80% 76%;
+    --task-nutrient: 48 85% 65%;
+    --task-harvest: 290 65% 74%;
+    --task-planting: 330 78% 73%;
+    --task-repair: 5 85% 72%;
+    --task-inspection: 205 85% 68%;
+    --task-machine: 25 55% 62%;
     --task-other: 212 12% 70%;
 
     --border: 213 12% 20%;                /* subtle slate */
