@@ -20,7 +20,10 @@
 // are untouched.
 import { Fragment, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { taskLabourCost } from "@/lib/pieceRateCosting";
+import { buildWorkTaskCostRollup } from "@/lib/workTaskCostRollup";
+import { resolveWorkTaskReportAllocation, type TaskReportAllocation, type ReportBlock } from "@/lib/workTaskReportAllocation";
+import { usePruningActivity } from "@/lib/pruningActivityQuery";
+import { useWorkTaskMaterials } from "@/lib/materialsQuery";
 import { useEffectiveLabourCosts, resolveEffectiveLabourCost, type LabourCostSource } from "@/lib/effectiveLabourCost";
 import { format } from "date-fns";
 import {
@@ -74,7 +77,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ReportDateCell } from "@/components/reports/ReportDateCell";
 
-interface PaddockLite { id: string; name: string | null; area_ha?: number | null }
+type PaddockLite = ReportBlock;
 
 interface AllocContribution {
   taskId: string;
@@ -118,7 +121,7 @@ interface AllocRow {
 }
 
 const ANY = "__any__";
-const OVERLAP_SOURCES = new Set(["missed_trip", "trip_failed", "correction"]);
+
 
 /** Column registry keys for the Task Summary table. */
 type TaskColKey =
@@ -151,6 +154,7 @@ interface TaskRow {
   blocksLabel: string;
   paddockIds: string[];
   totalAreaHa: number | null;
+  allocation: TaskReportAllocation;
   labourHours: number;
   machineHours: number;
   machineEntries: number;
@@ -306,6 +310,8 @@ export default function WorkTaskReportsPage() {
     });
 
   const enabled = !!selectedVineyardId;
+  const pruningQ = usePruningActivity(selectedVineyardId);
+  const materialsQ = useWorkTaskMaterials(selectedVineyardId, canSeeCosts);
 
   const paddocksQ = useQuery({
     queryKey: ["paddocks", selectedVineyardId],
@@ -389,19 +395,6 @@ export default function WorkTaskReportsPage() {
     return m;
   }, [paddocks]);
 
-  // Legacy paddock-area fallback (matches Work Task drawer's effectiveTaskAreaHa
-  // resolver — see src/pages/setup/WorkTasksPage.tsx). Some iPhone-created task
-  // logs only have paddock_id and no work_task_paddocks rows, so we fall back
-  // to the paddock entity's own area_ha.
-  const paddockAreaById = useMemo(() => {
-    const m = new Map<string, number>();
-    paddocks.forEach((p) => {
-      const v = p.area_ha == null ? NaN : Number(p.area_ha);
-      if (Number.isFinite(v) && v > 0) m.set(p.id, v);
-    });
-    return m;
-  }, [paddocks]);
-
   const labourByTask = useMemo(() => {
     const m = new Map<string, WorkTaskLabourLine[]>();
     (labourQ.data ?? []).forEach((l) => {
@@ -475,28 +468,8 @@ export default function WorkTaskReportsPage() {
         ? blockNames.join(", ")
         : (task.paddock_name ?? "—");
 
-      // Area roll-up (hectares, canonical). Mirrors effectiveTaskAreaHa() in
-      // the Work Task drawer so report and drawer agree:
-      //   1) task.area_ha if positive
-      //   2) Σ work_task_paddocks.area_ha (positive values only)
-      //   3) Σ paddock entity area_ha by paddock_id (legacy iPhone task logs)
-      //   4) null
-      // Display unit conversion happens at render/export time.
-      let totalAreaHa: number | null = null;
-      const storedTaskArea = task.area_ha == null ? NaN : Number(task.area_ha);
-      if (Number.isFinite(storedTaskArea) && storedTaskArea > 0) {
-        totalAreaHa = storedTaskArea;
-      }
-      if (totalAreaHa == null && taskPaddocks.length) {
-        const sum = taskPaddocks.reduce(
-          (s, p) => s + (Number(p.area_ha) > 0 ? Number(p.area_ha) : 0), 0,
-        );
-        if (sum > 0) totalAreaHa = sum;
-      }
-      if (totalAreaHa == null && pIds.length) {
-        const sum = pIds.reduce((s, id) => s + (paddockAreaById.get(id) ?? 0), 0);
-        if (sum > 0) totalAreaHa = sum;
-      }
+      const allocation = resolveWorkTaskReportAllocation(task, taskPaddocks, paddocks, pruningQ.data ?? []);
+      const totalAreaHa = allocation.totalAreaHa;
 
       // Canonical labour cost (SQL 188): piece-rate tasks read their snapshot
       // total; every other task sums its labour lines. Never both.
@@ -507,28 +480,24 @@ export default function WorkTaskReportsPage() {
         effectiveCostByTask.get(task.id) ?? null,
       );
       // Null = "no known cost" (SQL 189). Totals treat it as 0, the cell shows "—".
-      const manualLabourCostRaw = resolvedLabour.cost;
-      const manualLabourCost = manualLabourCostRaw ?? 0;
-      const labourHours = labour.reduce((s, l) => s + num(l.total_hours), 0);
-      const machineCharge = machine.reduce((s, l) => s + num(l.total_machine_cost), 0);
-      const machineFuel = machine.reduce((s, l) => s + num(l.fuel_cost), 0);
-      const machineHours = machine.reduce(
-        (s, l) => s + num(l.duration_hours ?? l.engine_hours_used), 0,
-      );
-      const manualMachineTotal = machineCharge + machineFuel;
-
-      let linkedTripTotal = 0;
-      trips.forEach((t) => {
-        (allocByTripId.get(t.id) ?? []).forEach((a) => {
-          linkedTripTotal += num(a.total_cost);
-        });
+      const rollup = buildWorkTaskCostRollup({
+        task, labourLines: labour, machineLines: machine,
+        effectiveLabourCost: effectiveCostByTask.get(task.id),
+        tripAllocations: trips.flatMap((t) => allocByTripId.get(t.id) ?? []),
+        linkedTripCount: trips.length,
+        materialLines: (materialsQ.data ?? []).filter((m) => m.work_task_id === task.id),
       });
-
+      const manualLabourCostRaw = rollup.labourCostKnown ? rollup.labourCost : null;
+      const manualLabourCost = rollup.labourCost;
+      const labourHours = rollup.labourHours;
+      const machineCharge = rollup.machineCharge;
+      const machineFuel = rollup.machineFuel;
+      const machineHours = rollup.machineHours;
+      const manualMachineTotal = rollup.machineCost;
+      const linkedTripTotal = rollup.linkedTripCost;
       const hasLinkedTrips = trips.length > 0;
       const hasManualMachine = machine.length > 0;
-      const overlap = hasLinkedTrips && machine.some((l) =>
-        OVERLAP_SOURCES.has(String(l.entry_source ?? "")),
-      );
+      const overlap = rollup.overlapRisk || allocation.warnings.length > 0;
 
       return {
         task,
@@ -538,6 +507,7 @@ export default function WorkTaskReportsPage() {
         blocksLabel,
         paddockIds: pIds,
         totalAreaHa,
+        allocation,
         labourHours,
         machineHours,
         machineEntries: machine.length,
@@ -552,7 +522,7 @@ export default function WorkTaskReportsPage() {
         machineFuel,
         manualMachineTotal,
         linkedTripTotal,
-        totalCost: manualLabourCost + manualMachineTotal + linkedTripTotal,
+        totalCost: rollup.total,
         hasLinkedTrips,
         hasManualMachine,
         hasWarning: overlap,
@@ -562,7 +532,7 @@ export default function WorkTaskReportsPage() {
         trips,
       };
     });
-  }, [tasksQ.data, labourByTask, machineByTask, paddocksByTask, tripsByTask, allocByTripId, paddockNameById, paddockAreaById, effectiveCostByTask]);
+  }, [tasksQ.data, labourByTask, machineByTask, paddocksByTask, tripsByTask, allocByTripId, paddockNameById, paddocks, pruningQ.data, materialsQ.data, effectiveCostByTask]);
 
   const taskTypeOptions = useMemo(() => {
     const set = new Set<string>();
@@ -817,7 +787,7 @@ export default function WorkTaskReportsPage() {
 
       case "status":
         return r.hasWarning ? (
-          <span title="Review: linked GPS trips and manual correction/missed machine entries may overlap.">
+          <span title={r.allocation.warnings.length ? r.allocation.warnings.join(" ") : "Review: linked GPS trips and manual correction/missed machine entries may overlap."}>
             <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 gap-1">
               <AlertTriangle className="h-3 w-3" /> Review
             </Badge>
@@ -1061,26 +1031,8 @@ export default function WorkTaskReportsPage() {
     toast({ title: "Excel exported", description: `${filtered.length} task${filtered.length === 1 ? "" : "s"} exported.` });
   };
 
-  // -------------------- Block / paddock allocation (Stage 5H) --------------------
-  // Per-task area-share allocation, aggregated by block/paddock across the
-  // currently filtered task set. Read-only — nothing is written back to the
-  // database and the existing task-level roll-up is untouched.
-  //
-  // For each task in `filtered`:
-  //   totalTaskAreaHa = the same area precedence used in the task summary
-  //     (task.area_ha > 0  →  Σ work_task_paddocks.area_ha > 0  →  Σ paddock entity area_ha > 0  → null)
-  //   for each linked paddock:
-  //     paddockAreaHa = work_task_paddocks.area_ha (if > 0) else paddock.area_ha (if > 0) else null
-  //     share         = paddockAreaHa / totalTaskAreaHa
-  //     allocated*    = task* × share
-  //
-  // If totalTaskAreaHa is missing/zero, the whole task is added to an
-  // "Unallocated" bucket so totals still reconcile against the task summary.
-  // If a single block has no resolvable area but the task does, that block
-  // contributes 0 cost and is flagged "Missing block area".
-  // Allocation types are declared at module scope (see below) so the
-  // AllocationContributions helper component can share them.
-
+  // Shared read-only allocation: stored areas / mapped geometry and canonical
+  // pruning shares. Unknown hectares stay unknown; costs remain reconciled.
   const allocationRows = useMemo<AllocRow[]>(() => {
     const map = new Map<string, AllocRow>();
     const ensure = (paddockId: string | null, name: string, isUnallocated: boolean): AllocRow => {
@@ -1126,97 +1078,14 @@ export default function WorkTaskReportsPage() {
     });
 
     filtered.forEach((r) => {
-      const totalHa = r.totalAreaHa && r.totalAreaHa > 0 ? r.totalAreaHa : null;
-
-      const links: Array<{ paddockId: string; areaHa: number | null }> = r.taskPaddocks.length
-        ? r.taskPaddocks.map((p) => {
-            const a = Number(p.area_ha);
-            const fromLink = Number.isFinite(a) && a > 0 ? a : null;
-            const fallback = paddockAreaById.get(p.paddock_id) ?? null;
-            return { paddockId: p.paddock_id, areaHa: fromLink ?? (fallback && fallback > 0 ? fallback : null) };
-          })
-        : r.paddockIds.map((id) => {
-            const fallback = paddockAreaById.get(id) ?? null;
-            return { paddockId: id, areaHa: fallback && fallback > 0 ? fallback : null };
-          });
-
-      // Case 1: task area unresolved → entire task → Unallocated bucket.
-      if (totalHa == null) {
-        const row = ensure(null, "Unallocated", true);
+      r.allocation.allocations.forEach(({ blockId: pid, share, areaHa }) => {
+        const row = ensure(pid, pid ? paddockNameById.get(pid) ?? "—" : "Unallocated", pid == null);
         row.taskIds.add(r.task.id);
-        row.labourHours += r.labourHours;
-        row.machineHours += r.machineHours;
-        row.linkedTripCount += r.linkedTripCount;
-        row.manualLabourCost += r.manualLabourCost;
-        row.machineCharge += r.machineCharge;
-        row.machineFuel += r.machineFuel;
-        row.linkedTripTotal += r.linkedTripTotal;
-        row.totalCost += r.totalCost;
-        row.hasMissingTaskArea = true;
-        if (r.hasWarning) row.hasOverlapWarning = true;
-        row.contributions.push({
-          ...baseContrib(r),
-          share: null, areaHa: null,
-          labourHours: r.labourHours, machineHours: r.machineHours,
-          linkedTripCount: r.linkedTripCount,
-          manualLabourCost: r.manualLabourCost, machineCharge: r.machineCharge,
-          machineFuel: r.machineFuel, linkedTripTotal: r.linkedTripTotal,
-          totalCost: r.totalCost,
-          reason: "Missing task area",
-        });
-        return;
-      }
-
-      // Case 2: no linked paddocks → Unallocated.
-      if (!links.length) {
-        const row = ensure(null, "Unallocated", true);
-        row.taskIds.add(r.task.id);
-        row.labourHours += r.labourHours;
-        row.machineHours += r.machineHours;
-        row.linkedTripCount += r.linkedTripCount;
-        row.manualLabourCost += r.manualLabourCost;
-        row.machineCharge += r.machineCharge;
-        row.machineFuel += r.machineFuel;
-        row.linkedTripTotal += r.linkedTripTotal;
-        row.totalCost += r.totalCost;
-        if (r.hasWarning) row.hasOverlapWarning = true;
-        row.contributions.push({
-          ...baseContrib(r),
-          share: null, areaHa: null,
-          labourHours: r.labourHours, machineHours: r.machineHours,
-          linkedTripCount: r.linkedTripCount,
-          manualLabourCost: r.manualLabourCost, machineCharge: r.machineCharge,
-          machineFuel: r.machineFuel, linkedTripTotal: r.linkedTripTotal,
-          totalCost: r.totalCost,
-          reason: "No linked blocks",
-        });
-        return;
-      }
-
-      // Case 3: per-paddock allocation by area share.
-      links.forEach(({ paddockId: pid, areaHa }) => {
-        const name = paddockNameById.get(pid) ?? "—";
-        const row = ensure(pid, name, false);
-        row.taskIds.add(r.task.id);
-        if (r.hasWarning) row.hasOverlapWarning = true;
-
-        if (areaHa == null || !(areaHa > 0)) {
-          row.hasMissingBlockArea = true;
-          row.linkedTripCount += r.linkedTripCount > 0 ? 1 : 0;
-          row.contributions.push({
-            ...baseContrib(r),
-            share: null, areaHa: null,
-            labourHours: 0, machineHours: 0,
-            linkedTripCount: r.linkedTripCount > 0 ? 1 : 0,
-            manualLabourCost: 0, machineCharge: 0, machineFuel: 0,
-            linkedTripTotal: 0, totalCost: 0,
-            reason: "Missing block area",
-          });
-          return;
-        }
-        const share = areaHa / totalHa;
-        row.areaHa += areaHa;
-        row.hasAnyArea = true;
+        row.hasMissingTaskArea ||= r.totalAreaHa == null;
+        row.hasMissingBlockArea ||= areaHa == null;
+        row.hasOverlapWarning ||= r.hasWarning && r.allocation.warnings.length === 0;
+        row.areaHa += areaHa ?? 0;
+        row.hasAnyArea ||= areaHa != null;
         row.labourHours += r.labourHours * share;
         row.machineHours += r.machineHours * share;
         row.linkedTripCount += r.linkedTripCount > 0 ? 1 : 0;
@@ -1226,17 +1095,13 @@ export default function WorkTaskReportsPage() {
         row.linkedTripTotal += r.linkedTripTotal * share;
         row.totalCost += r.totalCost * share;
         row.contributions.push({
-          ...baseContrib(r),
-          share, areaHa,
-          labourHours: r.labourHours * share,
-          machineHours: r.machineHours * share,
+          ...baseContrib(r), share, areaHa,
+          labourHours: r.labourHours * share, machineHours: r.machineHours * share,
           linkedTripCount: r.linkedTripCount > 0 ? 1 : 0,
           manualLabourCost: r.manualLabourCost * share,
-          machineCharge: r.machineCharge * share,
-          machineFuel: r.machineFuel * share,
-          linkedTripTotal: r.linkedTripTotal * share,
-          totalCost: r.totalCost * share,
-          reason: null,
+          machineCharge: r.machineCharge * share, machineFuel: r.machineFuel * share,
+          linkedTripTotal: r.linkedTripTotal * share, totalCost: r.totalCost * share,
+          reason: r.allocation.warnings.join(" ") || null,
         });
       });
     });
@@ -1256,7 +1121,7 @@ export default function WorkTaskReportsPage() {
       if (!a.isUnallocated && b.isUnallocated) return -1;
       return a.name.localeCompare(b.name);
     });
-  }, [filtered, paddockAreaById, paddockNameById]);
+  }, [filtered, paddockNameById]);
 
 
   const allocationTotals = useMemo(() => {
@@ -1435,7 +1300,7 @@ export default function WorkTaskReportsPage() {
       const status = allocationStatus(r);
       const isReview = status !== "OK";
       return isReview ? (
-        <span title="Review: linked GPS trips and manual correction/missed machine entries may overlap.">
+        <span title={allocationStatus(r)}>
           <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 gap-1">
             <AlertTriangle className="h-3 w-3" /> {status}
           </Badge>
@@ -1652,16 +1517,21 @@ export default function WorkTaskReportsPage() {
 
   const loading =
     tasksQ.isLoading || labourQ.isLoading || machineQ.isLoading ||
-    wtPaddocksQ.isLoading || tripsQ.isLoading || (canSeeCosts && (allocQ.isLoading || allocOverlay.isLoading));
+    wtPaddocksQ.isLoading || tripsQ.isLoading || pruningQ.isLoading ||
+    (canSeeCosts && (allocQ.isLoading || allocOverlay.isLoading || materialsQ.isLoading || effectiveCostQ.isLoading));
 
   return (
     <div className="p-6 space-y-4 w-full">
+      {(materialsQ.isError || pruningQ.isError) && (
+        <div role="alert" className="text-sm text-destructive">
+          Some cost or allocation details could not be loaded. Reload this report before relying on its totals.
+        </div>
+      )}
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Work Task Reports</h1>
         <p className="text-sm text-muted-foreground">
           Task-level roll-up of manual labour, manual machine work and linked
-          GPS trips. Read-only — totals are not written back to the database
-          and existing Cost Reports are unchanged.
+          GPS trips and materials. Read-only — totals are not written back to the database.
         </p>
         {canSeeCosts && (
           <p className="text-xs text-muted-foreground flex items-start gap-1">
@@ -2000,7 +1870,7 @@ export default function WorkTaskReportsPage() {
                         )}
                         <TableCell>
                           {isReview ? (
-                            <span title="Review: linked GPS trips and manual correction/missed machine entries may overlap.">
+                            <span title={allocationStatus(r)}>
                               <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 gap-1">
                                 <AlertTriangle className="h-3 w-3" /> {status}
                               </Badge>

@@ -20,6 +20,14 @@ import {
   fetchTripCostAllocationsForVineyard,
   type TripCostAllocation,
 } from "@/lib/tripCostAllocationsQuery";
+import { fetchList } from "@/lib/queries";
+import { fetchWorkTasksForVineyard, fetchLabourLinesForVineyard, fetchWorkTaskPaddocksForVineyard } from "@/lib/workTasksQuery";
+import { fetchWorkTaskMachineLinesForVineyard } from "@/lib/workTaskMachineLinesQuery";
+import { fetchEffectiveLabourCosts } from "@/lib/effectiveLabourCost";
+import { fetchWorkTaskMaterials } from "@/lib/materialsQuery";
+import { distinctTripCount, type ReportBlock } from "@/lib/workTaskReportAllocation";
+import { useVintage } from "@/lib/useVintage";
+import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 import { usePruningActivity } from "@/lib/pruningActivityQuery";
 import { useChemicalAllocationOverlay } from "@/lib/useChemicalAllocationOverlay";
 import {
@@ -204,18 +212,47 @@ export default function CostReportsPage() {
 
   // Pruning activity labour is an operational cost recorded outside field
   // trips. It is included through its reconciled per-block allocations.
-  const { data: pruningRows = [] } = usePruningActivity(
+  const { data: pruningRows = [], isLoading: pruningLoading, isError: pruningError } = usePruningActivity(
     canSeeCosts ? selectedVineyardId : null,
   );
 
+  const { seasonStartMonth, seasonStartDay } = useVintage();
+  const reportTasksQ = useQuery({
+    queryKey: ["cost-report-work-task-sources", selectedVineyardId],
+    enabled: !!selectedVineyardId && canSeeCosts,
+    queryFn: async () => {
+      if (!selectedVineyardId) throw new Error("Select a vineyard.");
+      const blocks = await fetchList<ReportBlock>("paddocks", selectedVineyardId);
+      const [tasks, labour, machine, effective, materials, links] = await Promise.all([
+        fetchWorkTasksForVineyard(selectedVineyardId, blocks.map((b) => b.id)),
+        fetchLabourLinesForVineyard(selectedVineyardId),
+        fetchWorkTaskMachineLinesForVineyard(selectedVineyardId),
+        fetchEffectiveLabourCosts(selectedVineyardId),
+        fetchWorkTaskMaterials(selectedVineyardId),
+        fetchWorkTaskPaddocksForVineyard(selectedVineyardId),
+      ]);
+      return { blocks, tasks: tasks.tasks, labour, machine, effective, materials, links };
+    },
+  });
   const unified = useMemo(
     () =>
       buildUnifiedCostDataset({
         vineyardId: selectedVineyardId ?? "",
         tripAllocations: overlaidTripRows,
         pruningRows,
+        blocks: reportTasksQ.data?.blocks ?? [],
+        taskPaddocks: reportTasksQ.data?.links ?? [],
+        workTasks: (reportTasksQ.data?.tasks ?? []).map((task) => ({
+          task,
+          vintageYear: task.start_date || task.date
+            ? vintageForDate(new Date(task.start_date ?? task.date ?? ""), seasonStartMonth, seasonStartDay) : null,
+          labourLines: reportTasksQ.data?.labour.filter((l) => l.work_task_id === task.id) ?? [],
+          machineLines: reportTasksQ.data?.machine.filter((l) => l.work_task_id === task.id) ?? [],
+          effectiveLabourCost: reportTasksQ.data?.effective.get(task.id),
+          materialLines: reportTasksQ.data?.materials.filter((l) => l.work_task_id === task.id) ?? [],
+        })),
       }),
-    [selectedVineyardId, overlaidTripRows, pruningRows],
+    [selectedVineyardId, overlaidTripRows, pruningRows, reportTasksQ.data, seasonStartMonth, seasonStartDay],
   );
 
   // Adapter: the tab/aggregation pipeline below consumes the allocation shape.
@@ -353,7 +390,7 @@ export default function CostReportsPage() {
       g.input_cost += Number(r.input_cost ?? 0);
       g.total_cost += Number(r.total_cost ?? 0);
       g.warnings_count += warningsList(r.warnings).length;
-      if (r.trip_id) g.trip_count += 1;
+
       if (!g.status && r.costing_status) g.status = r.costing_status;
       if (r.trip_function && !g.trip_functions.includes(r.trip_function)) {
         g.trip_functions.push(r.trip_function);
@@ -361,6 +398,7 @@ export default function CostReportsPage() {
       g.contributing.push(r);
     }
     for (const g of map.values()) {
+      g.trip_count = distinctTripCount(g.contributing);
       g.cost_per_ha = g.allocation_area_ha > 0 ? g.total_cost / g.allocation_area_ha : null;
       g.cost_per_tonne = g.yield_tonnes > 0 ? g.total_cost / g.yield_tonnes : null;
     }
@@ -421,11 +459,11 @@ export default function CostReportsPage() {
       trips += g.trip_count;
     }
     return {
-      total, area, yieldT, warns, tripCount: trips,
+      total, area, yieldT, warns, tripCount: distinctTripCount(filteredRaw),
       costPerHa: area > 0 ? total / area : null,
       costPerTonne: yieldT > 0 ? total / yieldT : null,
     };
-  }, [filtered]);
+  }, [filtered, filteredRaw]);
 
   const unassignedCount = useMemo(
     () => filtered.filter((g) => !g.varietyResolved).length,
@@ -445,7 +483,7 @@ export default function CostReportsPage() {
       b.total += g.total_cost;
       b.area += g.allocation_area_ha;
       b.yieldT += g.yield_tonnes;
-      b.trips += g.trip_count;
+      b.trips = distinctTripCount(filtered.filter((row) => (row.paddock_name ?? "—") === k).flatMap((row) => row.contributing));
       b.warnings += g.warnings_count;
     }
     return Array.from(map.values()).map((b) => ({
@@ -466,7 +504,7 @@ export default function CostReportsPage() {
       b.total += g.total_cost;
       b.area += g.allocation_area_ha;
       b.yieldT += g.yield_tonnes;
-      b.trips += g.trip_count;
+      b.trips = distinctTripCount(filtered.filter((row) => (row.variety ?? "Unassigned") === k).flatMap((row) => row.contributing));
     }
     return Array.from(map.values()).map((b) => ({
       ...b,
@@ -496,16 +534,18 @@ export default function CostReportsPage() {
   }, [filteredRaw]);
 
   const categoryTotals = useMemo(() => {
-    let labour = 0, fuel = 0, chemical = 0, input = 0;
+    let labour = 0, fuel = 0, chemical = 0, input = 0, other = 0;
     for (const g of filtered) {
       labour += g.labour_cost; fuel += g.fuel_cost;
       chemical += g.chemical_cost; input += g.input_cost;
+      other += g.contributing.reduce((sum, row) => sum + ((row as CostRecord).unified?.other_cost ?? 0), 0);
     }
     const list = [
       { name: "Labour", value: labour },
       { name: "Fuel", value: fuel },
       { name: "Chemical", value: chemical },
       { name: "Seed / input", value: input },
+      { name: "Machinery / materials", value: other },
     ].filter((c) => c.value > 0);
     return list;
   }, [filtered]);
@@ -709,11 +749,17 @@ export default function CostReportsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Cost Reports</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Unified operational costs — field trips and pruning activity labour —
+            Unified operational costs — Work Tasks, field trips and pruning activity labour —
             grouped by vintage. Filters apply across every tab.
           </p>
         </div>
       </div>
+
+      {(reportTasksQ.isError || pruningError) && (
+        <Alert variant="destructive"><AlertTitle>Work Task costs could not be loaded</AlertTitle>
+          <AlertDescription>The totals are incomplete. Reload this report to try again.</AlertDescription>
+        </Alert>
+      )}
 
       {selectedVineyardId && <CostingSetupWizard vineyardId={selectedVineyardId} />}
 
@@ -1153,10 +1199,10 @@ export default function CostReportsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(isLoading || overlayLoading) && (
+                {(isLoading || overlayLoading || reportTasksQ.isLoading || pruningLoading) && (
                   <TableRow><TableCell colSpan={visibleCostOrder.length} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
                 )}
-                {!isLoading && !overlayLoading && filteredSorted.length === 0 && (
+                {!isLoading && !overlayLoading && !reportTasksQ.isLoading && !pruningLoading && filteredSorted.length === 0 && (
                   <TableRow><TableCell colSpan={visibleCostOrder.length} className="text-center text-muted-foreground py-8">
                     No cost allocations match these filters.
                   </TableCell></TableRow>
@@ -1244,7 +1290,7 @@ export default function CostReportsPage() {
 
               <div className="mt-6">
                 <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
-                  Contributing trip allocations
+                  Contributing cost allocations
                 </div>
                 <div className="space-y-3">
                   {drill.contributing.map((r) => {
@@ -1266,6 +1312,7 @@ export default function CostReportsPage() {
                           <DetailRow label="Fuel" value={fmtMoney(r.fuel_cost)} small />
                           <DetailRow label="Chemical" value={fmtMoney(r.chemical_cost)} small />
                           <DetailRow label="Input" value={fmtMoney(r.input_cost)} small />
+                          {(r as CostRecord).unified?.other_cost > 0 && <DetailRow label="Machinery / materials" value={fmtMoney((r as CostRecord).unified.other_cost)} small />}
                         </div>
                         {warns.length > 0 && (
                           <ul className="text-[11px] mt-1 space-y-0.5 list-disc list-inside text-amber-700">
