@@ -230,15 +230,18 @@ export default function CostReportsPage() {
     queryFn: async () => {
       if (!selectedVineyardId) throw new Error("Select a vineyard.");
       const blocks = await fetchList<ReportBlock>("paddocks", selectedVineyardId);
-      const [tasks, labour, machine, effective, materials, links] = await Promise.all([
+      // Cross-vintage read (no season scope): the report derives each Trip's
+      // Vintage from the vineyard season boundary and filters afterwards.
+      const [tasks, labour, machine, effective, materials, links, trips] = await Promise.all([
         fetchWorkTasksForVineyard(selectedVineyardId, blocks.map((b) => b.id)),
         fetchLabourLinesForVineyard(selectedVineyardId),
         fetchWorkTaskMachineLinesForVineyard(selectedVineyardId),
         fetchEffectiveLabourCosts(selectedVineyardId),
         fetchWorkTaskMaterials(selectedVineyardId),
         fetchWorkTaskPaddocksForVineyard(selectedVineyardId),
+        fetchTripsForVineyard(selectedVineyardId, blocks.map((b) => b.id), null),
       ]);
-      return { blocks, tasks: tasks.tasks, labour, machine, effective, materials, links };
+      return { blocks, tasks: tasks.tasks, labour, machine, effective, materials, links, trips: trips.trips };
     },
   });
   const unified = useMemo(
@@ -246,6 +249,8 @@ export default function CostReportsPage() {
       buildUnifiedCostDataset({
         vineyardId: selectedVineyardId ?? "",
         tripAllocations: overlaidTripRows,
+        trips: reportTasksQ.data?.trips ?? [],
+        seasonStart: { month: seasonStartMonth, day: seasonStartDay },
         pruningRows,
         blocks: reportTasksQ.data?.blocks ?? [],
         taskPaddocks: reportTasksQ.data?.links ?? [],
