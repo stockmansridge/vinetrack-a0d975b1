@@ -882,7 +882,7 @@ export default function CostReportsPage() {
       </Card>
 
       <Tabs value={tab} onValueChange={setTab} className="w-full">
-        <TabsList className="flex flex-wrap h-auto justify-start">
+        <TabsList className="flex-wrap">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="blocks">{rf.blockLabel}s</TabsTrigger>
           <TabsTrigger value="varieties">Varieties</TabsTrigger>
