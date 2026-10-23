@@ -1,6 +1,9 @@
 // READ-ONLY query helper for trip_cost_allocations.
 // Owner/manager only — gated by useCanSeeCosts() at the call sites and
 // enforced by RLS on the iOS Supabase project.
+// Only ACTIVE allocation rows (deleted_at IS NULL) are cost authority.
+// Soft-deleted allocations are retained history: they must never enter
+// totals and must never suppress an uncosted Trip presence row.
 import { supabase } from "@/integrations/ios-supabase/client";
 
 export interface TripCostAllocation {
@@ -26,6 +29,7 @@ export interface TripCostAllocation {
   calculated_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  deleted_at?: string | null;
   // Optional source-trip metadata if exposed by the table:
   trip_updated_at?: string | null;
 }
@@ -37,6 +41,7 @@ export async function fetchTripCostAllocationsForVineyard(
     .from("trip_cost_allocations")
     .select("*")
     .eq("vineyard_id", vineyardId)
+    .is("deleted_at", null)
     .order("calculated_at", { ascending: false, nullsFirst: false });
   if (error) {
     // RLS will return either an error or zero rows for non-owner/manager.
