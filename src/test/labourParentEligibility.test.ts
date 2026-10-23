@@ -29,8 +29,8 @@ const line: WorkTaskLabourLine = { id: "l1", vineyard_id: "v1", work_task_id: "t
 beforeEach(() => {
   state.calls = [];
   state.tables = {
-    work_tasks: [active, deleted],
-    work_task_labour_lines: [line, { ...line, id: "ld", work_task_id: "td", total_hours: 53, total_cost: 1795 }, { ...line, id: "lm", work_task_id: "missing" }, { ...line, id: "removed", deleted_at: "2026-10-22" }, { ...line, id: "other", vineyard_id: "v2" }],
+    work_tasks: [{ ...active }, { ...deleted }],
+    work_task_labour_lines: [{ ...line }, { ...line, id: "ld", work_task_id: "td", total_hours: 53, total_cost: 1795 }, { ...line, id: "lm", work_task_id: "missing" }, { ...line, id: "removed", deleted_at: "2026-10-22" }, { ...line, id: "other", vineyard_id: "v2" }],
     v_work_task_effective_labour_cost: ["t1", "td", "missing"].map((work_task_id) => ({ work_task_id, vineyard_id: "v1", effective_labour_cost: work_task_id === "t1" ? 455 : 1795, costing_method: "hourly", labour_cost_source: "labour_lines" })),
   };
 });
