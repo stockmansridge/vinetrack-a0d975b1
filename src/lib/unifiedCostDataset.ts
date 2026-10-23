@@ -243,14 +243,13 @@ export function buildUnifiedCostDataset({
     const row = pruningRowToUnified(p, vineyardId);
     if (seen.has(row.dedup_key)) continue;
     seen.add(row.dedup_key);
-    if (p.workTaskId) linkedWorkTaskIds.add(p.workTaskId);
+    if (p.allocatedCost != null && p.workTaskId) linkedWorkTaskIds.add(p.workTaskId);
     // SQL 200: every Work Task linked to the activity is already costed here.
-    (p.linkedWorkTaskIds ?? []).forEach((id) => linkedWorkTaskIds.add(id));
+    if (p.allocatedCost != null) (p.linkedWorkTaskIds ?? []).forEach((id) => linkedWorkTaskIds.add(id));
     rows.push(row);
   }
 
-  // 2) Trip allocations. A trip whose cost is already claimed by a pruning
-  //    activity's Work Task must not be imported a second time.
+  // 2) Saved trip allocations own GPS components independently of task labour.
   for (const t of tripAllocations) {
     if (t.vineyard_id !== vineyardId) continue;
     const row = tripAllocationToUnified(t);

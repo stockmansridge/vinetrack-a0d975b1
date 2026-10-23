@@ -4,6 +4,7 @@
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import type { WorkTask, WorkTaskPaddock } from "@/lib/workTasksQuery";
 import type { PruningActivityRow } from "@/lib/pruningActivityQuery";
+import { allocateActivityShares } from "@/lib/pruningActivityAllocation";
 
 export interface ReportBlock {
   id: string;
@@ -57,9 +58,19 @@ export function resolveWorkTaskReportAllocation(
   const totalAreaHa = storedTotal ?? (allLinksKnown ? linkAreas.reduce<number>((s, a) => s + (a ?? 0), 0) : null)
     ?? (allBlocksKnown ? areas.reduce<number>((s, a) => s + (a ?? 0), 0) : null);
   const weights = new Map<string, number>();
-  // Canonical row-equivalent activity shares (already normalised/reconciled).
-  // Across several activities linked to one task, weight by recorded row eq.
-  for (const p of pruning) weights.set(p.paddockId, (weights.get(p.paddockId) ?? 0) + Math.max(0, p.rowEquivalents));
+  // Reuse the established allocation engine, including server shares. Several
+  // activities on a task are weighted by their recorded total row equivalents.
+  const groups = new Map<string, PruningActivityRow[]>();
+  for (const p of pruning) {
+    const group = groups.get(p.groupKey) ?? [];
+    if (!group.some((r) => r.id === p.id)) group.push(p);
+    groups.set(p.groupKey, group);
+  }
+  for (const group of groups.values()) {
+    const rowEq = group.reduce((s, p) => s + Math.max(0, p.rowEquivalents), 0);
+    const shares = allocateActivityShares(group.map((p) => ({ id: p.id, rowEquivalents: p.rowEquivalents, serverShare: p.allocationShare })), null, null);
+    group.forEach((p, i) => weights.set(p.paddockId, (weights.get(p.paddockId) ?? 0) + rowEq * shares[i].share));
+  }
   const rowTotal = ids.reduce((s, id) => s + (weights.get(id) ?? 0), 0);
   const hasPruningShares = ids.length > 0 && rowTotal > 0 && ids.every((id) => (weights.get(id) ?? 0) > 0);
   const areaTotal = areas.reduce<number>((s, a) => s + (a ?? 0), 0);
