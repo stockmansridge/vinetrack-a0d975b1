@@ -315,6 +315,8 @@ export function tripPresenceRows(
 export function buildUnifiedCostDataset({
   vineyardId,
   tripAllocations = [],
+  trips = [],
+  seasonStart = null,
   pruningRows = [],
   workTasks = [],
   taskPaddocks = [],
@@ -340,12 +342,30 @@ export function buildUnifiedCostDataset({
   }
 
   // 2) Saved trip allocations own GPS components independently of task labour.
+  //    They are also the authority for which Trips are costed: a Trip with at
+  //    least one active saved allocation never gets a presence row.
+  const costedTripIds = new Set<string>();
   for (const t of tripAllocations) {
     if (t.vineyard_id !== vineyardId) continue;
+    if (t.trip_id) costedTripIds.add(t.trip_id);
     const row = tripAllocationToUnified(t);
     if (seen.has(row.dedup_key)) continue;
     seen.add(row.dedup_key);
     rows.push(row);
+  }
+
+  // 3) Completed Trips with no saved allocation still count as completed work.
+  //    Presence rows carry $0 / 0 ha — they move Trip counts only, never cost.
+  for (const trip of trips) {
+    if (trip.vineyard_id !== vineyardId) continue;
+    if (trip.deleted_at) continue;
+    if (!isCompletedTrip(trip)) continue;
+    if (costedTripIds.has(trip.id)) continue;
+    for (const row of tripPresenceRows(trip, vineyardId, blocks, seasonStart)) {
+      if (seen.has(row.dedup_key)) continue;
+      seen.add(row.dedup_key);
+      rows.push(row);
+    }
   }
 
   // Component-level ownership: pruning owns linked-task LABOUR only; trip
