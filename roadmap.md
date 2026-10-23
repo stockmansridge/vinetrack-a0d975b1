@@ -1,5 +1,10 @@
 # Roadmap
 
+## Work Task labour-line register
+- [ ] Add vineyard-wide active Labour Lines view, filters, parent-task links and cost visibility.
+- [ ] Share confirmed canonical soft deletion across register and task drawer; refresh dependent totals and local drawer rows.
+- [ ] Run focused tests and preview checks; no SQL or publication.
+
 ## Portal costing/report correction
 - [x] Correct headline Cost / ha to unique physical scope area; preserve cumulative treated area and totals. 58 focused regressions passed and preview build OK; authenticated live report remains blocked by unavailable shared-vineyard session. No publication.
 - [x] Exclude retained allocations of soft-deleted parent trips from shared reporting reads; verify active-trip preservation and focused regressions without data writes or publication.
