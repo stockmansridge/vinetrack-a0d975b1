@@ -76,6 +76,17 @@ describe("Labour Lines register", () => {
     expect(state.softDelete).not.toHaveBeenCalled();
     expect(screen.getByText("Correct this entry")).toBeInTheDocument();
   });
+  it("keeps the row and does not refresh totals when soft deletion fails", async () => {
+    state.softDelete.mockRejectedValue(new Error("Permission denied"));
+    const { invalidate } = mount(<LabourLinesPage />);
+    await screen.findByText("Correct this entry");
+    fireEvent.click(screen.getByRole("button", { name: "Delete labour line" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Remove$/ }));
+    await waitFor(() => expect(state.softDelete).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Remove$/ })).not.toBeDisabled());
+    expect(screen.getByText("Correct this entry")).toBeInTheDocument();
+    expect(invalidate).not.toHaveBeenCalled();
+  });
   it("Remove soft-deletes the actual row and refreshes canonical labour/effective totals", async () => {
     const { qc, invalidate } = mount(<LabourLinesPage />);
     await screen.findByText("Correct this entry");
