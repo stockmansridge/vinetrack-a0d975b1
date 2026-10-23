@@ -14,7 +14,7 @@ vi.mock("@/integrations/ios-supabase/client", () => ({
       const call = { table, ids: [] as string[], activeOnly: false, vineyard: null as string | null };
       state.calls.push(call);
       const result = () => table === "trip_cost_allocations"
-        ? { data: state.allocations.filter((row) => row.vineyard_id === call.vineyard), error: null }
+        ? { data: state.allocations.filter((row) => row.vineyard_id === call.vineyard && (!call.activeOnly || row.deleted_at == null)), error: null }
         : {
           data: state.parents.filter((row) => call.ids.includes(row.id) && (!call.activeOnly || row.deleted_at === null)).map(({ id }) => ({ id })),
           error: state.parentError ? { message: "Permission denied" } : null,
@@ -37,8 +37,15 @@ import { buildUnifiedCostDataset } from "@/lib/unifiedCostDataset";
 import { buildWorkTaskCostRollup } from "@/lib/workTaskCostRollup";
 
 const vineyard = "fe952afe-437f-4be7-8cbf-fdd8e630411c";
-const allocation = (id: string, tripId: string | null, total: number | null): TripCostAllocation => ({
-  id, vineyard_id: vineyard, trip_id: tripId, paddock_id: null, season_year: 2027, total_cost: total,
+const allocation = (id: string, tripId: string | null, total: number | null, deleted_at: string | null = null): TripCostAllocation => ({
+  id, vineyard_id: vineyard, trip_id: tripId, paddock_id: null, season_year: 2027, total_cost: total, deleted_at,
+});
+
+const completedTrip = (id: string) => ({
+  id, vineyard_id: vineyard, paddock_id: null, paddock_ids: [], paddock_name: null,
+  trip_function: "spraying", person_name: "Sam",
+  start_time: "2026-09-23T01:00:00Z", end_time: "2026-09-23T03:00:00Z",
+  is_active: false, deleted_at: null,
 });
 
 beforeEach(() => {
@@ -94,6 +101,45 @@ describe("active-parent trip allocation reporting", () => {
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(await fetchTripCostAllocationsForVineyard(vineyard)).toEqual([]);
     warning.mockRestore();
+  });
+
+  it("excludes soft-deleted allocation rows from fetch results", async () => {
+    state.allocations = [
+      allocation("live", "trip-live", 10),
+      allocation("history", "trip-live", 99, "2026-10-01T00:00:00Z"),
+    ];
+    state.parents = [{ id: "trip-live", deleted_at: null }];
+    expect((await fetchTripCostAllocationsForVineyard(vineyard)).map((row) => row.id)).toEqual(["live"]);
+    expect(state.calls[0].activeOnly).toBe(true);
+  });
+
+  it("treats a completed Trip whose only allocation is soft-deleted as uncosted presence", async () => {
+    const t = completedTrip("trip-only-deleted");
+    state.allocations = [allocation("history", t.id, 99, "2026-10-01T00:00:00Z")];
+    state.parents = [{ id: t.id, deleted_at: null }];
+    const tripAllocations = await fetchTripCostAllocationsForVineyard(vineyard);
+    expect(tripAllocations).toEqual([]);
+    const dataset = buildUnifiedCostDataset({ vineyardId: vineyard, trips: [t], tripAllocations, seasonStart: { month: 7, day: 1 } });
+    const presence = dataset.rows.filter((row) => row.source_type === "trip" && row.source_id === t.id);
+    expect(presence).toHaveLength(1);
+    expect(presence[0].status).toBe("uncosted");
+    expect(presence[0].total_cost).toBe(0);
+  });
+
+  it("still suppresses presence when an active allocation exists alongside deleted history", async () => {
+    const t = completedTrip("trip-costed");
+    state.allocations = [
+      allocation("live", t.id, 70),
+      allocation("history", t.id, 99, "2026-10-01T00:00:00Z"),
+    ];
+    state.parents = [{ id: t.id, deleted_at: null }];
+    const tripAllocations = await fetchTripCostAllocationsForVineyard(vineyard);
+    expect(tripAllocations.map((row) => row.id)).toEqual(["live"]);
+    const dataset = buildUnifiedCostDataset({ vineyardId: vineyard, trips: [t], tripAllocations, seasonStart: { month: 7, day: 1 } });
+    const rows = dataset.rows.filter((row) => row.source_type === "trip" && row.source_id === t.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).not.toBe("uncosted");
+    expect(rows[0].total_cost).toBe(70);
   });
 
   it("bounds parent reads without losing active allocations across batches", async () => {
