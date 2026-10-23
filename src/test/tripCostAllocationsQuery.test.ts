@@ -14,7 +14,7 @@ vi.mock("@/integrations/ios-supabase/client", () => ({
       const call = { table, ids: [] as string[], activeOnly: false, vineyard: null as string | null };
       state.calls.push(call);
       const result = () => table === "trip_cost_allocations"
-        ? { data: state.allocations.filter((row) => row.vineyard_id === call.vineyard), error: null }
+        ? { data: state.allocations.filter((row) => row.vineyard_id === call.vineyard && (!call.activeOnly || row.deleted_at == null)), error: null }
         : {
           data: state.parents.filter((row) => call.ids.includes(row.id) && (!call.activeOnly || row.deleted_at === null)).map(({ id }) => ({ id })),
           error: state.parentError ? { message: "Permission denied" } : null,
@@ -37,8 +37,15 @@ import { buildUnifiedCostDataset } from "@/lib/unifiedCostDataset";
 import { buildWorkTaskCostRollup } from "@/lib/workTaskCostRollup";
 
 const vineyard = "fe952afe-437f-4be7-8cbf-fdd8e630411c";
-const allocation = (id: string, tripId: string | null, total: number | null): TripCostAllocation => ({
-  id, vineyard_id: vineyard, trip_id: tripId, paddock_id: null, season_year: 2027, total_cost: total,
+const allocation = (id: string, tripId: string | null, total: number | null, deleted_at: string | null = null): TripCostAllocation => ({
+  id, vineyard_id: vineyard, trip_id: tripId, paddock_id: null, season_year: 2027, total_cost: total, deleted_at,
+});
+
+const completedTrip = (id: string) => ({
+  id, vineyard_id: vineyard, paddock_id: null, paddock_ids: [], paddock_name: null,
+  trip_function: "spraying", person_name: "Sam",
+  start_time: "2026-09-23T01:00:00Z", end_time: "2026-09-23T03:00:00Z",
+  is_active: false, deleted_at: null,
 });
 
 beforeEach(() => {
