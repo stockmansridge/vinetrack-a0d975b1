@@ -37,6 +37,17 @@ import {
 import { PORTAL_APP_TYPE, appTypeLabel } from "@/lib/portalClientActivity";
 import { AppTypeBadge } from "@/components/admin/AppTypeBadge";
 import {
+  ACTIVITY_STATUS_LABELS,
+  activityStatus,
+  hasNoActivityFor,
+  isActiveWithin,
+  lastActivityIso,
+  lastActivityMs,
+  matchesActivityFilter,
+  type ActivityFilter,
+  type ActivityStatus,
+} from "@/lib/userActivityStatus";
+import {
   groupPlatformsByUser,
   userUsedAppType,
   type PlatformActivityRow,
@@ -96,27 +107,12 @@ type ActivitySortKey =
   | "status";
 
 
-type LastLoginFilter =
-  | "all"
-  | "today"
-  | "7d"
-  | "30d"
-  | "never"
-  | "inactive30"
-  | "inactive90";
+type LastLoginFilter = ActivityFilter;
 
 
-const STATUS_LABELS: Record<string, string> = {
-  never: "Never logged in",
-  active_recent: "Active",
-  active_30d: "Active 30d",
-  inactive_30d: "Inactive 30d+",
-  inactive_90d: "Inactive 90d+",
-};
-
-function statusClass(s: string | null | undefined) {
-  switch ((s ?? "").toLowerCase()) {
-    case "active_recent":
+function statusClass(s: ActivityStatus) {
+  switch (s) {
+    case "active_7d":
       return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30";
     case "active_30d":
       return "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30";
@@ -124,8 +120,6 @@ function statusClass(s: string | null | undefined) {
       return "bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30";
     case "inactive_90d":
       return "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30";
-    case "never":
-      return "bg-muted text-muted-foreground border-border";
     default:
       return "bg-muted text-muted-foreground border-border";
   }
@@ -191,16 +185,6 @@ function lastSeenDisplay(r: UserActivityRow): React.ReactNode {
 }
 
 
-function isWithin(iso: string | null, days: number): boolean {
-  if (!iso) return false;
-  return Date.now() - new Date(iso).getTime() <= days * 24 * 60 * 60 * 1000;
-}
-
-function isOlderThan(iso: string | null, days: number): boolean {
-  if (!iso) return false;
-  return Date.now() - new Date(iso).getTime() > days * 24 * 60 * 60 * 1000;
-}
-
 function csvEscape(v: unknown): string {
   if (v == null) return "";
   const s = String(v);
@@ -224,7 +208,8 @@ function exportCsv(rows: UserActivityRow[]) {
     "last_device_model",
     "last_os_name",
     "last_os_version",
-    "status",
+    "last_activity_at",
+    "activity_status",
   ];
   const lines = [headers.join(",")];
   for (const r of rows) {
@@ -244,7 +229,8 @@ function exportCsv(rows: UserActivityRow[]) {
         r.last_device_model ?? "",
         r.last_os_name ?? "",
         r.last_os_version ?? "",
-        r.status ?? "",
+        lastActivityIso(r) ?? "",
+        activityStatus(r),
       ]
         .map(csvEscape)
         .join(","),
@@ -407,9 +393,10 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
     sortable: true,
     render: (r) => (
       <span
-        className={`inline-flex items-center px-2 py-0.5 rounded text-xs border ${statusClass(r.status)}`}
+        className={`inline-flex items-center px-2 py-0.5 rounded text-xs border ${statusClass(activityStatus(r))}`}
+        title={lastActivityIso(r) ? `Last activity ${formatDate(lastActivityIso(r))}` : undefined}
       >
-        {STATUS_LABELS[r.status ?? ""] ?? r.status ?? "—"}
+        {ACTIVITY_STATUS_LABELS[activityStatus(r)]}
       </span>
     ),
   },
@@ -470,8 +457,9 @@ export default function AdminUserActivityPage() {
     [data],
   );
   const statuses = useMemo(
-    () =>
-      Array.from(new Set(data.map((r) => r.status ?? "").filter(Boolean))).sort(),
+    () => (Object.keys(ACTIVITY_STATUS_LABELS) as ActivityStatus[]).filter((s) =>
+      data.some((r) => activityStatus(r) === s),
+    ),
     [data],
   );
 
@@ -486,15 +474,15 @@ export default function AdminUserActivityPage() {
     startOfToday.setHours(0, 0, 0, 0);
     const todayMs = startOfToday.getTime();
     for (const r of data) {
-      if (!r.last_sign_in_at) {
+      const t = lastActivityMs(r);
+      if (t === null) {
         never += 1;
         continue;
       }
-      const t = new Date(r.last_sign_in_at).getTime();
       if (t >= todayMs) today += 1;
-      if (isWithin(r.last_sign_in_at, 7)) last7 += 1;
-      if (isWithin(r.last_sign_in_at, 30)) last30 += 1;
-      if (isOlderThan(r.last_sign_in_at, 90)) inactive90 += 1;
+      if (isActiveWithin(r, 7)) last7 += 1;
+      if (isActiveWithin(r, 30)) last30 += 1;
+      if (hasNoActivityFor(r, 90)) inactive90 += 1;
     }
     return { total, today, last7, last30, never, inactive90 };
   }, [data]);
@@ -527,22 +515,8 @@ export default function AdminUserActivityPage() {
       if (vineyardFilter !== "all" && !(r.vineyard_names ?? []).includes(vineyardFilter))
         return false;
       if (roleFilter !== "all" && !(r.roles ?? []).includes(roleFilter)) return false;
-      if (statusFilter !== "all" && (r.status ?? "") !== statusFilter) return false;
-      if (loginFilter === "never" && r.last_sign_in_at) return false;
-      if (loginFilter === "today") {
-        const start = new Date();
-        start.setHours(0, 0, 0, 0);
-        if (!r.last_sign_in_at || new Date(r.last_sign_in_at).getTime() < start.getTime())
-          return false;
-      }
-      if (loginFilter === "7d" && !isWithin(r.last_sign_in_at, 7)) return false;
-      if (loginFilter === "30d" && !isWithin(r.last_sign_in_at, 30)) return false;
-      if (loginFilter === "inactive30") {
-        if (!r.last_sign_in_at || !isOlderThan(r.last_sign_in_at, 30)) return false;
-      }
-      if (loginFilter === "inactive90") {
-        if (!r.last_sign_in_at || !isOlderThan(r.last_sign_in_at, 90)) return false;
-      }
+      if (statusFilter !== "all" && activityStatus(r) !== statusFilter) return false;
+      if (!matchesActivityFilter(r, loginFilter)) return false;
       if (!platformsError && !userUsedAppType(r.platforms, appTypeFilter)) return false;
       if (!q) return true;
       return [r.display_name, r.email]
@@ -565,7 +539,7 @@ export default function AdminUserActivityPage() {
       app_version: (r) => r.last_app_version ?? "",
       device: (r) => r.last_device_model ?? "",
       os: (r) => osDisplay(r).toLowerCase(),
-      status: (r) => r.status ?? "",
+      status: (r) => lastActivityMs(r) ?? 0,
     },
 
     initial: { key: "last_login", direction: "desc" },
@@ -604,11 +578,11 @@ export default function AdminUserActivityPage() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
         <SummaryCard label="Total users" value={summary.total} />
-        <SummaryCard label="Logged in today" value={summary.today} tone="good" />
+        <SummaryCard label="Active today" value={summary.today} tone="good" />
         <SummaryCard label="Active 7d" value={summary.last7} tone="good" />
         <SummaryCard label="Active 30d" value={summary.last30} />
-        <SummaryCard label="Never logged in" value={summary.never} tone="muted" />
-        <SummaryCard label="Inactive 90d+" value={summary.inactive90} tone="bad" />
+        <SummaryCard label="Never active" value={summary.never} tone="muted" />
+        <SummaryCard label="No activity 90d+" value={summary.inactive90} tone="bad" />
       </div>
 
       <Card className="p-3 mb-3">
@@ -624,16 +598,16 @@ export default function AdminUserActivityPage() {
             onValueChange={(v) => setLoginFilter(v as LastLoginFilter)}
           >
             <SelectTrigger className="h-9 w-44">
-              <SelectValue placeholder="Last login" />
+              <SelectValue placeholder="Activity" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Any last login</SelectItem>
-              <SelectItem value="today">Today</SelectItem>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-              <SelectItem value="never">Never logged in</SelectItem>
-              <SelectItem value="inactive30">Inactive 30d+</SelectItem>
-              <SelectItem value="inactive90">Inactive 90d+</SelectItem>
+              <SelectItem value="all">Any activity</SelectItem>
+              <SelectItem value="today">Active today</SelectItem>
+              <SelectItem value="7d">Active last 7 days</SelectItem>
+              <SelectItem value="30d">Active last 30 days</SelectItem>
+              <SelectItem value="never">Never active</SelectItem>
+              <SelectItem value="inactive30">No activity 30d+</SelectItem>
+              <SelectItem value="inactive90">No activity 90d+</SelectItem>
             </SelectContent>
           </Select>
           {vineyards.length > 0 && (
@@ -675,7 +649,7 @@ export default function AdminUserActivityPage() {
                 <SelectItem value="all">All statuses</SelectItem>
                 {statuses.map((s) => (
                   <SelectItem key={s} value={s}>
-                    {STATUS_LABELS[s] ?? s}
+                    {ACTIVITY_STATUS_LABELS[s]}
                   </SelectItem>
                 ))}
               </SelectContent>

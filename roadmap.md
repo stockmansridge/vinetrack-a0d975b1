@@ -1,5 +1,11 @@
 # Roadmap
 
+## User Activity + expired-trial read-only
+- [x] Canonical last-activity status, cards, filters, sorting; 7 tests.
+- [x] Read-only vineyard mode: banner, central mutation guard, TrialEndedDialog, VT_READ_ONLY catch, allow-list; 9 tests.
+- [ ] Server: can_write/read_only_reason in get_my_vineyard_access_matrix and vineyard_write_allowed enforcement — blocked: shared SQL not in repo; spec in docs/vineyard-read-only-trial-contract.md.
+- [ ] Signed-in live check of expired-trial vineyard — blocked: no preview session.
+
 ## Labour Lines live-data hardening
 - [x] Classify audit parents and exclude invalid children from normal aggregate reads; backend unchanged.
 - [x] Add solid surfaces, review summary/status filter and historical parent details.

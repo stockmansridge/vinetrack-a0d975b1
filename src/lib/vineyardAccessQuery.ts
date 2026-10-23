@@ -1,3 +1,4 @@
+import { ALLOW_READ_ONLY } from "@/lib/vineyardWriteAccess";
 // Phase 2F — vineyard-scoped access.
 //
 // Access is resolved PER VINEYARD by the shared backend (SQL 155–158). The
@@ -84,6 +85,10 @@ export interface VineyardAccessRow {
   is_billing_authority: boolean;
   requires_billing_attention: boolean;
   last_verified_at: string | null;
+  /** Additive server field. Missing => true, so older backends keep full write access. */
+  can_write: boolean;
+  /** Additive server field, e.g. "trial_expired". Null when writable. */
+  read_only_reason: string | null;
 }
 
 export interface VineyardAccountAccessSummary {
@@ -125,6 +130,8 @@ function readRow(fn: string, raw: unknown): VineyardAccessRow {
     is_billing_authority: flag("is_billing_authority"),
     requires_billing_attention: flag("requires_billing_attention"),
     last_verified_at: str(r.last_verified_at),
+    can_write: flag("can_write", true),
+    read_only_reason: str(r.read_only_reason),
   };
 }
 
@@ -246,6 +253,7 @@ export function useAdminExplainVineyardAccess(
 export function useRefreshVineyardAccess() {
   const qc = useQueryClient();
   return useMutation({
+    meta: ALLOW_READ_ONLY,
     mutationFn: async () => {
       const keys = [
         VINEYARD_ACCESS_KEYS.root,
