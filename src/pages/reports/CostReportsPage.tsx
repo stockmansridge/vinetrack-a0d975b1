@@ -434,7 +434,8 @@ export default function CostReportsPage() {
     if (!selectedVineyardId || !seasons.length) return;
     if (defaultedSeasonForVineyard === selectedVineyardId) return;
     setDefaultedSeasonForVineyard(selectedVineyardId);
-    if (currentVintage != null && seasons.includes(currentVintage)) setSeason(String(currentVintage));
+    const def = defaultSeasonOption(seasons, currentVintage);
+    if (def != null) setSeason(String(def));
   }, [selectedVineyardId, seasons, currentVintage, defaultedSeasonForVineyard]);
 
   const paddocks = useMemo(
