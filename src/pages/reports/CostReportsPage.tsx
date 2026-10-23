@@ -21,6 +21,7 @@ import {
   type TripCostAllocation,
 } from "@/lib/tripCostAllocationsQuery";
 import { fetchList } from "@/lib/queries";
+import { fetchTripsForVineyard } from "@/lib/tripsQuery";
 import { fetchWorkTasksForVineyard, fetchLabourLinesForVineyard, fetchWorkTaskPaddocksForVineyard } from "@/lib/workTasksQuery";
 import { fetchWorkTaskMachineLinesForVineyard } from "@/lib/workTaskMachineLinesQuery";
 import { fetchEffectiveLabourCosts } from "@/lib/effectiveLabourCost";
@@ -140,6 +141,7 @@ function topNWithOther<T extends { name: string; value: number }>(
 
 function categorizeWarning(w: string): string {
   const s = w.toLowerCase();
+  if (s.includes("no saved cost allocation")) return "Uncosted trip";
   if (s.includes("labour") || s.includes("labor")) return "Missing labour rate";
   if (s.includes("fuel")) return "Missing fuel rate";
   if (s.includes("chemical") || s.includes("input")) return "Missing chemical/input cost";
@@ -228,15 +230,18 @@ export default function CostReportsPage() {
     queryFn: async () => {
       if (!selectedVineyardId) throw new Error("Select a vineyard.");
       const blocks = await fetchList<ReportBlock>("paddocks", selectedVineyardId);
-      const [tasks, labour, machine, effective, materials, links] = await Promise.all([
+      // Cross-vintage read (no season scope): the report derives each Trip's
+      // Vintage from the vineyard season boundary and filters afterwards.
+      const [tasks, labour, machine, effective, materials, links, trips] = await Promise.all([
         fetchWorkTasksForVineyard(selectedVineyardId, blocks.map((b) => b.id)),
         fetchLabourLinesForVineyard(selectedVineyardId),
         fetchWorkTaskMachineLinesForVineyard(selectedVineyardId),
         fetchEffectiveLabourCosts(selectedVineyardId),
         fetchWorkTaskMaterials(selectedVineyardId),
         fetchWorkTaskPaddocksForVineyard(selectedVineyardId),
+        fetchTripsForVineyard(selectedVineyardId, blocks.map((b) => b.id), null),
       ]);
-      return { blocks, tasks: tasks.tasks, labour, machine, effective, materials, links };
+      return { blocks, tasks: tasks.tasks, labour, machine, effective, materials, links, trips: trips.trips };
     },
   });
   const unified = useMemo(
@@ -244,6 +249,8 @@ export default function CostReportsPage() {
       buildUnifiedCostDataset({
         vineyardId: selectedVineyardId ?? "",
         tripAllocations: overlaidTripRows,
+        trips: reportTasksQ.data?.trips ?? [],
+        seasonStart: { month: seasonStartMonth, day: seasonStartDay },
         pruningRows,
         blocks: reportTasksQ.data?.blocks ?? [],
         taskPaddocks: reportTasksQ.data?.links ?? [],
@@ -1333,7 +1340,13 @@ export default function CostReportsPage() {
                     cost_ha: <TableCell className="text-right">{fmtMoneyPerArea(g.cost_per_ha)}</TableCell>,
                     cost_t: <TableCell className="text-right">{fmtMoney(g.cost_per_tonne)}</TableCell>,
                     trips: <TableCell className="text-right">{g.trip_count}</TableCell>,
-                    status: <TableCell>{g.status ? <Badge variant="outline">{g.status}</Badge> : "—"}</TableCell>,
+                    status: (
+                      <TableCell>
+                        {g.status === "uncosted" ? (
+                          <Badge variant="outline" className="text-amber-700 border-amber-400">Uncosted trip</Badge>
+                        ) : g.status ? <Badge variant="outline">{g.status}</Badge> : "—"}
+                      </TableCell>
+                    ),
                     warnings: (
                       <TableCell>
                         {g.warnings_count > 0 ? (
@@ -1391,15 +1404,23 @@ export default function CostReportsPage() {
                   {drill.contributing.map((r) => {
                     const warns = warningsList(r.warnings);
                     const stale = !!(r.calculated_at && r.trip_updated_at && r.trip_updated_at > r.calculated_at);
+                    const uncostedTrip = (r as CostRecord).unified?.source_type === "trip"
+                      && (r as CostRecord).unified?.status === "uncosted";
                     return (
                       <Card key={r.id} className="p-3 text-xs space-y-1">
                         <div className="flex items-center justify-between gap-2">
                           <div className="font-mono text-[11px] truncate">{r.trip_id ?? "—"}</div>
+                          {uncostedTrip && (
+                            <Badge variant="outline" className="text-amber-700 border-amber-400">Uncosted trip</Badge>
+                          )}
                           {stale && <Badge variant="outline">Stale</Badge>}
                         </div>
                         <div className="text-muted-foreground">
                           {tripFunctionLabel(r.trip_function) ?? "trip"} · {r.calculated_at ? rf.dateTime(r.calculated_at) : "—"}
                         </div>
+                        {uncostedTrip && (
+                          <div className="text-amber-700">Cost allocation missing — counted as completed work, excluded from cost totals.</div>
+                        )}
                         <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-1">
                           <DetailRow label="Area" value={fmtArea(r.allocation_area_ha)} small />
                           <DetailRow label="Total" value={fmtMoney(r.total_cost)} small bold />
