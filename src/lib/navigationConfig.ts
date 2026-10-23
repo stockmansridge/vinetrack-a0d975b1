@@ -468,7 +468,7 @@ export const ACTIVITIES: NavActivity[] = [
       { id: "reports.catalogue", label: "Report Catalogue", path: "/reports", keywords: ["reports", "catalogue"] },
       {
         id: "reports.costs",
-        label: "Cost Reports",
+        label: "Vineyard Costings",
         path: "/reports/costs",
         report: true,
         keywords: ["cost", "money", "expenses"],
