@@ -60,3 +60,34 @@ export function hasNoActivityFor(r: ActivityTimestamps, days: number, now = Date
   const t = lastActivityMs(r);
   return t !== null && now - t > days * DAY_MS;
 }
+
+export type ActivityFilter = "all" | "today" | "7d" | "30d" | "never" | "inactive30" | "inactive90";
+
+/** Activity filter, using the canonical last-activity timestamp (not last login). */
+export function matchesActivityFilter(
+  r: Parameters<typeof lastActivityMs>[0],
+  f: ActivityFilter,
+  now = Date.now(),
+): boolean {
+  const t = lastActivityMs(r);
+  switch (f) {
+    case "all":
+      return true;
+    case "never":
+      return t === null;
+    case "today": {
+      const start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      return t !== null && t >= start.getTime();
+    }
+    case "7d":
+      return isActiveWithin(r, 7, now);
+    case "30d":
+      return isActiveWithin(r, 30, now);
+    case "inactive30":
+      return hasNoActivityFor(r, 30, now);
+    case "inactive90":
+      return hasNoActivityFor(r, 90, now);
+  }
+}
+

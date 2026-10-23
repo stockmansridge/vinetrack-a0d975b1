@@ -43,6 +43,8 @@ import {
   isActiveWithin,
   lastActivityIso,
   lastActivityMs,
+  matchesActivityFilter,
+  type ActivityFilter,
   type ActivityStatus,
 } from "@/lib/userActivityStatus";
 import {
@@ -105,14 +107,7 @@ type ActivitySortKey =
   | "status";
 
 
-export type LastLoginFilter =
-  | "all"
-  | "today"
-  | "7d"
-  | "30d"
-  | "never"
-  | "inactive30"
-  | "inactive90";
+type LastLoginFilter = ActivityFilter;
 
 
 function statusClass(s: ActivityStatus) {
@@ -127,34 +122,6 @@ function statusClass(s: ActivityStatus) {
       return "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30";
     default:
       return "bg-muted text-muted-foreground border-border";
-  }
-}
-
-/** Activity filter, using the canonical last-activity timestamp (not last login). */
-export function matchesActivityFilter(
-  r: Parameters<typeof lastActivityMs>[0],
-  f: LastLoginFilter,
-  now = Date.now(),
-): boolean {
-  const t = lastActivityMs(r);
-  switch (f) {
-    case "all":
-      return true;
-    case "never":
-      return t === null;
-    case "today": {
-      const start = new Date(now);
-      start.setHours(0, 0, 0, 0);
-      return t !== null && t >= start.getTime();
-    }
-    case "7d":
-      return isActiveWithin(r, 7, now);
-    case "30d":
-      return isActiveWithin(r, 30, now);
-    case "inactive30":
-      return hasNoActivityFor(r, 30, now);
-    case "inactive90":
-      return hasNoActivityFor(r, 90, now);
   }
 }
 
