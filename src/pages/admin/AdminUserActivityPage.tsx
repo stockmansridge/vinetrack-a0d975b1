@@ -49,6 +49,8 @@ import {
 } from "@/lib/userActivityStatus";
 import {
   groupPlatformsByUser,
+  platformDetailsCsvField,
+  platformDetailsLine,
   userUsedAppType,
   type PlatformActivityRow,
 } from "@/lib/userActivityQuery";
@@ -77,7 +79,7 @@ interface UserActivityRow {
   last_device_model: string | null;
   last_client_seen_at: string | null;
   status: string | null;
-  /** Merged from admin_user_activity_platforms; undefined when that call failed. */
+  /** Merged from admin_user_activity_platform_details; undefined when that call failed. */
   platforms?: PlatformActivityRow[];
 }
 
@@ -126,7 +128,7 @@ function statusClass(s: ActivityStatus) {
 }
 
 async function fetchPlatformActivity(): Promise<PlatformActivityRow[]> {
-  const { data, error } = await (iosSupabase as any).rpc("admin_user_activity_platforms");
+  const { data, error } = await (iosSupabase as any).rpc("admin_user_activity_platform_details");
   if (error) throw error;
   return (data ?? []) as PlatformActivityRow[];
 }
@@ -135,16 +137,21 @@ function platformsDisplay(r: UserActivityRow): React.ReactNode {
   if (r.platforms === undefined) return <span className="text-muted-foreground">Unavailable</span>;
   if (r.platforms.length === 0) return <span className="text-muted-foreground">Not recorded</span>;
   return (
-    <div className="flex flex-col gap-1">
-      {r.platforms.map((p) => (
-        <div key={p.app_type} className="flex items-center gap-2 text-xs">
-          <AppTypeBadge appType={p.app_type} />
-          <span className="text-muted-foreground">
-            {p.last_seen_at ? formatRelative(p.last_seen_at) : "—"}
-            {p.browser_name ? ` · ${p.browser_name}${p.browser_version ? ` ${p.browser_version.split(".")[0]}` : ""}` : ""}
-          </span>
-        </div>
-      ))}
+    <div className="flex flex-col gap-1.5">
+      {r.platforms.map((p) => {
+        const details = platformDetailsLine(p);
+        return (
+          <div key={p.app_type} className="text-xs">
+            <div className="flex items-center gap-2">
+              <AppTypeBadge appType={p.app_type} />
+              {details ? <span className="text-foreground">{details}</span> : null}
+            </div>
+            <div className="text-muted-foreground pl-0.5">
+              {p.last_seen_at ? formatRelative(p.last_seen_at) : "—"}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -208,6 +215,7 @@ function exportCsv(rows: UserActivityRow[]) {
     "last_device_model",
     "last_os_name",
     "last_os_version",
+    "platforms_details",
     "last_activity_at",
     "activity_status",
   ];
@@ -229,6 +237,7 @@ function exportCsv(rows: UserActivityRow[]) {
         r.last_device_model ?? "",
         r.last_os_name ?? "",
         r.last_os_version ?? "",
+        platformDetailsCsvField(r.platforms),
         lastActivityIso(r) ?? "",
         activityStatus(r),
       ]
@@ -351,7 +360,7 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
   },
   {
     key: "platforms",
-    label: "Platforms used",
+    label: "Platforms & devices",
     className: "whitespace-nowrap",
     sortable: true,
     render: (r) => platformsDisplay(r),
