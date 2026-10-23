@@ -69,7 +69,7 @@ export default function ReportsIndexPage() {
                   </div>
                   <div className="min-w-0">
                     <h2 className="font-semibold leading-snug">
-                      {r.activity.label} — {r.title}
+                      {CARD_TITLES[r.path] ?? `${r.activity.label} — ${r.title}`}
                     </h2>
                     <span className="text-xs font-medium text-report">Available</span>
                   </div>
