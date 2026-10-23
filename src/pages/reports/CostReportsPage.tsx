@@ -1340,7 +1340,13 @@ export default function CostReportsPage() {
                     cost_ha: <TableCell className="text-right">{fmtMoneyPerArea(g.cost_per_ha)}</TableCell>,
                     cost_t: <TableCell className="text-right">{fmtMoney(g.cost_per_tonne)}</TableCell>,
                     trips: <TableCell className="text-right">{g.trip_count}</TableCell>,
-                    status: <TableCell>{g.status ? <Badge variant="outline">{g.status}</Badge> : "—"}</TableCell>,
+                    status: (
+                      <TableCell>
+                        {g.status === "uncosted" ? (
+                          <Badge variant="outline" className="text-amber-700 border-amber-400">Uncosted trip</Badge>
+                        ) : g.status ? <Badge variant="outline">{g.status}</Badge> : "—"}
+                      </TableCell>
+                    ),
                     warnings: (
                       <TableCell>
                         {g.warnings_count > 0 ? (
