@@ -5,7 +5,7 @@
 // a scenario. Overrides are in-memory only — nothing is written back — and
 // "Reset to estimates" restores every block to the estimate.
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import type { SeasonYieldBlockEstimate } from "@/lib/seasonYieldContract";
 import {
   buildBlockScenarioRows,
@@ -24,7 +24,10 @@ import {
 const fmtT = (v: number | null | undefined): string =>
   v == null || !Number.isFinite(v)
     ? "—"
-    : `${v.toLocaleString(undefined, { maximumFractionDigits: 2 })} t`;
+    : `${v.toLocaleString(undefined, { maximumFractionDigits: 3 })} t`;
+
+const fmt3 = (v: number | null) =>
+  v == null ? "" : String(Math.round(v * 1000) / 1000);
 
 /** Editable tonnes cell. Commits valid numbers (≥ 0) as the user types;
  *  empty clears the override (back to the estimate); invalid text reverts on blur. */
@@ -37,9 +40,9 @@ function TonnesInput({
   onCommit: (v: number | null) => void;
   ariaLabel: string;
 }) {
-  const [text, setText] = useState(value == null ? "" : String(value));
+  const [text, setText] = useState(fmt3(value));
   useEffect(() => {
-    setText(value == null ? "" : String(value));
+    setText(fmt3(value));
   }, [value]);
   const parsed = text.trim() === "" ? null : Number(text);
   const valid = text.trim() === "" || (Number.isFinite(parsed) && (parsed as number) >= 0);
@@ -53,12 +56,13 @@ function TonnesInput({
       className={`h-8 w-24 text-right ml-auto ${valid ? "" : "border-destructive"}`}
       onChange={(e) => {
         const t = e.target.value;
+        if (/\.\d{4,}$/.test(t.trim())) return; // cap at 3 decimals
         setText(t);
         const n = t.trim() === "" ? null : Number(t);
         if (t.trim() === "" || (Number.isFinite(n) && (n as number) >= 0)) onCommit(n);
       }}
       onBlur={() => {
-        if (!valid) setText(value == null ? "" : String(value));
+        if (!valid) setText(fmt3(value));
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
@@ -102,8 +106,8 @@ export default function EstimatedYieldTab({
     [blocks, costByBlockId, overrides],
   );
   const varietyRows = useMemo(
-    () => buildVarietyScenarioRows(blocks, costByVariety, overrides),
-    [blocks, costByVariety, overrides],
+    () => buildVarietyScenarioRows(blocks, costByBlockId, overrides),
+    [blocks, costByBlockId, overrides],
   );
   const totals = useMemo(() => scenarioTotals(blockRows), [blockRows]);
 
@@ -180,7 +184,6 @@ export default function EstimatedYieldTab({
               <TableHead className="text-right">Scenario tonnes</TableHead>
               <TableHead className="text-right">Total cost</TableHead>
               <TableHead className="text-right">Cost/t</TableHead>
-              <TableHead className="text-right">Warnings</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -219,13 +222,6 @@ export default function EstimatedYieldTab({
                 </TableCell>
                 <TableCell className="text-right">{money(b.totalCost)}</TableCell>
                 <TableCell className="text-right font-medium">{money(b.costPerTonne)}</TableCell>
-                <TableCell className="text-right">
-                  {b.warnings.length > 0 ? (
-                    <span className="inline-flex items-center gap-1 text-amber-600">
-                      <AlertTriangle className="h-3 w-3" />{b.warnings.length}
-                    </span>
-                  ) : "—"}
-                </TableCell>
               </TableRow>
             ))}
           </TableBody>
