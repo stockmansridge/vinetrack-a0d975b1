@@ -190,3 +190,14 @@ export function workTaskTypeBadgeClass(name?: string | null): string {
 export function workTaskTypeDotClass(name?: string | null): string {
   return DOT_CLASS[workTaskTypeColorKey(name)];
 }
+
+/** Badge classes straight from a colour key, for callers (like trip
+ *  functions) that resolve to a task colour family themselves. */
+export function workTaskTypeBadgeClassForKey(key: WorkTaskTypeColorKey): string {
+  return BADGE_CLASS[key];
+}
+
+/** Dot classes straight from a colour key. */
+export function workTaskTypeDotClassForKey(key: WorkTaskTypeColorKey): string {
+  return DOT_CLASS[key];
+}
