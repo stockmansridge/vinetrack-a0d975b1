@@ -133,25 +133,24 @@ async function fetchPlatformActivity(): Promise<PlatformActivityRow[]> {
   return (data ?? []) as PlatformActivityRow[];
 }
 
-function platformsDisplay(r: UserActivityRow): React.ReactNode {
+/**
+ * One stacked cell per platform, aligned across the platform columns: every
+ * stack uses the same newest-first r.platforms array and a fixed minimum row
+ * height so Android/iOS/Portal entries line up horizontally.
+ */
+function platformStack(
+  r: UserActivityRow,
+  render: (p: PlatformActivityRow) => React.ReactNode,
+): React.ReactNode {
   if (r.platforms === undefined) return <span className="text-muted-foreground">Unavailable</span>;
   if (r.platforms.length === 0) return <span className="text-muted-foreground">Not recorded</span>;
   return (
     <div className="flex flex-col gap-1.5">
-      {r.platforms.map((p) => {
-        const details = platformDetailsLine(p);
-        return (
-          <div key={p.app_type} className="text-xs">
-            <div className="flex items-center gap-2">
-              <AppTypeBadge appType={p.app_type} />
-              {details ? <span className="text-foreground">{details}</span> : null}
-            </div>
-            <div className="text-muted-foreground pl-0.5">
-              {p.last_seen_at ? formatRelative(p.last_seen_at) : "—"}
-            </div>
-          </div>
-        );
-      })}
+      {r.platforms.map((p) => (
+        <div key={p.app_type} className="flex min-h-[24px] items-center text-xs">
+          {render(p)}
+        </div>
+      ))}
     </div>
   );
 }
