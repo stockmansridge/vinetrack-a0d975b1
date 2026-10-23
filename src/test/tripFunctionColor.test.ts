@@ -22,9 +22,16 @@ describe("trip function colour coding", () => {
     expect(tripFunctionColorKey("other")).toBe("other");
   });
 
-  it("gives the distinct function labels distinct colour families", () => {
-    const keys = Object.keys(TRIP_FUNCTION_LABELS).map(tripFunctionColorKey);
-    expect(new Set(keys).size).toBe(new Set(TRIP_FUNCTION_LABELS.values()).size);
+  it("gives the distinct function families distinct colours", () => {
+    // One representative per label family; harrowing/interRow share soil and
+    // spreading/fertiliser share nutrient by design, like the work tasks.
+    const families = ["spray", "slashing", "mulching", "harrowing", "mowing", "seeding",
+      "spreading", "fertiliser", "undervineWeeding", "interRowCultivation", "pruning",
+      "shootThinning", "canopyWork", "irrigationCheck", "repairs", "other"];
+    const keys = families.map(tripFunctionColorKey);
+    expect(new Set(keys).size).toBe(14);
+    // Mowing and undervine mowing look different from the ground family here.
+    expect(tripFunctionColorKey("mowing")).not.toBe(tripFunctionColorKey("undervineWeeding"));
   });
 
   it("colours unknown functions deterministically without inventing data", () => {
