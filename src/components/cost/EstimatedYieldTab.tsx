@@ -24,7 +24,10 @@ import {
 const fmtT = (v: number | null | undefined): string =>
   v == null || !Number.isFinite(v)
     ? "—"
-    : `${v.toLocaleString(undefined, { maximumFractionDigits: 2 })} t`;
+    : `${v.toLocaleString(undefined, { maximumFractionDigits: 3 })} t`;
+
+const fmt3 = (v: number | null) =>
+  v == null ? "" : String(Math.round(v * 1000) / 1000);
 
 /** Editable tonnes cell. Commits valid numbers (≥ 0) as the user types;
  *  empty clears the override (back to the estimate); invalid text reverts on blur. */
@@ -37,9 +40,9 @@ function TonnesInput({
   onCommit: (v: number | null) => void;
   ariaLabel: string;
 }) {
-  const [text, setText] = useState(value == null ? "" : String(value));
+  const [text, setText] = useState(fmt3(value));
   useEffect(() => {
-    setText(value == null ? "" : String(value));
+    setText(fmt3(value));
   }, [value]);
   const parsed = text.trim() === "" ? null : Number(text);
   const valid = text.trim() === "" || (Number.isFinite(parsed) && (parsed as number) >= 0);
@@ -58,7 +61,7 @@ function TonnesInput({
         if (t.trim() === "" || (Number.isFinite(n) && (n as number) >= 0)) onCommit(n);
       }}
       onBlur={() => {
-        if (!valid) setText(value == null ? "" : String(value));
+        if (!valid) setText(fmt3(value));
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
@@ -102,8 +105,8 @@ export default function EstimatedYieldTab({
     [blocks, costByBlockId, overrides],
   );
   const varietyRows = useMemo(
-    () => buildVarietyScenarioRows(blocks, costByVariety, overrides),
-    [blocks, costByVariety, overrides],
+    () => buildVarietyScenarioRows(blocks, costByBlockId, overrides),
+    [blocks, costByBlockId, overrides],
   );
   const totals = useMemo(() => scenarioTotals(blockRows), [blockRows]);
 

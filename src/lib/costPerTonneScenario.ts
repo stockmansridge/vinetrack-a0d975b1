@@ -93,13 +93,17 @@ export function buildBlockScenarioRows(
  */
 export function buildVarietyScenarioRows(
   blocks: SeasonYieldBlockEstimate[],
-  costByVariety: ReadonlyMap<string, number>,
+  costByBlockId: ReadonlyMap<string, number>,
   overrides: ReadonlyMap<string, number>,
 ): VarietyScenarioRow[] {
   const map = new Map<string, VarietyScenarioRow & { complete: boolean }>();
   for (const b of blocks) {
     const { tonnes } = effectiveBlockTonnes(b, overrides);
     const shares = splitBlockEstimateToGroups(b, tonnes);
+    // Block cost follows the same planting split (estimate shares, independent
+    // of scenario tonnes) so variety costs always sum back to the block costs.
+    const costShares = splitBlockEstimateToGroups(b, 1);
+    const blockCost = costByBlockId.get(b.paddockId) ?? null;
     b.groups.forEach((g, i) => {
       const key = (g.varietyKey ?? g.varietyName ?? "").trim().toLowerCase();
       if (!key) return;
@@ -110,11 +114,15 @@ export function buildVarietyScenarioRows(
           varietyName: g.varietyName ?? key,
           tonnes: 0,
           knownTonnes: 0,
-          totalCost: costByVariety.get(key) ?? null,
+          totalCost: null,
           costPerTonne: null,
           complete: true,
         };
         map.set(key, row);
+      }
+      const frac = costShares[i];
+      if (blockCost != null && frac != null) {
+        row.totalCost = (row.totalCost ?? 0) + blockCost * frac;
       }
       const share = shares[i] ?? null;
       if (share != null) {
