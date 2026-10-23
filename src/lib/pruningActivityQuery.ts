@@ -459,7 +459,7 @@ export function usePruningActivity(vineyardId: string | null) {
 
       const labourByTask = new Map<string, { hours: number; cost: number }>();
       labour.forEach((l) => {
-        if (!l.work_task_id) return;
+        if (!l.work_task_id || !taskById.has(l.work_task_id)) return;
         const acc = labourByTask.get(l.work_task_id) ?? { hours: 0, cost: 0 };
         acc.hours += Number(l.total_hours ?? 0);
         acc.cost += Number(l.total_cost ?? 0);
@@ -496,11 +496,11 @@ export function usePruningActivity(vineyardId: string | null) {
         const rowEq = Number(e.row_equivalents_completed ?? 0);
 
         const task = e.work_task_id ? taskById.get(e.work_task_id) ?? null : null;
-        const taskLabour = e.work_task_id ? labourByTask.get(e.work_task_id) ?? null : null;
+        const taskLabour = task ? labourByTask.get(task.id) ?? null : null;
         // Canonical task labour cost (SQL 189): backend effective cost when the
         // view is available, otherwise the identical local SQL 188 rule.
-        const backendCost = e.work_task_id ? effectiveCosts.get(e.work_task_id) ?? null : null;
-        const resolved = task || backendCost
+        const backendCost = task ? effectiveCosts.get(task.id) ?? null : null;
+        const resolved = task
           ? resolveEffectiveLabourCost(task, taskLabour ? taskLabour.cost : null, backendCost)
           : null;
         const canonicalCost = resolved?.cost ?? null;
