@@ -74,7 +74,7 @@ describe("active-parent trip allocation reporting", () => {
   it("does not reinstate deleted GPS cost through the Work Task rollup or central report", async () => {
     const tripAllocations = await fetchTripCostAllocationsForVineyard(vineyard);
     const input = {
-      task: { id: "task", vineyard_id: vineyard, vintage_year: 2027, task_type: "Shoot thinning", date: "2026-08-28" },
+      task: { id: "task", vineyard_id: vineyard, vintage_year: 2027, task_type: "Shoot thinning", date: "2026-08-28", costing_method: null },
       labourLines: [{ id: "labour", vineyard_id: vineyard, work_task_id: "task", total_cost: 18937 }],
       machineLines: [{ id: "machine", vineyard_id: vineyard, work_task_id: "task", total_machine_cost: 0, fuel_cost: 20.79 }],
       tripAllocations,
