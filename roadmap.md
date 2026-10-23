@@ -1,5 +1,10 @@
 # Roadmap
 
+## Labour Lines live-data hardening
+- [ ] Classify audit parents and exclude invalid children from normal aggregate reads; keep backend unchanged.
+- [ ] Add solid surfaces, review summary/status filter and historical parent details.
+- [ ] Run focused eligibility/report/UI regressions and verify available preview evidence.
+
 ## Work Task labour-line register
 - [x] Add vineyard-wide active Labour Lines view, filters, parent-task links and cost visibility.
 - [x] Share confirmed canonical soft deletion across register and task drawer; refresh dependent totals and local drawer rows.

@@ -26,6 +26,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { taskLabourCost, resolveCostingMethod, type CostingMethod } from "@/lib/pieceRateCosting";
+import { fetchWorkTasksByIds } from "@/lib/workTasksQuery";
 
 export type LabourCostSource =
   | "piece_rate"
@@ -68,9 +69,13 @@ export async function fetchEffectiveLabourCosts(
     )
     .eq("vineyard_id", vineyardId);
   if (error) return new Map();
+  const rows = (data ?? []) as unknown as EffectiveLabourCostRow[];
+  // SQL 189 may retain deleted tasks: eligibility is checked without changing its arithmetic.
+  const parents = await fetchWorkTasksByIds(rows.map((row) => row.work_task_id));
+  const activeIds = new Set(parents.filter((task) => !task.deleted_at).map((task) => task.id));
   const map = new Map<string, EffectiveLabourCostRow>();
-  ((data ?? []) as unknown as EffectiveLabourCostRow[]).forEach((r) => {
-    if (r?.work_task_id) map.set(r.work_task_id, r);
+  rows.forEach((r) => {
+    if (r?.work_task_id && activeIds.has(r.work_task_id)) map.set(r.work_task_id, r);
   });
   return map;
 }
@@ -79,7 +84,7 @@ export function useEffectiveLabourCosts(vineyardId: string | null) {
   return useQuery({
     queryKey: ["work-task-effective-labour-cost", vineyardId],
     enabled: !!vineyardId,
-    queryFn: () => fetchEffectiveLabourCosts(vineyardId!),
+    queryFn: () => vineyardId ? fetchEffectiveLabourCosts(vineyardId) : Promise.resolve(new Map<string, EffectiveLabourCostRow>()),
   });
 }
 
