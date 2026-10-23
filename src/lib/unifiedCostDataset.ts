@@ -20,7 +20,8 @@
 //     (row-equivalent share) produced by `pruningActivityAllocation.ts`;
 //   * the parent activity cost is counted once (allocations sum back to it);
 //   * work tasks consumed by a pruning activity are recorded in
-//     `linkedWorkTaskIds` so no other source may import them again.
+//     `linkedWorkTaskIds` so their labour is not imported again; manual
+//     machinery/fuel and frozen materials remain task-owned components.
 //
 // Vintage is the primary crop-cost grouping. `vintage_year` is discovered
 // dynamically from the included rows — never hard-coded, never derived only
@@ -300,7 +301,7 @@ export function buildUnifiedCostDataset({
         block_name: block?.name ?? task.paddock_name ?? (a.blockId ? null : "Unallocated"),
         variety: null, function: (task.task_type ?? "unknown").toLowerCase(), worker: null,
         work_task_id: task.id,
-        allocation_area_ha: linkedPruning.length ? 0 : a.areaHa ?? 0,
+        allocation_area_ha: linkedPruning.some((r) => r.block_id === a.blockId) ? 0 : a.areaHa ?? 0,
         yield_tonnes: 0, labour_cost: labour * a.share, fuel_cost: rollup.machineFuel * a.share,
         chemical_cost: 0, input_cost: 0,
         other_cost: (rollup.machineCharge + rollup.materialCost) * a.share,

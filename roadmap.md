@@ -1,9 +1,10 @@
 # Roadmap
 
 ## Portal costing/report correction
-- [ ] Include normal Work Tasks with component-level pruning/trip deduplication.
-- [ ] Share evidence-based area/block allocation resolution across both reports.
-- [ ] Count distinct trips and run focused reconciliation regressions; no production writes or publication.
+- [x] Include normal Work Tasks with component-level pruning/trip deduplication.
+- [x] Share evidence-based area/block allocation resolution across both reports; no conversion of row equivalents to invented hectares.
+- [x] Count distinct trips and run focused reconciliation regressions; no production writes or publication.
+- [ ] Verify Stockman's Ridge live report reconciliation — blocked: managed preview has no auth users and no available shared-vineyard session; owner-supplied figures are covered by an offline fixture only.
 
 ## Tractor photo automation
 - [x] Add Edit Tractor upload preview only; search controls and external Google Images link removed at owner request; 4 focused tests passed, unpublished.

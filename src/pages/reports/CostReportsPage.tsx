@@ -1312,6 +1312,7 @@ export default function CostReportsPage() {
                           <DetailRow label="Fuel" value={fmtMoney(r.fuel_cost)} small />
                           <DetailRow label="Chemical" value={fmtMoney(r.chemical_cost)} small />
                           <DetailRow label="Input" value={fmtMoney(r.input_cost)} small />
+                          {(r as CostRecord).unified?.other_cost > 0 && <DetailRow label="Machinery / materials" value={fmtMoney((r as CostRecord).unified.other_cost)} small />}
                         </div>
                         {warns.length > 0 && (
                           <ul className="text-[11px] mt-1 space-y-0.5 list-disc list-inside text-amber-700">
