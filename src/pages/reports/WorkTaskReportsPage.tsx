@@ -1031,26 +1031,8 @@ export default function WorkTaskReportsPage() {
     toast({ title: "Excel exported", description: `${filtered.length} task${filtered.length === 1 ? "" : "s"} exported.` });
   };
 
-  // -------------------- Block / paddock allocation (Stage 5H) --------------------
-  // Per-task area-share allocation, aggregated by block/paddock across the
-  // currently filtered task set. Read-only — nothing is written back to the
-  // database and the existing task-level roll-up is untouched.
-  //
-  // For each task in `filtered`:
-  //   totalTaskAreaHa = the same area precedence used in the task summary
-  //     (task.area_ha > 0  →  Σ work_task_paddocks.area_ha > 0  →  Σ paddock entity area_ha > 0  → null)
-  //   for each linked paddock:
-  //     paddockAreaHa = work_task_paddocks.area_ha (if > 0) else paddock.area_ha (if > 0) else null
-  //     share         = paddockAreaHa / totalTaskAreaHa
-  //     allocated*    = task* × share
-  //
-  // If totalTaskAreaHa is missing/zero, the whole task is added to an
-  // "Unallocated" bucket so totals still reconcile against the task summary.
-  // If a single block has no resolvable area but the task does, that block
-  // contributes 0 cost and is flagged "Missing block area".
-  // Allocation types are declared at module scope (see below) so the
-  // AllocationContributions helper component can share them.
-
+  // Shared read-only allocation: stored areas / mapped geometry and canonical
+  // pruning shares. Unknown hectares stay unknown; costs remain reconciled.
   const allocationRows = useMemo<AllocRow[]>(() => {
     const map = new Map<string, AllocRow>();
     const ensure = (paddockId: string | null, name: string, isUnallocated: boolean): AllocRow => {
@@ -1535,16 +1517,21 @@ export default function WorkTaskReportsPage() {
 
   const loading =
     tasksQ.isLoading || labourQ.isLoading || machineQ.isLoading ||
-    wtPaddocksQ.isLoading || tripsQ.isLoading || (canSeeCosts && (allocQ.isLoading || allocOverlay.isLoading));
+    wtPaddocksQ.isLoading || tripsQ.isLoading || pruningQ.isLoading ||
+    (canSeeCosts && (allocQ.isLoading || allocOverlay.isLoading || materialsQ.isLoading || effectiveCostQ.isLoading));
 
   return (
     <div className="p-6 space-y-4 w-full">
+      {(materialsQ.isError || pruningQ.isError) && (
+        <div role="alert" className="text-sm text-destructive">
+          Some cost or allocation details could not be loaded. Reload this report before relying on its totals.
+        </div>
+      )}
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Work Task Reports</h1>
         <p className="text-sm text-muted-foreground">
           Task-level roll-up of manual labour, manual machine work and linked
-          GPS trips. Read-only — totals are not written back to the database
-          and existing Cost Reports are unchanged.
+          GPS trips and materials. Read-only — totals are not written back to the database.
         </p>
         {canSeeCosts && (
           <p className="text-xs text-muted-foreground flex items-start gap-1">

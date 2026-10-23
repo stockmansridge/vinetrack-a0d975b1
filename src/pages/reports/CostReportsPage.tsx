@@ -212,7 +212,7 @@ export default function CostReportsPage() {
 
   // Pruning activity labour is an operational cost recorded outside field
   // trips. It is included through its reconciled per-block allocations.
-  const { data: pruningRows = [] } = usePruningActivity(
+  const { data: pruningRows = [], isLoading: pruningLoading, isError: pruningError } = usePruningActivity(
     canSeeCosts ? selectedVineyardId : null,
   );
 
@@ -749,11 +749,17 @@ export default function CostReportsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Cost Reports</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Unified operational costs — field trips and pruning activity labour —
+            Unified operational costs — Work Tasks, field trips and pruning activity labour —
             grouped by vintage. Filters apply across every tab.
           </p>
         </div>
       </div>
+
+      {(reportTasksQ.isError || pruningError) && (
+        <Alert variant="destructive"><AlertTitle>Work Task costs could not be loaded</AlertTitle>
+          <AlertDescription>The totals are incomplete. Reload this report to try again.</AlertDescription>
+        </Alert>
+      )}
 
       {selectedVineyardId && <CostingSetupWizard vineyardId={selectedVineyardId} />}
 
@@ -1193,10 +1199,10 @@ export default function CostReportsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(isLoading || overlayLoading || reportTasksQ.isLoading) && (
+                {(isLoading || overlayLoading || reportTasksQ.isLoading || pruningLoading) && (
                   <TableRow><TableCell colSpan={visibleCostOrder.length} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
                 )}
-                {!isLoading && !overlayLoading && !reportTasksQ.isLoading && filteredSorted.length === 0 && (
+                {!isLoading && !overlayLoading && !reportTasksQ.isLoading && !pruningLoading && filteredSorted.length === 0 && (
                   <TableRow><TableCell colSpan={visibleCostOrder.length} className="text-center text-muted-foreground py-8">
                     No cost allocations match these filters.
                   </TableCell></TableRow>
@@ -1322,11 +1328,6 @@ export default function CostReportsPage() {
         </SheetContent>
       </Sheet>
 
-      {reportTasksQ.isError && (
-        <Alert variant="destructive"><AlertTitle>Work Task costs could not be loaded</AlertTitle>
-          <AlertDescription>The totals are incomplete. Reload this report to try again.</AlertDescription>
-        </Alert>
-      )}
       {/* Warning-type drill sheet */}
       <Sheet open={!!warningDrill} onOpenChange={(o) => !o && setWarningDrill(null)}>
         <SheetContent className="sm:max-w-lg overflow-y-auto">
