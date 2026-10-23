@@ -4,6 +4,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import type { SearchDestination } from "@/lib/navigationConfig";
 import ReportsIndexPage from "@/pages/reports/ReportsIndexPage";
 
 vi.mock("@/hooks/useNavViewer", () => ({
@@ -22,7 +23,7 @@ vi.mock("@/lib/navigationConfig", async (importOriginal) => {
         keywords: [],
         view: { id: "reports.costs", label: "Vineyard Costings", report: true },
         activity: { id: "reports", label: "Reports & Exports", icon: () => null, views: [] },
-      } as unknown as Parameters<typeof original.reportDestinations>[0][number],
+      } as unknown as SearchDestination,
     ],
   };
 });
