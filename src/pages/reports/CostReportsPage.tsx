@@ -36,6 +36,9 @@ import {
   buildUnifiedCostDataset,
   type UnifiedCostRow,
 } from "@/lib/unifiedCostDataset";
+import { useSeasonYieldBaseOverview } from "@/lib/seasonYieldQuery";
+import { buildSeasonYieldEstimates } from "@/lib/seasonYieldContract";
+import EstimatedYieldTab from "@/components/cost/EstimatedYieldTab";
 
 /** Allocation-shaped adapter over a unified cost row. */
 type CostRecord = TripCostAllocation & {
@@ -856,6 +859,7 @@ export default function CostReportsPage() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="blocks">{rf.blockLabel}s</TabsTrigger>
           <TabsTrigger value="varieties">Varieties</TabsTrigger>
+          <TabsTrigger value="yield">Estimated Yield</TabsTrigger>
           <TabsTrigger value="functions">Functions</TabsTrigger>
           <TabsTrigger value="equipment">Equipment &amp; Fuel</TabsTrigger>
           <TabsTrigger value="warnings">
