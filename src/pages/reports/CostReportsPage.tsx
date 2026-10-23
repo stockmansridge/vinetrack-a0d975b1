@@ -36,6 +36,9 @@ import {
   buildUnifiedCostDataset,
   type UnifiedCostRow,
 } from "@/lib/unifiedCostDataset";
+import { useSeasonYieldBaseOverview } from "@/lib/seasonYieldQuery";
+import { buildSeasonYieldEstimates } from "@/lib/seasonYieldContract";
+import EstimatedYieldTab from "@/components/cost/EstimatedYieldTab";
 
 /** Allocation-shaped adapter over a unified cost row. */
 type CostRecord = TripCostAllocation & {
@@ -543,6 +546,33 @@ export default function CostReportsPage() {
     }));
   }, [filtered]);
 
+  // ---- Estimated Yield scenario tab --------------------------------------
+  // Default tonnes come from the canonical seasonal base estimate (SQL 221)
+  // for the filtered Vintage (current Vintage when the filter is "All"). The
+  // tab's tonne overrides are in-memory only — nothing is written back.
+  const yieldVintage = season !== ANY ? Number(season) : currentVintage ?? null;
+  const seasonOverviewQ = useSeasonYieldBaseOverview(
+    canSeeCosts ? selectedVineyardId : null,
+    yieldVintage,
+  );
+  const seasonModel = useMemo(
+    () => buildSeasonYieldEstimates({ overview: seasonOverviewQ.data ?? null, applyDamage: false }),
+    [seasonOverviewQ.data],
+  );
+  const costByBlockId = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const g of filtered) {
+      if (!g.paddock_id) continue;
+      m.set(g.paddock_id, (m.get(g.paddock_id) ?? 0) + g.total_cost);
+    }
+    return m;
+  }, [filtered]);
+  const costByVariety = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const v of byVariety) m.set(v.name.toLowerCase(), v.total);
+    return m;
+  }, [byVariety]);
+
   const byFunction = useMemo(() => {
     const map = new Map<string, {
       fn: string; label: string; total: number; warnings: number; tripSet: Set<string>;
@@ -856,6 +886,7 @@ export default function CostReportsPage() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="blocks">{rf.blockLabel}s</TabsTrigger>
           <TabsTrigger value="varieties">Varieties</TabsTrigger>
+          <TabsTrigger value="yield">Estimated Yield</TabsTrigger>
           <TabsTrigger value="functions">Functions</TabsTrigger>
           <TabsTrigger value="equipment">Equipment &amp; Fuel</TabsTrigger>
           <TabsTrigger value="warnings">
@@ -1128,6 +1159,18 @@ export default function CostReportsPage() {
               </TableBody>
             </Table>
           </Card>
+        </TabsContent>
+
+        {/* ------------------ ESTIMATED YIELD ------------------ */}
+        <TabsContent value="yield" className="space-y-6">
+          <EstimatedYieldTab
+            key={yieldVintage ?? "none"}
+            blocks={seasonModel.blocks}
+            costByBlockId={costByBlockId}
+            costByVariety={costByVariety}
+            vintage={yieldVintage}
+            loading={seasonOverviewQ.isLoading}
+          />
         </TabsContent>
 
         {/* ------------------ FUNCTIONS ------------------ */}
