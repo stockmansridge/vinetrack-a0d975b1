@@ -31,6 +31,8 @@ import type { PruningActivityRow } from "@/lib/pruningActivityQuery";
 import { buildWorkTaskCostRollup, type WorkTaskCostRollupInput } from "@/lib/workTaskCostRollup";
 import { resolveWorkTaskReportAllocation, pruningTaskIds, type ReportBlock } from "@/lib/workTaskReportAllocation";
 import type { WorkTask, WorkTaskPaddock } from "@/lib/workTasksQuery";
+import type { Trip } from "@/lib/tripsQuery";
+import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 
 export type CostSourceType = "trip" | "pruning_activity" | "work_task";
 
