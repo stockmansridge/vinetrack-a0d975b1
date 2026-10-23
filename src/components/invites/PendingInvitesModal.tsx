@@ -1,3 +1,4 @@
+import { ALLOW_READ_ONLY } from "@/lib/vineyardWriteAccess";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -52,6 +53,7 @@ function usePendingInviteActions(invites: PendingInvite[]) {
   const navigate = useNavigate();
 
   const accept = useMutation({
+    meta: ALLOW_READ_ONLY,
     mutationFn: async (id: string) => acceptInvitation(id),
     onSuccess: async (_d, id) => {
       const inv = invites.find((i) => i.id === id);
@@ -93,6 +95,7 @@ function usePendingInviteActions(invites: PendingInvite[]) {
   });
 
   const decline = useMutation({
+    meta: ALLOW_READ_ONLY,
     mutationFn: async (id: string) => declineInvitation(id),
     onSuccess: async () => {
       clearDismissedInvites();

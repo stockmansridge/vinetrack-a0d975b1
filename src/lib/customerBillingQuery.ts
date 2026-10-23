@@ -1,3 +1,4 @@
+import { ALLOW_READ_ONLY } from "@/lib/vineyardWriteAccess";
 // Phase 2E — Vineyard Owner billing (customer-facing, portal only).
 //
 // Every value on /account/billing comes from the SQL 152/153 RPCs and the two
@@ -496,6 +497,7 @@ function edgeError(error: unknown, data: unknown): string {
  *  and never persisted in state, cache or storage. */
 export function useStripePortalSession() {
   return useMutation({
+    meta: ALLOW_READ_ONLY,
     mutationFn: async (vineyardId: string): Promise<string> => {
       const { data, error } = await supabase.functions.invoke(
         "create-stripe-customer-portal-session",
@@ -520,6 +522,7 @@ export interface InvoiceLinkRequest {
 /** Mints an invoice link on demand. Nothing is cached or stored. */
 export function useInvoiceLink() {
   return useMutation({
+    meta: ALLOW_READ_ONLY,
     mutationFn: async ({
       vineyardId,
       invoiceId,

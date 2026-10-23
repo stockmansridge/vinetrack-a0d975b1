@@ -1,4 +1,6 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { guardMutation, handleMutationError } from "@/lib/vineyardWriteAccess";
+import TrialEndedDialog from "@/components/access/TrialEndedDialog";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -144,7 +146,14 @@ import AdminBillingPreviewPage from "./pages/admin/AdminBillingPreviewPage";
 import ChemicalV3LabPage from "./pages/admin/ChemicalV3LabPage";
 import AccountBillingPage from "./pages/account/BillingPage";
 
-const queryClient = new QueryClient();
+// Central read-only guard: every useMutation is checked before it runs, and a
+// server VT_READ_ONLY denial opens the same purchase prompt.
+const queryClient = new QueryClient({
+  mutationCache: new MutationCache({
+    onMutate: (_vars, mutation) => guardMutation(mutation.meta as Record<string, unknown> | undefined),
+    onError: (err) => handleMutationError(err),
+  }),
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -155,6 +164,7 @@ const App = () => (
         <AuthProvider>
           <VineyardProvider>
             <PortalActivityTracker />
+            <TrialEndedDialog />
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/auth/callback" element={<AuthCallback />} />

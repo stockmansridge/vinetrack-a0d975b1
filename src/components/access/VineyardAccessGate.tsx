@@ -1,8 +1,8 @@
-import { ReactNode } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { ReactNode, useEffect } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Loader2 } from "lucide-react";
+import { RefreshCw, Loader2, Lock } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import { usePendingInvites } from "@/hooks/usePendingInvites";
 import {
@@ -11,6 +11,23 @@ import {
   type VineyardAccessRow,
 } from "@/lib/vineyardAccessQuery";
 import RestrictedVineyard from "@/components/access/RestrictedVineyard";
+import { readOnlyStore, resolveVineyardWriteAccess } from "@/lib/vineyardWriteAccess";
+
+/** Persistent read-only notice shown above vineyard pages for an expired trial. */
+export function ReadOnlyBanner() {
+  return (
+    <div
+      role="status"
+      className="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-border bg-card px-3 py-2 text-sm"
+    >
+      <Lock className="h-4 w-4 text-muted-foreground" />
+      <span>Trial ended — VineTrack is read-only. Choose a plan to continue making changes.</span>
+      <Button asChild size="sm" className="ml-auto">
+        <Link to="/billing">Choose a plan</Link>
+      </Button>
+    </div>
+  );
+}
 
 /**
  * Routes that stay reachable regardless of the selected vineyard's access:
@@ -34,10 +51,22 @@ export function VineyardAccessGate({ children }: { children: ReactNode }) {
   const { data: invites = [] } = usePendingInvites();
   const refresh = useRefreshVineyardAccess();
 
-  if (isAlwaysAllowed(pathname)) return <>{children}</>;
+  const allowed = isAlwaysAllowed(pathname);
+  const supportBypass = !!adminSupport && adminSupport.vineyard_id === selectedVineyardId;
+  const row: VineyardAccessRow | undefined = matrix?.vineyards.find(
+    (v) => v.vineyard_id === selectedVineyardId,
+  );
+  const access = resolveVineyardWriteAccess(row);
+  const readOnly = !allowed && !supportBypass && !!row && access.canEnter && !access.canWrite;
+  useEffect(() => {
+    readOnlyStore.setReadOnly(readOnly, readOnly ? access.readOnlyReason : null);
+  }, [readOnly, access.readOnlyReason]);
+  useEffect(() => () => readOnlyStore.setReadOnly(false), []);
+
+  if (allowed) return <>{children}</>;
   // System Admin support session — billing access doesn't apply; the backend
   // still authorises every read and write.
-  if (adminSupport && adminSupport.vineyard_id === selectedVineyardId) return <>{children}</>;
+  if (supportBypass) return <>{children}</>;
 
   // Never flash a paywall while access is resolving.
   if (isLoading) {
@@ -70,11 +99,16 @@ export function VineyardAccessGate({ children }: { children: ReactNode }) {
     );
   }
 
-  const row: VineyardAccessRow | undefined = matrix.vineyards.find(
-    (v) => v.vineyard_id === selectedVineyardId,
-  );
-
-  if (row?.can_enter_vineyard) return <>{children}</>;
+  if (row && access.canEnter) {
+    if (!access.canWrite)
+      return (
+        <>
+          <ReadOnlyBanner />
+          {children}
+        </>
+      );
+    return <>{children}</>;
+  }
 
   // Restricted selection, but the account still has somewhere to go.
   if (row) {

@@ -1,3 +1,4 @@
+import { ALLOW_READ_ONLY } from "@/lib/vineyardWriteAccess";
 // Phase 2F — vineyard-scoped access.
 //
 // Access is resolved PER VINEYARD by the shared backend (SQL 155–158). The
@@ -252,6 +253,7 @@ export function useAdminExplainVineyardAccess(
 export function useRefreshVineyardAccess() {
   const qc = useQueryClient();
   return useMutation({
+    meta: ALLOW_READ_ONLY,
     mutationFn: async () => {
       const keys = [
         VINEYARD_ACCESS_KEYS.root,
