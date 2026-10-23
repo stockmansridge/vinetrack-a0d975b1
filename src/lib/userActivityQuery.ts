@@ -76,6 +76,31 @@ export function platformDetailsLine(p: PlatformActivityRow): string {
   return parts.join(" · ");
 }
 
+/** Per-platform value for one stacked table column; "—" when not recorded. */
+export type PlatformStackField = "appVersion" | "device" | "os";
+
+export function platformStackValue(
+  p: PlatformActivityRow,
+  field: PlatformStackField,
+): string {
+  switch (field) {
+    case "appVersion":
+      if (p.app_version) {
+        return `${p.app_version}${p.app_build ? ` (${p.app_build})` : ""}`;
+      }
+      return p.app_build ? `build ${p.app_build}` : "—";
+    case "device":
+      // Portal has no device model; fall back to the browser label when known.
+      return p.device_model ?? browserLabel(p) ?? "—";
+    case "os": {
+      const os = [p.os_name, p.os_version].filter(Boolean).join(" ");
+      const browser = browserLabel(p);
+      if (os && browser) return `${os} · ${browser}`;
+      return os || browser || "—";
+    }
+  }
+}
+
 /**
  * CSV field summarising every platform a user has used, one segment per
  * platform: "Android: SM-G990E | Android 16 | 3.1.8 (1792728910) | 2026-10-23T08:00:00Z; iOS: ...".
