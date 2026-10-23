@@ -3,7 +3,7 @@
 // which is RLS-restricted to owner/manager. We additionally gate the
 // query and the entire page behind useCanSeeCosts().
 import { HelpHint } from "@/components/ui/HelpHint";
-import { useMemo, useState, Fragment } from "react";
+import { useEffect, useMemo, useState, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Lock, Download, AlertTriangle, Info, BarChart3, ChevronUp, ChevronDown } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -27,6 +27,7 @@ import { fetchEffectiveLabourCosts } from "@/lib/effectiveLabourCost";
 import { fetchWorkTaskMaterials } from "@/lib/materialsQuery";
 import { distinctTripCount, type ReportBlock } from "@/lib/workTaskReportAllocation";
 import { useVintage } from "@/lib/useVintage";
+import { defaultSeasonOption } from "@/lib/reportSeasonDefault";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 import { usePruningActivity } from "@/lib/pruningActivityQuery";
 import { useChemicalAllocationOverlay } from "@/lib/useChemicalAllocationOverlay";
@@ -216,7 +217,7 @@ export default function CostReportsPage() {
     canSeeCosts ? selectedVineyardId : null,
   );
 
-  const { seasonStartMonth, seasonStartDay } = useVintage();
+  const { seasonStartMonth, seasonStartDay, vintage: currentVintage } = useVintage();
   const reportTasksQ = useQuery({
     queryKey: ["cost-report-work-task-sources", selectedVineyardId],
     enabled: !!selectedVineyardId && canSeeCosts,
@@ -337,6 +338,10 @@ export default function CostReportsPage() {
     return !o;
   });
   const [season, setSeason] = useState<string>(ANY);
+  // Like the other report pages, the report opens on the vineyard's current
+  // Vintage when that Vintage has records; "All" is only the fallback and the
+  // result of an explicit filter clear.
+  const [defaultedSeasonForVineyard, setDefaultedSeasonForVineyard] = useState<string | null>(null);
   const [opYear, setOpYear] = useState<string>(ANY);
   const [paddock, setPaddock] = useState<string>(ANY);
   const [variety, setVariety] = useState<string>(ANY);
@@ -422,6 +427,17 @@ export default function CostReportsPage() {
   // (trips, pruning activities, …) — never hard-coded.
   const seasons = unified.vintageYears;
   const opYears = unified.operationYears;
+
+  // Open on the vineyard's current Vintage when it has records (same default
+  // as the other report pages); once per vineyard so an explicit filter clear
+  // back to "All" is respected afterwards.
+  useEffect(() => {
+    if (!selectedVineyardId || !seasons.length) return;
+    if (defaultedSeasonForVineyard === selectedVineyardId) return;
+    setDefaultedSeasonForVineyard(selectedVineyardId);
+    const def = defaultSeasonOption(seasons, currentVintage);
+    if (def != null) setSeason(String(def));
+  }, [selectedVineyardId, seasons, currentVintage, defaultedSeasonForVineyard]);
 
   const paddocks = useMemo(
     () => Array.from(new Set(grouped.map((g) => g.paddock_name).filter((v): v is string => !!v))).sort(),
@@ -754,7 +770,7 @@ export default function CostReportsPage() {
     <div className="p-6 space-y-6 w-full">
       <div className="flex flex-col items-start gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Cost Reports</h1>
+          <h1 className="text-2xl font-semibold">Vineyard Costings</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Unified operational costs — Work Tasks, field trips and pruning activity labour —
             grouped by vintage. Filters apply across every tab.
