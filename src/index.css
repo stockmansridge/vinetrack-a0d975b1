@@ -58,7 +58,16 @@
     --report-costs: 162 74% 28%;
     --report-documents: 10 70% 41%;
 
-    /* Work Task type families: distinct, accessible accents in both themes. */
+    /* Individual Work Task types: readable semantic accents. */
+    --task-shoot: 208 90% 36%;
+    --task-wire: 270 65% 43%;
+    --task-leaf: 18 85% 35%;
+    --task-slashing: 350 72% 40%;
+    --task-mulch: 38 92% 30%;
+    --task-weed: 185 85% 27%;
+    --task-soil: 225 55% 42%;
+    --task-replant: 310 62% 39%;
+    --task-guards: 335 72% 42%;
     --task-canopy: 145 72% 26%;
     --task-ground: 88 62% 30%;
     --task-spray: 172 85% 26%;
@@ -138,7 +147,16 @@
     --report-costs: 162 64% 60%;
     --report-documents: 10 85% 72%;
 
-    /* Work Task type families: distinct, accessible accents in both themes. */
+    /* Individual Work Task types: readable semantic accents. */
+    --task-shoot: 208 92% 80%;
+    --task-wire: 270 80% 78%;
+    --task-leaf: 18 90% 72%;
+    --task-slashing: 350 85% 74%;
+    --task-mulch: 38 92% 67%;
+    --task-weed: 185 78% 65%;
+    --task-soil: 225 75% 77%;
+    --task-replant: 310 75% 75%;
+    --task-guards: 335 80% 74%;
     --task-canopy: 145 55% 50%;
     --task-ground: 88 62% 62%;
     --task-spray: 172 78% 64%;
