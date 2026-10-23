@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Portal costing/report correction
+- [x] Exclude retained allocations of soft-deleted parent trips from shared reporting reads; verify active-trip preservation and focused regressions without data writes or publication.
 - [x] Include normal Work Tasks with component-level pruning/trip deduplication.
 - [x] Share evidence-based area/block allocation resolution across both reports; no conversion of row equivalents to invented hectares.
 - [x] Count distinct trips and run focused reconciliation regressions; no production writes or publication.

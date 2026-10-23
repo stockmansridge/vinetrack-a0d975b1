@@ -45,5 +45,25 @@ export async function fetchTripCostAllocationsForVineyard(
     console.warn("[trip_cost_allocations] fetch failed:", error.message);
     return [];
   }
-  return (data ?? []) as TripCostAllocation[];
+  const allocations = (data ?? []) as TripCostAllocation[];
+  const tripIds = [...new Set(allocations.flatMap((row) => row.trip_id ? [row.trip_id] : []))];
+  const activeTripIds = new Set<string>();
+  // Retained allocations are evidence, not authority to keep a deleted trip
+  // financially active. Read parent state without relying on a schema FK join.
+  // Bound each request below the backend row limit, including multi-block trips.
+  for (let offset = 0; offset < tripIds.length; offset += 200) {
+    const { data: trips, error: tripError } = await supabase
+      .from("trips")
+      .select("id")
+      .in("id", tripIds.slice(offset, offset + 200))
+      .is("deleted_at", null);
+    if (tripError) {
+      console.warn("[trip_cost_allocations] parent trip fetch failed:", tripError.message);
+      return [];
+    }
+    for (const trip of trips ?? []) activeTripIds.add(trip.id);
+  }
+  // Preserve allocations without a parent reference; only referenced trips
+  // require an active, visible parent. No retained rows are mutated.
+  return allocations.filter((row) => !row.trip_id || activeTripIds.has(row.trip_id));
 }
