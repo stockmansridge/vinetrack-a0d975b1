@@ -32,9 +32,10 @@ import {
   AdminError,
   AdminEmpty,
   formatDate,
+  formatDateTime,
   formatRelative,
 } from "./_shared";
-import { PORTAL_APP_TYPE, appTypeLabel } from "@/lib/portalClientActivity";
+import { PORTAL_APP_TYPE } from "@/lib/portalClientActivity";
 import { AppTypeBadge } from "@/components/admin/AppTypeBadge";
 import {
   ACTIVITY_STATUS_LABELS,

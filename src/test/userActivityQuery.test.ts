@@ -3,6 +3,7 @@ import {
   groupPlatformsByUser,
   platformDetailsCsvField,
   platformDetailsLine,
+  platformStackValue,
   type PlatformActivityRow,
 } from "@/lib/userActivityQuery";
 import { activityStatus, lastActivityMs } from "@/lib/userActivityStatus";
