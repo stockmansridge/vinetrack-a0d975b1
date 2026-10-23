@@ -361,7 +361,7 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
   {
     key: "platforms",
     label: "Platforms & devices",
-    className: "whitespace-nowrap",
+    className: "min-w-[220px]",
     sortable: true,
     render: (r) => platformsDisplay(r),
   },
