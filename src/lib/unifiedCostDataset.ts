@@ -214,12 +214,99 @@ export function pruningRowToUnified(
 export interface BuildUnifiedCostArgs {
   vineyardId: string;
   tripAllocations?: TripCostAllocation[];
+  /** Active vineyard Trips — used for completed-Trip presence, never cost. */
+  trips?: Trip[];
+  /** Vineyard season boundary used to derive each Trip's Vintage. */
+  seasonStart?: { month: number; day: number } | null;
   pruningRows?: PruningActivityRow[];
   workTasks?: Array<WorkTaskCostRollupInput & { task: WorkTask; vintageYear?: number | null }>;
   taskPaddocks?: WorkTaskPaddock[];
   blocks?: ReportBlock[];
   /** Include reversed pruning activities (default false). */
   includeReversed?: boolean;
+}
+
+export const TRIP_PRESENCE_WARNING =
+  "Trip has no saved cost allocation. It is counted as completed work but excluded from cost and treated-area totals until costing is recalculated.";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Valid, case-normalised block ids linked to a Trip (jsonb list, else scalar). */
+export function tripBlockIds(trip: Trip): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (v: unknown) => {
+    if (typeof v !== "string") return;
+    const id = v.trim().toLowerCase();
+    if (!UUID_RE.test(id) || seen.has(id)) return;
+    seen.add(id);
+    out.push(id);
+  };
+  const ids = trip.paddock_ids;
+  if (Array.isArray(ids)) ids.forEach(push);
+  if (out.length === 0) push(trip.paddock_id);
+  return out;
+}
+
+/** A Trip counts as completed report activity only when finished and not active. */
+export function isCompletedTrip(trip: Trip): boolean {
+  return !!trip.end_time && trip.is_active !== true;
+}
+
+/** Build one zero-cost presence row per linked block (or one unallocated row). */
+export function tripPresenceRows(
+  trip: Trip,
+  vineyardId: string,
+  blocks: ReportBlock[],
+  seasonStart: { month: number; day: number } | null | undefined,
+): UnifiedCostRow[] {
+  const date = trip.start_time ?? null;
+  const parsed = date ? new Date(date) : null;
+  const vintage = parsed && !isNaN(parsed.getTime()) && seasonStart
+    ? vintageForDate(parsed, seasonStart.month, seasonStart.day)
+    : null;
+  const blockIds = tripBlockIds(trip);
+  const targets: Array<{ blockId: string | null; blockName: string | null }> = blockIds.length
+    ? blockIds.map((id) => ({
+        blockId: id,
+        blockName: blocks.find((b) => b.id.toLowerCase() === id)?.name ?? null,
+      }))
+    : [{ blockId: null, blockName: trip.paddock_name ?? null }];
+
+  return targets.map(({ blockId, blockName }) => ({
+    source_type: "trip",
+    source_id: trip.id,
+    allocation_id: `trip-presence:${trip.id}:${blockId ?? "unallocated"}`,
+    dedup_key: `trip_presence:${trip.id}:${blockId ?? "unallocated"}`,
+    vineyard_id: vineyardId,
+    activity_date: date,
+    vintage_year: vintage,
+    operation_year: yearOf(date),
+    block_id: blockId,
+    block_name: blockName,
+    variety: null,
+    function: trip.trip_function ?? "unknown",
+    worker: trip.person_name ?? null,
+    work_task_id: null,
+    allocation_area_ha: 0,
+    yield_tonnes: 0,
+    labour_cost: 0,
+    fuel_cost: 0,
+    chemical_cost: 0,
+    input_cost: 0,
+    other_cost: 0,
+    total_cost: 0,
+    parent_labour_hours: null,
+    parent_total_cost: 0,
+    allocated_labour_hours: null,
+    row_equivalents: null,
+    vines: null,
+    allocation_basis: "trip_presence",
+    warnings: [TRIP_PRESENCE_WARNING],
+    status: "uncosted",
+    reversed: false,
+    raw: trip,
+  }));
 }
 
 /**
