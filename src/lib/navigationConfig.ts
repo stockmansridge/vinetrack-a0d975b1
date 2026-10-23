@@ -250,6 +250,7 @@ export const ACTIVITIES: NavActivity[] = [
         keywords: ["task summary", "block allocation", "work task reports"],
       },
     ],
+    crossLinks: [{ label: "Vineyard Costings", path: "/reports/costs" }],
   },
   {
     id: "spraying",
