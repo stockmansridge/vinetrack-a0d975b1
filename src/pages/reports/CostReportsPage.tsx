@@ -21,6 +21,7 @@ import {
   type TripCostAllocation,
 } from "@/lib/tripCostAllocationsQuery";
 import { fetchList } from "@/lib/queries";
+import { fetchTripsForVineyard } from "@/lib/tripsQuery";
 import { fetchWorkTasksForVineyard, fetchLabourLinesForVineyard, fetchWorkTaskPaddocksForVineyard } from "@/lib/workTasksQuery";
 import { fetchWorkTaskMachineLinesForVineyard } from "@/lib/workTaskMachineLinesQuery";
 import { fetchEffectiveLabourCosts } from "@/lib/effectiveLabourCost";
@@ -140,6 +141,7 @@ function topNWithOther<T extends { name: string; value: number }>(
 
 function categorizeWarning(w: string): string {
   const s = w.toLowerCase();
+  if (s.includes("no saved cost allocation")) return "Uncosted trip";
   if (s.includes("labour") || s.includes("labor")) return "Missing labour rate";
   if (s.includes("fuel")) return "Missing fuel rate";
   if (s.includes("chemical") || s.includes("input")) return "Missing chemical/input cost";
