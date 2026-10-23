@@ -22,8 +22,9 @@ import { fetchLabourLinesForVineyard, fetchLabourLinesForVineyardAudit, fetchLab
 import { fetchEffectiveLabourCosts } from "@/lib/effectiveLabourCost";
 import { classifyLabourLine, labourReviewSummary } from "@/lib/labourLineEligibility";
 import { buildWorkTaskCostRollup } from "@/lib/workTaskCostRollup";
+import { buildUnifiedCostDataset } from "@/lib/unifiedCostDataset";
 
-const active: WorkTask = { id: "t1", vineyard_id: "v1", deleted_at: null, costing_method: "hourly" };
+const active: WorkTask = { id: "t1", vineyard_id: "v1", paddock_id: "b1", deleted_at: null, costing_method: "hourly" };
 const deleted: WorkTask = { ...active, id: "td", deleted_at: "2026-10-20" };
 const line: WorkTaskLabourLine = { id: "l1", vineyard_id: "v1", work_task_id: "t1", total_hours: 13, total_cost: 455, deleted_at: null };
 beforeEach(() => {
@@ -58,13 +59,27 @@ describe("Canonical labour parent eligibility", () => {
     expect([...map.keys()]).toEqual(["t1"]);
     expect(map.get("t1")?.effective_labour_cost).toBe(455);
   });
-  it.each(["Work Task Reports", "Vineyard Costings"])("%s aggregate inputs cannot retain deleted-parent labour or backend cost", async () => {
+  it("Work Task Reports aggregate inputs cannot retain deleted-parent labour or backend cost", async () => {
     const lines = await fetchLabourLinesForVineyard("v1");
     const costs = await fetchEffectiveLabourCosts("v1");
     const tasks = await fetchWorkTasksByIds(["t1", "td", "missing"]);
     const totals = tasks.map((task) => buildWorkTaskCostRollup({ task, labourLines: lines.filter((l) => l.work_task_id === task.id), effectiveLabourCost: costs.get(task.id) }));
     expect(totals.reduce((sum, row) => sum + row.labourHours, 0)).toBe(13);
     expect(totals.reduce((sum, row) => sum + row.total, 0)).toBe(455);
+  });
+  it("Vineyard Costings' actual dataset excludes deleted task costs even with stale child and effective rows", async () => {
+    const lines = await fetchLabourLinesForVineyard("v1");
+    const costs = await fetchEffectiveLabourCosts("v1");
+    const tasks = await fetchWorkTasksByIds(["t1", "td", "missing"]);
+    const dataset = buildUnifiedCostDataset({
+      vineyardId: "v1", blocks: [{ id: "b1", name: "Shiraz", area_ha: 1 }],
+      workTasks: [
+        ...tasks.map((task) => ({ task, labourLines: lines.filter((l) => l.work_task_id === task.id), effectiveLabourCost: costs.get(task.id) })),
+        { task: deleted, labourLines: [{ ...line, work_task_id: "td", total_cost: 1795 }], effectiveLabourCost: { work_task_id: "td", vineyard_id: "v1", effective_labour_cost: 1795, costing_method: "hourly", piece_rate_per_vine: null, piece_vine_count: null, piece_rate_total_cost: null, labour_line_cost: 1795, labour_cost_source: "labour_lines" } },
+      ],
+    });
+    expect(dataset.rows.reduce((sum, row) => sum + row.total_cost, 0)).toBe(455);
+    expect(dataset.rows.map((row) => row.source_id)).toEqual(["t1"]);
   });
   it("matches the supplied Stockman's 39 active / 5 review / 53 hours / $1,795 excluded fixture", () => {
     const rows = [
