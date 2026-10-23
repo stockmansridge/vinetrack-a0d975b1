@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAdminWorkTasks } from "@/lib/adminApi";
+import { workTaskTypeDotClass } from "@/lib/workTaskTypeColor";
 import { AdminGate, AdminPageHeader, AdminError, AdminEmpty, formatDate } from "./_shared";
 
 export default function AdminWorkTasksPage() {
