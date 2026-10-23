@@ -73,6 +73,7 @@ import { toast } from "@/hooks/use-toast";
 import { Plus, Trash2, Download } from "lucide-react";
 import {
   fetchWorkTasksForVineyard,
+  fetchWorkTaskById,
   fetchLabourLinesForVineyard,
   fetchWorkTaskPaddocksForVineyard,
   syncWorkTaskPaddocks,
@@ -297,6 +298,21 @@ export default function WorkTasksPage() {
   const [selected, setSelected] = useState<WorkTask | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createdTask, setCreatedTask] = useState<WorkTask | null>(null);
+  const [openedTaskLink, setOpenedTaskLink] = useState<string | null>(null);
+  const linkedTaskId = searchParams.get("task");
+  const linkedTaskQ = useQuery({
+    queryKey: ["labour-line-task", selectedVineyardId, linkedTaskId],
+    enabled: !!selectedVineyardId && !!linkedTaskId,
+    queryFn: () => linkedTaskId ? fetchWorkTaskById(linkedTaskId) : Promise.resolve(null),
+  });
+  useEffect(() => {
+    const task = linkedTaskQ.data;
+    const identity = `${selectedVineyardId}:${linkedTaskId}`;
+    if (task && task.vineyard_id === selectedVineyardId && openedTaskLink !== identity) {
+      setSelected(task);
+      setOpenedTaskLink(identity);
+    }
+  }, [linkedTaskQ.data, selectedVineyardId, linkedTaskId, openedTaskLink]);
 
   const { vintage: currentVintageYear, seasonStartMonth, seasonStartDay } = useVintage();
   const [season, setSeason] = useState<string>("current");
@@ -1867,7 +1883,7 @@ function LabourLinesSection({
   );
 }
 
-function LabourLineRow({
+export function LabourLineRow({
   line, categories, canSoftDelete, userId, vineyardId, taskId, onChanged, onCancel,
 }: {
   line: WorkTaskLabourLine | null;
@@ -1936,15 +1952,6 @@ function LabourLineRow({
     onError: (e: any) => toast({ title: "Save failed", description: friendlySaveError(e, "labour details"), variant: "destructive" }),
   });
 
-  const del = useMutation({
-    mutationFn: async () => {
-      if (!line) return;
-      await softDeleteLabourLine(line.id, userId);
-    },
-    onSuccess: () => { toast({ title: "Labour line removed" }); onChanged(); },
-    onError: (e: any) => toast({ title: "Delete failed", description: friendlySaveError(e, "labour details"), variant: "destructive" }),
-  });
-
   if (!editing && line) {
     const cat = line.worker_type_id ? categories.find((c) => c.id === line.worker_type_id) : null;
     return (
@@ -1965,9 +1972,7 @@ function LabourLineRow({
         <div className="flex gap-1">
           <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>Edit</Button>
           {canSoftDelete ? (
-            <Button variant="ghost" size="sm" onClick={() => del.mutate()} disabled={del.isPending}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <RemoveLabourLineButton line={line} userId={userId} allowed={canSoftDelete} onRemoved={onChanged} />
           ) : (
             <span className="text-xs text-muted-foreground self-center px-2">Delete restricted</span>
           )}
