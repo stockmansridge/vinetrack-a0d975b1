@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { fetchList } from "@/lib/queries";
 import { fetchOperatorCategoriesForVineyard, type OperatorCategory } from "@/lib/operatorCategoriesQuery";
 import WorkTaskLabourFields from "@/components/work-tasks/WorkTaskLabourFields";
+import { RemoveLabourLineButton } from "@/components/work-tasks/RemoveLabourLineButton";
 import { WorkTaskMaterialsSection } from "@/components/work-tasks/WorkTaskMaterialsSection";
 import { useWorkTaskMaterials } from "@/lib/materialsQuery";
 import {
@@ -79,7 +80,6 @@ import {
   updateWorkTask,
   createLabourLine,
   updateLabourLine,
-  softDeleteLabourLine,
   hardDeleteWorkTask,
   type WorkTask,
   type WorkTaskLabourLine,

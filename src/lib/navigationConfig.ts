@@ -242,6 +242,7 @@ export const ACTIVITIES: NavActivity[] = [
     icon: ClipboardList,
     views: [
       { id: "work-tasks.list", label: "Tasks", path: "/work-tasks", keywords: ["tasks", "jobs", "labour"] },
+      { id: "work-tasks.labour-lines", label: "Labour Lines", path: "/work-tasks/labour-lines", keywords: ["labour register", "worker hours", "labour lines"] },
       {
         id: "work-tasks.reports",
         label: "Reports",
