@@ -359,39 +359,46 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
   },
   {
     key: "platforms",
-    label: "Platforms & devices",
-    className: "min-w-[220px]",
-    sortable: true,
-    render: (r) => platformsDisplay(r),
-  },
-  {
-    key: "app_type",
-    label: "Latest client",
+    label: "Platforms used",
     className: "whitespace-nowrap",
     sortable: true,
     render: (r) =>
-      r.last_app_type ? <AppTypeBadge appType={r.last_app_type} /> : appTypeLabel(r.last_app_type),
+      platformStack(r, (p) => (
+        <div>
+          <AppTypeBadge appType={p.app_type} />
+          <div className="text-muted-foreground pl-0.5">
+            {p.last_seen_at ? formatRelative(p.last_seen_at) : "—"}
+          </div>
+        </div>
+      )),
+  },
+  {
+    key: "app_type",
+    label: "Clients",
+    className: "whitespace-nowrap",
+    sortable: true,
+    render: (r) => platformStack(r, (p) => <AppTypeBadge appType={p.app_type} />),
   },
   {
     key: "app_version",
     label: "App version",
     className: "whitespace-nowrap",
     sortable: true,
-    render: (r) => appVersionDisplay(r),
+    render: (r) => platformStack(r, (p) => platformStackValue(p, "appVersion")),
   },
   {
     key: "device",
     label: "Device",
     className: "whitespace-nowrap",
     sortable: true,
-    render: (r) => r.last_device_model ?? "Not recorded",
+    render: (r) => platformStack(r, (p) => platformStackValue(p, "device")),
   },
   {
     key: "os",
     label: "OS",
     className: "whitespace-nowrap",
     sortable: true,
-    render: (r) => osDisplay(r),
+    render: (r) => platformStack(r, (p) => platformStackValue(p, "os")),
   },
 
   {
@@ -399,14 +406,23 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
     label: "Status",
     className: "whitespace-nowrap",
     sortable: true,
-    render: (r) => (
-      <span
-        className={`inline-flex items-center px-2 py-0.5 rounded text-xs border ${statusClass(activityStatus(r))}`}
-        title={lastActivityIso(r) ? `Last activity ${formatDate(lastActivityIso(r))}` : undefined}
-      >
-        {ACTIVITY_STATUS_LABELS[activityStatus(r)]}
-      </span>
-    ),
+    sortValue: (r) => lastActivityMs(r),
+    render: (r) => {
+      const lastIso = lastActivityIso(r);
+      return (
+        <div className="flex flex-col gap-1">
+          <span
+            className={`inline-flex w-fit items-center px-2 py-0.5 rounded text-xs border ${statusClass(activityStatus(r))}`}
+            title={lastIso ? `Last activity ${formatDateTime(lastIso)}` : undefined}
+          >
+            {ACTIVITY_STATUS_LABELS[activityStatus(r)]}
+          </span>
+          {lastIso ? (
+            <span className="text-xs text-muted-foreground">{formatRelative(lastIso)}</span>
+          ) : null}
+        </div>
+      );
+    },
   },
 ];
 
