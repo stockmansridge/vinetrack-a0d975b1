@@ -19,8 +19,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   exportSprayJobPdf, exportYearlySprayProgramPdf, exportYearlySprayProgramCsv,
-  fetchJobPaddockMap, jobYear, type JobLookups,
+  fetchJobPaddockMap, type JobLookups,
 } from "@/lib/sprayJobsExport";
+import { useVintage } from "@/lib/useVintage";
+import { jobVintage } from "@/lib/sprayProgramProgression";
+import { NextFromProgramSections } from "@/components/spray/NextFromProgramSections";
 
 import { useVineyard } from "@/context/VineyardContext";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
@@ -268,9 +271,13 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
             onPlanSpray={startPlanFromStep} />
         </TabsContent>
         {!templatesOnly && (
-          <TabsContent value="planned">
-            <JobsTable mode="planned" canEdit={canEdit} maps={lookups.maps}
-              onEdit={(job) => setEditing({ job, isTemplate: false })} />
+          <TabsContent value="planned" className="space-y-6">
+            <section className="space-y-2">
+              <h2 className="text-lg font-semibold">Planned Sprays</h2>
+              <JobsTable mode="planned" canEdit={canEdit} maps={lookups.maps}
+                onEdit={(job) => setEditing({ job, isTemplate: false })} />
+            </section>
+            <NextFromProgramSections onOpen={(step) => setDetailStep(step)} />
           </TabsContent>
         )}
         <TabsContent value="archived">
@@ -411,28 +418,32 @@ function JobsTable({
     }
   };
 
-  // Years available for the program export (planned tab only).
+  // Vintages available for the program export (planned tab only). Grouped by
+  // the vineyard's season window, never by calendar year.
+  const season = useVintage();
   const years = useMemo(() => {
-    const set = new Set<number>();
+    const set = new Set<number>([season.vintage]);
     (data ?? []).forEach((j) => {
-      const y = jobYear(j);
+      const y = jobVintage(j, season.seasonStartMonth, season.seasonStartDay);
       if (y != null) set.add(y);
     });
-    const arr = Array.from(set).sort((a, b) => b - a);
-    if (!arr.length) arr.push(new Date().getFullYear());
-    return arr;
-  }, [data]);
-  const [yearSel, setYearSel] = useState<string>(() => String(new Date().getFullYear()));
+    return Array.from(set).sort((a, b) => b - a);
+  }, [data, season.vintage, season.seasonStartMonth, season.seasonStartDay]);
+  const [yearPick, setYearSel] = useState<string | null>(null);
+  const yearSel = yearPick ?? String(season.vintage);
 
   const handleYearExport = async (kind: "pdf" | "csv") => {
     const year = Number(yearSel);
-    const yearJobs = (data ?? []).filter((j) => jobYear(j) === year);
+    const yearJobs = (data ?? []).filter(
+      (j) => jobVintage(j, season.seasonStartMonth, season.seasonStartDay) === year,
+    );
+    const label = `Vintage ${year}`;
     try {
       const padMap = await fetchJobPaddockMap(yearJobs.map((j) => j.id));
       if (kind === "pdf") {
-        exportYearlySprayProgramPdf(yearJobs, padMap, lookupMaps, vineyardName, year, formatters);
+        exportYearlySprayProgramPdf(yearJobs, padMap, lookupMaps, vineyardName, year, formatters, label);
       } else {
-        exportYearlySprayProgramCsv(yearJobs, padMap, lookupMaps, vineyardName, year, formatters);
+        exportYearlySprayProgramCsv(yearJobs, padMap, lookupMaps, vineyardName, year, formatters, label);
       }
     } catch (e: any) {
       toast({ title: "Export failed", description: e.message, variant: "destructive" });
@@ -653,9 +664,9 @@ function JobsTable({
         <span className="text-xs text-muted-foreground">{sorted.length} {sorted.length === 1 ? "result" : "results"}</span>
         {mode === "planned" && (
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            <span className="text-sm text-muted-foreground">Yearly program:</span>
+            <span className="text-sm text-muted-foreground">Vintage:</span>
             <Select value={yearSel} onValueChange={setYearSel}>
-              <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-8 w-28" aria-label="Vintage"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {years.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
               </SelectContent>
