@@ -58,6 +58,19 @@
     --report-costs: 162 74% 28%;
     --report-documents: 10 70% 41%;
 
+    /* Work Task type families: distinct, accessible accents in both themes. */
+    --task-canopy: 145 72% 26%;
+    --task-ground: 88 62% 30%;
+    --task-spray: 172 85% 26%;
+    --task-water: 245 78% 45%;
+    --task-nutrient: 50 96% 26%;
+    --task-harvest: 292 58% 40%;
+    --task-planting: 335 72% 42%;
+    --task-repair: 5 78% 42%;
+    --task-inspection: 208 90% 36%;
+    --task-machine: 30 55% 30%;
+    --task-other: 138 8% 40%;
+
     /* Borders / inputs / focus */
     --border: 96 13% 90%;                 /* #E3E8E1 */
     --input: 96 17% 88%;                  /* #DDE5DA */
@@ -124,6 +137,19 @@
     --report-levy: 42 85% 65%;
     --report-costs: 162 64% 60%;
     --report-documents: 10 85% 72%;
+
+    /* Work Task type families: distinct, accessible accents in both themes. */
+    --task-canopy: 145 55% 50%;
+    --task-ground: 88 62% 62%;
+    --task-spray: 172 78% 64%;
+    --task-water: 245 85% 74%;
+    --task-nutrient: 50 88% 66%;
+    --task-harvest: 292 68% 76%;
+    --task-planting: 335 80% 74%;
+    --task-repair: 5 88% 72%;
+    --task-inspection: 208 92% 80%;
+    --task-machine: 30 55% 62%;
+    --task-other: 212 12% 70%;
 
     --border: 213 12% 20%;                /* subtle slate */
     --input: 213 12% 22%;

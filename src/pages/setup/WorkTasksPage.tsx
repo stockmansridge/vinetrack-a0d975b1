@@ -154,6 +154,7 @@ import { useTeamLookup } from "@/hooks/useTeamLookup";
 import ResourcePicker from "@/components/people/ResourcePicker";
 import { useExternalResources } from "@/components/people/ExternalResourcesCard";
 import { COMPLETED_BADGE_CLASS } from "@/lib/workTaskCompletion";
+import { workTaskTypeBadgeClass, workTaskTypeDotClass } from "@/lib/workTaskTypeColor";
 import { EL_TARGET_OPTIONS, elStageLabel, isElScheduled, matchesElRange, scheduleBasisOf, scheduleCell, schedulePayload, validateSchedule, workTaskDateBounds, type ScheduleBasis } from "@/lib/workTaskSchedule";
 import { sortWorkTasksDefault } from "@/lib/workTaskDefaultOrder";
 import { canManageExternalResources, workTaskAssignmentFields, workTaskAssignmentValue, type ExternalResource, type ResourceValue } from "@/lib/externalResources";
@@ -842,7 +843,7 @@ export default function WorkTasksPage() {
             <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value={ANY}>Any</SelectItem>
-              {taskTypes.map((o) => (<SelectItem key={o} value={o}>{o}</SelectItem>))}
+              {taskTypes.map((o) => (<SelectItem key={o} value={o}><span className="flex items-center gap-2"><span className={`h-2 w-2 shrink-0 rounded-full ${workTaskTypeDotClass(o)}`} />{o}</span></SelectItem>))}
             </SelectContent>
           </Select>
         </Filter>
@@ -997,7 +998,7 @@ export default function WorkTasksPage() {
                 paddock: <TableCell title={padNamesFull || undefined}>{blockCellLabel}</TableCell>,
                 task_type: (
                   <TableCell>
-                    {t.task_type ? <Badge variant="secondary">{t.task_type}</Badge> : "—"}
+                    {t.task_type ? <Badge variant="outline" className={workTaskTypeBadgeClass(t.task_type)}>{t.task_type}</Badge> : "—"}
                     {relIndicator}
                   </TableCell>
                 ),
