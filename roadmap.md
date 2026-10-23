@@ -1,5 +1,10 @@
 # Roadmap
 
+## Portal costing/report correction
+- [ ] Include normal Work Tasks with component-level pruning/trip deduplication.
+- [ ] Share evidence-based area/block allocation resolution across both reports.
+- [ ] Count distinct trips and run focused reconciliation regressions; no production writes or publication.
+
 ## Tractor photo automation
 - [x] Add Edit Tractor upload preview only; search controls and external Google Images link removed at owner request; 4 focused tests passed, unpublished.
 - [ ] Connect shared photo saving and background removal — blocked on ChatGPT's separate photo cache/storage contract and enforced A$20 spending guard; no equipment-record changes or publication.
