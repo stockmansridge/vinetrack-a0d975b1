@@ -125,6 +125,19 @@
     --report-costs: 162 64% 60%;
     --report-documents: 10 85% 72%;
 
+    /* Work Task type families: distinct, accessible accents in both themes. */
+    --task-canopy: 151 62% 62%;
+    --task-ground: 88 65% 62%;
+    --task-spray: 180 62% 60%;
+    --task-water: 227 85% 75%;
+    --task-nutrient: 42 85% 65%;
+    --task-harvest: 288 65% 74%;
+    --task-planting: 327 78% 73%;
+    --task-repair: 10 85% 72%;
+    --task-inspection: 202 85% 68%;
+    --task-machine: 28 90% 66%;
+    --task-other: 212 12% 70%;
+
     --border: 213 12% 20%;                /* subtle slate */
     --input: 213 12% 22%;
     --ring: 80 58% 50%;
