@@ -118,3 +118,4 @@
 - [x] Tabbed floating settings: contour Groups/Setup/Row edit/Review; normal Rows Layout/Vine counts/Summary
 - [ ] Signed-in visual check as System Admin (not done)
 - [x] Scout Reports & Vintage Notes Portal frontend (2026-10-19): /observations/scout-reports (+:visitId) and /observations/vintage-notes under Pins & Observations; read-only scouts, add-only notes; honest RLS-restricted states; SQL proposal docs/vineyard-insights-rls-proposal.md AWAITING Jonathan's approval — not executed.
+- [x] Vineyard Costings: Estimated Yield tab — cost/t by block & variety, SQL 221 estimate defaults, in-memory scenario overrides with reset
