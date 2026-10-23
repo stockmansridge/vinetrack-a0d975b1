@@ -98,7 +98,7 @@ describe("buildVarietyScenarioRows", () => {
   it("splits edited block tonnes across plantings so varieties reconcile to the block", () => {
     const rows = buildVarietyScenarioRows(
       [shirazCabBlock],
-      new Map([["shiraz", 3000], ["cabernet franc", 2000]]),
+      new Map([["b1", 5000]]),
       new Map([["b1", 20]]),
     );
     const shiraz = rows.find((r) => r.varietyKey === "shiraz")!;
@@ -108,6 +108,13 @@ describe("buildVarietyScenarioRows", () => {
     expect(shiraz.costPerTonne).toBeCloseTo(250, 6);
     expect(cab.costPerTonne).toBeCloseTo(250, 6);
     expect((shiraz.tonnes ?? 0) + (cab.tonnes ?? 0)).toBeCloseTo(20, 6);
+    expect((shiraz.totalCost ?? 0) + (cab.totalCost ?? 0)).toBeCloseTo(5000, 6);
+  });
+
+  it("allocates block cost to varieties even when no variety cost map exists", () => {
+    const rows = buildVarietyScenarioRows([shirazCabBlock], new Map([["b1", 1000]]), new Map());
+    expect(rows.every((r) => r.totalCost != null && r.totalCost > 0)).toBe(true);
+    expect(rows.reduce((a, r) => a + (r.totalCost ?? 0), 0)).toBeCloseTo(1000, 6);
   });
 
   it("marks a variety partial while any contributing planting lacks tonnes", () => {
