@@ -56,6 +56,7 @@ function TonnesInput({
       className={`h-8 w-24 text-right ml-auto ${valid ? "" : "border-destructive"}`}
       onChange={(e) => {
         const t = e.target.value;
+        if (/\.\d{4,}$/.test(t.trim())) return; // cap at 3 decimals
         setText(t);
         const n = t.trim() === "" ? null : Number(t);
         if (t.trim() === "" || (Number.isFinite(n) && (n as number) >= 0)) onCommit(n);
@@ -183,7 +184,6 @@ export default function EstimatedYieldTab({
               <TableHead className="text-right">Scenario tonnes</TableHead>
               <TableHead className="text-right">Total cost</TableHead>
               <TableHead className="text-right">Cost/t</TableHead>
-              <TableHead className="text-right">Warnings</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -222,13 +222,6 @@ export default function EstimatedYieldTab({
                 </TableCell>
                 <TableCell className="text-right">{money(b.totalCost)}</TableCell>
                 <TableCell className="text-right font-medium">{money(b.costPerTonne)}</TableCell>
-                <TableCell className="text-right">
-                  {b.warnings.length > 0 ? (
-                    <span className="inline-flex items-center gap-1 text-amber-600">
-                      <AlertTriangle className="h-3 w-3" />{b.warnings.length}
-                    </span>
-                  ) : "—"}
-                </TableCell>
               </TableRow>
             ))}
           </TableBody>
