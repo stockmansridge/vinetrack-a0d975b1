@@ -26,6 +26,7 @@ import { fetchWorkTaskMachineLinesForVineyard } from "@/lib/workTaskMachineLines
 import { fetchEffectiveLabourCosts } from "@/lib/effectiveLabourCost";
 import { fetchWorkTaskMaterials } from "@/lib/materialsQuery";
 import { distinctTripCount, type ReportBlock } from "@/lib/workTaskReportAllocation";
+import { headlineCostMetrics, resolveCostReportPhysicalArea } from "@/lib/costReportPhysicalArea";
 import { useVintage } from "@/lib/useVintage";
 import { defaultSeasonOption } from "@/lib/reportSeasonDefault";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
@@ -472,7 +473,13 @@ export default function CostReportsPage() {
     [filtered],
   );
 
+  const physicalScope = useMemo(() => resolveCostReportPhysicalArea(
+    reportTasksQ.isError ? undefined : reportTasksQ.data?.blocks,
+    { blockNames: paddock === ANY ? undefined : [paddock], variety: variety === ANY ? undefined : variety, varietyMap },
+  ), [reportTasksQ.data, reportTasksQ.isError, paddock, variety, varietyMap]);
+
   const summary = useMemo(() => {
+    const headline = headlineCostMetrics(filteredRaw, physicalScope);
     let total = 0, area = 0, yieldT = 0, warns = 0, trips = 0;
     for (const g of filtered) {
       total += g.total_cost;
@@ -483,10 +490,10 @@ export default function CostReportsPage() {
     }
     return {
       total, area, yieldT, warns, tripCount: distinctTripCount(filteredRaw),
-      costPerHa: area > 0 ? total / area : null,
+      costPerHa: headline.costPerHa,
       costPerTonne: yieldT > 0 ? total / yieldT : null,
     };
-  }, [filtered, filteredRaw]);
+  }, [filtered, filteredRaw, physicalScope]);
 
   const unassignedCount = useMemo(
     () => filtered.filter((g) => !g.varietyResolved).length,
@@ -874,13 +881,21 @@ export default function CostReportsPage() {
             <SummaryCard
               label={`Cost / ${rf.areaUnitLabel}`}
               value={fmtMoneyPerArea(summary.costPerHa)}
-              info="Total cost divided by cumulative treated area."
+              info="Total cost divided by the unique physical vineyard/block area in the current scope. Each block is counted once, regardless of how many times it was worked."
             />
             <SummaryCard label="Yield" value={`${fmtNum(summary.yieldT)} t`} />
             <SummaryCard label="Cost / tonne" value={fmtMoney(summary.costPerTonne)} />
             <SummaryCard label="Trips" value={String(summary.tripCount)} />
             <SummaryCard label="Warnings" value={String(summary.warns)} />
           </div>
+
+          {physicalScope.warnings.length > 0 && (
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Cost per area is unavailable</AlertTitle>
+              <AlertDescription>{physicalScope.warnings.join(" ")} Treated area is not used as a substitute.</AlertDescription>
+            </Alert>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <ChartCard
