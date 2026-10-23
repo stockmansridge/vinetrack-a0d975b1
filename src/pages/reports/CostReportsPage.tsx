@@ -427,6 +427,16 @@ export default function CostReportsPage() {
   const seasons = unified.vintageYears;
   const opYears = unified.operationYears;
 
+  // Open on the vineyard's current Vintage when it has records (same default
+  // as the other report pages); once per vineyard so an explicit filter clear
+  // back to "All" is respected afterwards.
+  useEffect(() => {
+    if (!selectedVineyardId || !seasons.length) return;
+    if (defaultedSeasonForVineyard === selectedVineyardId) return;
+    setDefaultedSeasonForVineyard(selectedVineyardId);
+    if (currentVintage != null && seasons.includes(currentVintage)) setSeason(String(currentVintage));
+  }, [selectedVineyardId, seasons, currentVintage, defaultedSeasonForVineyard]);
+
   const paddocks = useMemo(
     () => Array.from(new Set(grouped.map((g) => g.paddock_name).filter((v): v is string => !!v))).sort(),
     [grouped],
@@ -758,7 +768,7 @@ export default function CostReportsPage() {
     <div className="p-6 space-y-6 w-full">
       <div className="flex flex-col items-start gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Cost Reports</h1>
+          <h1 className="text-2xl font-semibold">Vineyard Costings</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Unified operational costs — Work Tasks, field trips and pruning activity labour —
             grouped by vintage. Filters apply across every tab.
