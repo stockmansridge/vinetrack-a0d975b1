@@ -5,7 +5,7 @@
 import { HelpHint } from "@/components/ui/HelpHint";
 import { useMemo, useState, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Lock, Download, AlertTriangle, Info, BarChart3 } from "lucide-react";
+import { Lock, Download, AlertTriangle, Info, BarChart3, ChevronUp, ChevronDown } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
@@ -329,6 +329,13 @@ export default function CostReportsPage() {
   }
 
   const [tab, setTab] = useState<string>("overview");
+  const [setupOpen, setSetupOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem("vt.costReports.setupOpen") !== "0"; } catch { return true; }
+  });
+  const toggleSetup = () => setSetupOpen((o) => {
+    try { localStorage.setItem("vt.costReports.setupOpen", o ? "0" : "1"); } catch { /* ignore */ }
+    return !o;
+  });
   const [season, setSeason] = useState<string>(ANY);
   const [opYear, setOpYear] = useState<string>(ANY);
   const [paddock, setPaddock] = useState<string>(ANY);
@@ -761,6 +768,18 @@ export default function CostReportsPage() {
         </Alert>
       )}
 
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm text-muted-foreground">
+          Costing setup & notices
+          {!setupOpen && (showMissingBanner || unassignedCount > 0) && " — some items need attention"}
+        </span>
+        <Button variant="ghost" size="sm" onClick={toggleSetup} aria-expanded={setupOpen}>
+          {setupOpen ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
+          {setupOpen ? "Hide setup & notices" : "Show setup & notices"}
+        </Button>
+      </div>
+
+      {setupOpen && (<>
       {selectedVineyardId && <CostingSetupWizard vineyardId={selectedVineyardId} />}
 
       {showMissingBanner && (
@@ -787,6 +806,8 @@ export default function CostReportsPage() {
           </AlertDescription>
         </Alert>
       )}
+      </>)}
+
 
       {/* Global filter bar — applies to every tab */}
       <Card className="p-3 flex flex-wrap gap-2 items-center">
