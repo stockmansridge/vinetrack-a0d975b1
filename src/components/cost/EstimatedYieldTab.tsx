@@ -5,7 +5,7 @@
 // a scenario. Overrides are in-memory only — nothing is written back — and
 // "Reset to estimates" restores every block to the estimate.
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import type { SeasonYieldBlockEstimate } from "@/lib/seasonYieldContract";
 import {
   buildBlockScenarioRows,
