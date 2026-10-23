@@ -46,6 +46,7 @@ import VintageNotesPage from "./pages/observations/VintageNotesPage";
 import SprayRecordsPage from "./pages/setup/SprayRecordsPage";
 import ManualSprayEntryPage from "./pages/setup/ManualSprayEntryPage";
 import WorkTasksPage from "./pages/setup/WorkTasksPage";
+import LabourLinesPage from "./pages/setup/LabourLinesPage";
 import MaintenancePage from "./pages/setup/MaintenancePage";
 import TripsPage from "./pages/setup/TripsPage";
 import YieldReportsPage from "./pages/setup/YieldReportsPage";
@@ -228,6 +229,7 @@ const App = () => (
                     <Route path="/spray-records/manual/new" element={<ManualSprayEntryPage />} />
                     <Route path="/spray-records/manual/:sprayRecordId/edit" element={<ManualSprayEntryPage />} />
                     <Route path="/work-tasks" element={<WorkTasksPage />} />
+                    <Route path="/work-tasks/labour-lines" element={<LabourLinesPage />} />
                     <Route path="/maintenance" element={<MaintenancePage />} />
                     <Route path="/trips" element={<TripsPage />} />
                     <Route path="/yield" element={<YieldReportsPage />} />
