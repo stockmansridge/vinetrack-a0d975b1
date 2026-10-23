@@ -64,7 +64,7 @@ export function NextFromProgramSections({ onOpen }: { onOpen: (step: SprayJob) =
               </TableCell>
               <TableCell className="font-medium">{s.name ?? "Untitled step"}</TableCell>
               <TableCell>{s.operation_type ?? "—"}</TableCell>
-              <TableCell>{s.target ?? (s.targets ?? []).join(", ") ?? "—"}</TableCell>
+              <TableCell>{s.target || (s.targets ?? []).join(", ") || "—"}</TableCell>
             </TableRow>
           ))}
         </TableBody>
