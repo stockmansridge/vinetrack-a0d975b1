@@ -80,7 +80,7 @@ describe("Labour Lines register", () => {
     const { qc, invalidate } = mount(<LabourLinesPage />);
     await screen.findByText("Correct this entry");
     fireEvent.click(screen.getByRole("button", { name: "Delete labour line" }));
-    fireEvent.click(screen.getByRole("button", { name: "Remove", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: /^Remove$/ }));
     await waitFor(() => expect(screen.queryByText("Correct this entry")).toBeNull());
     expect(state.softDelete).toHaveBeenCalledExactlyOnceWith("l1", "u1");
     expect(qc.getQueryData<WorkTaskLabourLine[]>(["work_task_labour_lines", "v1"])?.some((l) => l.id === "l1")).toBe(false);
@@ -100,7 +100,7 @@ describe("Existing Work Task labour row", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(state.softDelete).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Delete labour line" }));
-    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Remove", exact: true }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: /^Remove$/ }));
     await waitFor(() => expect(changed).toHaveBeenCalled());
     expect(changed.mock.calls[0][0]).toMatchObject({ id: "l1", deleted_at: expect.any(String) });
     expect(state.softDelete).toHaveBeenCalledExactlyOnceWith("l1", "u1");
