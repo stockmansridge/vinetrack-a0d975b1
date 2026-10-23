@@ -2,25 +2,32 @@ import { describe, expect, it } from "vitest";
 import { workTaskTypeBadgeClass, workTaskTypeColorKey } from "@/lib/workTaskTypeColor";
 
 describe("work task type colour coding", () => {
-  it("maps each default task type to its work family", () => {
+  it("maps each default task type to its individual colour key", () => {
     expect(workTaskTypeColorKey("Pruning")).toBe("canopy");
-    expect(workTaskTypeColorKey("Leaf plucking")).toBe("canopy");
-    expect(workTaskTypeColorKey("Shoot thinning")).toBe("canopy");
-    expect(workTaskTypeColorKey("Wire lifting")).toBe("canopy");
+    expect(workTaskTypeColorKey("Leaf plucking")).toBe("leaf");
+    expect(workTaskTypeColorKey("Shoot thinning")).toBe("shoot");
+    expect(workTaskTypeColorKey("Wire lifting")).toBe("wire");
     expect(workTaskTypeColorKey("Mowing")).toBe("ground");
-    expect(workTaskTypeColorKey("Slashing")).toBe("ground");
-    expect(workTaskTypeColorKey("Mulching")).toBe("ground");
-    expect(workTaskTypeColorKey("Weeding")).toBe("ground");
-    expect(workTaskTypeColorKey("Soil work")).toBe("ground");
+    expect(workTaskTypeColorKey("Slashing")).toBe("slashing");
+    expect(workTaskTypeColorKey("Mulching")).toBe("mulch");
+    expect(workTaskTypeColorKey("Weeding")).toBe("weed");
+    expect(workTaskTypeColorKey("Soil work")).toBe("soil");
     expect(workTaskTypeColorKey("Spraying")).toBe("spray");
     expect(workTaskTypeColorKey("Irrigation")).toBe("water");
     expect(workTaskTypeColorKey("Fertilising")).toBe("nutrient");
     expect(workTaskTypeColorKey("Harvesting")).toBe("harvest");
     expect(workTaskTypeColorKey("Planting")).toBe("planting");
-    expect(workTaskTypeColorKey("Replanting")).toBe("planting");
+    expect(workTaskTypeColorKey("Replanting")).toBe("replant");
     expect(workTaskTypeColorKey("Trellis repair")).toBe("repair");
     expect(workTaskTypeColorKey("Inspection")).toBe("inspection");
     expect(workTaskTypeColorKey("Other")).toBe("other");
+  });
+
+  it("keeps the task types in Jonathan's list distinct, ignoring case and whitespace", () => {
+    const types = ["Pruning", "Shoot Thinning", "Wire Lifting", "Mulching", "Removing Guards"];
+    expect(new Set(types.map(workTaskTypeColorKey)).size).toBe(5);
+    expect(workTaskTypeColorKey("  shoot   thinning  ")).toBe("shoot");
+    expect(workTaskTypeColorKey("Removing Guards")).toBe("guards");
   });
 
   it("gives every family a different colour so types stand apart in the list", () => {

@@ -43,6 +43,16 @@ export default {
         "map-accent": "hsl(var(--map-accent))",
         report: "hsl(var(--report-accent))",
         task: {
+          shoot: "hsl(var(--task-shoot))",
+          wire: "hsl(var(--task-wire))",
+          leaf: "hsl(var(--task-leaf))",
+          slashing: "hsl(var(--task-slashing))",
+          mulch: "hsl(var(--task-mulch))",
+          weed: "hsl(var(--task-weed))",
+          soil: "hsl(var(--task-soil))",
+          replant: "hsl(var(--task-replant))",
+          guards: "hsl(var(--task-guards))",
+
           canopy: "hsl(var(--task-canopy))",
           ground: "hsl(var(--task-ground))",
           spray: "hsl(var(--task-spray))",
