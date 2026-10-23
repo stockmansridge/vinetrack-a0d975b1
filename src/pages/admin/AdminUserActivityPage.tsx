@@ -32,7 +32,6 @@ import {
   AdminError,
   AdminEmpty,
   formatDate,
-  formatDateTime,
   formatRelative,
 } from "./_shared";
 import { PORTAL_APP_TYPE } from "@/lib/portalClientActivity";
@@ -407,14 +406,13 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
     label: "Status",
     className: "whitespace-nowrap",
     sortable: true,
-    sortValue: (r) => lastActivityMs(r),
     render: (r) => {
       const lastIso = lastActivityIso(r);
       return (
         <div className="flex flex-col gap-1">
           <span
             className={`inline-flex w-fit items-center px-2 py-0.5 rounded text-xs border ${statusClass(activityStatus(r))}`}
-            title={lastIso ? `Last activity ${formatDateTime(lastIso)}` : undefined}
+            title={lastIso ? `Last activity ${formatDate(lastIso)}` : undefined}
           >
             {ACTIVITY_STATUS_LABELS[activityStatus(r)]}
           </span>
