@@ -1,3 +1,4 @@
+import { friendlySaveError } from "@/lib/friendlySaveError";
 // Read-only query helper + types for `work_task_machine_lines`
 // (added by Rork SQL 103).
 //
@@ -223,7 +224,7 @@ export function describeMachineLineWriteError(err: unknown): string {
   if (/row-level security|permission denied|RLS|42501/i.test(msg)) {
     return "You don't have permission to make this change. Only owners, managers, or supervisors can edit machine work.";
   }
-  return msg || "Something went wrong. Please try again.";
+  return friendlySaveError(err, "machine work");
 }
 
 

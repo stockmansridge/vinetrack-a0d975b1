@@ -1,3 +1,4 @@
+import { friendlySaveError } from "@/lib/friendlySaveError";
 import { useMemo, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
@@ -1882,7 +1883,7 @@ function LabourLineRow({
   const fmtDate = mkFmtDate(rf);
   const money = mkMoney(rf);
   const [editing, setEditing] = useState(isNew);
-  const [workDate, setWorkDate] = useState(line?.work_date ?? "");
+  const [workDate, setWorkDate] = useState(line?.work_date ?? new Date().toISOString().slice(0, 10));
   const [categoryId, setCategoryId] = useState(line?.worker_type_id ?? NONE);
   const [workerCount, setWorkerCount] = useState(line?.worker_count == null ? "" : String(line.worker_count));
   const [hoursPerWorker, setHoursPerWorker] = useState(line?.hours_per_worker == null ? "" : String(line.hours_per_worker));
@@ -1909,6 +1910,7 @@ function LabourLineRow({
   const save = useMutation({
     mutationFn: async () => {
       if (!vineyardId) throw new Error("No vineyard");
+      if (!workDate) throw new Error("Work date is missing. Please select a work date, then press save again.");
       const input: UpsertLabourLineInput = {
         id: line?.id,
         work_task_id: taskId,
@@ -1930,7 +1932,7 @@ function LabourLineRow({
       setEditing(false);
       onChanged(savedLine);
     },
-    onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: "Save failed", description: friendlySaveError(e, "labour details"), variant: "destructive" }),
   });
 
   const del = useMutation({
@@ -1939,7 +1941,7 @@ function LabourLineRow({
       await softDeleteLabourLine(line.id, userId);
     },
     onSuccess: () => { toast({ title: "Labour line removed" }); onChanged(); },
-    onError: (e: any) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: "Delete failed", description: friendlySaveError(e, "labour details"), variant: "destructive" }),
   });
 
   if (!editing && line) {
