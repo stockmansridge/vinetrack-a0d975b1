@@ -1,5 +1,11 @@
 # Roadmap
 
+## Labour Lines live-data hardening
+- [x] Classify audit parents and exclude invalid children from normal aggregate reads; backend unchanged.
+- [x] Add solid surfaces, review summary/status filter and historical parent details.
+- [x] Run focused eligibility/report/UI regressions: 85 tests passed across 11 files; preview build OK.
+- [ ] Verify Stockman's register visually with a signed-in session — blocked: no preview auth session could be minted; browser redirected to /login. Supplied 39/5/53/$1,795 figures verified by fixture, not live reads.
+
 ## Work Task labour-line register
 - [x] Add vineyard-wide active Labour Lines view, filters, parent-task links and cost visibility.
 - [x] Share confirmed canonical soft deletion across register and task drawer; refresh dependent totals and local drawer rows.

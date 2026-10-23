@@ -6,6 +6,7 @@
 import { supabase } from "@/integrations/ios-supabase/client";
 import type { CostingMethod } from "@/lib/pieceRateCosting";
 import { completePayload, reopenPayload, completedDatePayload } from "@/lib/workTaskCompletion";
+import { eligibleLabourLines } from "@/lib/labourLineEligibility";
 
 /**
  * SQL 188 costing columns. Only emitted when the caller explicitly supplies a
@@ -178,6 +179,15 @@ export function workTaskShortLabel(
 export async function fetchLabourLinesForVineyard(
   vineyardId: string,
 ): Promise<WorkTaskLabourLine[]> {
+  const lines = await fetchLabourLinesForVineyardAudit(vineyardId);
+  const parents = await fetchWorkTasksByIds(lines.map((line) => line.work_task_id));
+  return eligibleLabourLines(lines, parents);
+}
+
+/** Audit register only: retained children are evidence, not normal aggregate inputs. */
+export async function fetchLabourLinesForVineyardAudit(
+  vineyardId: string,
+): Promise<WorkTaskLabourLine[]> {
   const { data, error } = await supabase
     .from("work_task_labour_lines")
     .select("*")
@@ -207,6 +217,16 @@ export async function fetchWorkTasksByIds(ids: string[]): Promise<WorkTask[]> {
     .select("*")
     .in("id", unique)
     .is("deleted_at", null);
+  if (error) throw error;
+  return (data ?? []) as WorkTask[];
+}
+
+/** Read-only, vineyard-scoped audit lookup. Normal task queries still exclude deleted parents. */
+export async function fetchLabourLineParentsForAudit(vineyardId: string, ids: string[]): Promise<WorkTask[]> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (!unique.length) return [];
+  const { data, error } = await supabase.from("work_tasks").select("*")
+    .eq("vineyard_id", vineyardId).in("id", unique);
   if (error) throw error;
   return (data ?? []) as WorkTask[];
 }

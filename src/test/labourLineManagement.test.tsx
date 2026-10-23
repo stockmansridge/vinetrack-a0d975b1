@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
-import type { WorkTaskLabourLine } from "@/lib/workTasksQuery";
+import type { WorkTaskLabourLine, WorkTask } from "@/lib/workTasksQuery";
 import { AU_FORMATTERS } from "@/lib/regionFormatters";
 import { resolveLocation, ACTIVITIES } from "@/lib/navigationConfig";
 
-const state = vi.hoisted(() => ({ role: "owner", lines: [] as WorkTaskLabourLine[], softDelete: vi.fn(), fetchLines: vi.fn() }));
+const state = vi.hoisted(() => ({ role: "owner", lines: [] as WorkTaskLabourLine[], parents: [] as WorkTask[], softDelete: vi.fn(), fetchLines: vi.fn() }));
 vi.mock("@/context/VineyardContext", () => ({ useVineyard: () => ({ selectedVineyardId: "v1", currentRole: state.role }) }));
 vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 vi.mock("@/lib/useRegionFormatters", () => ({ useRegionFormatters: () => AU_FORMATTERS }));
@@ -16,6 +16,8 @@ vi.mock("@/lib/operatorCategoriesQuery", () => ({ fetchOperatorCategoriesForVine
 vi.mock("@/lib/workTasksQuery", async (original) => ({
   ...await original<typeof import("@/lib/workTasksQuery")>(),
   fetchLabourLinesForVineyard: state.fetchLines,
+  fetchLabourLinesForVineyardAudit: state.fetchLines,
+  fetchLabourLineParentsForAudit: vi.fn(async () => state.parents),
   fetchWorkTasksForVineyard: vi.fn(async () => ({ tasks: [{ id: "t1", vineyard_id: "v1", task_type: "Pruning", description: "North rows", paddock_id: "b1", date: "2026-10-23" }] })),
   fetchWorkTasksByIds: vi.fn(async () => []),
   fetchWorkTaskPaddocksForVineyard: vi.fn(async () => [{ id: "j1", vineyard_id: "v1", work_task_id: "t1", paddock_id: "b1" }]),
@@ -35,6 +37,7 @@ function mount(ui: React.ReactNode) {
 }
 beforeEach(() => {
   state.role = "owner";
+  state.parents = [{ id: "t1", vineyard_id: "v1", task_type: "Pruning", description: "North rows", paddock_id: "b1", date: "2026-10-23" }];
   state.lines = [{ ...line }, { ...line, id: "deleted", deleted_at: "2026-10-22", notes: "Deleted record" }, { ...line, id: "other", vineyard_id: "v2", notes: "Other vineyard record" }];
   state.fetchLines.mockReset().mockImplementation(async () => [...state.lines]);
   state.softDelete.mockReset().mockImplementation(async (id: string) => { state.lines = state.lines.filter((l) => l.id !== id); });
@@ -94,11 +97,50 @@ describe("Labour Lines register", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Remove$/ }));
     await waitFor(() => expect(screen.queryByText("Correct this entry")).toBeNull());
     expect(state.softDelete).toHaveBeenCalledExactlyOnceWith("l1", "u1");
-    expect(qc.getQueryData<WorkTaskLabourLine[]>(["work_task_labour_lines", "v1"])?.some((l) => l.id === "l1")).toBe(false);
+    expect(qc.getQueryData<WorkTaskLabourLine[]>(["labour-line-audit", "v1"])?.some((l) => l.id === "l1")).toBe(false);
     for (const key of [["work_task_labour_lines", "v1"], ["work-task-effective-labour-cost", "v1"], ["work_tasks", "v1"], ["cost-report-work-task-sources", "v1"]]) {
       expect(invalidate).toHaveBeenCalledWith({ queryKey: key });
     }
     expect(state.fetchLines.mock.calls.length).toBeGreaterThan(1);
+  });
+  it("separates deleted and missing parents, hides their opening actions, and retains confirmed removal", async () => {
+    state.parents.push({ id: "td", vineyard_id: "v1", task_type: "Wire Lifting", description: "Historical south rows", date: "2026-09-03", deleted_at: "2026-10-20", paddock_id: "b1" });
+    state.lines = [line, { ...line, id: "ld", work_task_id: "td", total_hours: 40, total_cost: 1400, notes: "Deleted parent child" }, { ...line, id: "lm", work_task_id: "missing", notes: "Missing parent child" }];
+    mount(<LabourLinesPage />);
+    await screen.findByText("1 active labour line");
+    expect(screen.getByText("2 labour lines need review")).toBeInTheDocument();
+    expect(screen.getByText(`53 person-hours · ${AU_FORMATTERS.currency(1855)} excluded from totals`)).toBeInTheDocument();
+    expect(screen.queryByText("Deleted parent child")).toBeNull();
+    // Select via its keyboard interaction, as a customer does.
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "Status" }), { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("option", { name: "Needs review" }));
+    expect(screen.getByText("Parent Work Task deleted")).toBeInTheDocument();
+    expect(screen.getByText("Parent Work Task missing")).toBeInTheDocument();
+    expect(screen.getByText(/Wire Lifting · Historical south rows/)).toBeInTheDocument();
+    expect(screen.queryByText("Parent Work Task unavailable")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Open Work Task" })).toBeNull();
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete labour line" })[0]);
+    expect(state.softDelete).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(state.softDelete).not.toHaveBeenCalled();
+  });
+  it("assigns opaque semantic content surfaces to table, header, body, rows and filters", async () => {
+    mount(<LabourLinesPage />);
+    await screen.findByText("Correct this entry");
+    const table = screen.getByRole("table");
+    expect(table).toHaveClass("bg-card");
+    expect(table.querySelector("thead")).toHaveClass("bg-card");
+    expect(table.querySelector("tbody")).toHaveClass("bg-card");
+    table.querySelectorAll("tr").forEach((row) => expect(row).toHaveClass("bg-card", "hover:bg-card"));
+    expect(screen.getByLabelText("Search").closest(".grid")).toHaveClass("bg-card");
+  });
+  it.each(["supervisor", "operator"])("does not expose excluded costs to %s", async (role) => {
+    state.role = role;
+    state.parents[0].deleted_at = "2026-10-20";
+    mount(<LabourLinesPage />);
+    await screen.findByText("1 labour line needs review");
+    expect(screen.getByText("13 person-hours excluded from totals")).toBeInTheDocument();
+    expect(screen.queryByText(/455/)).toBeNull();
   });
 });
 
