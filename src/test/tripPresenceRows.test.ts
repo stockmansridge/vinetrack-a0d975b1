@@ -124,7 +124,11 @@ describe("trip presence rows — uncosted completed Trips", () => {
       workTasks: [{
         task, vintageYear: 2027,
         labourLines: [], machineLines: [], materialLines: [],
-        effectiveLabourCost: { effectiveCost: 97, labourHours: 2, source: "lines" } as any,
+        effectiveLabourCost: {
+          work_task_id: "task-1", vineyard_id: VINEYARD, costing_method: "hourly",
+          piece_rate_per_vine: null, piece_vine_count: null, piece_rate_total_cost: null,
+          labour_line_cost: 97, effective_labour_cost: 97, labour_cost_source: "lines",
+        } as any,
       }],
       taskPaddocks: [{ work_task_id: "task-1", paddock_id: BLOCKS[0].id } as any],
     });
