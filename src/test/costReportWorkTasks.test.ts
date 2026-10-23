@@ -68,7 +68,7 @@ describe("central cost report Work Task regressions", () => {
     expect(ds.rows.reduce((s, r) => s + r.labour_cost, 0)).toBe(18937);
     expect(total(ds.rows)).toBeCloseTo(18957.79, 8);
     const byFunction = aggregateBy(ds.rows, (r) => r.function ?? "");
-    expect(byFunction.find((r) => r.name === "mulching")?.total).toBe(96.79);
+    expect(byFunction.find((r) => r.name === "mulching")?.total).toBeCloseTo(96.79, 8);
     expect(ds.rows.every((r) => r.vintage_year === 2027)).toBe(true);
   });
 });
@@ -81,6 +81,9 @@ describe("shared report allocation evidence", () => {
     expect(700 / (r.totalAreaHa ?? 0)).toBeCloseTo(564.879, 2);
     expect(r.allocations[0].share).toBe(1);
     expect(r.warnings).toHaveLength(0);
+    const ds = buildUnifiedCostDataset({ vineyardId, blocks: [polygonBlock], taskPaddocks: [link("t1", "p1")], pruningRows: pruning(), workTasks: [{ task: task(), labourLines: [labour("t1", 700)] }] });
+    expect(ds.rows.reduce((s, row) => s + row.allocation_area_ha, 0)).toBe(r.totalAreaHa);
+    expect(total(ds.rows)).toBe(700);
   });
   it("preserves the saved 30 August area and $315 cost/ha", () => {
     const r = resolveWorkTaskReportAllocation(task("t1", { area_ha: 1.075619921875 }), [link("t1", "p1", 1.075619921875)], blocks, pruning());
@@ -114,5 +117,12 @@ describe("shared report allocation evidence", () => {
   });
   it("counts multi-block trips by distinct IDs at every aggregation scope", () => {
     expect(distinctTripCount([trip("a1"), trip("a2", "p2"), { ...trip("a3"), trip_id: "gps2" }, { trip_id: null }])).toBe(2);
+  });
+  it("ignores reversed and skipped pruning evidence and duplicate block links", () => {
+    const rows = pruning(); rows[0].isReversed = true;
+    const r = resolveWorkTaskReportAllocation(task(), [link("t1", "p1", 2), link("t1", "p1", 2)], blocks, rows);
+    expect(r.allocations).toHaveLength(1);
+    expect(r.totalAreaHa).toBe(2);
+    expect(r.basis).toBe("saved_block_area");
   });
 });

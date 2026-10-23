@@ -44,8 +44,7 @@ export function resolveWorkTaskReportAllocation(
   const activeLinks = links.filter((l) => !l.deleted_at && l.work_task_id === task.id);
   const pruning = pruningRows.filter((p) => !p.isReversed && !p.isSkipped && pruningTaskIds(p).includes(task.id));
   const ids = [...new Set([
-    ...activeLinks.map((l) => l.paddock_id),
-    ...(task.paddock_id ? [task.paddock_id] : []),
+    ...(activeLinks.length ? activeLinks.map((l) => l.paddock_id) : task.paddock_id ? [task.paddock_id] : []),
     ...pruning.map((p) => p.paddockId),
   ])];
   const blockMap = new Map(blocks.map((b) => [b.id, b]));
