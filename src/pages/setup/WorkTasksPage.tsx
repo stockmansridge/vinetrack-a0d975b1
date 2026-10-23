@@ -154,6 +154,7 @@ import { useTeamLookup } from "@/hooks/useTeamLookup";
 import ResourcePicker from "@/components/people/ResourcePicker";
 import { useExternalResources } from "@/components/people/ExternalResourcesCard";
 import { COMPLETED_BADGE_CLASS } from "@/lib/workTaskCompletion";
+import { workTaskTypeBadgeClass, workTaskTypeDotClass } from "@/lib/workTaskTypeColor";
 import { EL_TARGET_OPTIONS, elStageLabel, isElScheduled, matchesElRange, scheduleBasisOf, scheduleCell, schedulePayload, validateSchedule, workTaskDateBounds, type ScheduleBasis } from "@/lib/workTaskSchedule";
 import { sortWorkTasksDefault } from "@/lib/workTaskDefaultOrder";
 import { canManageExternalResources, workTaskAssignmentFields, workTaskAssignmentValue, type ExternalResource, type ResourceValue } from "@/lib/externalResources";
