@@ -50,7 +50,7 @@ import {
 import {
   groupPlatformsByUser,
   platformDetailsCsvField,
-  platformDetailsLine,
+  platformStackValue,
   userUsedAppType,
   type PlatformActivityRow,
 } from "@/lib/userActivityQuery";
