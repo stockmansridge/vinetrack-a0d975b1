@@ -3,7 +3,7 @@
 // which is RLS-restricted to owner/manager. We additionally gate the
 // query and the entire page behind useCanSeeCosts().
 import { HelpHint } from "@/components/ui/HelpHint";
-import { useMemo, useState, Fragment } from "react";
+import { useEffect, useMemo, useState, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Lock, Download, AlertTriangle, Info, BarChart3, ChevronUp, ChevronDown } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -216,7 +216,7 @@ export default function CostReportsPage() {
     canSeeCosts ? selectedVineyardId : null,
   );
 
-  const { seasonStartMonth, seasonStartDay } = useVintage();
+  const { seasonStartMonth, seasonStartDay, vintage: currentVintage } = useVintage();
   const reportTasksQ = useQuery({
     queryKey: ["cost-report-work-task-sources", selectedVineyardId],
     enabled: !!selectedVineyardId && canSeeCosts,
@@ -337,6 +337,10 @@ export default function CostReportsPage() {
     return !o;
   });
   const [season, setSeason] = useState<string>(ANY);
+  // Like the other report pages, the report opens on the vineyard's current
+  // Vintage when that Vintage has records; "All" is only the fallback and the
+  // result of an explicit filter clear.
+  const [defaultedSeasonForVineyard, setDefaultedSeasonForVineyard] = useState<string | null>(null);
   const [opYear, setOpYear] = useState<string>(ANY);
   const [paddock, setPaddock] = useState<string>(ANY);
   const [variety, setVariety] = useState<string>(ANY);
