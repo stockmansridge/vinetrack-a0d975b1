@@ -27,6 +27,7 @@ import { fetchEffectiveLabourCosts } from "@/lib/effectiveLabourCost";
 import { fetchWorkTaskMaterials } from "@/lib/materialsQuery";
 import { distinctTripCount, type ReportBlock } from "@/lib/workTaskReportAllocation";
 import { useVintage } from "@/lib/useVintage";
+import { defaultSeasonOption } from "@/lib/reportSeasonDefault";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 import { usePruningActivity } from "@/lib/pruningActivityQuery";
 import { useChemicalAllocationOverlay } from "@/lib/useChemicalAllocationOverlay";
