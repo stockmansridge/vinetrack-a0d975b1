@@ -121,7 +121,7 @@ interface AllocRow {
 }
 
 const ANY = "__any__";
-const OVERLAP_SOURCES = new Set(["missed_trip", "trip_failed", "correction"]);
+
 
 /** Column registry keys for the Task Summary table. */
 type TaskColKey =
@@ -1318,7 +1318,7 @@ export default function WorkTaskReportsPage() {
       const status = allocationStatus(r);
       const isReview = status !== "OK";
       return isReview ? (
-        <span title={r.allocation.warnings.length ? r.allocation.warnings.join(" ") : "Review: linked GPS trips and manual correction/missed machine entries may overlap."}>
+        <span title={allocationStatus(r)}>
           <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 gap-1">
             <AlertTriangle className="h-3 w-3" /> {status}
           </Badge>
@@ -1883,7 +1883,7 @@ export default function WorkTaskReportsPage() {
                         )}
                         <TableCell>
                           {isReview ? (
-                            <span title={r.allocation.warnings.length ? r.allocation.warnings.join(" ") : "Review: linked GPS trips and manual correction/missed machine entries may overlap."}>
+                            <span title={allocationStatus(r)}>
                               <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 gap-1">
                                 <AlertTriangle className="h-3 w-3" /> {status}
                               </Badge>
