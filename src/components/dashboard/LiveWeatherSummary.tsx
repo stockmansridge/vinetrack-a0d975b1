@@ -46,6 +46,7 @@ import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import type { RegionFormatters } from "@/lib/regionFormatters";
 
 const SOURCE_LABELS: Record<string, string> = {
+  mait_intelliweb: "MAIT iNTELLiWeb",
   davis_weatherlink: "Davis WeatherLink",
   davis: "Davis WeatherLink",
   wunderground: "Weather Underground",

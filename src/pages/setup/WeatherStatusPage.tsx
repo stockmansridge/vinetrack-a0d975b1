@@ -13,6 +13,8 @@ import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PortalNotice } from "@/components/ui/PortalNotice";
 import { AlertTriangle } from "lucide-react";
+import { MaitWeatherCard, useMait } from "@/components/mait/MaitWeatherCard";
+import { fetchLocalObservationProvider, observationProviderLabel, refreshObservationProvider, providerFromObservationSource } from "@/lib/localObservationProvider";
 
 import {
   Collapsible,
@@ -102,6 +104,11 @@ export default function WeatherStatusPage() {
   const { selectedVineyardId, currentRole } = useVineyard();
   const showWeatherDiagnostics = useDiagnosticPanel("show_weather_diagnostics");
   const qc = useQueryClient();
+  const observationSource = useQuery({
+    queryKey: ["local-observation-provider", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => selectedVineyardId ? fetchLocalObservationProvider(selectedVineyardId) : Promise.resolve("none" as const),
+  });
   const { data, isLoading, error } = useQuery({
     queryKey: ["weather_status", selectedVineyardId],
     enabled: !!selectedVineyardId,
@@ -181,13 +188,7 @@ export default function WeatherStatusPage() {
             <SourceCard
               icon={<Droplets className="h-4 w-4" />}
               label="Observation source"
-              value={
-                davis?.configured && davis.is_active
-                  ? "Davis WeatherLink"
-                  : wu?.configured && wu.is_active
-                    ? "Weather Underground"
-                    : "None"
-              }
+              value={observationSource.isPending ? "Loading…" : observationProviderLabel(observationSource.data ?? "none")}
               hint="Live in-vineyard observations."
             />
             <SourceCard
@@ -213,6 +214,7 @@ export default function WeatherStatusPage() {
             canEdit={canEdit}
           />
 
+          <div className="grid items-start gap-4 xl:grid-cols-3">
           <DavisCard
 
             status={davis}
@@ -232,6 +234,9 @@ export default function WeatherStatusPage() {
               qc.invalidateQueries({ queryKey: ["weather_status", selectedVineyardId] })
             }
           />
+
+          {selectedVineyardId && <MaitWeatherCard key={selectedVineyardId} vineyardId={selectedVineyardId} />}
+          </div>
 
           <p className="text-xs text-muted-foreground">
             Weather credentials are stored securely server-side and are never
@@ -749,6 +754,9 @@ function LiveWeatherCard({
   anyConfigured: boolean;
 }) {
   const rf = useRegionFormatters();
+  const mait = useMait(vineyardId);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const { data, isLoading, refetch, isFetching } = useQuery<LiveWeatherResult>({
     queryKey: ["live_weather", vineyardId],
     enabled: !!vineyardId,
@@ -770,14 +778,25 @@ function LiveWeatherCard({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => refetch()}
-          disabled={isFetching}
+          onClick={async () => {
+            setRefreshing(true); setRefreshError(null);
+            try {
+              const provider = await fetchLocalObservationProvider(vineyardId);
+              const result = await refreshObservationProvider(vineyardId, provider);
+              if (!result.ok) setRefreshError(result.message ?? "Live observations could not be refreshed.");
+              await refetch();
+            } catch (e) { setRefreshError(e instanceof Error ? e.message : "Could not refresh live observations."); }
+            finally { setRefreshing(false); }
+          }}
+          disabled={isFetching || refreshing}
           className="gap-1"
         >
           {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
           Refresh
         </Button>
       </div>
+
+      {refreshError && <Alert variant="destructive"><AlertDescription>{refreshError}</AlertDescription></Alert>}
 
       {isLoading && (
         <div className="text-sm text-muted-foreground">Loading current weather…</div>
@@ -787,7 +806,7 @@ function LiveWeatherCard({
         <LiveEmptyState
           reason={data.reason}
           message={data.message}
-          anyConfigured={anyConfigured}
+          anyConfigured={anyConfigured || mait.connected}
         />
       )}
 
@@ -819,7 +838,7 @@ function LiveWeatherCard({
             <Reading icon={<Cloud className="h-3.5 w-3.5" />} label="Station" value={data.reading.station_name ?? "—"} />
           </div>
           <div className="text-xs text-muted-foreground border-t pt-2 flex flex-wrap gap-x-4 gap-y-1">
-            <span>Source: {data.reading.source ?? "—"}</span>
+            <span>Source: {providerFromObservationSource(data.reading.source) ? observationProviderLabel(providerFromObservationSource(data.reading.source) ?? "none") : data.reading.source ?? "—"}</span>
             <span>Last observation: {fmtDate(data.reading.observed_at)}</span>
           </div>
         </div>
@@ -852,8 +871,8 @@ function LiveEmptyState({
   if (reason === "not_configured" || !anyConfigured) {
     return (
       <div className="rounded-md border bg-muted/40 px-3 py-3 text-sm">
-        No weather provider is configured for this vineyard yet. Configure Davis
-        WeatherLink below to start collecting in-vineyard observations.
+        No weather provider is configured for this vineyard yet. Configure a
+        local observation source below to start collecting in-vineyard observations.
       </div>
     );
   }
