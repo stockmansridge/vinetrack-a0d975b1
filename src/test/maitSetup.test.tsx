@@ -79,8 +79,8 @@ describe('MAIT setup actions', () => {
     mocks.connected=true; mount(<MaitWeatherCard vineyardId="v" />);
     fireEvent.click(await screen.findByRole('button',{name:'Inspect weather channels'}));
     const chooser=await screen.findByRole('combobox',{name:'Use channel Rain as'});
-    if(metric!=='none') { fireEvent.click(chooser); fireEvent.click(await screen.findByRole('option',{name:label,exact:true})); }
-    if(metric==='rainfall') {fireEvent.click(screen.getByRole('combobox',{name:'Rainfall meaning'})); fireEvent.click(await screen.findByRole('option',{name:'Daily cumulative rainfall',exact:true}));}
+    if(metric!=='none') { fireEvent.click(chooser); fireEvent.click(await screen.findByRole('option',{name:label})); }
+    if(metric==='rainfall') {fireEvent.click(screen.getByRole('combobox',{name:'Rainfall meaning'})); fireEvent.click(await screen.findByRole('option',{name:'Daily cumulative rainfall'}));}
     if(screen.queryByRole('button',{name:'Confirm conversion'})) fireEvent.click(screen.getByRole('button',{name:'Confirm conversion'}));
     fireEvent.click(screen.getByRole('button',{name:'Confirm mapping'}));
     await waitFor(()=>expect(mocks.rpc).toHaveBeenCalledWith('save_mait_intelliweb_channel_mapping',expect.objectContaining({p_module_id:'weather',p_channel_key:'Rain',p_channel_number:8,p_canonical_metric:metric,p_is_active:metric!=='none'})));
