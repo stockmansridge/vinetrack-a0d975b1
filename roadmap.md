@@ -1,5 +1,11 @@
 # Roadmap
 
+## MAIT iNTELLiWeb Portal support
+- [ ] Add shared RPC/proxy helpers, access presentation and credential/module/channel confirmation in Weather setup.
+- [ ] Extend explicit local observation selection and refresh without changing legacy fallback or forecasts.
+- [ ] Add controller/module/valve mappings and manual three-day overlap sync in Irrigation setup; canonical source labels.
+- [ ] Focused safety tests and preview verification; no backend/mobile edits or deployment/publication.
+
 ## Deleted demo vineyards in selection
 - [x] Refresh active membership reads, reject archived/missing parents, and clear stale selection after successful empty reads.
 - [x] Refresh membership caches after account deletion and show incomplete-deletion errors instead of claiming vineyards were removed.
