@@ -3,6 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import YieldReportsPage from "@/pages/setup/YieldReportsPage";
 
 const BLOCK = "11111111-1111-1111-1111-111111111111";
@@ -94,11 +95,13 @@ vi.mock("@/lib/userTablePreferencesQuery", () => ({
   }),
 }));
 
-function renderPage() {
+function renderPage(initialEntries: string[] = ["/yield"]) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <YieldReportsPage />
+      <MemoryRouter initialEntries={initialEntries}>
+        <YieldReportsPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
