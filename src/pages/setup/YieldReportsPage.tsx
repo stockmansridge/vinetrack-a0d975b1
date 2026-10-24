@@ -93,6 +93,7 @@ import {
 import { useVintage } from "@/lib/useVintage";
 import GrapeAllocationPanel, { type GrapeAllocationPanelRef } from "@/components/yield/GrapeAllocationPanel";
 import { varietyKeyOf } from "@/lib/grapeAllocationModel";
+import { initialYieldTab, type YieldTab } from "@/lib/yieldTab";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 import { buildVarietyMap, resolvePaddockAllocations, useGrapeVarieties } from "@/lib/varietyResolver";
 import { summariseYieldSession, type SessionBlockInfo } from "@/lib/yieldSessionSummary";
