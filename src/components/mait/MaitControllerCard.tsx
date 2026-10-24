@@ -21,7 +21,7 @@ export function MaitSyncStatus({ data, moduleId, timezone }: { data: Row; module
     if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) return 'Not reported';
     return new Intl.DateTimeFormat(undefined, { timeZone: timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
   };
-  const values: [string, unknown][] = [
+  const values: [string, any][] = [
     ['Last sync attempt', timestamp(state.last_sync_attempt_at)], ['Last successful sync', timestamp(state.last_successful_sync_at)],
     ...(state.last_source_event_at == null ? [] : [['Last source event', timestamp(state.last_source_event_at)] as [string, unknown]]),
     ['Received', state.records_received], ['Created / staged', state.records_created],
