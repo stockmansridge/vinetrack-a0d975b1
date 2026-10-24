@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AU_FORMATTERS } from "@/lib/regionFormatters";
@@ -54,6 +54,7 @@ describe("New labour line default work date", () => {
 
   it("keeps the saved date of an existing line", () => {
     mount(<LabourLineRow line={savedLine} categories={[]} canSoftDelete userId="u1" vineyardId="v1" taskId="t1" onChanged={() => {}} timeZone={SYDNEY} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(dateInputValue()).toBe("2026-09-03");
   });
 });
