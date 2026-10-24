@@ -1,4 +1,4 @@
-import { maitConfigurationFixture, maitInspectFixture } from './fixtures/maitLiveContract';
+import { maitConfigurationFixture, maitInspectFixture, maitIntegrationStatusFixture, maitSyncFixture, maitSyncStatusFixture } from './fixtures/maitLiveContract';
 import { MAIT_METRICS } from '@/lib/maitIntelliwebQuery';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -14,7 +14,7 @@ function mount(ui: React.ReactNode) { return render(<QueryClientProvider client=
 beforeEach(() => { cleanup(); vi.clearAllMocks(); mocks.manage=true; mocks.connected=false; mocks.conflict=false; mocks.config=maitConfigurationFixture(); mocks.rpc.mockImplementation(async (name:string,args:any) => {
   if (name === 'has_mait_intelliweb_manage_access') return {data:mocks.manage};
   if (name === 'has_mait_intelliweb_view_access') return {data:true};
-  if (name === 'get_vineyard_weather_integration') return {data:{configured:mocks.connected}};
+  if (name === 'get_vineyard_weather_integration') return {data:mocks.connected ? [maitIntegrationStatusFixture] : []};
   if (name === 'get_mait_intelliweb_configuration') return {data:mocks.connected ? mocks.config : {}};
   if (name === 'set_mait_intelliweb_controller_module') mocks.config.modules.push({id:'new-row',module_id:args.p_module_id,module_name:args.p_module_name,module_role:'irrigation_controller',irrigation_system_id:args.p_irrigation_system_id,is_active:true,metadata:{},updated_at:null});
   if (name === 'set_mait_intelliweb_weather_module') { mocks.config.modules = mocks.config.modules.filter(m=>m.module_role!=='weather'); mocks.config.modules.push({id:'new-weather',module_id:args.p_module_id,module_name:args.p_module_name,module_role:'weather',irrigation_system_id:null,is_active:true,metadata:{},updated_at:null}); }
@@ -62,7 +62,7 @@ describe('MAIT setup actions', () => {
   it('does not substitute station_id for a missing network_id', async () => {
     mocks.connected=true; (mocks.config.connection as any).network_id=null;
     const original=mocks.rpc.getMockImplementation();
-    mocks.rpc.mockImplementation(async(name,args)=>name==='get_vineyard_weather_integration'?{data:{configured:true,station_id:'MODULE_NOT_NETWORK'}}:original?.(name,args));
+    mocks.rpc.mockImplementation(async(name,args)=>name==='get_vineyard_weather_integration'?{data:[{...maitIntegrationStatusFixture,station_id:'MODULE_NOT_NETWORK'}]}:original?.(name,args));
     mount(<MaitWeatherCard vineyardId="v" />);
     fireEvent.click(await screen.findByRole('button',{name:'Change credentials'}));
     expect(screen.getByLabelText('Network ID')).toHaveValue('');
@@ -117,5 +117,49 @@ describe('MAIT setup actions', () => {
     fireEvent.click(screen.getByRole('button',{name:'Inspect weather channels'}));
     await screen.findByRole('button',{name:'Confirm mapping'});
     expect((fetch as any).mock.calls.map((c:any)=>JSON.parse(c[1].body))).toContainEqual({vineyardId:'v',action:'inspect_module',moduleId:'new-module',scope:'existing'});
+  });
+ });
+
+ describe('final MAIT live status flows', () => {
+  it('shows active raw integration to view-only users without network details', async () => {
+    mocks.manage=false; mocks.connected=true; mount(<MaitWeatherCard vineyardId="v" />);
+    await screen.findByText('Connected');
+    expect(screen.getByText('Weather station')).toBeInTheDocument();
+    expect(screen.queryByText(/Network ID/)).not.toBeInTheDocument();
+    expect(mocks.rpc.mock.calls.some(c=>c[0]==='get_mait_intelliweb_configuration')).toBe(false);
+  });
+  it('does not mark inactive integration connected for view-only members', async () => {
+    mocks.manage=false; const original=mocks.rpc.getMockImplementation();
+    mocks.rpc.mockImplementation(async(name,args)=>name==='get_vineyard_weather_integration'?{data:[{...maitIntegrationStatusFixture,is_active:false}]}:original?.(name,args));
+    mount(<MaitWeatherCard vineyardId="v" />);
+    await screen.findByText('Your vineyard owner or manager manages this MAIT connection.');
+    expect(screen.getByText('Not connected')).toBeInTheDocument();
+    expect(screen.queryByText(/Network ID/)).not.toBeInTheDocument();
+  });
+  it('renders real sync_status envelope after checking selected controller', async () => {
+    mocks.connected=true;
+    vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify(maitSyncStatusFixture))));
+    mount(<MaitControllerCard vineyardId="v" />);
+    fireEvent.click(await screen.findByRole('combobox',{name:'Choose controller module'}));
+    fireEvent.click(await screen.findByRole('option',{name:'controller · Pump'}));
+    fireEvent.click(await screen.findByRole('button',{name:'Check sync status'}));
+    await screen.findByText('Last attempt');
+    expect(screen.getByRole('status')).toHaveTextContent('Created / staged4');
+    expect(screen.getByRole('status')).toHaveTextContent('Already existing2');
+    expect(screen.queryByText('Committed')).not.toBeInTheDocument();
+    expect((fetch as any).mock.calls.map((c:any)=>JSON.parse(c[1].body))).toContainEqual({vineyardId:'v',action:'sync_status'});
+  });
+  it('renders partial sync_usage success false through the manual sync flow', async () => {
+    mocks.connected=true; const original=mocks.rpc.getMockImplementation();
+    mocks.rpc.mockImplementation(async(name,args)=>name==='get_mait_intelliweb_controller_mappings'?{data:[{external_valve_number:2,irrigation_valve_id:'valve'}]}:original?.(name,args));
+    vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify(maitSyncFixture),{status:206})));
+    mount(<MaitControllerCard vineyardId="v" />);
+    fireEvent.click(await screen.findByRole('combobox',{name:'Choose controller module'}));
+    fireEvent.click(await screen.findByRole('option',{name:'controller · Pump'}));
+    const sync=await screen.findByRole('button',{name:'Sync now'}); await waitFor(()=>expect(sync).toBeEnabled());
+    fireEvent.click(sync);
+    await screen.findByText('Committed');
+    expect(screen.getByRole('status')).toHaveTextContent('Committed4');
+    expect(screen.getByRole('status')).toHaveTextContent('partial/truncated');
   });
  });

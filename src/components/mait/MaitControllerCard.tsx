@@ -7,12 +7,27 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useIrrigationSystems, useIrrigationValves } from '@/lib/irrigationQuery';
-import { maitRpc, maitProxy, maitModules, maitOutputs, maitRows, maitDateWindow, maitSyncCounts, MAIT_PROVIDER, MAIT_PARTIAL_WARNING, type MaitResult } from '@/lib/maitIntelliwebQuery';
+import { maitRpc, maitProxy, maitModules, maitOutputs, maitRows, maitDateWindow, maitSyncCounts, maitControllerSyncState, MAIT_PROVIDER, MAIT_PARTIAL_WARNING, type MaitResult } from '@/lib/maitIntelliwebQuery';
 import { MaitChoice, useMait } from './MaitWeatherCard';
 
 type Row = Record<string, any>;
 export function MaitSyncResult({ result }: { result: MaitResult }) {
   return <div className="space-y-3" role="status">{result.partial && <Alert variant="destructive"><AlertDescription>{MAIT_PARTIAL_WARNING}</AlertDescription></Alert>}{result.empty ? <p>MAIT returned no usage data for this range.</p> : <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">{maitSyncCounts(result.data).map(([label, count]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="font-semibold">{count ?? 'Not reported'}</dd></div>)}</dl>}</div>;
+}
+export function MaitSyncStatus({ data, moduleId, timezone }: { data: Row; moduleId: string; timezone: string }) {
+  const state = maitControllerSyncState(data, moduleId);
+  if (!state) return <p role="status" className="text-sm text-muted-foreground">No sync status recorded for this controller.</p>;
+  const timestamp = (value: unknown) => {
+    if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) return 'Not reported';
+    return new Intl.DateTimeFormat(undefined, { timeZone: timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+  };
+  const values = [
+    ['Last attempt', timestamp(state.last_attempt_at)], ['Last success', timestamp(state.last_success_at)],
+    ['Received', state.records_received], ['Created / staged', state.records_created],
+    ['Already existing', state.records_existing], ['Needs mapping', state.records_needing_mapping],
+    ['Needs review', state.records_needing_review],
+  ];
+  return <div role="status" className="space-y-3">{state.incomplete_range === true && <Alert variant="destructive"><AlertDescription>{MAIT_PARTIAL_WARNING}</AlertDescription></Alert>}<dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">{values.map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="font-semibold">{value ?? 'Not reported'}</dd></div>)}</dl></div>;
 }
 export function MaitControllerCard({ vineyardId }: { vineyardId: string }) {
   const { access, configuration, config, connected, timezone } = useMait(vineyardId);
@@ -26,6 +41,7 @@ export function MaitControllerCard({ vineyardId }: { vineyardId: string }) {
   const [notice, setNotice] = useState('');
   const [partialDiscovery, setPartialDiscovery] = useState(false);
   const [result, setResult] = useState<MaitResult | null>(null);
+  const [syncStatus, setSyncStatus] = useState<Row | null>(null);
   const controllers = config.controllerModules;
   const connection = config.connection;
   const controller = controllers.find(c => String(c.module_id) === moduleId);
@@ -45,7 +61,7 @@ export function MaitControllerCard({ vineyardId }: { vineyardId: string }) {
       <p className="text-sm text-muted-foreground">{connection.network_name || 'Connected MAIT network'}</p>
       {notice && <Alert><AlertDescription>{notice}</AlertDescription></Alert>}
       <Button variant="outline" disabled={run.isPending} onClick={() => act(async () => { const r = await maitProxy(vineyardId, 'modules'); setModules(maitModules(r.data)); if (r.empty) setNotice('MAIT returned no modules.'); })}>Load controller modules</Button>
-      <div className="grid gap-3 sm:grid-cols-2"><MaitChoice label="Choose controller module" value={moduleId} onChange={v => { setModuleId(v); setSystemId(''); setOutputs(null); setResult(null); setPartialDiscovery(false); }} items={moduleChoices.map(m => ({ value: m.id, label: `${m.id} · ${m.name}` }))} /><MaitChoice label="VineTrack Irrigation System" value={selectedSystem} onChange={setSystemId} items={(systems.data ?? []).map(s => ({ value: s.id, label: s.name }))} /></div>
+      <div className="grid gap-3 sm:grid-cols-2"><MaitChoice label="Choose controller module" value={moduleId} onChange={v => { setModuleId(v); setSystemId(''); setOutputs(null); setResult(null); setSyncStatus(null); setPartialDiscovery(false); }} items={moduleChoices.map(m => ({ value: m.id, label: `${m.id} · ${m.name}` }))} /><MaitChoice label="VineTrack Irrigation System" value={selectedSystem} onChange={setSystemId} items={(systems.data ?? []).map(s => ({ value: s.id, label: s.name }))} /></div>
       {systems.error && <p className="text-sm text-destructive">Could not load irrigation systems.</p>}
       <Button disabled={run.isPending || !moduleId || !(systemId || selectedSystem)} onClick={() => act(async () => {
         await maitRpc('set_mait_intelliweb_controller_module', vineyardId, { p_module_id: moduleId, p_irrigation_system_id: systemId || selectedSystem, p_module_name: moduleChoices.find(m => m.id === moduleId)?.name || null }); await qc.invalidateQueries({ queryKey: ['mait', vineyardId] }); setOutputs(null); setNotice('Controller module saved. Review its output mappings.');
@@ -60,7 +76,8 @@ export function MaitControllerCard({ vineyardId }: { vineyardId: string }) {
         {valves.error && <p className="text-sm text-destructive">Could not load valves.</p>}
         <Button disabled={run.isPending || !ready || selectedSystem !== controller.irrigation_system_id} onClick={() => act(async () => { const r = await maitProxy(vineyardId, 'sync_usage', { moduleId, ...maitDateWindow(timezone) }); setResult(r); await qc.invalidateQueries({ queryKey: ['irrigation'] }); await qc.invalidateQueries({ queryKey: ['irrigation-report'] }); await qc.invalidateQueries({ queryKey: ['mait', vineyardId] }); })}>Sync now</Button>
         {result && <MaitSyncResult result={result} />}
-        <Button variant="ghost" disabled={run.isPending} onClick={() => act(async () => { const r = await maitProxy(vineyardId, 'sync_status'); setResult(r); })}>Check sync status</Button>
+        <Button variant="ghost" disabled={run.isPending} onClick={() => act(async () => { const r = await maitProxy(vineyardId, 'sync_status'); setSyncStatus(r.data); })}>Check sync status</Button>
+        {syncStatus && <MaitSyncStatus data={syncStatus} moduleId={moduleId} timezone={timezone} />}
       </div>}
     </>}
   </Card>;

@@ -36,6 +36,8 @@ export function maitHttpResult(status: number, body: Row): MaitResult {
   if (status === 401) throw new Error('Your session has expired. Sign in again to use MAIT.');
   if (status === 403) throw new Error('You do not have permission to use this MAIT action for this vineyard.');
   if (status === 400) throw new Error('MAIT could not accept this request. Check the credentials, module and date range.');
+  // Truncated sync_usage deliberately returns success=false with HTTP 206.
+  if (status === 206 && !body.error) return { data: body, status, partial: true, empty: false };
   if (status < 200 || status >= 300 || body.ok === false || body.success === false || body.error) throw new Error('MAIT could not complete the request. Check your connection and MAIT configuration, then retry.');
   return { data: body, status, partial: status === 206 || body.partial === true || body.data?.partial === true, empty: status === 204 };
 }
@@ -64,7 +66,7 @@ export function maitModules(data: Row): Row[] {
   return maitRows(data.modules ?? data.data?.modules).map(m => ({ ...m, id: String(m.module_id ?? m.moduleId ?? m.id), name: String(m.description ?? m.module_name ?? m.name ?? '') })).filter(m => m.id !== 'undefined');
 }
 export function maitChannels(data: Row): Row[] {
-  return maitRows(data.columns).filter(c => c.channel_key != null).map(c => ({ ...c, key: String(c.channel_key), number: c.channel_number ?? null, label: String(c.label ?? ''), unit: String(c.unit ?? ''), value: data.latest?.[c.channel_key] ?? null }));
+  return maitRows(data.columns).filter(c => c.channel_key != null && String(c.channel_key).replace(/\s/g, '').toLowerCase() !== 'datetime').map(c => ({ ...c, key: String(c.channel_key), number: c.channel_number ?? null, label: String(c.label ?? ''), unit: String(c.unit ?? ''), value: data.latest?.[c.channel_key] ?? null }));
 }
 export const MAIT_METRICS = [
   ['air_temperature', 'Air temperature'], ['relative_humidity', 'Relative humidity'], ['wind_speed', 'Wind speed'], ['wind_direction', 'Wind direction'], ['wind_gust', 'Wind gust'], ['rainfall', 'Rainfall'], ['rain_rate', 'Rain rate'], ['leaf_wetness', 'Leaf wetness'], ['soil_moisture', 'Soil moisture'], ['soil_temperature', 'Soil temperature'], ['none', 'Ignore'],
@@ -110,6 +112,9 @@ export function maitOutputs(data: Row): Row[] {
 export function maitSyncCounts(data: Row) {
   const s = data.summary ?? data.result ?? data;
   return [ ['Received', s.received], ['Committed', s.committed], ['Already existing', s.existing], ['Needs mapping', s.needs_mapping], ['Needs review', s.needs_review], ['Possible changed event', s.possible_changed_event] ] as const;
+}
+export function maitControllerSyncState(data: Row, moduleId: string) {
+  return maitRows(data.sync).find(row => String(row.module_id) === moduleId && row.sync_kind === 'irrigation_usage');
 }
 export function maitDailyRainConfirmed(mappings: Row[]) {
   return mappings.some(m => m.is_active === true && m.canonical_metric === 'rainfall' && m.semantics === 'daily_cumulative');

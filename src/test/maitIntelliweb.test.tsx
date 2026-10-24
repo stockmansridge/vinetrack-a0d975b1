@@ -1,10 +1,10 @@
-import { maitConfigurationFixture, maitInspectFixture, maitSyncFixture } from './fixtures/maitLiveContract';
+import { maitConfigurationFixture, maitInspectFixture, maitSyncFixture, maitSyncStatusFixture } from './fixtures/maitLiveContract';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
-import { MaitSyncResult } from '@/components/mait/MaitControllerCard';
+import { MaitSyncResult, MaitSyncStatus } from '@/components/mait/MaitControllerCard';
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), getSession: vi.fn() }));
 vi.mock('@/integrations/ios-supabase/client', () => ({ supabase: { rpc: mocks.rpc, auth: { getSession: mocks.getSession } }, IOS_SUPABASE_URL: 'https://example.test', IOS_SUPABASE_ANON_KEY: 'public' }));
-import { maitAccess, saveMaitConnection, maitConversion, maitDateWindow, maitHttpResult, maitProxy, maitModules, maitChannels, maitOutputs, maitDailyRainConfirmed, irrigationSessionSourceLabel, MAIT_PARTIAL_WARNING, MAIT_METRICS, maitConfiguration, maitWeatherReady, maitSyncCounts } from '@/lib/maitIntelliwebQuery';
+import { maitAccess, saveMaitConnection, maitConversion, maitDateWindow, maitHttpResult, maitProxy, maitModules, maitChannels, maitOutputs, maitDailyRainConfirmed, irrigationSessionSourceLabel, MAIT_PARTIAL_WARNING, MAIT_METRICS, maitConfiguration, maitWeatherReady, maitSyncCounts, maitControllerSyncState } from '@/lib/maitIntelliwebQuery';
 import { mapBackendObservationProvider, resolveLocalObservationProvider, refreshObservationProvider } from '@/lib/localObservationProvider';
 
 beforeEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllGlobals(); mocks.rpc.mockResolvedValue({ data: true, error: null }); mocks.getSession.mockResolvedValue({ data: { session: { access_token: 'test-session' } } }); });
@@ -78,4 +78,40 @@ describe('MAIT controller imports', () => {
     expect(maitSyncCounts({...maitSyncFixture,already_existing:99}).find(([label])=>label==='Already existing')?.[1]).toBe(2);
   });
   it('rejects live success:false result', () => expect(()=>maitHttpResult(200,{success:false})).toThrow());
+ });
+
+ describe('final MAIT contract guards', () => {
+  it('accepts HTTP 206 success false as partial while retaining counters', () => {
+    expect(maitHttpResult(206,{success:false,partial:true,received:10})).toEqual({data:{success:false,partial:true,received:10},status:206,partial:true,empty:false});
+  });
+  it('rejects explicit errors even on HTTP 206', () => expect(()=>maitHttpResult(206,{success:false,partial:true,error:'failed'})).toThrow());
+  it.each(['DateTime','date time',' DATE TIME '])('excludes timestamp channel %s', key => {
+    expect(maitChannels({...maitInspectFixture,columns:[{channel_key:key},maitInspectFixture.columns[1]]}).map(row=>row.key)).toEqual(['Rain']);
+  });
+  it('selects sync state by both module id and irrigation_usage kind', () => {
+    const selected=maitSyncStatusFixture.sync[0];
+    expect(maitControllerSyncState({sync:[{...selected,module_id:'other',records_received:99},{...selected,sync_kind:'weather',records_received:88},selected]},'controller')).toEqual(selected);
+    expect(maitControllerSyncState(maitSyncStatusFixture,'missing')).toBeUndefined();
+  });
+  it('renders sync state counters separately and warns about incomplete range', () => {
+    render(<MaitSyncStatus data={maitSyncStatusFixture} moduleId="controller" timezone="Australia/Sydney" />);
+    expect(screen.getByRole('status')).toHaveTextContent(MAIT_PARTIAL_WARNING);
+    expect(screen.getByRole('status')).toHaveTextContent('Received10');
+    expect(screen.getByRole('status')).toHaveTextContent('Created / staged4');
+    expect(screen.getByRole('status')).toHaveTextContent('Already existing2');
+    expect(screen.getByRole('status')).toHaveTextContent('Needs mapping1');
+    expect(screen.getByRole('status')).toHaveTextContent('Needs review3');
+    expect(screen.getByRole('status')).toHaveTextContent('Last attempt');
+    expect(screen.getByRole('status')).toHaveTextContent('Last success');
+    expect(screen.getByRole('status')).not.toHaveTextContent('Committed');
+  });
+  it('complete sync state remains complete', () => {
+    render(<MaitSyncStatus data={{sync:[{...maitSyncStatusFixture.sync[0],incomplete_range:false}]}} moduleId="controller" timezone="Australia/Sydney" />);
+    expect(screen.queryByText(MAIT_PARTIAL_WARNING)).not.toBeInTheDocument();
+  });
+  it('has no fabricated counters when selected module has no state', () => {
+    render(<MaitSyncStatus data={maitSyncStatusFixture} moduleId="missing" timezone="Australia/Sydney" />);
+    expect(maitControllerSyncState(maitSyncStatusFixture,'missing')).toBeUndefined();
+    expect(screen.getByRole('status')).not.toHaveTextContent('Received10');
+  });
  });
