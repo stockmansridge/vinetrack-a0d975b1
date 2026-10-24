@@ -2289,11 +2289,11 @@ const noManual = (): Record<AutoField, boolean> => ({
   total_machine_cost: false,
 });
 
-const emptyForm = (): MachineLineFormState => ({
+const emptyForm = (timeZone?: string | null): MachineLineFormState => ({
   equipment_source: "free_text",
   equipment_ref_id: null,
   equipment_name_snapshot: "",
-  work_date: new Date().toISOString().slice(0, 10),
+  work_date: localToday(timeZone),
   duration_hours: "",
   engine_hours_used: "",
   entry_source: "manual",
@@ -2326,12 +2326,13 @@ export function applyAuto(f: MachineLineFormState, config: MachineCostConfig): M
 export const formFromLine = (
   l: WorkTaskMachineLine,
   config?: MachineCostConfig,
+  timeZone?: string | null,
 ): MachineLineFormState => {
   const base: MachineLineFormState = {
     equipment_source: ((l.equipment_source as WorkTaskMachineEquipmentSource) ?? "free_text"),
     equipment_ref_id: l.equipment_ref_id ?? null,
     equipment_name_snapshot: l.equipment_name_snapshot ?? "",
-    work_date: l.work_date ?? new Date().toISOString().slice(0, 10),
+    work_date: l.work_date ?? localToday(timeZone),
     duration_hours: l.duration_hours == null ? "" : String(l.duration_hours),
     engine_hours_used: l.engine_hours_used == null ? "" : String(l.engine_hours_used),
     entry_source: (l.entry_source ?? "manual"),
@@ -2352,6 +2353,7 @@ export const formFromLine = (
 function MachineWorkSection({
   workTaskId,
   vineyardId,
+  timeZone,
   lines,
   lookups,
   canEdit,
@@ -2361,6 +2363,7 @@ function MachineWorkSection({
 }: {
   workTaskId: string;
   vineyardId: string | null;
+  timeZone?: string | null;
   lines: WorkTaskMachineLine[];
   lookups: MachineLookups;
   canEdit: boolean;
@@ -2372,7 +2375,7 @@ function MachineWorkSection({
   const rf = useRegionFormatters();
   const fmtDate = mkFmtDate(rf);
   const [editingId, setEditingId] = useState<string | null>(null); // id, or "__new__"
-  const [form, setForm] = useState<MachineLineFormState>(emptyForm());
+  const [form, setForm] = useState<MachineLineFormState>(emptyForm(timeZone));
   const groups = useMemo(() => buildMachinePickerGroups(lookups), [lookups]);
   // Vineyard fuel price: weighted cost/L across fuel purchases (same source
   // as GPS-trip fuel costing).
@@ -2391,19 +2394,19 @@ function MachineWorkSection({
   });
 
   const startCreate = () => {
-    setForm(emptyForm());
+    setForm(emptyForm(timeZone));
     setEditingId("__new__");
   };
   const startEdit = (l: WorkTaskMachineLine) => {
     setForm(formFromLine(l, configFor({
       equipment_source: (l.equipment_source as WorkTaskMachineEquipmentSource) ?? "free_text",
       equipment_ref_id: l.equipment_ref_id ?? null,
-    })));
+    }), timeZone));
     setEditingId(l.id);
   };
   const cancel = () => {
     setEditingId(null);
-    setForm(emptyForm());
+    setForm(emptyForm(timeZone));
   };
 
   const invalidate = () =>
