@@ -501,7 +501,7 @@ export default function IrrigationHistoryPage() {
                     )}
                     {s.system_name} · {formatDuration(s.duration_minutes)} ·{" "}
                     {CALCULATION_METHOD_LABEL[s.calculation_method] ?? s.calculation_method}
-                    {s.source_type === "manual_portal" ? " · Portal" : ` · ${s.source_type}`}
+                    {s.source_type === "manual_portal" ? " · Portal" : ` · ${s.configuration_snapshot?.import?.provider === "mait_intelliweb" ? "MAIT iNTELLiWeb" : s.source_type === "controller_api" ? "Controller API" : s.source_type}`}
                   </div>
 
                 </div>

@@ -18,8 +18,9 @@ import {
   type WeatherIntegrationStatus,
 } from "@/lib/weatherStatusQuery";
 import { refreshWundergroundObservations } from "@/lib/wundergroundProxy";
+import { maitProxy } from "@/lib/maitIntelliwebQuery";
 
-export type LocalObservationProvider = "davis_weatherlink" | "wunderground" | "none";
+export type LocalObservationProvider = "davis_weatherlink" | "wunderground" | "mait_intelliweb" | "none";
 
 export interface ObservationProviderRefresh {
   provider: LocalObservationProvider;
@@ -32,6 +33,7 @@ export interface ObservationProviderRefresh {
 }
 
 const SOURCE_TO_PROVIDER: Record<string, LocalObservationProvider> = {
+  mait_intelliweb: "mait_intelliweb",
   davis: "davis_weatherlink",
   davis_weatherlink: "davis_weatherlink",
   wunderground: "wunderground",
@@ -81,7 +83,8 @@ export function resolveLocalObservationProvider(input: {
   if (isActive(input.davis)) return "davis_weatherlink";
   if (isActive(input.wunderground)) return "wunderground";
   const fromSource = providerFromObservationSource(input.observationSource);
-  if (fromSource) return fromSource;
+  // MAIT requires an explicit server selection, never a legacy fallback.
+  if (fromSource && fromSource !== "mait_intelliweb") return fromSource;
   if (input.davis?.configured) return "davis_weatherlink";
   if (input.wunderground?.configured) return "wunderground";
   return "none";
@@ -117,6 +120,14 @@ export async function refreshObservationProvider(
   provider: LocalObservationProvider,
 ): Promise<ObservationProviderRefresh> {
   switch (provider) {
+    case "mait_intelliweb": {
+      try {
+        const result = await maitProxy(vineyardId, "current");
+        return { provider, attempted: true, ok: !result.partial, reason: result.partial ? "provider_error" : undefined, message: result.partial ? "MAIT returned incomplete observations. Retry the refresh." : undefined };
+      } catch (e) {
+        return { provider, attempted: true, ok: false, reason: "provider_error", message: e instanceof Error ? e.message : "MAIT observations could not be refreshed." };
+      }
+    }
     case "davis_weatherlink": {
       const proxy = await refreshDavisObservations(vineyardId);
       return {
@@ -144,6 +155,8 @@ export async function refreshObservationProvider(
 
 export function observationProviderLabel(provider: LocalObservationProvider): string {
   switch (provider) {
+    case "mait_intelliweb":
+      return "MAIT iNTELLiWeb";
     case "davis_weatherlink":
       return "Davis WeatherLink";
     case "wunderground":
@@ -156,6 +169,8 @@ export function observationProviderLabel(provider: LocalObservationProvider): st
 /** Provider-aware wording for a failed/unavailable observation refresh. */
 export function observationFailureTitle(provider: LocalObservationProvider): string {
   switch (provider) {
+    case "mait_intelliweb":
+      return "Live observations not refreshed (MAIT iNTELLiWeb)";
     case "davis_weatherlink":
       return "Live observations not refreshed (Davis WeatherLink)";
     case "wunderground":
@@ -173,6 +188,9 @@ export function noNewerObservationsMessage(
   refresh: ObservationProviderRefresh,
 ): string | null {
   if (!refresh.attempted || !refresh.ok) return null;
+  if (refresh.provider === "mait_intelliweb") {
+    return "MAIT iNTELLiWeb returned no newer reading — the station has not reported since the last update.";
+  }
   if (refresh.provider === "davis_weatherlink") {
     return "Davis WeatherLink returned no newer data — the station hasn't reported since the last update.";
   }

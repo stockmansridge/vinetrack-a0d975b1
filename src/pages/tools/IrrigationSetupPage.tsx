@@ -76,6 +76,7 @@ import {
 
 import { ValveRowSelector } from "@/components/irrigation/ValveRowSelector";
 import ValveImportDialog from "@/components/irrigation/ValveImportDialog";
+import { MaitControllerCard } from "@/components/mait/MaitControllerCard";
 
 
 function useBlocks(vineyardId: string | null) {
@@ -1755,6 +1756,8 @@ export default function IrrigationSetupPage() {
           <SetupStatusPanel vineyardId={selectedVineyardId} />
         </TabsContent>
       </Tabs>
+
+      {selectedVineyardId && <MaitControllerCard key={selectedVineyardId} vineyardId={selectedVineyardId} />}
 
     </div>
   );
