@@ -101,9 +101,15 @@ describe('MAIT controller imports', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Already existing2');
     expect(screen.getByRole('status')).toHaveTextContent('Needs mapping1');
     expect(screen.getByRole('status')).toHaveTextContent('Needs review3');
-    expect(screen.getByRole('status')).toHaveTextContent('Last attempt');
-    expect(screen.getByRole('status')).toHaveTextContent('Last success');
+    expect(screen.getByRole('status')).toHaveTextContent('Last sync attempt');
+    expect(screen.getByRole('status')).toHaveTextContent('Last successful sync');
+    expect(screen.getByRole('status')).toHaveTextContent('Last source event');
+    expect(screen.getByRole('status')).not.toHaveTextContent('Last error');
     expect(screen.getByRole('status')).not.toHaveTextContent('Committed');
+  });
+  it('renders live sync error fields only when recorded', () => {
+    render(<MaitSyncStatus data={{ sync: [{ ...maitSyncStatusFixture.sync[0], last_error_code: 'PARTIAL', last_error_message: 'MAIT truncated the range' }] }} moduleId="controller" timezone="Australia/Sydney" />);
+    expect(screen.getByRole('status')).toHaveTextContent('Last error: PARTIAL — MAIT truncated the range');
   });
   it('complete sync state remains complete', () => {
     render(<MaitSyncStatus data={{sync:[{...maitSyncStatusFixture.sync[0],incomplete_range:false}]}} moduleId="controller" timezone="Australia/Sydney" />);

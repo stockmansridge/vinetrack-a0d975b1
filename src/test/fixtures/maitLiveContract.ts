@@ -20,5 +20,5 @@ export const maitSyncFixture = {
 };
 export const maitIntegrationStatusFixture = { id: 'integration-row', provider: 'mait_intelliweb', station_id: 'weather', station_name: 'Weather station', is_active: true };
 export const maitSyncStatusFixture = { sync: [
-  { module_id: 'controller', sync_kind: 'irrigation_usage', last_attempt_at: '2026-10-24T07:00:00Z', last_success_at: '2026-10-23T07:00:00Z', records_received: 10, records_created: 4, records_existing: 2, records_needing_mapping: 1, records_needing_review: 3, incomplete_range: true },
+  { module_id: 'controller', sync_kind: 'irrigation_usage', last_sync_attempt_at: '2026-10-24T07:00:00Z', last_successful_sync_at: '2026-10-23T07:00:00Z', last_source_event_at: '2026-10-23T18:30:00Z', last_error_code: null, last_error_message: null, records_received: 10, records_created: 4, records_existing: 2, records_needing_mapping: 1, records_needing_review: 3, incomplete_range: true },
 ] };

@@ -21,13 +21,15 @@ export function MaitSyncStatus({ data, moduleId, timezone }: { data: Row; module
     if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) return 'Not reported';
     return new Intl.DateTimeFormat(undefined, { timeZone: timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
   };
-  const values = [
-    ['Last attempt', timestamp(state.last_attempt_at)], ['Last success', timestamp(state.last_success_at)],
+  const values: [string, any][] = [
+    ['Last sync attempt', timestamp(state.last_sync_attempt_at)], ['Last successful sync', timestamp(state.last_successful_sync_at)],
+    ...(state.last_source_event_at == null ? [] : [['Last source event', timestamp(state.last_source_event_at)] as [string, unknown]]),
     ['Received', state.records_received], ['Created / staged', state.records_created],
     ['Already existing', state.records_existing], ['Needs mapping', state.records_needing_mapping],
     ['Needs review', state.records_needing_review],
   ];
-  return <div role="status" className="space-y-3">{state.incomplete_range === true && <Alert variant="destructive"><AlertDescription>{MAIT_PARTIAL_WARNING}</AlertDescription></Alert>}<dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">{values.map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="font-semibold">{value ?? 'Not reported'}</dd></div>)}</dl></div>;
+  const errorText = [state.last_error_code, state.last_error_message].filter((part) => typeof part === 'string' && part.trim() !== '').join(' — ');
+  return <div role="status" className="space-y-3">{state.incomplete_range === true && <Alert variant="destructive"><AlertDescription>{MAIT_PARTIAL_WARNING}</AlertDescription></Alert>}<dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">{values.map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="font-semibold">{value ?? 'Not reported'}</dd></div>)}</dl>{errorText && <p className="text-sm text-muted-foreground">Last error: {errorText}</p>}</div>;
 }
 export function MaitControllerCard({ vineyardId }: { vineyardId: string }) {
   const { access, configuration, config, connected, timezone } = useMait(vineyardId);

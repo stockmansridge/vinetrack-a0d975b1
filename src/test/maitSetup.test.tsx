@@ -143,7 +143,7 @@ describe('MAIT setup actions', () => {
     fireEvent.click(await screen.findByRole('combobox',{name:'Choose controller module'}));
     fireEvent.click(await screen.findByRole('option',{name:'controller · Pump'}));
     fireEvent.click(await screen.findByRole('button',{name:'Check sync status'}));
-    await screen.findByText('Last attempt');
+    await screen.findByText('Last sync attempt');
     expect(screen.getByRole('status')).toHaveTextContent('Created / staged4');
     expect(screen.getByRole('status')).toHaveTextContent('Already existing2');
     expect(screen.queryByText('Committed')).not.toBeInTheDocument();
