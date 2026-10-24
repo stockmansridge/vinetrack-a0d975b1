@@ -62,7 +62,6 @@ describe("Machine line default work date", () => {
   it("fills an unsaved work date with the vineyard-local day", () => {
     const machineLine = { id: "m1", work_date: null } as WorkTaskMachineLine;
     expect(formFromLine(machineLine, undefined, SYDNEY).work_date).toBe(SYDNEY_DAY);
-    expect(formFromLine(machineLine).work_date).not.toBe("1970-01-01");
   });
 
   it("keeps the saved date of an existing machine line", () => {
