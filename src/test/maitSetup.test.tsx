@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { MaitWeatherCard } from '@/components/mait/MaitWeatherCard';
 import { MaitControllerCard } from '@/components/mait/MaitControllerCard';
-const mocks = vi.hoisted(() => ({ rpc: vi.fn(), manage: true, connected: false, conflict: false, config: maitConfigurationFixture() }));
+const mocks = vi.hoisted(() => ({ rpc: vi.fn(), manage: true, connected: false, conflict: false, config: {} as ReturnType<typeof maitConfigurationFixture> }));
 vi.mock('@/integrations/ios-supabase/client', () => ({ supabase: { rpc: mocks.rpc, auth: { getSession: async () => ({data:{session:{access_token:'fixture'}}}) } }, IOS_SUPABASE_URL:'https://example.test', IOS_SUPABASE_ANON_KEY:'public' }));
 vi.mock('@/lib/vineyardSettingsQuery', () => ({ fetchVineyard: async () => ({timezone:'Australia/Sydney'}) }));
 vi.mock('@/lib/irrigationQuery', () => ({ useIrrigationSystems: () => ({ data:[{id:'system',name:'East system'}] }), useIrrigationValves: () => ({data:[{id:'valve',name:'East valve',irrigation_system_id:'system'}]}) }));
