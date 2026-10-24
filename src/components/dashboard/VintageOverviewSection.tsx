@@ -221,7 +221,7 @@ export default function VintageOverviewSection() {
                   </div>
                 )
           }
-          to="/yield"
+          to="/yield?tab=allocation"
         />
       </div>
     </section>

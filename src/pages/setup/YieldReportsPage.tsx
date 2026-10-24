@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { isAustralianVineyard } from "@/lib/wineGrapeLevyAccess";
 import { canAccessRoute } from "@/lib/rolePermissions";
 import { Card } from "@/components/ui/card";
@@ -93,6 +93,7 @@ import {
 import { useVintage } from "@/lib/useVintage";
 import GrapeAllocationPanel, { type GrapeAllocationPanelRef } from "@/components/yield/GrapeAllocationPanel";
 import { varietyKeyOf } from "@/lib/grapeAllocationModel";
+import { initialYieldTab, type YieldTab } from "@/lib/yieldTab";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 import { buildVarietyMap, resolvePaddockAllocations, useGrapeVarieties } from "@/lib/varietyResolver";
 import { summariseYieldSession, type SessionBlockInfo } from "@/lib/yieldSessionSummary";
@@ -160,9 +161,12 @@ export default function YieldReportsPage() {
   // `null` means "not chosen yet" and resolves to the vineyard's current vintage.
   const [vintageFilter, setVintageFilter] = useState<string | null>(null);
   const [completion, setCompletion] = useState<string>(ANY);
-  const [tab, setTab] = useState<
-    "overview" | "sessions" | "historical" | "picking" | "allocation"
-  >("overview");
+  // Deep links (e.g. the Dashboard "Grape allocation" card) open a specific tab
+  // through ?tab=...; anything unrecognised still lands on Overview.
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<YieldTab>(
+    initialYieldTab(searchParams.get("tab")),
+  );
   const [selected, setSelected] = useState<AnyRow | null>(null);
   const [recordOpen, setRecordOpen] = useState(false);
   // Damage adjustment is OFF by default: the headline estimate is the

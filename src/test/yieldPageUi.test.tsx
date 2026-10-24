@@ -3,6 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import YieldReportsPage from "@/pages/setup/YieldReportsPage";
 
 const BLOCK = "11111111-1111-1111-1111-111111111111";
@@ -94,11 +95,13 @@ vi.mock("@/lib/userTablePreferencesQuery", () => ({
   }),
 }));
 
-function renderPage() {
+function renderPage(initialEntries: string[] = ["/yield"]) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <YieldReportsPage />
+      <MemoryRouter initialEntries={initialEntries}>
+        <YieldReportsPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -179,5 +182,30 @@ describe("Yields page", () => {
     fireEvent.click(await screen.findByRole("button", { name: /view full trip detail/i }));
     await screen.findByRole("dialog");
     expect(screen.queryByRole("button", { name: /delete/i })).toBeNull();
+  });
+});
+
+describe("Yields page deep links", () => {
+  it("opens the Grape Allocation tab when the link carries ?tab=allocation", async () => {
+    renderPage(["/yield?tab=allocation"]);
+    const allocation = await screen.findByRole("tab", {
+      name: "Grape Allocation",
+    });
+    expect(allocation.getAttribute("data-state")).toBe("active");
+    expect(
+      screen.getByRole("tab", { name: "Overview" }).getAttribute("data-state"),
+    ).toBe("inactive");
+  });
+
+  it("still opens Overview when no tab is requested", async () => {
+    renderPage();
+    const overview = await screen.findByRole("tab", { name: "Overview" });
+    expect(overview.getAttribute("data-state")).toBe("active");
+  });
+
+  it("ignores an unknown tab value and opens Overview", async () => {
+    renderPage(["/yield?tab=bogus"]);
+    const overview = await screen.findByRole("tab", { name: "Overview" });
+    expect(overview.getAttribute("data-state")).toBe("active");
   });
 });
