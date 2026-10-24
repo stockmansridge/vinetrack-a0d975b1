@@ -1,6 +1,7 @@
 # Roadmap
 
 ## MAIT iNTELLiWeb Portal support
+- [ ] Correct supplied live MAIT contracts: metric ids, nested configuration, inspect columns/latest, sync existing and module refresh; run Portal regressions only.
 - [x] Add shared RPC/proxy helpers, access presentation and credential/module/channel confirmation in Weather setup.
 - [x] Extend explicit local observation selection and refresh without changing legacy fallback or forecasts.
 - [x] Add controller/module/valve mappings and manual three-day overlap sync in Irrigation setup; canonical source labels.
