@@ -1,5 +1,11 @@
 # Roadmap
 
+## Deleted demo vineyards in selection
+- [x] Refresh active membership reads, reject archived/missing parents, and clear stale selection after successful empty reads.
+- [x] Refresh membership caches after account deletion and show incomplete-deletion errors instead of claiming vineyards were removed.
+- [x] Six focused tests passed; preview build OK; no database changes or publication.
+- [ ] Confirm/repair surviving demo vineyards — blocked: shared vineyard session unavailable; database cleanup requires separate owner approval.
+
 ## User Activity + expired-trial read-only
 - [x] Canonical last-activity status, cards, filters, sorting; 7 tests.
 - [x] Read-only vineyard mode: banner, central mutation guard, TrialEndedDialog, VT_READ_ONLY catch, allow-list; 9 tests.

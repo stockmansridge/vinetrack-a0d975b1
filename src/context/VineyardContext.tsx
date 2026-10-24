@@ -65,17 +65,23 @@ export function VineyardProvider({ children }: { children: ReactNode }) {
   );
   const [adminSupport, setAdminSupport] = useState<AdminSupportVineyard | null>(readSupport);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isSuccess } = useQuery({
     queryKey: ["memberships", user?.id],
     enabled: !!user,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
     queryFn: async (): Promise<VineyardMembership[]> => {
+      if (!user) return [];
       const { data, error } = await supabase
         .from("vineyard_members")
         .select("vineyard_id, role, vineyards!inner(name, country, deleted_at)")
-        .eq("user_id", user!.id)
+        .eq("user_id", user.id)
         .is("vineyards.deleted_at", null);
       if (error) throw error;
       return (data ?? [])
+        // Retained membership rows must never revive archived/missing vineyards.
+        .filter((m: any) => m.vineyards && m.vineyards.deleted_at === null)
         .map((m: any) => ({
           vineyard_id: m.vineyard_id,
           role: m.role,
@@ -105,6 +111,7 @@ export function VineyardProvider({ children }: { children: ReactNode }) {
 
   // Support session ends when the user signs out / changes.
   useEffect(() => {
+    if (!user || !isSuccess) return;
     if (!user && adminSupport) endAdminSupport();
   }, [user, adminSupport, endAdminSupport]);
 
@@ -115,11 +122,11 @@ export function VineyardProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(STORAGE_KEY, memberships[0].vineyard_id);
     }
     // Clear selection if no longer member
-    if (ownSelectedId && memberships.length && !memberships.find((m) => m.vineyard_id === ownSelectedId)) {
+    if (ownSelectedId && !memberships.find((m) => m.vineyard_id === ownSelectedId)) {
       setSelectedVineyardId(null);
       localStorage.removeItem(STORAGE_KEY);
     }
-  }, [memberships, ownSelectedId]);
+  }, [memberships, ownSelectedId, user, isSuccess]);
 
   const selectedVineyardId = adminSupport?.vineyard_id ?? ownSelectedId;
   const currentMembership = memberships.find((m) => m.vineyard_id === selectedVineyardId);

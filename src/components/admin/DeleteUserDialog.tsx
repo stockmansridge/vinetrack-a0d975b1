@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +29,7 @@ interface Props {
 /** Two-step confirmation before permanently deleting a user, their data and
  *  any vineyard they solely own. System admins only. */
 export function DeleteUserDialog({ user, onOpenChange, onDeleted }: Props) {
+  const queryClient = useQueryClient();
   const [step, setStep] = useState<1 | 2>(1);
   const [preview, setPreview] = useState<DeleteUserPreview | null>(null);
   const [loading, setLoading] = useState(false);
@@ -56,10 +58,16 @@ export function DeleteUserDialog({ user, onOpenChange, onDeleted }: Props) {
     setDeleting(true);
     try {
       const res = await deleteUserPermanently(user.user_id);
+      // Deletion can change the calling admin's temporary memberships too.
+      await queryClient.invalidateQueries({ queryKey: ["memberships"] });
+      await queryClient.invalidateQueries({ queryKey: ["archived-vineyards"] });
       toast({
-        title: "User deleted",
+        title: res.errors?.length ? "Deletion needs review" : "User deleted",
+        variant: res.errors?.length ? "destructive" : "default",
         description:
-          `${user.email ?? user.user_id} removed` +
+          res.errors?.length
+            ? "The account was removed, but some vineyard data could not be deleted. These vineyards may still appear; review the deletion errors below."
+            : `${user.email ?? user.user_id} removed` +
           (res.deleted_vineyards?.length
             ? ` · ${res.deleted_vineyards.length} vineyard(s) deleted`
             : ""),
@@ -67,10 +75,15 @@ export function DeleteUserDialog({ user, onOpenChange, onDeleted }: Props) {
       if (res.errors?.length) {
         // eslint-disable-next-line no-console
         console.warn("[admin-delete-user] partial errors", res.errors);
+        setError(`Deletion incomplete: ${res.errors.join("; ")}`);
+        onDeleted?.();
+        return;
       }
       onOpenChange(false);
       onDeleted?.();
     } catch (e) {
+      // A failed response can still follow partial removal on the server.
+      await queryClient.invalidateQueries({ queryKey: ["memberships"] });
       toast({
         title: "Delete failed",
         description: e instanceof Error ? e.message : String(e),
@@ -139,6 +152,7 @@ export function DeleteUserDialog({ user, onOpenChange, onDeleted }: Props) {
 
         {step === 2 && (
           <div className="space-y-3 text-sm">
+            {error && <p role="alert" className="text-destructive">{error}</p>}
             <p>
               Type <span className="font-mono font-medium">{expected || user?.user_id}</span> to
               confirm permanent deletion.
@@ -166,7 +180,7 @@ export function DeleteUserDialog({ user, onOpenChange, onDeleted }: Props) {
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={
-                deleting ||
+                deleting || !!error ||
                 confirmText.trim().toLowerCase() !== (expected || (user?.user_id ?? "")).toLowerCase()
               }
               onClick={(e) => {
