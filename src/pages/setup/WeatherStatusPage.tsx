@@ -104,6 +104,11 @@ export default function WeatherStatusPage() {
   const { selectedVineyardId, currentRole } = useVineyard();
   const showWeatherDiagnostics = useDiagnosticPanel("show_weather_diagnostics");
   const qc = useQueryClient();
+  const observationSource = useQuery({
+    queryKey: ["local-observation-provider", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => selectedVineyardId ? fetchLocalObservationProvider(selectedVineyardId) : Promise.resolve("none" as const),
+  });
   const { data, isLoading, error } = useQuery({
     queryKey: ["weather_status", selectedVineyardId],
     enabled: !!selectedVineyardId,
@@ -183,7 +188,7 @@ export default function WeatherStatusPage() {
             <SourceCard
               icon={<Droplets className="h-4 w-4" />}
               label="Observation source"
-              value="See live weather source below"
+              value={observationSource.isPending ? "Loading…" : observationProviderLabel(observationSource.data ?? "none")}
               hint="Live in-vineyard observations."
             />
             <SourceCard

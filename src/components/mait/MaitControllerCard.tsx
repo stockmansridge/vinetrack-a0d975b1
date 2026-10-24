@@ -28,7 +28,7 @@ export function MaitControllerCard({ vineyardId }: { vineyardId: string }) {
   const [result, setResult] = useState<MaitResult | null>(null);
   const controllers = maitRows(config.controller_modules ?? config.controllers);
   const controller = controllers.find(c => String(c.module_id) === moduleId);
-  const selectedSystem = controller?.irrigation_system_id ?? systemId;
+  const selectedSystem = systemId || controller?.irrigation_system_id || '';
   const mappings = useQuery({ queryKey: ['mait', vineyardId, 'controller-mappings', moduleId], enabled: access.data?.manage === true && !!controller, queryFn: async () => maitRows(await maitRpc('get_mait_intelliweb_controller_mappings', vineyardId, { p_module_id: moduleId })) });
   const run = useMutation({ mutationFn: async (fn: () => Promise<unknown>) => { if (!access.data?.manage) throw new Error('You do not have permission to manage MAIT controllers.'); return fn(); }, onError: (e: Error) => setNotice(e.message) });
   const act = (fn: () => Promise<unknown>) => { setNotice(''); run.mutate(fn); };
@@ -57,7 +57,7 @@ export function MaitControllerCard({ vineyardId }: { vineyardId: string }) {
         {outputs && !outputs.length && <p className="text-sm text-muted-foreground">No usage outputs returned for the recent three-day window.</p>}
         {(outputs || mapRows.length > 0) && <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="p-2">MAIT output</th><th className="p-2">MAIT name</th><th className="p-2">VineTrack valve</th><th className="p-2">Status</th></tr></thead><tbody>{[...new Map([...mapRows.map(m => ({ number: Number(m.external_valve_number ?? m.channel_number), name: m.external_valve_name ?? m.channel_name ?? '' })), ...(outputs ?? [])].map(o => [o.number, o])).values()].filter(o => Number.isFinite(o.number)).map(o => <OutputRow key={`${moduleId}:${selectedSystem}:${o.number}`} output={o} saved={mapRows.find(m => Number(m.external_valve_number ?? m.channel_number) === o.number)} vineyardId={vineyardId} controllerKey={`${config.network_id}:${moduleId}`} controllerName={controller.module_name ?? moduleId} valves={(valves.data ?? []).filter(v => v.irrigation_system_id === selectedSystem)} onSaved={async () => { await mappings.refetch(); }} />)}</tbody></table></div>}
         {valves.error && <p className="text-sm text-destructive">Could not load valves.</p>}
-        <Button disabled={run.isPending || !ready} onClick={() => act(async () => { const r = await maitProxy(vineyardId, 'sync_usage', { moduleId, ...maitDateWindow(timezone) }); setResult(r); await qc.invalidateQueries({ queryKey: ['irrigation'] }); await qc.invalidateQueries({ queryKey: ['mait', vineyardId] }); })}>Sync now</Button>
+        <Button disabled={run.isPending || !ready || selectedSystem !== controller.irrigation_system_id} onClick={() => act(async () => { const r = await maitProxy(vineyardId, 'sync_usage', { moduleId, ...maitDateWindow(timezone) }); setResult(r); await qc.invalidateQueries({ queryKey: ['irrigation'] }); await qc.invalidateQueries({ queryKey: ['irrigation-report'] }); await qc.invalidateQueries({ queryKey: ['mait', vineyardId] }); })}>Sync now</Button>
         {result && <MaitSyncResult result={result} />}
         <Button variant="ghost" disabled={run.isPending} onClick={() => act(async () => { const r = await maitProxy(vineyardId, 'sync_status'); setResult(r); })}>Check sync status</Button>
       </div>}

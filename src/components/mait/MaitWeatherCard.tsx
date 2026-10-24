@@ -46,8 +46,8 @@ export function MaitWeatherCard({ vineyardId }: { vineyardId: string }) {
   const action = useMutation({ mutationFn: async (run: () => Promise<unknown>) => { if (!access.data?.manage) throw new Error('You do not have permission to manage this MAIT connection.'); return run(); }, onError: (e: Error) => setNotice(e.message) });
   const run = (fn: () => Promise<unknown>) => { setNotice(''); action.mutate(fn); };
   const updateCredential = (fn: () => void) => { fn(); setTested(null); };
-  const mappings = maitRows(config.channel_mappings ?? config.mappings);
-  const ready = !!config.weather_module_id && mappings.some(m => m.is_active === true && m.canonical_metric !== 'ignore');
+  const mappings = maitRows(config.channel_mappings ?? config.mappings).filter(m => String(m.module_id) === String(config.weather_module_id));
+  const ready = !!config.weather_module_id && mappings.some(m => m.is_active === true && !!m.canonical_metric && m.canonical_metric !== 'ignore');
   const networkName = tested?.data.network_name ?? tested?.data.network?.name ?? config.network_name;
   if (access.isPending) return <Card className="p-4">Checking MAIT access…</Card>;
   return <Card id="mait" className="p-4 space-y-4 scroll-mt-6">
