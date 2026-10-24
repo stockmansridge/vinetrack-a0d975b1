@@ -34,7 +34,7 @@ export function MaitControllerCard({ vineyardId }: { vineyardId: string }) {
   const act = (fn: () => Promise<unknown>) => { setNotice(''); run.mutate(fn); };
   const moduleChoices = [...new Map([...controllers.map(c => ({ id: String(c.module_id), name: c.module_name ?? '' })), ...modules].map(m => [m.id, m])).values()];
   const mapRows = mappings.data ?? [];
-  const ready = !!controller && !!config.network_id && mapRows.some(m => m.irrigation_valve_id && m.ignore !== true && m.is_ignored !== true);
+  const ready = !!controller && !!config.network_id && mapRows.some(m => m.irrigation_valve_id && m.ignore !== true && m.is_ignored !== true && (valves.data ?? []).some(v => v.id === m.irrigation_valve_id && v.irrigation_system_id === controller.irrigation_system_id));
   if (access.isPending) return <Card className="p-4">Checking MAIT access…</Card>;
   return <Card className="p-4 space-y-4"><h2 className="font-semibold">MAIT iNTELLiWeb controller</h2>
     {[access.error, configuration.error, mappings.error].filter(Boolean).map((e, i) => <Alert variant="destructive" key={i}><AlertDescription>{(e as Error).message}</AlertDescription></Alert>)}

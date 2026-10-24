@@ -214,6 +214,7 @@ export default function WeatherStatusPage() {
             canEdit={canEdit}
           />
 
+          <div className="grid items-start gap-4 xl:grid-cols-3">
           <DavisCard
 
             status={davis}
@@ -235,6 +236,7 @@ export default function WeatherStatusPage() {
           />
 
           {selectedVineyardId && <MaitWeatherCard key={selectedVineyardId} vineyardId={selectedVineyardId} />}
+          </div>
 
           <p className="text-xs text-muted-foreground">
             Weather credentials are stored securely server-side and are never

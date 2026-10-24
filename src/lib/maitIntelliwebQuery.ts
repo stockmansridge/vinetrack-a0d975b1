@@ -25,7 +25,7 @@ export function maitHttpResult(status: number, body: Row): MaitResult {
   if (status === 403) throw new Error('You do not have permission to use this MAIT action for this vineyard.');
   if (status === 400) throw new Error('MAIT could not accept this request. Check the credentials, module and date range.');
   if (status < 200 || status >= 300 || body.ok === false || body.error) throw new Error('MAIT could not complete the request. Check your connection and MAIT configuration, then retry.');
-  return { data: body, status, partial: status === 206 || body.partial === true, empty: status === 204 };
+  return { data: body, status, partial: status === 206 || body.partial === true || body.data?.partial === true, empty: status === 204 };
 }
 export async function maitProxy(vineyardId: string, action: string, args: Row = {}): Promise<MaitResult> {
   const { data } = await supabase.auth.getSession();
@@ -37,7 +37,9 @@ export async function maitProxy(vineyardId: string, action: string, args: Row = 
       body: JSON.stringify({ vineyardId, action, ...args }),
     });
   } catch { throw new Error('MAIT could not be reached. Check your connection and retry.'); }
-  const body = response.status === 204 ? {} : await response.json().catch(() => ({}));
+  const body = response.status === 204 ? {} : await response.json().catch(() => {
+    throw new Error('MAIT returned an unreadable response. Retry before saving or importing.');
+  });
   return maitHttpResult(response.status, body);
 }
 export function connectionArgs(input: { username: string; password: string; networkId: string; networkName?: string; timezone: string }) {
@@ -85,7 +87,7 @@ export function maitDateWindow(timezone: string | null, now = new Date()) {
 export function maitOutputs(data: Row): Row[] {
   const rows = maitRows(data.outputs ?? data.events ?? data.usage ?? data.data?.events ?? data.data?.usage);
   const outputs = new Map<number, Row>();
-  rows.forEach(r => { const n = Number(r.channel_number ?? r.output_number ?? r.channel ?? r.external_valve_number); if (Number.isFinite(n) && n >= 0) outputs.set(n, { number: n, name: String(r.channel_name ?? r.output_name ?? r.name ?? r.external_valve_name ?? '') }); });
+  rows.forEach(r => { const raw = r.channel_number ?? r.output_number ?? r.channel ?? r.external_valve_number; if (raw == null || raw === '') return; const n = Number(raw); if (Number.isInteger(n) && n >= 0) outputs.set(n, { number: n, name: String(r.channel_name ?? r.output_name ?? r.name ?? r.external_valve_name ?? '') }); });
   return [...outputs.values()].sort((a, b) => a.number - b.number);
 }
 export function maitSyncCounts(data: Row) {
