@@ -21,7 +21,7 @@ export function useMait(vineyardId: string) {
   const vineyard = useQuery({ queryKey: ['vineyard-settings', vineyardId], queryFn: () => fetchVineyard(vineyardId) });
   const config = configuration.data ?? maitConfiguration(null);
   const connection = config.connection;
-  const connected = access.data?.manage ? connection.configured === true : status.data?.configured === true;
+  const connected = access.data?.manage ? connection.configured === true : !!status.data?.id && status.data?.is_active !== false;
   return { access, configuration, status, config, connected, timezone: connection.timezone ?? vineyard.data?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone };
 }
 function Choice({ value, onChange, items, label }: { value: string; onChange: (v: string) => void; items: { value: string; label: string }[]; label: string }) {
@@ -59,7 +59,7 @@ export function MaitWeatherCard({ vineyardId }: { vineyardId: string }) {
     <p className="text-sm text-muted-foreground">Connect your MAIT Industries iNTELLiWeb weather station or sensor network.</p>
     {[access.error, configuration.error, status.error].filter(Boolean).map((e, i) => <Alert key={i} variant="destructive"><AlertDescription>{(e as Error).message}</AlertDescription></Alert>)}
     {notice && <Alert role="status"><AlertDescription>{notice}</AlertDescription></Alert>}
-    {connected && <p className="text-sm">{connection.network_name ?? 'MAIT network'} · Network ID {connection.network_id ?? '—'}</p>}
+    {connected && <p className="text-sm">{access.data?.manage ? <>{connection.network_name ?? 'MAIT network'} · Network ID {connection.network_id ?? '—'}</> : status.data?.station_name || 'MAIT weather source'}</p>}
     {!access.data?.manage ? <p className="text-sm text-muted-foreground">{access.data?.view ? 'Your vineyard owner or manager manages this MAIT connection.' : 'MAIT access is not available for this vineyard.'}</p> : <>
       {!editing && <div className="flex flex-wrap gap-2">{!connected ? <Button onClick={() => setEditing(true)}>Connect MAIT</Button> : <>
         <Button variant="outline" disabled={action.isPending} onClick={() => run(async () => { const r = await maitProxy(vineyardId, 'test_saved'); setModules(maitModules(r.data)); setNotice(r.empty ? 'MAIT returned no data.' : 'Saved MAIT connection tested successfully.'); await refresh(); })}>Test saved connection</Button>

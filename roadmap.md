@@ -1,6 +1,7 @@
 # Roadmap
 
 ## MAIT iNTELLiWeb Portal support
+- [ ] Final contract hardening: accept partial HTTP 206, raw view-only integration status, exclude DateTime sensors, dedicated controller sync-state display; verify regressions.
 - [x] Correct supplied live MAIT contracts: metric ids, nested configuration, inspect columns/latest, sync existing and module refresh; 65 MAIT tests and 78 existing regressions passed (143 total, 9 files); preview build/typecheck OK.
 - [x] Add shared RPC/proxy helpers, access presentation and credential/module/channel confirmation in Weather setup.
 - [x] Extend explicit local observation selection and refresh without changing legacy fallback or forecasts.

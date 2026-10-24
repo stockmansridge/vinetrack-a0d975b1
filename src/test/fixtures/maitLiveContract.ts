@@ -11,10 +11,14 @@ export function maitConfigurationFixture() {
   };
 }
 export const maitInspectFixture = {
-  module_id: 'weather', columns: [{ index: 1, channel_key: 'Rain', channel_number: 8, label: 'Rain', unit: 'mm' }],
+  module_id: 'weather', columns: [{ index: 0, channel_key: 'DateTime', channel_number: null, label: 'Date time', unit: '' }, { index: 1, channel_key: 'Rain', channel_number: 8, label: 'Rain', unit: 'mm' }],
   latest: { DateTime: '2026-10-24T08:00:00', Rain: '3' }, record_count: 1, partial: false,
 };
 export const maitSyncFixture = {
-  success: true, module_id: 'controller', partial: true, received: 10, staged: 8, committed: 4,
+  success: false, module_id: 'controller', partial: true, received: 10, staged: 8, committed: 4,
   existing: 2, needs_mapping: 1, needs_review: 2, possible_changed_event: 1, results: [],
 };
+export const maitIntegrationStatusFixture = { id: 'integration-row', provider: 'mait_intelliweb', station_id: 'weather', station_name: 'Weather station', is_active: true };
+export const maitSyncStatusFixture = { sync: [
+  { module_id: 'controller', sync_kind: 'irrigation_usage', last_attempt_at: '2026-10-24T07:00:00Z', last_success_at: '2026-10-23T07:00:00Z', records_received: 10, records_created: 4, records_existing: 2, records_needing_mapping: 1, records_needing_review: 3, incomplete_range: true },
+] };
