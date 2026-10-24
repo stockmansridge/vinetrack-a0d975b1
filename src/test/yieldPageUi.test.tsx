@@ -184,3 +184,28 @@ describe("Yields page", () => {
     expect(screen.queryByRole("button", { name: /delete/i })).toBeNull();
   });
 });
+
+describe("Yields page deep links", () => {
+  it("opens the Grape Allocation tab when the link carries ?tab=allocation", async () => {
+    renderPage(["/yield?tab=allocation"]);
+    const allocation = await screen.findByRole("tab", {
+      name: "Grape Allocation",
+    });
+    expect(allocation.getAttribute("data-state")).toBe("active");
+    expect(
+      screen.getByRole("tab", { name: "Overview" }).getAttribute("data-state"),
+    ).toBe("inactive");
+  });
+
+  it("still opens Overview when no tab is requested", async () => {
+    renderPage();
+    const overview = await screen.findByRole("tab", { name: "Overview" });
+    expect(overview.getAttribute("data-state")).toBe("active");
+  });
+
+  it("ignores an unknown tab value and opens Overview", async () => {
+    renderPage(["/yield?tab=bogus"]);
+    const overview = await screen.findByRole("tab", { name: "Overview" });
+    expect(overview.getAttribute("data-state")).toBe("active");
+  });
+});
