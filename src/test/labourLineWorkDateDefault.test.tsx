@@ -3,7 +3,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AU_FORMATTERS } from "@/lib/regionFormatters";
-import type { WorkTaskLabourLine, WorkTaskMachineLine } from "@/lib/workTasksQuery";
+import type { WorkTaskLabourLine } from "@/lib/workTasksQuery";
+import type { WorkTaskMachineLine } from "@/lib/workTaskMachineLinesQuery";
 
 vi.mock("@/context/VineyardContext", () => ({ useVineyard: () => ({ selectedVineyardId: "v1", currentRole: "owner" }) }));
 vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
