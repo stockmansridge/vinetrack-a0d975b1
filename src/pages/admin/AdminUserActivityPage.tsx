@@ -565,7 +565,8 @@ export default function AdminUserActivityPage() {
       status: (r) => lastActivityMs(r) ?? 0,
     },
 
-    initial: { key: "last_login", direction: "desc" },
+    // Newest activity first: the Last seen column is the primary ordering.
+    initial: { key: "last_seen", direction: "desc" },
   });
 
   return (
