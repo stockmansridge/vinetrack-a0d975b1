@@ -148,7 +148,7 @@ export default function VintageOverviewSection() {
                 ? "—"
                 : fmt(sprayCountQ.data ?? 0)
           }
-          to="/reports/spray"
+          to="/spray-records"
         />
         <MetricCard
           label="Pruning complete"
