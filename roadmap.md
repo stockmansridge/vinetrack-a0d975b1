@@ -1,11 +1,12 @@
 # Roadmap
 
 ## MAIT iNTELLiWeb Portal support
+- [x] Correct supplied live MAIT contracts: metric ids, nested configuration, inspect columns/latest, sync existing and module refresh; 65 MAIT tests and 78 existing regressions passed (143 total, 9 files); preview build/typecheck OK.
 - [x] Add shared RPC/proxy helpers, access presentation and credential/module/channel confirmation in Weather setup.
 - [x] Extend explicit local observation selection and refresh without changing legacy fallback or forecasts.
 - [x] Add controller/module/valve mappings and manual three-day overlap sync in Irrigation setup; canonical source labels.
 - [x] Focused safety/action tests: 90 passed across 7 files; no backend/mobile edits or deployment/publication.
-- [ ] Verify signed-in MAIT connection against live responses — blocked: shared backend session/MAIT account unavailable. Canonical metric/semantics identifiers and configuration/proxy response shapes require live contract confirmation; no upstream MAIT requests or live imports executed.
+- [ ] Verify signed-in MAIT connection against live responses — blocked: shared backend session/MAIT account unavailable. Supplied live configuration/metric/inspect/sync contracts are covered by exact-envelope fixtures and component save/refetch flows; no upstream MAIT requests or live imports executed.
 
 ## Deleted demo vineyards in selection
 - [x] Refresh active membership reads, reject archived/missing parents, and clear stale selection after successful empty reads.

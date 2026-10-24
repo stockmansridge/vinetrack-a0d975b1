@@ -6,6 +6,18 @@ export const MAIT_PARTIAL_WARNING = 'MAIT returned a partial/truncated result. V
 type Row = Record<string, any>;
 export const maitRows = (value: unknown): Row[] => Array.isArray(value) ? value : [];
 export const maitRow = (value: unknown): Row => (Array.isArray(value) ? value[0] : value) ?? {};
+// Normalize the live RPC envelope once; station_id is a weather module, never a network.
+export function maitConfiguration(value: unknown) {
+  const data = maitRow(value);
+  const modules = maitRows(data.modules);
+  return {
+    connection: maitRow(data.connection),
+    weatherModule: modules.find(m => m.module_role === 'weather' && m.is_active === true),
+    controllerModules: modules.filter(m => m.module_role === 'irrigation_controller' && m.is_active === true),
+    weatherMappings: maitRows(data.weather_mappings),
+    sync: maitRows(data.sync),
+  };
+}
 export async function maitRpc(name: string, vineyardId: string, args: Row = {}) {
   const { data, error } = await (supabase.rpc as any)(name, { p_vineyard_id: vineyardId, ...args });
   if (error) throw new Error(error.message || 'MAIT settings could not be updated.');
@@ -24,7 +36,7 @@ export function maitHttpResult(status: number, body: Row): MaitResult {
   if (status === 401) throw new Error('Your session has expired. Sign in again to use MAIT.');
   if (status === 403) throw new Error('You do not have permission to use this MAIT action for this vineyard.');
   if (status === 400) throw new Error('MAIT could not accept this request. Check the credentials, module and date range.');
-  if (status < 200 || status >= 300 || body.ok === false || body.error) throw new Error('MAIT could not complete the request. Check your connection and MAIT configuration, then retry.');
+  if (status < 200 || status >= 300 || body.ok === false || body.success === false || body.error) throw new Error('MAIT could not complete the request. Check your connection and MAIT configuration, then retry.');
   return { data: body, status, partial: status === 206 || body.partial === true || body.data?.partial === true, empty: status === 204 };
 }
 export async function maitProxy(vineyardId: string, action: string, args: Row = {}): Promise<MaitResult> {
@@ -52,31 +64,36 @@ export function maitModules(data: Row): Row[] {
   return maitRows(data.modules ?? data.data?.modules).map(m => ({ ...m, id: String(m.module_id ?? m.moduleId ?? m.id), name: String(m.description ?? m.module_name ?? m.name ?? '') })).filter(m => m.id !== 'undefined');
 }
 export function maitChannels(data: Row): Row[] {
-  return maitRows(data.channels ?? data.data?.channels).map(c => ({ ...c, key: String(c.channel_key ?? c.key ?? c.channel_number ?? c.channel), number: c.channel_number ?? c.channel ?? null, label: String(c.source_label ?? c.label ?? c.name ?? ''), unit: String(c.source_unit ?? c.unit ?? ''), value: c.latest_value ?? c.value ?? null }));
+  return maitRows(data.columns).filter(c => c.channel_key != null).map(c => ({ ...c, key: String(c.channel_key), number: c.channel_number ?? null, label: String(c.label ?? ''), unit: String(c.unit ?? ''), value: data.latest?.[c.channel_key] ?? null }));
 }
 export const MAIT_METRICS = [
-  ['temperature_c', 'Air temperature'], ['humidity_pct', 'Relative humidity'], ['wind_speed_kmh', 'Wind speed'], ['wind_direction_deg', 'Wind direction'], ['wind_gust_kmh', 'Wind gust'], ['rainfall_mm', 'Rainfall'], ['rain_rate_mm_h', 'Rain rate'], ['leaf_wetness', 'Leaf wetness'], ['soil_moisture_pct', 'Soil moisture'], ['soil_temperature_c', 'Soil temperature'], ['ignore', 'Ignore'],
+  ['air_temperature', 'Air temperature'], ['relative_humidity', 'Relative humidity'], ['wind_speed', 'Wind speed'], ['wind_direction', 'Wind direction'], ['wind_gust', 'Wind gust'], ['rainfall', 'Rainfall'], ['rain_rate', 'Rain rate'], ['leaf_wetness', 'Leaf wetness'], ['soil_moisture', 'Soil moisture'], ['soil_temperature', 'Soil temperature'], ['none', 'Ignore'],
 ] as const;
+export function maitWeatherReady(config: ReturnType<typeof maitConfiguration>) {
+  return !!config.weatherModule && config.weatherMappings.some(m =>
+    String(m.module_id) === String(config.weatherModule?.module_id) && m.is_active === true &&
+    MAIT_METRICS.some(([id]) => id !== 'none' && id === m.canonical_metric));
+}
 export function maitConversion(unit: string, metric: string): { multiplier: number; offset: number } | null {
   const u = unit.trim().toLowerCase().replace(/°/g, '');
-  if (metric === 'ignore') return { multiplier: 1, offset: 0 };
-  if (['temperature_c', 'soil_temperature_c'].includes(metric)) {
+  if (metric === 'none') return { multiplier: 1, offset: 0 };
+  if (['air_temperature', 'soil_temperature'].includes(metric)) {
     if (['c', 'celsius'].includes(u)) return { multiplier: 1, offset: 0 };
     if (['f', 'fahrenheit'].includes(u)) return { multiplier: 5 / 9, offset: -32 * 5 / 9 };
   }
-  if (['wind_speed_kmh', 'wind_gust_kmh'].includes(metric)) {
+  if (['wind_speed', 'wind_gust'].includes(metric)) {
     if (['km/h', 'kph'].includes(u)) return { multiplier: 1, offset: 0 };
     if (u === 'm/s') return { multiplier: 3.6, offset: 0 };
     if (u === 'mph') return { multiplier: 1.609344, offset: 0 };
   }
-  if (['rainfall_mm', 'rain_rate_mm_h'].includes(metric)) {
-    const base = metric === 'rain_rate_mm_h' ? u.replace(/\/(h|hr|hour)$/, '') : u;
+  if (['rainfall', 'rain_rate'].includes(metric)) {
+    const base = metric === 'rain_rate' ? u.replace(/\/(h|hr|hour)$/, '') : u;
     if (base === 'mm') return { multiplier: 1, offset: 0 };
     if (base === 'cm') return { multiplier: 10, offset: 0 };
     if (['in', 'inches'].includes(base)) return { multiplier: 25.4, offset: 0 };
   }
-  if (['humidity_pct', 'soil_moisture_pct'].includes(metric) && u === '%') return { multiplier: 1, offset: 0 };
-  if (metric === 'wind_direction_deg' && ['degrees', 'deg'].includes(u)) return { multiplier: 1, offset: 0 };
+  if (['relative_humidity', 'soil_moisture'].includes(metric) && u === '%') return { multiplier: 1, offset: 0 };
+  if (metric === 'wind_direction' && ['degrees', 'deg'].includes(u)) return { multiplier: 1, offset: 0 };
   return null;
 }
 export function maitDateWindow(timezone: string | null, now = new Date()) {
@@ -92,10 +109,10 @@ export function maitOutputs(data: Row): Row[] {
 }
 export function maitSyncCounts(data: Row) {
   const s = data.summary ?? data.result ?? data;
-  return [ ['Received', s.received], ['Committed', s.committed], ['Already existing', s.already_existing], ['Needs mapping', s.needs_mapping], ['Needs review', s.needs_review], ['Possible changed event', s.possible_changed_event ?? s.possible_changed_events] ] as const;
+  return [ ['Received', s.received], ['Committed', s.committed], ['Already existing', s.existing], ['Needs mapping', s.needs_mapping], ['Needs review', s.needs_review], ['Possible changed event', s.possible_changed_event] ] as const;
 }
 export function maitDailyRainConfirmed(mappings: Row[]) {
-  return mappings.some(m => m.is_active === true && m.canonical_metric === 'rainfall_mm' && m.semantics === 'daily_cumulative');
+  return mappings.some(m => m.is_active === true && m.canonical_metric === 'rainfall' && m.semantics === 'daily_cumulative');
 }
 export function irrigationSessionSourceLabel(session: { source_type?: string | null; configuration_snapshot?: Row | null }) {
   if (session.configuration_snapshot?.import?.provider === MAIT_PROVIDER) return 'MAIT iNTELLiWeb';

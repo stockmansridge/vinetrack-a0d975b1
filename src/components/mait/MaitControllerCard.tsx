@@ -26,7 +26,8 @@ export function MaitControllerCard({ vineyardId }: { vineyardId: string }) {
   const [notice, setNotice] = useState('');
   const [partialDiscovery, setPartialDiscovery] = useState(false);
   const [result, setResult] = useState<MaitResult | null>(null);
-  const controllers = maitRows(config.controller_modules ?? config.controllers);
+  const controllers = config.controllerModules;
+  const connection = config.connection;
   const controller = controllers.find(c => String(c.module_id) === moduleId);
   const selectedSystem = systemId || controller?.irrigation_system_id || '';
   const mappings = useQuery({ queryKey: ['mait', vineyardId, 'controller-mappings', moduleId], enabled: access.data?.manage === true && !!controller, queryFn: async () => maitRows(await maitRpc('get_mait_intelliweb_controller_mappings', vineyardId, { p_module_id: moduleId })) });
@@ -34,14 +35,14 @@ export function MaitControllerCard({ vineyardId }: { vineyardId: string }) {
   const act = (fn: () => Promise<unknown>) => { setNotice(''); run.mutate(fn); };
   const moduleChoices = [...new Map([...controllers.map(c => ({ id: String(c.module_id), name: c.module_name ?? '' })), ...modules].map(m => [m.id, m])).values()];
   const mapRows = mappings.data ?? [];
-  const ready = !!controller && !!config.network_id && mapRows.some(m => m.irrigation_valve_id && m.ignore !== true && m.is_ignored !== true && (valves.data ?? []).some(v => v.id === m.irrigation_valve_id && v.irrigation_system_id === controller.irrigation_system_id));
+  const ready = !!controller && !!connection.network_id && mapRows.some(m => m.irrigation_valve_id && m.ignore !== true && m.is_ignored !== true && (valves.data ?? []).some(v => v.id === m.irrigation_valve_id && v.irrigation_system_id === controller.irrigation_system_id));
   if (access.isPending) return <Card className="p-4">Checking MAIT access…</Card>;
   return <Card className="p-4 space-y-4"><h2 className="font-semibold">MAIT iNTELLiWeb controller</h2>
     {[access.error, configuration.error, mappings.error].filter(Boolean).map((e, i) => <Alert variant="destructive" key={i}><AlertDescription>{(e as Error).message}</AlertDescription></Alert>)}
     {!access.data?.manage ? <p className="text-sm text-muted-foreground">Your vineyard owner or manager manages controller setup and imports.</p> : !connected ? <>
       <p className="text-sm text-muted-foreground">Weather stations and irrigation controllers use the same MAIT network connection.</p><Button asChild variant="outline"><Link to="/setup/weather#mait">Connect MAIT in Weather setup</Link></Button>
     </> : <>
-      <p className="text-sm text-muted-foreground">{config.network_name || 'Connected MAIT network'}</p>
+      <p className="text-sm text-muted-foreground">{connection.network_name || 'Connected MAIT network'}</p>
       {notice && <Alert><AlertDescription>{notice}</AlertDescription></Alert>}
       <Button variant="outline" disabled={run.isPending} onClick={() => act(async () => { const r = await maitProxy(vineyardId, 'modules'); setModules(maitModules(r.data)); if (r.empty) setNotice('MAIT returned no modules.'); })}>Load controller modules</Button>
       <div className="grid gap-3 sm:grid-cols-2"><MaitChoice label="Choose controller module" value={moduleId} onChange={v => { setModuleId(v); setSystemId(''); setOutputs(null); setResult(null); setPartialDiscovery(false); }} items={moduleChoices.map(m => ({ value: m.id, label: `${m.id} · ${m.name}` }))} /><MaitChoice label="VineTrack Irrigation System" value={selectedSystem} onChange={setSystemId} items={(systems.data ?? []).map(s => ({ value: s.id, label: s.name }))} /></div>
@@ -51,11 +52,11 @@ export function MaitControllerCard({ vineyardId }: { vineyardId: string }) {
       })}>Save controller module</Button>
       {controller && <div className="space-y-3 border-t pt-4">
         <p className="text-sm font-medium">{controller.module_name || moduleId} · {(systems.data ?? []).find(s => s.id === selectedSystem)?.name ?? 'Irrigation system'}</p>
-        <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Controller identity</summary>{config.network_id}:{moduleId}</details>
+        <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Controller identity</summary>{connection.network_id}:{moduleId}</details>
         <Button variant="outline" disabled={run.isPending} onClick={() => act(async () => { const r = await maitProxy(vineyardId, 'usage', { moduleId, ...maitDateWindow(timezone) }); setOutputs(maitOutputs(r.data)); setPartialDiscovery(r.partial); if (r.empty) setNotice('No MAIT outputs ran in the recent three-day window. Existing mappings remain available.'); })}>Discover recent outputs</Button>
         {partialDiscovery && <Alert variant="destructive"><AlertDescription>{MAIT_PARTIAL_WARNING}</AlertDescription></Alert>}
         {outputs && !outputs.length && <p className="text-sm text-muted-foreground">No usage outputs returned for the recent three-day window.</p>}
-        {(outputs || mapRows.length > 0) && <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="p-2">MAIT output</th><th className="p-2">MAIT name</th><th className="p-2">VineTrack valve</th><th className="p-2">Status</th></tr></thead><tbody>{[...new Map([...mapRows.map(m => ({ number: Number(m.external_valve_number ?? m.channel_number), name: m.external_valve_name ?? m.channel_name ?? '' })), ...(outputs ?? [])].map(o => [o.number, o])).values()].filter(o => Number.isFinite(o.number)).map(o => <OutputRow key={`${moduleId}:${selectedSystem}:${o.number}`} output={o} saved={mapRows.find(m => Number(m.external_valve_number ?? m.channel_number) === o.number)} vineyardId={vineyardId} controllerKey={`${config.network_id}:${moduleId}`} controllerName={controller.module_name ?? moduleId} valves={(valves.data ?? []).filter(v => v.irrigation_system_id === selectedSystem)} onSaved={async () => { await mappings.refetch(); }} />)}</tbody></table></div>}
+        {(outputs || mapRows.length > 0) && <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="p-2">MAIT output</th><th className="p-2">MAIT name</th><th className="p-2">VineTrack valve</th><th className="p-2">Status</th></tr></thead><tbody>{[...new Map([...mapRows.map(m => ({ number: Number(m.external_valve_number ?? m.channel_number), name: m.external_valve_name ?? m.channel_name ?? '' })), ...(outputs ?? [])].map(o => [o.number, o])).values()].filter(o => Number.isFinite(o.number)).map(o => <OutputRow key={`${moduleId}:${selectedSystem}:${o.number}`} output={o} saved={mapRows.find(m => Number(m.external_valve_number ?? m.channel_number) === o.number)} vineyardId={vineyardId} controllerKey={`${connection.network_id}:${moduleId}`} controllerName={controller.module_name ?? moduleId} valves={(valves.data ?? []).filter(v => v.irrigation_system_id === selectedSystem)} onSaved={async () => { await mappings.refetch(); }} />)}</tbody></table></div>}
         {valves.error && <p className="text-sm text-destructive">Could not load valves.</p>}
         <Button disabled={run.isPending || !ready || selectedSystem !== controller.irrigation_system_id} onClick={() => act(async () => { const r = await maitProxy(vineyardId, 'sync_usage', { moduleId, ...maitDateWindow(timezone) }); setResult(r); await qc.invalidateQueries({ queryKey: ['irrigation'] }); await qc.invalidateQueries({ queryKey: ['irrigation-report'] }); await qc.invalidateQueries({ queryKey: ['mait', vineyardId] }); })}>Sync now</Button>
         {result && <MaitSyncResult result={result} />}
