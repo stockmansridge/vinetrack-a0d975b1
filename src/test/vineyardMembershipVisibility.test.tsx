@@ -37,6 +37,23 @@ describe("vineyard membership visibility", () => {
     expect(mocks.eq).toHaveBeenCalledWith("user_id", "admin");
     expect(mocks.is).toHaveBeenCalledWith("vineyards.deleted_at", null);
   });
+  it("keeps a stored selection while memberships are still loading", async () => {
+    localStorage.setItem("vt_selected_vineyard", "my-vineyard");
+    mocks.is.mockReturnValue(new Promise(() => {})); // query never resolves
+    mount();
+    await waitFor(() => expect(screen.getByText("loading")).toBeInTheDocument());
+    expect(localStorage.getItem("vt_selected_vineyard")).toBe("my-vineyard");
+  });
+  it("restores a stored selection for a multi-vineyard user after load", async () => {
+    localStorage.setItem("vt_selected_vineyard", "second");
+    mocks.rows = [
+      { vineyard_id: "first", role: "owner", vineyards: { name: "First", deleted_at: null } },
+      { vineyard_id: "second", role: "manager", vineyards: { name: "Second", deleted_at: null } },
+    ];
+    mount();
+    await waitFor(() => expect(screen.getByText("ready:first,second:second")).toBeInTheDocument());
+    expect(localStorage.getItem("vt_selected_vineyard")).toBe("second");
+  });
   it("clears a removed selection even when no memberships remain", async () => {
     localStorage.setItem("vt_selected_vineyard", "deleted-demo");
     mount();
