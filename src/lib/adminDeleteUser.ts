@@ -22,6 +22,8 @@ export interface DeleteUserResult extends DeleteUserPreview {
   success?: boolean;
   errors?: string[];
   deleted_vineyards?: DeleteUserVineyard[];
+  /** Vineyards that could not be hard-deleted and were archived instead. */
+  archived_vineyards?: DeleteUserVineyard[];
   kept_vineyards?: DeleteUserVineyard[];
 }
 
