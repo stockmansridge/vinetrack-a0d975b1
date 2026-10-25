@@ -307,7 +307,8 @@ Deno.serve(async (req: Request) => {
     mode: "delete",
     success: true,
     errors,
-    deleted_vineyards: soleOwner,
+    deleted_vineyards: soleOwner.filter((v) => !archivedInstead.includes(v.id)),
+    archived_vineyards: soleOwner.filter((v) => archivedInstead.includes(v.id)),
     kept_vineyards: shared,
     user: summary.user,
   });
