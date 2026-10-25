@@ -35,9 +35,14 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import {
+  Activity,
   Cloud,
   CloudRain,
+  CloudSun,
   Droplets,
+  Gauge,
+  Plug,
+  Sun,
   Thermometer,
   Wind,
   Leaf,
@@ -166,7 +171,7 @@ export default function WeatherStatusPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-semibold">Weather</h1>
         <p className="text-sm text-muted-foreground">
@@ -193,6 +198,8 @@ export default function WeatherStatusPage() {
             <SectionHeader
               title="Weather Data Sources"
               helper="These are the sources VineTrack is currently using for this vineyard."
+              icon={<CloudSun className="h-5 w-5" />}
+              tone="bg-map-accent/10 text-map-accent border-map-accent/30"
             />
             <div className="grid items-start gap-3 md:grid-cols-2">
               <ForecastSourceCard
@@ -216,6 +223,8 @@ export default function WeatherStatusPage() {
             <SectionHeader
               title="Current Weather"
               helper="Latest in-vineyard observations from your configured station."
+              icon={<Activity className="h-5 w-5" />}
+              tone="bg-success/10 text-success border-success/30"
             />
             <LiveWeatherCard
               vineyardId={selectedVineyardId!}
@@ -227,6 +236,8 @@ export default function WeatherStatusPage() {
             <SectionHeader
               title="Weather Provider Connections"
               helper="Connect and configure weather services available to this vineyard. VineTrack will only use providers selected in the Weather Data Sources section above."
+              icon={<Plug className="h-5 w-5" />}
+              tone="bg-primary/10 text-primary border-primary/30"
             />
             <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
               <div className="space-y-1.5">
@@ -280,11 +291,41 @@ export default function WeatherStatusPage() {
   );
 }
 
-function SectionHeader({ title, helper }: { title: string; helper?: string }) {
+function SectionHeader({
+  title,
+  helper,
+  icon,
+  tone,
+}: {
+  title: string;
+  helper?: string;
+  icon?: React.ReactNode;
+  tone?: string;
+}) {
   return (
-    <div className="space-y-0.5">
-      <h2 className="text-lg font-semibold">{title}</h2>
-      {helper && <p className="text-sm text-muted-foreground">{helper}</p>}
+    <div className="flex items-start gap-3">
+      {icon && (
+        <div
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${tone ?? "bg-muted text-muted-foreground border-border"}`}
+        >
+          {icon}
+        </div>
+      )}
+      <div className="space-y-0.5">
+        <h2 className="text-xl font-bold tracking-tight">{title}</h2>
+        {helper && <p className="text-sm text-muted-foreground">{helper}</p>}
+      </div>
+    </div>
+  );
+}
+
+/** Branded visual identifier for a weather provider (icon + token tint). */
+function ProviderAvatar({ icon, tone }: { icon: React.ReactNode; tone: string }) {
+  return (
+    <div
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${tone}`}
+    >
+      {icon}
     </div>
   );
 }
@@ -298,11 +339,16 @@ function ProviderUsageLine({
   usedFor: string[];
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-      <span>Provides: {provides.join(" · ")}</span>
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+      <span className="text-muted-foreground">Provides:</span>
+      {provides.map((p) => (
+        <Badge key={p} variant="outline" className="font-normal text-muted-foreground">
+          {p}
+        </Badge>
+      ))}
       {usedFor.length > 0 && (
-        <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
-          Currently used for: {usedFor.join(" · ")}
+        <Badge className="gap-1 bg-success/15 text-success border-success/30">
+          <Check className="h-3 w-3" /> Used for: {usedFor.join(" · ")}
         </Badge>
       )}
     </div>
@@ -314,8 +360,14 @@ function OpenMeteoCard() {
   return (
     <Card className="p-4 space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-base font-semibold">Open-Meteo</h2>
-        <Badge variant="outline" className="text-muted-foreground">Built in</Badge>
+        <div className="flex items-center gap-3">
+          <ProviderAvatar
+            tone="bg-map-accent/10 text-map-accent border-map-accent/30"
+            icon={<CloudSun className="h-5 w-5" />}
+          />
+          <h2 className="text-base font-semibold">Open-Meteo</h2>
+        </div>
+        <Badge className="bg-map-accent/15 text-map-accent border-map-accent/30">Built in</Badge>
       </div>
       <p className="text-xs text-muted-foreground">
         Free global forecast and archive service. No connection or credentials
@@ -355,37 +407,39 @@ function ObservationSourceCard({
   // One provider supplying both is shown once, labelled for both roles.
   const sameProvider = provider !== "none" && rainfallSource === label;
   return (
-    <Card className="p-4 space-y-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Droplets className="h-4 w-4" /> Observations &amp; Rainfall
+    <Card className="p-5 space-y-4 border-success/30 bg-success/5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <ProviderAvatar
+            tone="bg-success/15 text-success border-success/30"
+            icon={<CloudRain className="h-5 w-5" />}
+          />
+          <div className="space-y-1">
+            <h3 className="text-lg font-semibold">Observations &amp; Rainfall</h3>
+            <p className="text-xs text-muted-foreground">
+              Live weather observations and rainfall actuals.
+            </p>
           </div>
-          <div className="text-base font-semibold">
-            {observationLoading ? "Loading…" : label}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Live weather observations and rainfall actuals.
-          </p>
         </div>
         {!observationLoading && provider !== "none" && (
-          <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
-            Active
+          <Badge className="gap-1 bg-success/15 text-success border-success/30">
+            <Check className="h-3 w-3" /> Active
           </Badge>
         )}
       </div>
+      <div className="rounded-lg border border-success/20 bg-card px-3 py-2.5">
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+          {sameProvider ? "Live observations & Rainfall actuals" : "Live observations"}
+        </div>
+        <div className="text-xl font-bold">
+          {observationLoading ? "Loading…" : label}
+        </div>
+      </div>
       <div className="grid gap-2 sm:grid-cols-2 text-sm">
-        {sameProvider ? (
-          <Row label="Live observations & Rainfall actuals" value={label} />
-        ) : (
-          <>
-            <Row label="Live observations" value={observationLoading ? "Loading…" : label} />
-            <Row label="Rainfall actuals" value={rainfallSource} />
-          </>
-        )}
+        {!sameProvider && <Row label="Rainfall actuals" value={rainfallSource} />}
         {stationName && <Row label="Station" value={stationName} />}
       </div>
-      <div className="border-t pt-2 text-sm">
+      <div className="rounded-lg border border-dashed px-3 py-2 text-sm">
         <Row label="Historical rainfall fallback" value="Open-Meteo Archive" />
         <p className="text-xs text-muted-foreground pt-1">
           Used when station data is unavailable.
