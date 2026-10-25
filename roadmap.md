@@ -1,5 +1,12 @@
 # Roadmap
 
+## Weather Settings visual refinement
+- [x] Separate source, current-weather and connection sections; retain source/fallback semantics.
+- [x] Compact current readings into five desktop tiles with timestamp/Refresh header and inline rain rate.
+- [x] Uniform provider summary cards with text brand treatments and explicit dialogs retaining existing forms/hooks.
+- [x] 176 tests passed across 12 files; preview compilation OK; isolated provider-card desktop/dialog/mobile checks completed.
+- [ ] Verify full signed-in Weather page against the approved mock-up — blocked: preview has no auth users and no mock-up image was available in inspected project/uploads.
+
 ## MAIT iNTELLiWeb Portal support
 - [x] Final contract hardening: accept partial HTTP 206, raw view-only integration status, exclude DateTime sensors, dedicated selected-controller sync-state display; 78 MAIT + 78 existing regressions passed (156 total, 9 files); preview build/typecheck OK. No backend/mobile changes or publication.
 - [x] Correct supplied live MAIT contracts: metric ids, nested configuration, inspect columns/latest, sync existing and module refresh; 65 MAIT tests and 78 existing regressions passed (143 total, 9 files); preview build/typecheck OK.

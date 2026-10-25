@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
+import { ProviderConnectionCard } from '@/components/weather/ProviderConnectionCard';
+import { PROVIDER_PROVIDES } from '@/lib/weatherSourceSummary';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,7 +31,7 @@ function Choice({ value, onChange, items, label }: { value: string; onChange: (v
   return <Select value={value} onValueChange={onChange}><SelectTrigger aria-label={label} className="min-w-40"><SelectValue placeholder={label} /></SelectTrigger><SelectContent>{items.map(i => <SelectItem key={i.value} value={i.value}>{i.label}</SelectItem>)}</SelectContent></Select>;
 }
 export { Choice as MaitChoice };
-export function MaitWeatherCard({ vineyardId }: { vineyardId: string }) {
+export function MaitWeatherCard({ vineyardId, usedFor }: { vineyardId: string; usedFor?: string[] }) {
   const { access, configuration, status, config, connected, timezone } = useMait(vineyardId);
   const connection = config.connection;
   const weatherModuleId = config.weatherModule?.module_id;
@@ -55,7 +57,7 @@ export function MaitWeatherCard({ vineyardId }: { vineyardId: string }) {
   const moduleChoices = [...new Map([...(config.weatherModule ? [{ id: String(weatherModuleId), name: config.weatherModule.module_name ?? '' }] : []), ...modules].map(m => [m.id, m])).values()];
   const networkName = tested?.data.network_name ?? tested?.data.network?.name ?? connection.network_name;
   if (access.isPending) return <Card className="p-4">Checking MAIT access…</Card>;
-  return <Card id="mait" className="p-4 space-y-4 scroll-mt-6">
+  const content = <div className="space-y-4">
     <div className="flex flex-wrap items-center gap-3">
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-task-water/10 text-task-water border-task-water/30"><Gauge className="h-5 w-5" /></div>
       <h2 className="text-base font-semibold">MAIT iNTELLiWeb</h2>
@@ -108,7 +110,9 @@ export function MaitWeatherCard({ vineyardId }: { vineyardId: string }) {
       </div>}
     </>}
     <Dialog open={disconnect} onOpenChange={setDisconnect}><DialogContent><DialogHeader><DialogTitle>Disconnect MAIT?</DialogTitle><DialogDescription>The weather station and controllers share this connection. Historical irrigation records will remain unchanged.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setDisconnect(false)}>Cancel</Button><Button variant="destructive" disabled={action.isPending} onClick={() => run(async () => { await maitRpc('remove_mait_intelliweb_connection', vineyardId); setDisconnect(false); setModules([]); setChannels(null); await refresh(); })}>Disconnect</Button></DialogFooter></DialogContent></Dialog>
-  </Card>;
+  </div>;
+  if (!usedFor) return <Card id="mait" className="p-4 space-y-4 scroll-mt-6">{content}</Card>;
+  return <ProviderConnectionCard id="mait" name="MAIT iNTELLiWeb" mark="MAIT" icon={<Gauge className="h-7 w-7" />} tone="bg-task-water/10 text-task-water" description="iNTELLiWeb weather stations and sensor networks." configured={connected} provides={PROVIDER_PROVIDES.mait} usedFor={usedFor}>{content}</ProviderConnectionCard>;
 }
 function ChannelRow({ channel, saved, vineyardId, moduleId, onSaved }: { channel: Row; saved?: Row; vineyardId: string; moduleId: string; onSaved: () => Promise<void> }) {
   const [metric, setMetric] = useState(saved?.is_active ? saved.canonical_metric : 'none');

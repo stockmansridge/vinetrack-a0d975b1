@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useVineyard } from "@/context/VineyardContext";
 import { useDiagnosticPanel } from "@/lib/systemAdmin";
 import { Card } from "@/components/ui/card";
+import { ProviderConnectionCard } from "@/components/weather/ProviderConnectionCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -194,14 +195,14 @@ export default function WeatherStatusPage() {
 
       {data && (
         <>
-          <section className="space-y-3">
+          <section className="space-y-5 border-y border-map-accent/20 bg-map-accent/5 px-4 py-6 sm:px-6">
             <SectionHeader
               title="Weather Data Sources"
               helper="These are the sources VineTrack is currently using for this vineyard."
               icon={<CloudSun className="h-5 w-5" />}
               tone="bg-map-accent/10 text-map-accent border-map-accent/30"
             />
-            <div className="grid items-start gap-3 md:grid-cols-2">
+            <div className="grid items-stretch gap-4 md:grid-cols-2">
               <ForecastSourceCard
                 vineyardId={selectedVineyardId!}
                 canEdit={canEdit}
@@ -219,42 +220,32 @@ export default function WeatherStatusPage() {
             </div>
           </section>
 
-          <section className="space-y-3">
-            <SectionHeader
-              title="Current Weather"
-              helper="Latest in-vineyard observations from your configured station."
-              icon={<Activity className="h-5 w-5" />}
-              tone="bg-success/10 text-success border-success/30"
-            />
+          <section className="border-y border-success/25 bg-success/5 px-4 py-4 sm:px-6">
             <LiveWeatherCard
               vineyardId={selectedVineyardId!}
               anyConfigured={!!(davis?.configured || wu?.configured)}
             />
           </section>
 
-          <section className="space-y-3">
+          <section className="space-y-5 border-y bg-secondary/70 px-4 py-6 sm:px-6">
             <SectionHeader
               title="Weather Provider Connections"
-              helper="Connect and configure weather services available to this vineyard. VineTrack will only use providers selected in the Weather Data Sources section above."
+              helper="Weather services available to this vineyard."
               icon={<Plug className="h-5 w-5" />}
               tone="bg-primary/10 text-primary border-primary/30"
             />
-            <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <div className="space-y-1.5">
-                <ProviderUsageLine provides={PROVIDER_PROVIDES.open_meteo} usedFor={usedFor.open_meteo} />
-                <OpenMeteoCard />
-              </div>
-              <div className="space-y-1.5">
-                <ProviderUsageLine provides={PROVIDER_PROVIDES.willyweather} usedFor={usedFor.willyweather} />
+            <div className="grid auto-rows-fr items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <OpenMeteoCard usedFor={usedFor.open_meteo} />
+
                 <WillyWeatherCard
                   vineyardId={selectedVineyardId!}
+                  usedFor={usedFor.willyweather}
                   canEdit={canEdit}
                 />
-              </div>
-              <div className="space-y-1.5">
-                <ProviderUsageLine provides={PROVIDER_PROVIDES.davis} usedFor={usedFor.davis} />
+
                 <DavisCard
                   status={davis}
+                  usedFor={usedFor.davis}
                   canEdit={canEdit}
                   callerRole={callerRole}
                   vineyardId={selectedVineyardId!}
@@ -262,22 +253,19 @@ export default function WeatherStatusPage() {
                     qc.invalidateQueries({ queryKey: ["weather_status", selectedVineyardId] })
                   }
                 />
-              </div>
-              <div className="space-y-1.5">
-                <ProviderUsageLine provides={PROVIDER_PROVIDES.wunderground} usedFor={usedFor.wunderground} />
+
                 <WundergroundCard
                   status={wu}
+                  usedFor={usedFor.wunderground}
                   canEdit={canEdit}
                   vineyardId={selectedVineyardId!}
                   onChanged={() =>
                     qc.invalidateQueries({ queryKey: ["weather_status", selectedVineyardId] })
                   }
                 />
-              </div>
-              <div className="space-y-1.5">
-                <ProviderUsageLine provides={PROVIDER_PROVIDES.mait} usedFor={usedFor.mait} />
-                {selectedVineyardId && <MaitWeatherCard key={selectedVineyardId} vineyardId={selectedVineyardId} />}
-              </div>
+
+                {selectedVineyardId && <MaitWeatherCard key={selectedVineyardId} vineyardId={selectedVineyardId} usedFor={usedFor.mait} />}
+
             </div>
           </section>
 
@@ -312,7 +300,7 @@ function SectionHeader({
         </div>
       )}
       <div className="space-y-0.5">
-        <h2 className="text-xl font-bold tracking-tight">{title}</h2>
+        <h2 className="text-xl font-bold tracking-normal">{title}</h2>
         {helper && <p className="text-sm text-muted-foreground">{helper}</p>}
       </div>
     </div>
@@ -330,52 +318,9 @@ function ProviderAvatar({ icon, tone }: { icon: React.ReactNode; tone: string })
   );
 }
 
-/** Capabilities a provider CAN supply, plus what it is actively selected for. */
-function ProviderUsageLine({
-  provides,
-  usedFor,
-}: {
-  provides: string[];
-  usedFor: string[];
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-1.5 text-xs">
-      <span className="text-muted-foreground">Provides:</span>
-      {provides.map((p) => (
-        <Badge key={p} variant="outline" className="font-normal text-muted-foreground">
-          {p}
-        </Badge>
-      ))}
-      {usedFor.length > 0 && (
-        <Badge className="gap-1 bg-success/15 text-success border-success/30">
-          <Check className="h-3 w-3" /> Used for: {usedFor.join(" · ")}
-        </Badge>
-      )}
-    </div>
-  );
-}
-
-/** Open-Meteo is built in — no connection or credentials to configure. */
-function OpenMeteoCard() {
-  return (
-    <Card className="p-4 space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-3">
-          <ProviderAvatar
-            tone="bg-map-accent/10 text-map-accent border-map-accent/30"
-            icon={<CloudSun className="h-5 w-5" />}
-          />
-          <h2 className="text-base font-semibold">Open-Meteo</h2>
-        </div>
-        <Badge className="bg-map-accent/15 text-map-accent border-map-accent/30">Built in</Badge>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Free global forecast and archive service. No connection or credentials
-        are required — it is always available as the app default forecast and
-        as the historical rainfall fallback.
-      </p>
-    </Card>
-  );
+/** Open-Meteo has no credentials or configuration action. */
+function OpenMeteoCard({ usedFor }: { usedFor: string[] }) {
+  return <ProviderConnectionCard name="Open-Meteo" mark="Open-Meteo" icon={<CloudSun className="h-7 w-7" />} tone="bg-map-accent/10 text-map-accent" description="Global forecasts and historical rainfall archive." builtIn provides={PROVIDER_PROVIDES.open_meteo} usedFor={usedFor} />;
 }
 
 function ObservationSourceCard({
@@ -407,7 +352,7 @@ function ObservationSourceCard({
   // One provider supplying both is shown once, labelled for both roles.
   const sameProvider = provider !== "none" && rainfallSource === label;
   return (
-    <Card className="p-5 space-y-4 border-success/30 bg-success/5">
+    <Card className="h-full rounded-lg p-5 space-y-4 border-success/30 bg-success/10">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <ProviderAvatar
@@ -427,7 +372,7 @@ function ObservationSourceCard({
           </Badge>
         )}
       </div>
-      <div className="rounded-lg border border-success/20 bg-card px-3 py-2.5">
+      <div className="border-y border-success/20 py-3">
         <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
           {sameProvider ? "Live observations & Rainfall actuals" : "Live observations"}
         </div>
@@ -439,7 +384,7 @@ function ObservationSourceCard({
         {!sameProvider && <Row label="Rainfall actuals" value={rainfallSource} />}
         {stationName && <Row label="Station" value={stationName} />}
       </div>
-      <div className="rounded-lg border border-dashed px-3 py-2 text-sm">
+      <div className="border-t border-success/20 pt-3 text-sm">
         <Row label="Historical rainfall fallback" value="Open-Meteo Archive" />
         <p className="text-xs text-muted-foreground pt-1">
           Used when station data is unavailable.
@@ -593,12 +538,14 @@ function ProviderStatusCard({
 function DavisCard({
   status,
   canEdit,
+  usedFor,
   callerRole,
   vineyardId,
   onChanged,
 }: {
   status?: WeatherIntegrationStatus;
   canEdit: boolean;
+  usedFor: string[];
   callerRole: string | null;
   vineyardId: string;
   onChanged: () => void;
@@ -685,30 +632,9 @@ function DavisCard({
   const typedHasNew = apiKey.trim() !== "" || apiSecret.trim() !== "";
 
   return (
-    <Collapsible defaultOpen={false} className="group">
-      <Card className="p-4 space-y-4">
-        <CollapsibleTrigger asChild>
-          <button type="button" className="flex w-full items-center justify-between gap-3 text-left">
-            <div className="flex items-center gap-3">
-              <ProviderAvatar
-                tone="bg-task-weed/10 text-task-weed border-task-weed/30"
-                icon={<Wind className="h-5 w-5" />}
-              />
-              <h2 className="text-base font-semibold">Davis WeatherLink</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              {configured ? (
-                <Badge className="bg-success/15 text-success border-success/30">
-                  Configured
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-muted-foreground">Not configured</Badge>
-              )}
-              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-            </div>
-          </button>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="space-y-4">
+    <ProviderConnectionCard name="Davis WeatherLink" mark="WeatherLink" icon={<Wind className="h-7 w-7" />} tone="bg-task-weed/10 text-task-weed" description="Local observations from your Davis station." configured={configured} provides={PROVIDER_PROVIDES.davis} usedFor={usedFor}>
+      <div className="space-y-4">
+
           {status?.error && <div className="text-xs text-destructive">RPC error: {status.error}</div>}
 
           {configured && <StatusBlock status={status} />}
@@ -890,7 +816,7 @@ function DavisCard({
               </div>
             </div>
           )}
-        </CollapsibleContent>
+
 
         <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
           <AlertDialogContent>
@@ -916,8 +842,8 @@ function DavisCard({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </Card>
-    </Collapsible>
+      </div>
+    </ProviderConnectionCard>
   );
 
 }
@@ -952,8 +878,8 @@ function LiveWeatherCard({
   });
 
   return (
-    <Card className="p-4 space-y-3">
-      <div className="flex items-center justify-between gap-3">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <ProviderAvatar
             tone="bg-success/10 text-success border-success/30"
@@ -966,8 +892,10 @@ function LiveWeatherCard({
             </p>
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs text-muted-foreground">Last updated: {data?.available === true ? fmtDate(data.reading.observed_at) : "—"}</span>
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
           onClick={async () => {
             setRefreshing(true); setRefreshError(null);
@@ -985,6 +913,7 @@ function LiveWeatherCard({
           {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
           Refresh
         </Button>
+        </div>
       </div>
 
       {refreshError && <Alert variant="destructive"><AlertDescription>{refreshError}</AlertDescription></Alert>}
@@ -1004,11 +933,11 @@ function LiveWeatherCard({
       {!isLoading && data && data.available === true && (
         <div className="space-y-3">
           {data.stale && (
-            <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+            <div className="border-l-2 border-warning bg-warning/10 px-3 py-1.5 text-xs text-foreground">
               Reading is stale (&gt; 1 hour old). Station may be offline.
             </div>
           )}
-          <div className="grid gap-3 sm:grid-cols-3 text-sm">
+          <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-5">
             <Reading tone="bg-task-leaf/10 text-task-leaf border-task-leaf/30" icon={<Thermometer className="h-4 w-4" />} label="Temperature" value={data.reading.temperature_c != null ? rf.temperature(data.reading.temperature_c, 1) : "—"} />
             <Reading tone="bg-map-accent/10 text-map-accent border-map-accent/30" icon={<Droplets className="h-4 w-4" />} label="Humidity" value={fmtNum(data.reading.humidity_pct, 0, " %")} />
             <Reading
@@ -1026,16 +955,15 @@ function LiveWeatherCard({
               }
             />
             <Reading tone="bg-task-shoot/10 text-task-shoot border-task-shoot/30" icon={<CloudRain className="h-4 w-4" />} label="Rain today" value={data.reading.rain_today_mm != null ? rf.rainfall(data.reading.rain_today_mm, 1) : "—"} />
-            <Reading tone="bg-task-water/10 text-task-water border-task-water/30" icon={<CloudRain className="h-4 w-4" />} label="Rain rate" value={data.reading.rain_rate_mm_per_hr != null ? `${rf.rainfall(data.reading.rain_rate_mm_per_hr)}/h` : "—"} />
             <Reading icon={<Cloud className="h-4 w-4" />} label="Station" value={data.reading.station_name ?? "—"} />
           </div>
           <div className="text-xs text-muted-foreground border-t pt-2 flex flex-wrap gap-x-4 gap-y-1">
             <span>Source: {providerFromObservationSource(data.reading.source) ? observationProviderLabel(providerFromObservationSource(data.reading.source) ?? "none") : data.reading.source ?? "—"}</span>
-            <span>Last observation: {fmtDate(data.reading.observed_at)}</span>
+            <span>Rain rate: {data.reading.rain_rate_mm_per_hr != null ? `${rf.rainfall(data.reading.rain_rate_mm_per_hr)}/h` : "—"}</span>
           </div>
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -1087,16 +1015,16 @@ function Reading({
   icon, label, value, tone,
 }: { icon: React.ReactNode; label: string; value: React.ReactNode; tone?: string }) {
   return (
-    <div className="rounded-lg border bg-card p-3 shadow-sm">
+    <div className="min-w-0 rounded-md border bg-card px-3 py-2.5">
       <div className="flex items-center gap-2">
         <span
           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border ${tone ?? "bg-muted text-muted-foreground border-border"}`}
         >
           {icon}
         </span>
-        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</span>
+        <span className="text-xs text-muted-foreground">{label}</span>
       </div>
-      <div className="mt-1.5 text-lg font-semibold">{value}</div>
+      <div className="mt-1 text-base font-semibold leading-5 break-words">{value}</div>
     </div>
   );
 }
@@ -1135,7 +1063,7 @@ function ForecastSourceCard({
   const value: ForecastProvider = preference ?? "auto";
 
   return (
-    <Card className="p-5 space-y-4 border-map-accent/30 bg-map-accent/5">
+    <Card className="h-full rounded-lg p-5 space-y-4 border-map-accent/30 bg-map-accent/10">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <ProviderAvatar
@@ -1158,7 +1086,7 @@ function ForecastSourceCard({
           </Badge>
         </div>
       </div>
-      <div className="rounded-lg border border-map-accent/20 bg-card px-3 py-2.5">
+      <div className="border-y border-map-accent/20 py-3">
         <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
           Selected forecast source
         </div>
@@ -1228,9 +1156,11 @@ function ForecastSourceCard({
 function WillyWeatherCard({
   vineyardId,
   canEdit,
+  usedFor,
 }: {
   vineyardId: string;
   canEdit: boolean;
+  usedFor: string[];
 }) {
   const qc = useQueryClient();
   const { data: status, isLoading } = useQuery<WillyIntegrationStatus>({
@@ -1441,30 +1371,9 @@ function WillyWeatherCard({
   }, [canEdit, configured, providerEligible, vineyardCenter, autoAssigning, vineyardId]);
 
   return (
-    <Collapsible defaultOpen={false} className="group">
-      <Card className="p-4 space-y-4">
-        <CollapsibleTrigger asChild>
-          <button type="button" className="flex w-full items-center justify-between gap-3 text-left">
-            <div className="flex items-center gap-3">
-              <ProviderAvatar
-                tone="bg-wind/10 text-wind border-wind/30"
-                icon={<Sun className="h-5 w-5" />}
-              />
-              <h2 className="text-base font-semibold">WillyWeather</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              {configured ? (
-                <Badge className="bg-success/15 text-success border-success/30">
-                  Configured
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-muted-foreground">Not configured</Badge>
-              )}
-              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-            </div>
-          </button>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="space-y-4">
+    <ProviderConnectionCard name="WillyWeather" mark="WillyWeather" icon={<Sun className="h-7 w-7" />} tone="bg-warning/10 text-warning" description="Australian forecasts for your vineyard location." configured={configured} provides={PROVIDER_PROVIDES.willyweather} usedFor={usedFor}>
+      <div className="space-y-4">
+
           <p className="text-xs text-muted-foreground">
             WillyWeather provides Australian-region forecasts. The API key is managed centrally — no key is needed here. Set a location and test the connection.
           </p>
@@ -1600,7 +1509,7 @@ function WillyWeatherCard({
           )}
 
           <WillyWeatherAttribution />
-        </CollapsibleContent>
+
 
         <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
           <AlertDialogContent>
@@ -1624,8 +1533,8 @@ function WillyWeatherCard({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </Card>
-    </Collapsible>
+      </div>
+    </ProviderConnectionCard>
   );
 
 }
@@ -1640,11 +1549,13 @@ function WillyWeatherCard({
 function WundergroundCard({
   status,
   canEdit,
+  usedFor,
   vineyardId,
   onChanged,
 }: {
   status?: WeatherIntegrationStatus;
   canEdit: boolean;
+  usedFor: string[];
   vineyardId: string;
   onChanged: () => void;
 }) {
@@ -1819,30 +1730,9 @@ function WundergroundCard({
   const configured = merged.configured;
 
   return (
-    <Collapsible defaultOpen={false} className="group">
-      <Card className="p-4 space-y-4">
-        <CollapsibleTrigger asChild>
-          <button type="button" className="flex w-full items-center justify-between gap-3 text-left">
-            <div className="flex items-center gap-3">
-              <ProviderAvatar
-                tone="bg-task-slashing/10 text-task-slashing border-task-slashing/30"
-                icon={<Thermometer className="h-5 w-5" />}
-              />
-              <h2 className="text-base font-semibold">Weather Underground</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              {configured ? (
-                <Badge className="bg-success/15 text-success border-success/30">
-                  Configured
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-muted-foreground">Not configured</Badge>
-              )}
-              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-            </div>
-          </button>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="space-y-4">
+    <ProviderConnectionCard name="Weather Underground" mark="WU" icon={<Thermometer className="h-7 w-7" />} tone="bg-task-slashing/10 text-task-slashing" description="Local readings from your personal weather station." configured={configured} provides={PROVIDER_PROVIDES.wunderground} usedFor={usedFor}>
+      <div className="space-y-4">
+
           <p className="text-xs text-muted-foreground">
             Uses platform Weather Underground connection. Owners and managers can
             set the vineyard's PWS station ID. Rainfall is backfilled into
@@ -2009,7 +1899,7 @@ function WundergroundCard({
             Weather Underground rows — Manual and Davis rows are never
             overwritten.
           </div>
-        </CollapsibleContent>
+
 
         <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
           <AlertDialogContent>
@@ -2036,8 +1926,8 @@ function WundergroundCard({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </Card>
-    </Collapsible>
+      </div>
+    </ProviderConnectionCard>
   );
 
 }
