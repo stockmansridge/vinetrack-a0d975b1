@@ -117,6 +117,9 @@ export function VineyardProvider({ children }: { children: ReactNode }) {
 
   // Auto-pick if exactly one
   useEffect(() => {
+    // Never decide from an empty list while the memberships query is still
+    // loading — that would wipe a valid stored selection on every refresh.
+    if (!user || !isSuccess) return;
     if (!ownSelectedId && memberships.length === 1) {
       setSelectedVineyardId(memberships[0].vineyard_id);
       localStorage.setItem(STORAGE_KEY, memberships[0].vineyard_id);
