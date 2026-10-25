@@ -1,6 +1,8 @@
 # Roadmap
 
 ## Weather Settings visual refinement
+- [x] Match requested contained modules, compact five-column provider comparison, centred actions and source-card geometry.
+- [x] 160 focused weather/provider/MAIT tests passed across 9 files; final compact card adjustment passed 7 provider tests again; preview build OK. Isolated five/two/one-column geometry and existing dialog checked without writes. Separate typecheck not run (automatic harness owns compilation). Signed-in visual comparison blocked: preview has no auth users; approved mock-up unavailable locally.
 - [x] Separate source, current-weather and connection sections; retain source/fallback semantics.
 - [x] Compact current readings into five desktop tiles with timestamp/Refresh header and inline rain rate.
 - [x] Uniform provider summary cards with text brand treatments and explicit dialogs retaining existing forms/hooks.

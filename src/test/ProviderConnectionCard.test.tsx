@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { ProviderConnectionCard } from "@/components/weather/ProviderConnectionCard";
+import { ProviderConnectionCard, providerCapabilityRows } from "@/components/weather/ProviderConnectionCard";
 
 afterEach(cleanup);
 const props = { name: "Davis WeatherLink", mark: "WeatherLink", icon: null, tone: "", description: "Station", provides: ["Live observations"], usedFor: [] };
@@ -26,5 +26,21 @@ describe("provider configuration entry", () => {
     render(<ProviderConnectionCard {...props} builtIn />);
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("compares Open-Meteo forecasts/archive without claiming station actuals", () => {
+    expect(providerCapabilityRows(["Forecasts", "Historical rainfall archive"]).map(row => row.supported)).toEqual([true, false, false, true]);
+  });
+
+  it("compares Davis, Weather Underground and MAIT without claiming forecasts/archive", () => {
+    expect(providerCapabilityRows(["Live observations", "Rainfall actuals"]).map(row => row.supported)).toEqual([false, true, true, false]);
+  });
+
+  it("compares WillyWeather as forecast-only", () => {
+    expect(providerCapabilityRows(["Forecasts"]).map(row => row.supported)).toEqual([true, false, false, false]);
+  });
+
+  it("does not infer capabilities from unknown labels", () => {
+    expect(providerCapabilityRows(["Unknown"]).every(row => !row.supported)).toBe(true);
   });
 });

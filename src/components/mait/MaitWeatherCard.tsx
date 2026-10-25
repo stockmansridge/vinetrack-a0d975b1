@@ -112,7 +112,7 @@ export function MaitWeatherCard({ vineyardId, usedFor }: { vineyardId: string; u
     <Dialog open={disconnect} onOpenChange={setDisconnect}><DialogContent><DialogHeader><DialogTitle>Disconnect MAIT?</DialogTitle><DialogDescription>The weather station and controllers share this connection. Historical irrigation records will remain unchanged.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setDisconnect(false)}>Cancel</Button><Button variant="destructive" disabled={action.isPending} onClick={() => run(async () => { await maitRpc('remove_mait_intelliweb_connection', vineyardId); setDisconnect(false); setModules([]); setChannels(null); await refresh(); })}>Disconnect</Button></DialogFooter></DialogContent></Dialog>
   </div>;
   if (!usedFor) return <Card id="mait" className="p-4 space-y-4 scroll-mt-6">{content}</Card>;
-  return <ProviderConnectionCard id="mait" name="MAIT iNTELLiWeb" mark="MAIT" icon={<Gauge className="h-7 w-7" />} tone="bg-task-water/10 text-task-water" description="iNTELLiWeb weather stations and sensor networks." configured={connected} provides={PROVIDER_PROVIDES.mait} usedFor={usedFor}>{content}</ProviderConnectionCard>;
+  return <ProviderConnectionCard id="mait" name="MAIT iNTELLiWeb" mark="MAIT" icon={<Gauge className="h-7 w-7" />} tone="text-task-water" description="Weather stations & sensor networks." configured={connected} provides={PROVIDER_PROVIDES.mait} usedFor={usedFor}>{content}</ProviderConnectionCard>;
 }
 function ChannelRow({ channel, saved, vineyardId, moduleId, onSaved }: { channel: Row; saved?: Row; vineyardId: string; moduleId: string; onSaved: () => Promise<void> }) {
   const [metric, setMetric] = useState(saved?.is_active ? saved.canonical_metric : 'none');

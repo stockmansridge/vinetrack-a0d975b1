@@ -37,6 +37,8 @@ import {
 
 import {
   Activity,
+  ArrowRight,
+  Archive,
   Cloud,
   CloudRain,
   CloudSun,
@@ -195,7 +197,7 @@ export default function WeatherStatusPage() {
 
       {data && (
         <>
-          <section className="space-y-5 border-y border-map-accent/20 bg-map-accent/5 px-4 py-6 sm:px-6">
+          <section className="space-y-4 rounded-lg border bg-card px-4 py-5 shadow-sm sm:px-5">
             <SectionHeader
               title="Weather Data Sources"
               helper="These are the sources VineTrack is currently using for this vineyard."
@@ -220,28 +222,22 @@ export default function WeatherStatusPage() {
             </div>
           </section>
 
-          <section className="border-y border-success/25 bg-success/5 px-4 py-4 sm:px-6">
+          <section className="rounded-lg border bg-card px-4 py-4 shadow-sm sm:px-5">
             <LiveWeatherCard
               vineyardId={selectedVineyardId!}
               anyConfigured={!!(davis?.configured || wu?.configured)}
             />
           </section>
 
-          <section className="space-y-5 border-y bg-secondary/70 px-4 py-6 sm:px-6">
+          <section id="weather-provider-connections" className="space-y-4 scroll-mt-6 rounded-lg border bg-card px-4 py-5 shadow-sm sm:px-5">
             <SectionHeader
               title="Weather Provider Connections"
               helper="Weather services available to this vineyard."
               icon={<Plug className="h-5 w-5" />}
               tone="bg-primary/10 text-primary border-primary/30"
             />
-            <div className="grid auto-rows-fr items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid auto-rows-fr items-stretch gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 <OpenMeteoCard usedFor={usedFor.open_meteo} />
-
-                <WillyWeatherCard
-                  vineyardId={selectedVineyardId!}
-                  usedFor={usedFor.willyweather}
-                  canEdit={canEdit}
-                />
 
                 <DavisCard
                   status={davis}
@@ -252,6 +248,12 @@ export default function WeatherStatusPage() {
                   onChanged={() =>
                     qc.invalidateQueries({ queryKey: ["weather_status", selectedVineyardId] })
                   }
+                />
+
+                <WillyWeatherCard
+                  vineyardId={selectedVineyardId!}
+                  usedFor={usedFor.willyweather}
+                  canEdit={canEdit}
                 />
 
                 <WundergroundCard
@@ -320,7 +322,7 @@ function ProviderAvatar({ icon, tone }: { icon: React.ReactNode; tone: string })
 
 /** Open-Meteo has no credentials or configuration action. */
 function OpenMeteoCard({ usedFor }: { usedFor: string[] }) {
-  return <ProviderConnectionCard name="Open-Meteo" mark="Open-Meteo" icon={<CloudSun className="h-7 w-7" />} tone="bg-map-accent/10 text-map-accent" description="Global forecasts and historical rainfall archive." builtIn provides={PROVIDER_PROVIDES.open_meteo} usedFor={usedFor} />;
+  return <ProviderConnectionCard name="Open-Meteo" mark="Open-Meteo" icon={<CloudSun className="h-7 w-7" />} tone="text-map-accent" description="Forecasts & rainfall archive." builtIn provides={PROVIDER_PROVIDES.open_meteo} usedFor={usedFor} />;
 }
 
 function ObservationSourceCard({
@@ -352,7 +354,7 @@ function ObservationSourceCard({
   // One provider supplying both is shown once, labelled for both roles.
   const sameProvider = provider !== "none" && rainfallSource === label;
   return (
-    <Card className="h-full rounded-lg p-5 space-y-4 border-success/30 bg-success/10">
+    <Card className="flex h-full flex-col gap-3 rounded-lg border-success/30 bg-success/10 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <ProviderAvatar
@@ -376,7 +378,7 @@ function ObservationSourceCard({
         <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
           {sameProvider ? "Live observations & Rainfall actuals" : "Live observations"}
         </div>
-        <div className="text-xl font-bold">
+        <div className="mt-1 flex items-center gap-2 text-xl font-bold"><Activity className="h-5 w-5 shrink-0 text-success" />
           {observationLoading ? "Loading…" : label}
         </div>
       </div>
@@ -385,14 +387,12 @@ function ObservationSourceCard({
         {stationName && <Row label="Station" value={stationName} />}
       </div>
       <div className="border-t border-success/20 pt-3 text-sm">
-        <Row label="Historical rainfall fallback" value="Open-Meteo Archive" />
+        <Row label={<span className="flex items-center gap-1.5"><Archive className="h-4 w-4 text-success" />Historical rainfall fallback</span>} value="Open-Meteo Archive" />
         <p className="text-xs text-muted-foreground pt-1">
           Used when station data is unavailable.
         </p>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Change the observation source in Weather Provider Connections below.
-      </p>
+      <Button variant="outline" className="mt-auto w-full gap-2" onClick={() => document.getElementById("weather-provider-connections")?.scrollIntoView({ block: "start" })}>Manage observation source<ArrowRight className="h-4 w-4" /></Button>
     </Card>
   );
 }
@@ -632,7 +632,7 @@ function DavisCard({
   const typedHasNew = apiKey.trim() !== "" || apiSecret.trim() !== "";
 
   return (
-    <ProviderConnectionCard name="Davis WeatherLink" mark="WeatherLink" icon={<Wind className="h-7 w-7" />} tone="bg-task-weed/10 text-task-weed" description="Local observations from your Davis station." configured={configured} provides={PROVIDER_PROVIDES.davis} usedFor={usedFor}>
+    <ProviderConnectionCard name="Davis WeatherLink" mark="WeatherLink" icon={<Wind className="h-7 w-7" />} tone="text-task-weed" description="Your Davis station readings." configured={configured} provides={PROVIDER_PROVIDES.davis} usedFor={usedFor}>
       <div className="space-y-4">
 
           {status?.error && <div className="text-xs text-destructive">RPC error: {status.error}</div>}
@@ -938,11 +938,11 @@ function LiveWeatherCard({
             </div>
           )}
           <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-5">
-            <Reading tone="bg-task-leaf/10 text-task-leaf border-task-leaf/30" icon={<Thermometer className="h-4 w-4" />} label="Temperature" value={data.reading.temperature_c != null ? rf.temperature(data.reading.temperature_c, 1) : "—"} />
-            <Reading tone="bg-map-accent/10 text-map-accent border-map-accent/30" icon={<Droplets className="h-4 w-4" />} label="Humidity" value={fmtNum(data.reading.humidity_pct, 0, " %")} />
+            <Reading tone="bg-task-leaf/10 text-task-leaf border-task-leaf/30" icon={<Thermometer className="h-5 w-5" />} label="Temperature" value={data.reading.temperature_c != null ? rf.temperature(data.reading.temperature_c, 1) : "—"} />
+            <Reading tone="bg-map-accent/10 text-map-accent border-map-accent/30" icon={<Droplets className="h-5 w-5" />} label="Humidity" value={fmtNum(data.reading.humidity_pct, 0, " %")} />
             <Reading
               tone="bg-task-weed/10 text-task-weed border-task-weed/30"
-              icon={<Wind className="h-4 w-4" />}
+              icon={<Wind className="h-5 w-5" />}
               label="Wind"
               value={
                 data.reading.wind_speed_kmh == null
@@ -954,10 +954,10 @@ function LiveWeatherCard({
                     }`
               }
             />
-            <Reading tone="bg-task-shoot/10 text-task-shoot border-task-shoot/30" icon={<CloudRain className="h-4 w-4" />} label="Rain today" value={data.reading.rain_today_mm != null ? rf.rainfall(data.reading.rain_today_mm, 1) : "—"} />
-            <Reading icon={<Cloud className="h-4 w-4" />} label="Station" value={data.reading.station_name ?? "—"} />
+            <Reading tone="bg-task-shoot/10 text-task-shoot border-task-shoot/30" icon={<CloudRain className="h-5 w-5" />} label="Rain today" value={data.reading.rain_today_mm != null ? rf.rainfall(data.reading.rain_today_mm, 1) : "—"} />
+            <Reading icon={<Cloud className="h-5 w-5" />} label="Station" value={data.reading.station_name ?? "—"} />
           </div>
-          <div className="text-xs text-muted-foreground border-t pt-2 flex flex-wrap gap-x-4 gap-y-1">
+          <div className="text-[11px] text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
             <span>Source: {providerFromObservationSource(data.reading.source) ? observationProviderLabel(providerFromObservationSource(data.reading.source) ?? "none") : data.reading.source ?? "—"}</span>
             <span>Rain rate: {data.reading.rain_rate_mm_per_hr != null ? `${rf.rainfall(data.reading.rain_rate_mm_per_hr)}/h` : "—"}</span>
           </div>
@@ -1015,7 +1015,7 @@ function Reading({
   icon, label, value, tone,
 }: { icon: React.ReactNode; label: string; value: React.ReactNode; tone?: string }) {
   return (
-    <div className="min-w-0 rounded-md border bg-card px-3 py-2.5">
+    <div className="min-h-20 min-w-0 rounded-md border bg-muted/30 px-3 py-2">
       <div className="flex items-center gap-2">
         <span
           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border ${tone ?? "bg-muted text-muted-foreground border-border"}`}
@@ -1063,7 +1063,7 @@ function ForecastSourceCard({
   const value: ForecastProvider = preference ?? "auto";
 
   return (
-    <Card className="h-full rounded-lg p-5 space-y-4 border-map-accent/30 bg-map-accent/10">
+    <Card className="flex h-full flex-col gap-3 rounded-lg border-map-accent/30 bg-map-accent/10 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <ProviderAvatar
@@ -1090,7 +1090,7 @@ function ForecastSourceCard({
         <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
           Selected forecast source
         </div>
-        <div className="text-xl font-bold">{forecastSource.label}</div>
+        <div className="mt-1 flex items-center gap-2 text-xl font-bold"><CloudSun className="h-5 w-5 shrink-0 text-map-accent" />{forecastSource.label}</div>
       </div>
       <div className="grid gap-2 sm:grid-cols-2 text-sm">
         <Row label="Forecast period" value="7 days" />
@@ -1099,9 +1099,9 @@ function ForecastSourceCard({
           value={value === "auto" ? "Auto" : value === "open_meteo" ? "Open-Meteo" : "WillyWeather"}
         />
       </div>
-      <Collapsible className="group/fp">
+      <Collapsible className="group/fp mt-auto">
         <CollapsibleTrigger asChild>
-          <Button variant="outline" size="sm" className="gap-2" disabled={!canEdit}>
+          <Button variant="outline" className="w-full gap-2" disabled={!canEdit}>
             Change forecast source
             {pending ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1371,7 +1371,7 @@ function WillyWeatherCard({
   }, [canEdit, configured, providerEligible, vineyardCenter, autoAssigning, vineyardId]);
 
   return (
-    <ProviderConnectionCard name="WillyWeather" mark="WillyWeather" icon={<Sun className="h-7 w-7" />} tone="bg-warning/10 text-warning" description="Australian forecasts for your vineyard location." configured={configured} provides={PROVIDER_PROVIDES.willyweather} usedFor={usedFor}>
+    <ProviderConnectionCard name="WillyWeather" mark="WillyWeather" icon={<Sun className="h-7 w-7" />} tone="text-warning" description="Local Australian forecasts." configured={configured} provides={PROVIDER_PROVIDES.willyweather} usedFor={usedFor}>
       <div className="space-y-4">
 
           <p className="text-xs text-muted-foreground">
@@ -1730,7 +1730,7 @@ function WundergroundCard({
   const configured = merged.configured;
 
   return (
-    <ProviderConnectionCard name="Weather Underground" mark="WU" icon={<Thermometer className="h-7 w-7" />} tone="bg-task-slashing/10 text-task-slashing" description="Local readings from your personal weather station." configured={configured} provides={PROVIDER_PROVIDES.wunderground} usedFor={usedFor}>
+    <ProviderConnectionCard name="Weather Underground" mark="WU" icon={<Thermometer className="h-7 w-7" />} tone="text-task-slashing" description="Personal weather station readings." configured={configured} provides={PROVIDER_PROVIDES.wunderground} usedFor={usedFor}>
       <div className="space-y-4">
 
           <p className="text-xs text-muted-foreground">
