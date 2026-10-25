@@ -1160,7 +1160,7 @@ function WillyWeatherCard({
     queryFn: () => fetchWillyWeatherStatus(vineyardId),
   });
 
-  // Forecast provider preference — shared cache key with ForecastProviderCard.
+  // Forecast provider preference — shared cache key with ForecastSourceCard.
   const { data: provider } = useQuery({
     queryKey: ["forecast_provider", vineyardId],
     enabled: !!vineyardId,
