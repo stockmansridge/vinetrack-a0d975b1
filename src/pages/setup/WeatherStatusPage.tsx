@@ -35,9 +35,14 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import {
+  Activity,
   Cloud,
   CloudRain,
+  CloudSun,
   Droplets,
+  Gauge,
+  Plug,
+  Sun,
   Thermometer,
   Wind,
   Leaf,
@@ -166,7 +171,7 @@ export default function WeatherStatusPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-semibold">Weather</h1>
         <p className="text-sm text-muted-foreground">
@@ -193,6 +198,8 @@ export default function WeatherStatusPage() {
             <SectionHeader
               title="Weather Data Sources"
               helper="These are the sources VineTrack is currently using for this vineyard."
+              icon={<CloudSun className="h-5 w-5" />}
+              tone="bg-map-accent/10 text-map-accent border-map-accent/30"
             />
             <div className="grid items-start gap-3 md:grid-cols-2">
               <ForecastSourceCard
@@ -216,6 +223,8 @@ export default function WeatherStatusPage() {
             <SectionHeader
               title="Current Weather"
               helper="Latest in-vineyard observations from your configured station."
+              icon={<Activity className="h-5 w-5" />}
+              tone="bg-success/10 text-success border-success/30"
             />
             <LiveWeatherCard
               vineyardId={selectedVineyardId!}
@@ -227,6 +236,8 @@ export default function WeatherStatusPage() {
             <SectionHeader
               title="Weather Provider Connections"
               helper="Connect and configure weather services available to this vineyard. VineTrack will only use providers selected in the Weather Data Sources section above."
+              icon={<Plug className="h-5 w-5" />}
+              tone="bg-primary/10 text-primary border-primary/30"
             />
             <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
               <div className="space-y-1.5">
@@ -280,11 +291,41 @@ export default function WeatherStatusPage() {
   );
 }
 
-function SectionHeader({ title, helper }: { title: string; helper?: string }) {
+function SectionHeader({
+  title,
+  helper,
+  icon,
+  tone,
+}: {
+  title: string;
+  helper?: string;
+  icon?: React.ReactNode;
+  tone?: string;
+}) {
   return (
-    <div className="space-y-0.5">
-      <h2 className="text-lg font-semibold">{title}</h2>
-      {helper && <p className="text-sm text-muted-foreground">{helper}</p>}
+    <div className="flex items-start gap-3">
+      {icon && (
+        <div
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${tone ?? "bg-muted text-muted-foreground border-border"}`}
+        >
+          {icon}
+        </div>
+      )}
+      <div className="space-y-0.5">
+        <h2 className="text-xl font-bold tracking-tight">{title}</h2>
+        {helper && <p className="text-sm text-muted-foreground">{helper}</p>}
+      </div>
+    </div>
+  );
+}
+
+/** Branded visual identifier for a weather provider (icon + token tint). */
+function ProviderAvatar({ icon, tone }: { icon: React.ReactNode; tone: string }) {
+  return (
+    <div
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${tone}`}
+    >
+      {icon}
     </div>
   );
 }
@@ -298,11 +339,16 @@ function ProviderUsageLine({
   usedFor: string[];
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-      <span>Provides: {provides.join(" · ")}</span>
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+      <span className="text-muted-foreground">Provides:</span>
+      {provides.map((p) => (
+        <Badge key={p} variant="outline" className="font-normal text-muted-foreground">
+          {p}
+        </Badge>
+      ))}
       {usedFor.length > 0 && (
-        <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
-          Currently used for: {usedFor.join(" · ")}
+        <Badge className="gap-1 bg-success/15 text-success border-success/30">
+          <Check className="h-3 w-3" /> Used for: {usedFor.join(" · ")}
         </Badge>
       )}
     </div>
@@ -314,8 +360,14 @@ function OpenMeteoCard() {
   return (
     <Card className="p-4 space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-base font-semibold">Open-Meteo</h2>
-        <Badge variant="outline" className="text-muted-foreground">Built in</Badge>
+        <div className="flex items-center gap-3">
+          <ProviderAvatar
+            tone="bg-map-accent/10 text-map-accent border-map-accent/30"
+            icon={<CloudSun className="h-5 w-5" />}
+          />
+          <h2 className="text-base font-semibold">Open-Meteo</h2>
+        </div>
+        <Badge className="bg-map-accent/15 text-map-accent border-map-accent/30">Built in</Badge>
       </div>
       <p className="text-xs text-muted-foreground">
         Free global forecast and archive service. No connection or credentials
@@ -355,37 +407,39 @@ function ObservationSourceCard({
   // One provider supplying both is shown once, labelled for both roles.
   const sameProvider = provider !== "none" && rainfallSource === label;
   return (
-    <Card className="p-4 space-y-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Droplets className="h-4 w-4" /> Observations &amp; Rainfall
+    <Card className="p-5 space-y-4 border-success/30 bg-success/5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <ProviderAvatar
+            tone="bg-success/15 text-success border-success/30"
+            icon={<CloudRain className="h-5 w-5" />}
+          />
+          <div className="space-y-1">
+            <h3 className="text-lg font-semibold">Observations &amp; Rainfall</h3>
+            <p className="text-xs text-muted-foreground">
+              Live weather observations and rainfall actuals.
+            </p>
           </div>
-          <div className="text-base font-semibold">
-            {observationLoading ? "Loading…" : label}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Live weather observations and rainfall actuals.
-          </p>
         </div>
         {!observationLoading && provider !== "none" && (
-          <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
-            Active
+          <Badge className="gap-1 bg-success/15 text-success border-success/30">
+            <Check className="h-3 w-3" /> Active
           </Badge>
         )}
       </div>
+      <div className="rounded-lg border border-success/20 bg-card px-3 py-2.5">
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+          {sameProvider ? "Live observations & Rainfall actuals" : "Live observations"}
+        </div>
+        <div className="text-xl font-bold">
+          {observationLoading ? "Loading…" : label}
+        </div>
+      </div>
       <div className="grid gap-2 sm:grid-cols-2 text-sm">
-        {sameProvider ? (
-          <Row label="Live observations & Rainfall actuals" value={label} />
-        ) : (
-          <>
-            <Row label="Live observations" value={observationLoading ? "Loading…" : label} />
-            <Row label="Rainfall actuals" value={rainfallSource} />
-          </>
-        )}
+        {!sameProvider && <Row label="Rainfall actuals" value={rainfallSource} />}
         {stationName && <Row label="Station" value={stationName} />}
       </div>
-      <div className="border-t pt-2 text-sm">
+      <div className="rounded-lg border border-dashed px-3 py-2 text-sm">
         <Row label="Historical rainfall fallback" value="Open-Meteo Archive" />
         <p className="text-xs text-muted-foreground pt-1">
           Used when station data is unavailable.
@@ -634,11 +688,17 @@ function DavisCard({
     <Collapsible defaultOpen={false} className="group">
       <Card className="p-4 space-y-4">
         <CollapsibleTrigger asChild>
-          <button type="button" className="flex w-full items-center justify-between gap-2">
-            <h2 className="text-base font-semibold">Davis WeatherLink</h2>
+          <button type="button" className="flex w-full items-center justify-between gap-3 text-left">
+            <div className="flex items-center gap-3">
+              <ProviderAvatar
+                tone="bg-task-weed/10 text-task-weed border-task-weed/30"
+                icon={<Wind className="h-5 w-5" />}
+              />
+              <h2 className="text-base font-semibold">Davis WeatherLink</h2>
+            </div>
             <div className="flex items-center gap-2">
               {configured ? (
-                <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
+                <Badge className="bg-success/15 text-success border-success/30">
                   Configured
                 </Badge>
               ) : (
@@ -893,14 +953,18 @@ function LiveWeatherCard({
 
   return (
     <Card className="p-4 space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <h2 className="text-base font-semibold flex items-center gap-2">
-            <Cloud className="h-4 w-4" /> Current Weather
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Latest in-vineyard observations from your configured station.
-          </p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <ProviderAvatar
+            tone="bg-success/10 text-success border-success/30"
+            icon={<Activity className="h-5 w-5" />}
+          />
+          <div>
+            <h2 className="text-lg font-semibold">Current Weather</h2>
+            <p className="text-xs text-muted-foreground">
+              Latest in-vineyard observations from your configured station.
+            </p>
+          </div>
         </div>
         <Button
           variant="ghost"
@@ -944,11 +1008,12 @@ function LiveWeatherCard({
               Reading is stale (&gt; 1 hour old). Station may be offline.
             </div>
           )}
-          <div className="grid gap-2 sm:grid-cols-3 text-sm">
-            <Reading icon={<Thermometer className="h-3.5 w-3.5" />} label="Temperature" value={data.reading.temperature_c != null ? rf.temperature(data.reading.temperature_c, 1) : "—"} />
-            <Reading icon={<Droplets className="h-3.5 w-3.5" />} label="Humidity" value={fmtNum(data.reading.humidity_pct, 0, " %")} />
+          <div className="grid gap-3 sm:grid-cols-3 text-sm">
+            <Reading tone="bg-task-leaf/10 text-task-leaf border-task-leaf/30" icon={<Thermometer className="h-4 w-4" />} label="Temperature" value={data.reading.temperature_c != null ? rf.temperature(data.reading.temperature_c, 1) : "—"} />
+            <Reading tone="bg-map-accent/10 text-map-accent border-map-accent/30" icon={<Droplets className="h-4 w-4" />} label="Humidity" value={fmtNum(data.reading.humidity_pct, 0, " %")} />
             <Reading
-              icon={<Wind className="h-3.5 w-3.5" />}
+              tone="bg-task-weed/10 text-task-weed border-task-weed/30"
+              icon={<Wind className="h-4 w-4" />}
               label="Wind"
               value={
                 data.reading.wind_speed_kmh == null
@@ -960,9 +1025,9 @@ function LiveWeatherCard({
                     }`
               }
             />
-            <Reading icon={<CloudRain className="h-3.5 w-3.5" />} label="Rain today" value={data.reading.rain_today_mm != null ? rf.rainfall(data.reading.rain_today_mm, 1) : "—"} />
-            <Reading icon={<CloudRain className="h-3.5 w-3.5" />} label="Rain rate" value={data.reading.rain_rate_mm_per_hr != null ? `${rf.rainfall(data.reading.rain_rate_mm_per_hr)}/h` : "—"} />
-            <Reading icon={<Cloud className="h-3.5 w-3.5" />} label="Station" value={data.reading.station_name ?? "—"} />
+            <Reading tone="bg-task-shoot/10 text-task-shoot border-task-shoot/30" icon={<CloudRain className="h-4 w-4" />} label="Rain today" value={data.reading.rain_today_mm != null ? rf.rainfall(data.reading.rain_today_mm, 1) : "—"} />
+            <Reading tone="bg-task-water/10 text-task-water border-task-water/30" icon={<CloudRain className="h-4 w-4" />} label="Rain rate" value={data.reading.rain_rate_mm_per_hr != null ? `${rf.rainfall(data.reading.rain_rate_mm_per_hr)}/h` : "—"} />
+            <Reading icon={<Cloud className="h-4 w-4" />} label="Station" value={data.reading.station_name ?? "—"} />
           </div>
           <div className="text-xs text-muted-foreground border-t pt-2 flex flex-wrap gap-x-4 gap-y-1">
             <span>Source: {providerFromObservationSource(data.reading.source) ? observationProviderLabel(providerFromObservationSource(data.reading.source) ?? "none") : data.reading.source ?? "—"}</span>
@@ -1019,14 +1084,19 @@ function LiveEmptyState({
 }
 
 function Reading({
-  icon, label, value,
-}: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
+  icon, label, value, tone,
+}: { icon: React.ReactNode; label: string; value: React.ReactNode; tone?: string }) {
   return (
-    <div className="rounded-md border p-2.5">
-      <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-        {icon} {label}
+    <div className="rounded-lg border bg-card p-3 shadow-sm">
+      <div className="flex items-center gap-2">
+        <span
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border ${tone ?? "bg-muted text-muted-foreground border-border"}`}
+        >
+          {icon}
+        </span>
+        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</span>
       </div>
-      <div className="text-base font-semibold">{value}</div>
+      <div className="mt-1.5 text-lg font-semibold">{value}</div>
     </div>
   );
 }
@@ -1065,25 +1135,34 @@ function ForecastSourceCard({
   const value: ForecastProvider = preference ?? "auto";
 
   return (
-    <Card className="p-4 space-y-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Cloud className="h-4 w-4" /> Forecasts
+    <Card className="p-5 space-y-4 border-map-accent/30 bg-map-accent/5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <ProviderAvatar
+            tone="bg-map-accent/15 text-map-accent border-map-accent/30"
+            icon={<Cloud className="h-5 w-5" />}
+          />
+          <div className="space-y-1">
+            <h3 className="text-lg font-semibold">Forecasts</h3>
+            <p className="text-xs text-muted-foreground">
+              7-day weather forecasts used across the app.
+            </p>
           </div>
-          <div className="text-base font-semibold">{forecastSource.label}</div>
-          <p className="text-xs text-muted-foreground">
-            7-day weather forecasts used across the app.
-          </p>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
-            Active
+          <Badge className="gap-1 bg-success/15 text-success border-success/30">
+            <Check className="h-3 w-3" /> Active
           </Badge>
           <Badge variant="outline" className="text-muted-foreground">
             {forecastSource.isOverride ? "Vineyard override" : "App default"}
           </Badge>
         </div>
+      </div>
+      <div className="rounded-lg border border-map-accent/20 bg-card px-3 py-2.5">
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+          Selected forecast source
+        </div>
+        <div className="text-xl font-bold">{forecastSource.label}</div>
       </div>
       <div className="grid gap-2 sm:grid-cols-2 text-sm">
         <Row label="Forecast period" value="7 days" />
@@ -1365,11 +1444,17 @@ function WillyWeatherCard({
     <Collapsible defaultOpen={false} className="group">
       <Card className="p-4 space-y-4">
         <CollapsibleTrigger asChild>
-          <button type="button" className="flex w-full items-center justify-between gap-2">
-            <h2 className="text-base font-semibold">WillyWeather</h2>
+          <button type="button" className="flex w-full items-center justify-between gap-3 text-left">
+            <div className="flex items-center gap-3">
+              <ProviderAvatar
+                tone="bg-wind/10 text-wind border-wind/30"
+                icon={<Sun className="h-5 w-5" />}
+              />
+              <h2 className="text-base font-semibold">WillyWeather</h2>
+            </div>
             <div className="flex items-center gap-2">
               {configured ? (
-                <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
+                <Badge className="bg-success/15 text-success border-success/30">
                   Configured
                 </Badge>
               ) : (
@@ -1737,11 +1822,17 @@ function WundergroundCard({
     <Collapsible defaultOpen={false} className="group">
       <Card className="p-4 space-y-4">
         <CollapsibleTrigger asChild>
-          <button type="button" className="flex w-full items-center justify-between gap-2">
-            <h2 className="text-base font-semibold">Weather Underground</h2>
+          <button type="button" className="flex w-full items-center justify-between gap-3 text-left">
+            <div className="flex items-center gap-3">
+              <ProviderAvatar
+                tone="bg-task-slashing/10 text-task-slashing border-task-slashing/30"
+                icon={<Thermometer className="h-5 w-5" />}
+              />
+              <h2 className="text-base font-semibold">Weather Underground</h2>
+            </div>
             <div className="flex items-center gap-2">
               {configured ? (
-                <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
+                <Badge className="bg-success/15 text-success border-success/30">
                   Configured
                 </Badge>
               ) : (

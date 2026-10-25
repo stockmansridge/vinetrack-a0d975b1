@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Gauge } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fetchVineyard } from '@/lib/vineyardSettingsQuery';
@@ -55,7 +56,15 @@ export function MaitWeatherCard({ vineyardId }: { vineyardId: string }) {
   const networkName = tested?.data.network_name ?? tested?.data.network?.name ?? connection.network_name;
   if (access.isPending) return <Card className="p-4">Checking MAIT access…</Card>;
   return <Card id="mait" className="p-4 space-y-4 scroll-mt-6">
-    <div className="flex flex-wrap items-center gap-2"><h2 className="text-base font-semibold">MAIT iNTELLiWeb</h2><Badge variant="outline">{connected ? ((connection.last_test_status ?? status.data?.last_test_status) === 'failed' ? 'Needs attention' : 'Connected') : 'Not connected'}</Badge></div>
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-task-water/10 text-task-water border-task-water/30"><Gauge className="h-5 w-5" /></div>
+      <h2 className="text-base font-semibold">MAIT iNTELLiWeb</h2>
+      {connected
+        ? ((connection.last_test_status ?? status.data?.last_test_status) === 'failed'
+          ? <Badge className="border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300">Needs attention</Badge>
+          : <Badge className="bg-success/15 text-success border-success/30">Connected</Badge>)
+        : <Badge variant="outline" className="text-muted-foreground">Not connected</Badge>}
+    </div>
     <p className="text-sm text-muted-foreground">Connect your MAIT Industries iNTELLiWeb weather station or sensor network.</p>
     {[access.error, configuration.error, status.error].filter(Boolean).map((e, i) => <Alert key={i} variant="destructive"><AlertDescription>{(e as Error).message}</AlertDescription></Alert>)}
     {notice && <Alert role="status"><AlertDescription>{notice}</AlertDescription></Alert>}
