@@ -189,75 +189,86 @@ export default function WeatherStatusPage() {
 
       {data && (
         <>
-          <div className="grid gap-3 md:grid-cols-2">
-            <SourceCard
-              icon={<Cloud className="h-4 w-4" />}
-              label="Forecast source"
-              value="Open-Meteo Forecast"
-              hint="App-level default for all vineyards."
+          <section className="space-y-3">
+            <SectionHeader
+              title="Weather Data Sources"
+              helper="These are the sources VineTrack is currently using for this vineyard."
             />
-            <SourceCard
-              icon={<CloudRain className="h-4 w-4" />}
-              label="Rainfall actuals source"
-              value={rainfallSource}
-              hint={
-                rainfallSource.startsWith("Open-Meteo")
-                  ? "No active station configured — using archive fallback."
-                  : "From your configured weather station."
-              }
+            <div className="grid items-start gap-3 md:grid-cols-2">
+              <ForecastSourceCard
+                vineyardId={selectedVineyardId!}
+                canEdit={canEdit}
+                preference={forecastPreference ?? "auto"}
+                forecastSource={forecastSource}
+              />
+              <ObservationSourceCard
+                vineyardId={selectedVineyardId!}
+                davis={davis}
+                wu={wu}
+                observationProvider={observationSource.data ?? null}
+                observationLoading={observationSource.isPending}
+                rainfallSource={rainfallSource}
+              />
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <SectionHeader
+              title="Current Weather"
+              helper="Latest in-vineyard observations from your configured station."
             />
-            <SourceCard
-              icon={<Droplets className="h-4 w-4" />}
-              label="Observation source"
-              value={observationSource.isPending ? "Loading…" : observationProviderLabel(observationSource.data ?? "none")}
-              hint="Live in-vineyard observations."
+            <LiveWeatherCard
+              vineyardId={selectedVineyardId!}
+              anyConfigured={!!(davis?.configured || wu?.configured)}
             />
-            <SourceCard
-              icon={<Cloud className="h-4 w-4" />}
-              label="Historical rainfall fallback"
-              value="Open-Meteo Archive"
-              hint="Used when station data is unavailable."
+          </section>
+
+          <section className="space-y-3">
+            <SectionHeader
+              title="Weather Provider Connections"
+              helper="Connect and configure weather services available to this vineyard. VineTrack will only use providers selected in the Weather Data Sources section above."
             />
-          </div>
-
-          <ForecastProviderCard
-            vineyardId={selectedVineyardId!}
-            canEdit={canEdit}
-          />
-
-          <LiveWeatherCard
-            vineyardId={selectedVineyardId!}
-            anyConfigured={!!(davis?.configured || wu?.configured)}
-          />
-
-          <WillyWeatherCard
-            vineyardId={selectedVineyardId!}
-            canEdit={canEdit}
-          />
-
-          <div className="grid items-start gap-4 xl:grid-cols-3">
-          <DavisCard
-
-            status={davis}
-            canEdit={canEdit}
-            callerRole={callerRole}
-            vineyardId={selectedVineyardId!}
-            onChanged={() =>
-              qc.invalidateQueries({ queryKey: ["weather_status", selectedVineyardId] })
-            }
-          />
-
-          <WundergroundCard
-            status={wu}
-            canEdit={canEdit}
-            vineyardId={selectedVineyardId!}
-            onChanged={() =>
-              qc.invalidateQueries({ queryKey: ["weather_status", selectedVineyardId] })
-            }
-          />
-
-          {selectedVineyardId && <MaitWeatherCard key={selectedVineyardId} vineyardId={selectedVineyardId} />}
-          </div>
+            <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="space-y-1.5">
+                <ProviderUsageLine provides={PROVIDER_PROVIDES.open_meteo} usedFor={usedFor.open_meteo} />
+                <OpenMeteoCard />
+              </div>
+              <div className="space-y-1.5">
+                <ProviderUsageLine provides={PROVIDER_PROVIDES.willyweather} usedFor={usedFor.willyweather} />
+                <WillyWeatherCard
+                  vineyardId={selectedVineyardId!}
+                  canEdit={canEdit}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <ProviderUsageLine provides={PROVIDER_PROVIDES.davis} usedFor={usedFor.davis} />
+                <DavisCard
+                  status={davis}
+                  canEdit={canEdit}
+                  callerRole={callerRole}
+                  vineyardId={selectedVineyardId!}
+                  onChanged={() =>
+                    qc.invalidateQueries({ queryKey: ["weather_status", selectedVineyardId] })
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <ProviderUsageLine provides={PROVIDER_PROVIDES.wunderground} usedFor={usedFor.wunderground} />
+                <WundergroundCard
+                  status={wu}
+                  canEdit={canEdit}
+                  vineyardId={selectedVineyardId!}
+                  onChanged={() =>
+                    qc.invalidateQueries({ queryKey: ["weather_status", selectedVineyardId] })
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <ProviderUsageLine provides={PROVIDER_PROVIDES.mait} usedFor={usedFor.mait} />
+                {selectedVineyardId && <MaitWeatherCard key={selectedVineyardId} vineyardId={selectedVineyardId} />}
+              </div>
+            </div>
+          </section>
 
           <p className="text-xs text-muted-foreground">
             Weather credentials are stored securely server-side and are never
