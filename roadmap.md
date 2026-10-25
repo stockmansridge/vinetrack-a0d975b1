@@ -1,6 +1,8 @@
 # Roadmap
 
 ## Weather Settings visual refinement
+- [ ] Match requested contained modules, compact five-column provider comparison, centred actions and source-card geometry.
+- [ ] Run focused weather/provider regressions and check preview compilation; attempt signed-in visual verification without changing data.
 - [x] Separate source, current-weather and connection sections; retain source/fallback semantics.
 - [x] Compact current readings into five desktop tiles with timestamp/Refresh header and inline rain rate.
 - [x] Uniform provider summary cards with text brand treatments and explicit dialogs retaining existing forms/hooks.
