@@ -31,6 +31,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { CreateVineyardDialog } from "@/components/vineyard/CreateVineyardDialog";
+import { BulkArchiveVineyardsCard } from "@/components/vineyard/BulkArchiveVineyardsCard";
 import { PendingInvitationsSection } from "@/components/invites/PendingInvitesModal";
 import {
   readCountryReturnContext,
@@ -367,6 +368,8 @@ export default function VineyardSettingsPage() {
           </>
         )}
       </Card>
+
+      <BulkArchiveVineyardsCard />
 
       {isOwner && (
         <Card className="p-4 border-destructive/30">

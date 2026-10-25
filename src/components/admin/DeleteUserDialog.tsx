@@ -70,6 +70,9 @@ export function DeleteUserDialog({ user, onOpenChange, onDeleted }: Props) {
             : `${user.email ?? user.user_id} removed` +
           (res.deleted_vineyards?.length
             ? ` · ${res.deleted_vineyards.length} vineyard(s) deleted`
+            : "") +
+          (res.archived_vineyards?.length
+            ? ` · ${res.archived_vineyards.length} vineyard(s) archived`
             : ""),
       });
       if (res.errors?.length) {

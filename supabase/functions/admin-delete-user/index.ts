@@ -220,6 +220,7 @@ Deno.serve(async (req: Request) => {
 
   // --- Deletion ---------------------------------------------------------
   const errors: string[] = [];
+  const archivedInstead: string[] = [];
   const deletedTables: Record<string, true> = {};
 
   const soleOwnerIds = soleOwner.map((v) => v.id);
@@ -254,10 +255,23 @@ Deno.serve(async (req: Request) => {
       .in("vineyard_id", soleOwnerIds);
     if (memDelErr) errors.push(`vineyard_members: ${memDelErr.message}`);
 
-    const { error: vErr } = await admin.from("vineyards").delete().in("id", soleOwnerIds);
-    if (vErr) errors.push(`vineyards: ${vErr.message}`);
+    // Delete one vineyard at a time so a single blocked vineyard can't stop
+    // the rest. If a hard delete is refused, archive it through the canonical
+    // archive_vineyard RPC (as the caller, who is the temporary owner) so it
+    // never reappears in the admin's own vineyard list.
+    for (const vid of soleOwnerIds) {
+      const { error: vErr } = await admin.from("vineyards").delete().eq("id", vid);
+      if (!vErr) continue;
+      const { error: archErr } = await userClient.rpc("archive_vineyard", { p_vineyard_id: vid });
+      if (archErr) {
+        errors.push(`vineyards(${vid}): ${vErr.message}; archive failed: ${archErr.message}`);
+      } else {
+        archivedInstead.push(vid);
+      }
+    }
 
-    // Remove any temp ownership left behind (e.g. if the vineyard delete failed).
+    // Remove any temp ownership left behind. For archived vineyards the
+    // last-owner trigger may keep it; the vineyard is hidden either way.
     await admin
       .from("vineyard_members")
       .delete()
@@ -293,7 +307,8 @@ Deno.serve(async (req: Request) => {
     mode: "delete",
     success: true,
     errors,
-    deleted_vineyards: soleOwner,
+    deleted_vineyards: soleOwner.filter((v) => !archivedInstead.includes(v.id)),
+    archived_vineyards: soleOwner.filter((v) => archivedInstead.includes(v.id)),
     kept_vineyards: shared,
     user: summary.user,
   });
