@@ -14,7 +14,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PortalNotice } from "@/components/ui/PortalNotice";
 import { AlertTriangle } from "lucide-react";
 import { MaitWeatherCard, useMait } from "@/components/mait/MaitWeatherCard";
-import { fetchLocalObservationProvider, observationProviderLabel, refreshObservationProvider, providerFromObservationSource } from "@/lib/localObservationProvider";
+import { fetchLocalObservationProvider, observationProviderLabel, refreshObservationProvider, providerFromObservationSource, type LocalObservationProvider } from "@/lib/localObservationProvider";
+import { effectiveForecastSource, providerUsedFor, PROVIDER_PROVIDES, type EffectiveForecastSource } from "@/lib/weatherSourceSummary";
 
 import {
   Collapsible,
@@ -130,6 +131,26 @@ export default function WeatherStatusPage() {
       : wu?.configured && wu.is_active && wu.has_rain
         ? "Weather Underground"
         : "Open-Meteo Archive (fallback)";
+
+  // Forecast preference + WillyWeather status use the same query keys as the
+  // cards below, so these are shared-cache reads, not extra fetches.
+  const { data: forecastPreference } = useQuery({
+    queryKey: ["forecast_provider", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => getForecastProvider(selectedVineyardId!),
+  });
+  const { data: willyStatus } = useQuery<WillyIntegrationStatus>({
+    queryKey: ["willyweather_status", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchWillyWeatherStatus(selectedVineyardId!),
+  });
+  const willyConfigured = !!willyStatus?.configured && !!willyStatus?.station_id;
+  const forecastSource = effectiveForecastSource(forecastPreference ?? "auto", willyConfigured);
+  const usedFor = providerUsedFor({
+    forecastSource: forecastSource.id,
+    observationProvider: observationSource.data ?? "none",
+    rainfallSource,
+  });
 
   if (import.meta.env.DEV && showWeatherDiagnostics) {
     // eslint-disable-next-line no-console
@@ -248,25 +269,120 @@ export default function WeatherStatusPage() {
   );
 }
 
-function SourceCard({
-  icon,
-  label,
-  value,
-  hint,
+function SectionHeader({ title, helper }: { title: string; helper?: string }) {
+  return (
+    <div className="space-y-0.5">
+      <h2 className="text-lg font-semibold">{title}</h2>
+      {helper && <p className="text-sm text-muted-foreground">{helper}</p>}
+    </div>
+  );
+}
+
+/** Capabilities a provider CAN supply, plus what it is actively selected for. */
+function ProviderUsageLine({
+  provides,
+  usedFor,
 }: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  hint?: string;
+  provides: string[];
+  usedFor: string[];
 }) {
   return (
-    <Card className="p-4 space-y-1">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        {icon}
-        {label}
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+      <span>Provides: {provides.join(" · ")}</span>
+      {usedFor.length > 0 && (
+        <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
+          Currently used for: {usedFor.join(" · ")}
+        </Badge>
+      )}
+    </div>
+  );
+}
+
+/** Open-Meteo is built in — no connection or credentials to configure. */
+function OpenMeteoCard() {
+  return (
+    <Card className="p-4 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-base font-semibold">Open-Meteo</h2>
+        <Badge variant="outline" className="text-muted-foreground">Built in</Badge>
       </div>
-      <div className="text-sm font-medium">{value}</div>
-      {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
+      <p className="text-xs text-muted-foreground">
+        Free global forecast and archive service. No connection or credentials
+        are required — it is always available as the app default forecast and
+        as the historical rainfall fallback.
+      </p>
+    </Card>
+  );
+}
+
+function ObservationSourceCard({
+  vineyardId,
+  davis,
+  wu,
+  observationProvider,
+  observationLoading,
+  rainfallSource,
+}: {
+  vineyardId: string;
+  davis?: WeatherIntegrationStatus;
+  wu?: WeatherIntegrationStatus;
+  observationProvider: LocalObservationProvider | null;
+  observationLoading: boolean;
+  rainfallSource: string;
+}) {
+  const mait = useMait(vineyardId);
+  const provider = observationProvider ?? "none";
+  const label = observationProviderLabel(provider);
+  const stationName =
+    provider === "davis_weatherlink"
+      ? davis?.station_name
+      : provider === "wunderground"
+        ? wu?.station_name
+        : provider === "mait_intelliweb"
+          ? mait.status.data?.station_name ?? null
+          : null;
+  // One provider supplying both is shown once, labelled for both roles.
+  const sameProvider = provider !== "none" && rainfallSource === label;
+  return (
+    <Card className="p-4 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Droplets className="h-4 w-4" /> Observations &amp; Rainfall
+          </div>
+          <div className="text-base font-semibold">
+            {observationLoading ? "Loading…" : label}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Live weather observations and rainfall actuals.
+          </p>
+        </div>
+        {!observationLoading && provider !== "none" && (
+          <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
+            Active
+          </Badge>
+        )}
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 text-sm">
+        {sameProvider ? (
+          <Row label="Live observations & Rainfall actuals" value={label} />
+        ) : (
+          <>
+            <Row label="Live observations" value={observationLoading ? "Loading…" : label} />
+            <Row label="Rainfall actuals" value={rainfallSource} />
+          </>
+        )}
+        {stationName && <Row label="Station" value={stationName} />}
+      </div>
+      <div className="border-t pt-2 text-sm">
+        <Row label="Historical rainfall fallback" value="Open-Meteo Archive" />
+        <p className="text-xs text-muted-foreground pt-1">
+          Used when station data is unavailable.
+        </p>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Change the observation source in Weather Provider Connections below.
+      </p>
     </Card>
   );
 }
@@ -769,7 +885,7 @@ function LiveWeatherCard({
       <div className="flex items-center justify-between gap-2">
         <div>
           <h2 className="text-base font-semibold flex items-center gap-2">
-            <Cloud className="h-4 w-4" /> Live weather
+            <Cloud className="h-4 w-4" /> Current Weather
           </h2>
           <p className="text-xs text-muted-foreground">
             Latest in-vineyard observations from your configured station.
@@ -908,19 +1024,18 @@ function Reading({
 // Forecast Provider preference (Auto / Open-Meteo / WillyWeather)
 // ---------------------------------------------------------------------------
 
-function ForecastProviderCard({
+function ForecastSourceCard({
   vineyardId,
   canEdit,
+  preference,
+  forecastSource,
 }: {
   vineyardId: string;
   canEdit: boolean;
+  preference: ForecastProvider;
+  forecastSource: EffectiveForecastSource;
 }) {
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery({
-    queryKey: ["forecast_provider", vineyardId],
-    enabled: !!vineyardId,
-    queryFn: () => getForecastProvider(vineyardId),
-  });
   const [pending, setPending] = useState<ForecastProvider | null>(null);
 
   const onChange = async (next: ForecastProvider) => {
@@ -936,67 +1051,84 @@ function ForecastProviderCard({
     qc.invalidateQueries({ queryKey: ["forecast_provider", vineyardId] });
   };
 
-  const value: ForecastProvider = data ?? "auto";
+  const value: ForecastProvider = preference ?? "auto";
 
   return (
-    <Collapsible defaultOpen={false} className="group">
-      <Card className="p-4 space-y-3">
+    <Card className="p-4 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Cloud className="h-4 w-4" /> Forecasts
+          </div>
+          <div className="text-base font-semibold">{forecastSource.label}</div>
+          <p className="text-xs text-muted-foreground">
+            7-day weather forecasts used across the app.
+          </p>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
+            Active
+          </Badge>
+          <Badge variant="outline" className="text-muted-foreground">
+            {forecastSource.isOverride ? "Vineyard override" : "App default"}
+          </Badge>
+        </div>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 text-sm">
+        <Row label="Forecast period" value="7 days" />
+        <Row
+          label="Preference"
+          value={value === "auto" ? "Auto" : value === "open_meteo" ? "Open-Meteo" : "WillyWeather"}
+        />
+      </div>
+      <Collapsible className="group/fp">
         <CollapsibleTrigger asChild>
-          <button type="button" className="flex w-full items-center justify-between gap-2 text-left">
-            <div>
-              <h2 className="text-base font-semibold">Forecast Provider</h2>
-              <p className="text-xs text-muted-foreground">
-                Which service provides 7-day forecasts. Auto uses WillyWeather when configured, otherwise Open-Meteo.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {pending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-            </div>
-          </button>
+          <Button variant="outline" size="sm" className="gap-2" disabled={!canEdit}>
+            Change forecast source
+            {pending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]/fp:rotate-180" />
+            )}
+          </Button>
         </CollapsibleTrigger>
-        <CollapsibleContent className="space-y-3">
-          {isLoading ? (
-            <div className="text-sm text-muted-foreground">Loading…</div>
-          ) : (
-            <RadioGroup
-              value={value}
-              onValueChange={(v) => onChange(v as ForecastProvider)}
-              className="grid gap-2 sm:grid-cols-3"
-            >
-              {(
-                [
-                  { v: "auto", label: "Auto", hint: "WillyWeather if set, else Open-Meteo" },
-                  { v: "open_meteo", label: "Open-Meteo", hint: "Free global forecast service" },
-                  { v: "willyweather", label: "WillyWeather", hint: "Australian forecast (location required)" },
-                ] as { v: ForecastProvider; label: string; hint: string }[]
-              ).map((opt) => (
-                <label
-                  key={opt.v}
-                  htmlFor={`fp-${opt.v}`}
-                  className={`flex items-start gap-2 rounded-md border p-3 text-sm ${
-                    canEdit ? "cursor-pointer hover:bg-muted/40" : "opacity-60"
-                  } ${value === opt.v ? "border-primary bg-primary/5" : ""}`}
-                >
-                  <RadioGroupItem id={`fp-${opt.v}`} value={opt.v} disabled={!canEdit} className="mt-0.5" />
-                  <div>
-                    <div className="font-medium">{opt.label}</div>
-                    <div className="text-xs text-muted-foreground">{opt.hint}</div>
-                  </div>
-                </label>
-              ))}
-            </RadioGroup>
-          )}
+        <CollapsibleContent className="pt-3 space-y-3">
+          <RadioGroup
+            value={value}
+            onValueChange={(v) => onChange(v as ForecastProvider)}
+            className="grid gap-2 sm:grid-cols-3"
+          >
+            {(
+              [
+                { v: "auto", label: "Auto", hint: "WillyWeather if set, else Open-Meteo" },
+                { v: "open_meteo", label: "Open-Meteo", hint: "Free global forecast service" },
+                { v: "willyweather", label: "WillyWeather", hint: "Australian forecast (location required)" },
+              ] as { v: ForecastProvider; label: string; hint: string }[]
+            ).map((opt) => (
+              <label
+                key={opt.v}
+                htmlFor={`fp-${opt.v}`}
+                className={`flex items-start gap-2 rounded-md border p-3 text-sm ${
+                  canEdit ? "cursor-pointer hover:bg-muted/40" : "opacity-60"
+                } ${value === opt.v ? "border-primary bg-primary/5" : ""}`}
+              >
+                <RadioGroupItem id={`fp-${opt.v}`} value={opt.v} disabled={!canEdit} className="mt-0.5" />
+                <div>
+                  <div className="font-medium">{opt.label}</div>
+                  <div className="text-xs text-muted-foreground">{opt.hint}</div>
+                </div>
+              </label>
+            ))}
+          </RadioGroup>
           {!canEdit && (
             <div className="text-xs text-muted-foreground">
               Only vineyard Owners and Managers can change the forecast provider.
             </div>
           )}
         </CollapsibleContent>
-      </Card>
-    </Collapsible>
+      </Collapsible>
+    </Card>
   );
-
 }
 
 // ---------------------------------------------------------------------------
