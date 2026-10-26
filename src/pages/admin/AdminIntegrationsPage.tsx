@@ -85,6 +85,7 @@ export default function AdminIntegrationsPage() {
               <AdminIntegrationDirectory />
             </TabsContent>
             <TabsContent value="api" className="space-y-6">
+              <MaitApiDiagnosticCard />
               <AdminApiMetricsPanel />
               <AdminApiRequestsPanel />
             </TabsContent>
