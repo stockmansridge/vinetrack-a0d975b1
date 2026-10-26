@@ -329,6 +329,209 @@ function YesNo({ value }: { value: boolean | null }) {
   return value ? <span>Yes</span> : <span>No</span>;
 }
 
+const CHECK_STYLES: Record<MaitDeepCheck["status"], string> = {
+  pass: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  fail: "border-destructive/40 bg-destructive/10 text-destructive",
+  info: "border-border bg-muted text-muted-foreground",
+};
+
+function CheckBadge({ status }: { status: MaitDeepCheck["status"] }) {
+  return (
+    <Badge variant="outline" className={CHECK_STYLES[status]}>
+      {status === "pass" ? "Pass" : status === "info" ? "Info" : "Fail"}
+    </Badge>
+  );
+}
+
+function DeepResultPanel({ report }: { report: MaitDeepReport }) {
+  const Icon =
+    report.overall === "PASS" ? CheckCircle2 : report.overall === "PARTIAL" ? AlertTriangle : XCircle;
+  return (
+    <div
+      className="mt-4 rounded-md border p-3 text-sm space-y-4"
+      data-testid="mait-deep-result"
+    >
+      <h4 className="font-semibold text-sm">Full data diagnostic</h4>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Icon className="h-4 w-4 shrink-0" />
+        <Badge variant="outline" className={OVERALL_STYLES[report.overall]}>
+          {report.overall}
+        </Badge>
+        <span className="text-xs text-muted-foreground">
+          Tested at {formatDateTime(report.testedAt.toISOString())}
+        </span>
+      </div>
+
+      <dl className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted-foreground">Read-only</dt>
+          <dd>{report.readOnly ? "Yes" : "No"}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted-foreground">Writes performed</dt>
+          <dd>{report.writesPerformed}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted-foreground">Network</dt>
+          <dd>
+            {report.networkName ?? "—"} <span className="font-mono">({report.networkId})</span>
+          </dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted-foreground">Modules returned</dt>
+          <dd>{report.modulesReturned}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted-foreground">Module 52 present</dt>
+          <dd><YesNo value={report.module52Present} /></dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted-foreground">Response status</dt>
+          <dd className="font-mono">{report.statusLine}</dd>
+        </div>
+      </dl>
+
+      {report.errorMessage && <p className="text-xs">{report.errorMessage}</p>}
+
+      {report.module && (
+        <section className="space-y-2">
+          <h5 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Module 52 — current data parser
+          </h5>
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs sm:grid-cols-3">
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted-foreground">Module name</dt>
+              <dd>{report.module.moduleName ?? "—"}</dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted-foreground">Latest DateTime</dt>
+              <dd className="font-mono">{report.module.latestDatetime ?? "—"}</dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted-foreground">Record count</dt>
+              <dd>{report.module.recordCount ?? "—"}</dd>
+            </div>
+          </dl>
+          {report.module.columns.length > 0 && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-20">Channel</TableHead>
+                  <TableHead>MAIT label</TableHead>
+                  <TableHead className="w-20">Unit</TableHead>
+                  <TableHead className="w-28">Latest value</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {report.module.columns.map((c) => (
+                  <TableRow key={c.channelKey}>
+                    <TableCell className="font-mono">{c.channelNumber ?? c.channelKey}</TableCell>
+                    <TableCell>{c.label ?? "—"}</TableCell>
+                    <TableCell>{c.unit ?? "—"}</TableCell>
+                    <TableCell className="font-mono">{c.latestValue ?? "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </section>
+      )}
+
+      {report.usage && (
+        <section className="space-y-2">
+          <h5 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Module 52 — irrigation usage parser
+          </h5>
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted-foreground">Test range</dt>
+              <dd className="font-mono">
+                {report.usage.startDate ?? "—"} → {report.usage.endDate ?? "—"}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted-foreground">Outputs detected</dt>
+              <dd>{report.usage.outputs.length}</dd>
+            </div>
+          </dl>
+          {report.usage.outputs.length > 0 && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-20">Output</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead className="w-28">Duration channel</TableHead>
+                  <TableHead className="w-28">Volume channel</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {report.usage.outputs.map((o, i) => (
+                  <TableRow key={`${o.channelNumber ?? "x"}-${i}`}>
+                    <TableCell className="font-mono">{o.channelNumber ?? "—"}</TableCell>
+                    <TableCell>{o.channelName ?? "—"}</TableCell>
+                    <TableCell className="font-mono">
+                      {o.hasDuration ? (o.durationKey ?? "Yes") : "—"}
+                    </TableCell>
+                    <TableCell className="font-mono">
+                      {o.hasVolume ? (o.volumeKey ?? "Yes") : "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          {report.usage.events.length > 0 && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date/time</TableHead>
+                  <TableHead className="w-24">Output</TableHead>
+                  <TableHead className="w-24">Duration (min)</TableHead>
+                  <TableHead className="w-24">Volume (kL)</TableHead>
+                  <TableHead className="w-24">Volume (L)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {report.usage.events.map((e, i) => (
+                  <TableRow key={`${e.datetimeRaw}-${i}`}>
+                    <TableCell className="font-mono">{e.datetimeRaw || "—"}</TableCell>
+                    <TableCell>{e.channelName ?? e.channelNumber ?? "—"}</TableCell>
+                    <TableCell className="font-mono">{e.durationMinutes ?? "—"}</TableCell>
+                    <TableCell className="font-mono">{e.volumeKl ?? "—"}</TableCell>
+                    <TableCell className="font-mono">{e.volumeLitres ?? "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </section>
+      )}
+
+      {report.checks.length > 0 && (
+        <section className="space-y-2">
+          <h5 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Parser checks
+          </h5>
+          <ul className="space-y-1">
+            {report.checks.map((c) => (
+              <li key={c.key} className="flex items-start gap-2 text-xs">
+                <CheckBadge status={c.status} />
+                <span>
+                  <span className="font-mono text-muted-foreground">{c.key}</span> — {c.message}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
+}
+  if (value === null) return <span className="text-muted-foreground">Unknown</span>;
+  return value ? <span>Yes</span> : <span>No</span>;
+}
+
 function TrialResultPanel({ report }: { report: MaitTrialReport }) {
   const Icon =
     report.overall === "PASS" ? CheckCircle2 : report.overall === "PARTIAL" ? AlertTriangle : XCircle;
