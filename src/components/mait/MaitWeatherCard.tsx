@@ -16,7 +16,7 @@ import { Gauge } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fetchVineyard } from '@/lib/vineyardSettingsQuery';
-import { maitAccess, maitRpc, maitProxy, maitRow, maitConfiguration, maitWeatherReady, maitModules, maitChannels, maitConversion, maitDailyRainConfirmed, saveMaitConnection, MAIT_METRICS, MAIT_PROVIDER, type MaitResult } from '@/lib/maitIntelliwebQuery';
+import { maitAccess, maitRpc, maitProxy, maitRow, maitConfiguration, maitWeatherReady, maitModules, maitChannels, maitConversion, maitDailyRainConfirmed, saveMaitConnection, setMaitSensorModule, removeMaitSensorModule, maitWindSuggestion, maitSupplementary, MAIT_METRICS, MAIT_SENSOR_METRICS, MAIT_WIND_INTERVAL_HINT, MAIT_PROVIDER, type MaitResult } from '@/lib/maitIntelliwebQuery';
 
 type Row = Record<string, any>;
 export function useMait(vineyardId: string) {
@@ -117,10 +117,15 @@ export function MaitWeatherCard({ vineyardId, usedFor }: { vineyardId: string; u
   return <ProviderConnectionCard id="mait" name="MAIT iNTELLiWeb" mark="MAIT" icon={<Gauge className="h-7 w-7" />} tone="text-task-water" description="Weather stations & sensor networks." configured={connected} provides={PROVIDER_PROVIDES.mait} usedFor={usedFor} help={<MaitSetupHelp />} logoUrl={maitLogo.url}>{content}</ProviderConnectionCard>;
 }
 function ChannelRow({ channel, saved, vineyardId, moduleId, onSaved }: { channel: Row; saved?: Row; vineyardId: string; moduleId: string; onSaved: () => Promise<void> }) {
-  const [metric, setMetric] = useState(saved?.is_active ? saved.canonical_metric : 'none');
+  // Label-based wind suggestion pre-selects the dropdown only; nothing is saved
+  // until the customer presses Confirm mapping.
+  const suggested = saved?.is_active ? null : maitWindSuggestion(channel.label ?? '');
+  const initialMetric = saved?.is_active ? saved.canonical_metric : suggested ?? 'none';
+  const initialConversion = maitConversion(channel.unit, initialMetric);
+  const [metric, setMetric] = useState(initialMetric);
   const [semantics, setSemantics] = useState(saved?.semantics ?? '');
-  const [multiplier, setMultiplier] = useState(String(saved?.conversion_multiplier ?? 1));
-  const [offset, setOffset] = useState(String(saved?.conversion_offset ?? 0));
+  const [multiplier, setMultiplier] = useState(String(saved?.conversion_multiplier ?? initialConversion?.multiplier ?? 1));
+  const [offset, setOffset] = useState(String(saved?.conversion_offset ?? initialConversion?.offset ?? 0));
   const [reviewed, setReviewed] = useState(false);
   const conversion = maitConversion(channel.unit, metric);
   const save = useMutation({ mutationFn: async () => {
