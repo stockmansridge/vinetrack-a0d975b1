@@ -608,8 +608,10 @@ export function MaitApiDiagnosticCard() {
   const { selectedVineyardId } = useVineyard();
   const [running, setRunning] = useState(false);
   const [report, setReport] = useState<MaitTrialReport | null>(null);
+  const [deepRunning, setDeepRunning] = useState(false);
+  const [deepReport, setDeepReport] = useState<MaitDeepReport | null>(null);
 
-  const disabled = running || !selectedVineyardId;
+  const disabled = running || deepRunning || !selectedVineyardId;
 
   const run = async () => {
     if (!selectedVineyardId || running) return;
@@ -630,6 +632,23 @@ export function MaitApiDiagnosticCard() {
     }
   };
 
+  // Full data diagnostic: the backend owns the published trial credentials —
+  // the browser sends no username/password/network/module/date arguments.
+  const runDeep = async () => {
+    if (!selectedVineyardId || deepRunning) return;
+    setDeepRunning(true);
+    setDeepReport(null);
+    const testedAt = new Date();
+    try {
+      const result = await maitProxy(selectedVineyardId, "trial_deep_test", {});
+      setDeepReport(classifyMaitDeepSuccess(result, testedAt));
+    } catch (err) {
+      setDeepReport(classifyMaitDeepError(err, testedAt));
+    } finally {
+      setDeepRunning(false);
+    }
+  };
+
   return (
     <Card className="p-5">
       <div className="mb-3 flex items-start gap-2">
@@ -642,15 +661,21 @@ export function MaitApiDiagnosticCard() {
           </p>
         </div>
       </div>
-      <Button onClick={run} disabled={disabled}>
-        {running ? "Running…" : "Run MAIT trial test"}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={run} disabled={disabled}>
+          {running ? "Running…" : "Run MAIT trial test"}
+        </Button>
+        <Button variant="outline" onClick={runDeep} disabled={disabled}>
+          {deepRunning ? "Running…" : "Run full MAIT data test"}
+        </Button>
+      </div>
       {!selectedVineyardId && (
         <p className="text-xs text-muted-foreground mt-2">
           Select a vineyard to provide the authenticated test context.
         </p>
       )}
       {report && <TrialResultPanel report={report} />}
+      {deepReport && <DeepResultPanel report={deepReport} />}
     </Card>
   );
 }
