@@ -11,11 +11,14 @@ export interface ProviderHelp {
   formatNote?: string;
   duplicateNote?: string;
   uploadNote?: string;
+  /** Official provider logo asset URL, when one has been supplied. */
+  logoUrl?: string;
 }
 
 const PROVIDER_HELP: Record<string, ProviderHelp> = {
   galcon_gsi: {
     title: "How to export irrigation history from Galcon GSI",
+    logoUrl: galconLogo.url,
     steps: [
       "Sign in to the Galcon GSI website.",
       "Open Your Unit.",
