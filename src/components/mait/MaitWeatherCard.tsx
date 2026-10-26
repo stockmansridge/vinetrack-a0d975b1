@@ -49,6 +49,10 @@ export function MaitWeatherCard({ vineyardId, usedFor }: { vineyardId: string; u
   const [moduleId, setModuleId] = useState('');
   const [channels, setChannels] = useState<Row[] | null>(null);
   const [notice, setNotice] = useState('');
+  const [sensorAdding, setSensorAdding] = useState(false);
+  const [sensorModuleId, setSensorModuleId] = useState('');
+  const [sensorChannels, setSensorChannels] = useState<Record<string, Row[]>>({});
+  const [removingSensor, setRemovingSensor] = useState<Row | null>(null);
   useEffect(() => { setUsername(connection.username ?? ''); setNetworkId(connection.network_id ?? ''); setZone(timezone); setPassword(''); setTested(null); setModuleId(String(weatherModuleId ?? '')); setChannels(null); }, [connection.username, connection.network_id, weatherModuleId, timezone]);
   const refresh = async () => { await qc.invalidateQueries({ queryKey: ['mait', vineyardId] }); await qc.invalidateQueries({ queryKey: ['weather_status', vineyardId] }); await qc.invalidateQueries({ queryKey: ['local-observation-provider', vineyardId] }); await qc.invalidateQueries({ queryKey: ['live_weather', vineyardId] }); };
   const action = useMutation({ mutationFn: async (run: () => Promise<unknown>) => { if (!access.data?.manage) throw new Error('You do not have permission to manage this MAIT connection.'); return run(); }, onError: (e: Error) => setNotice(e.message) });
@@ -58,6 +62,10 @@ export function MaitWeatherCard({ vineyardId, usedFor }: { vineyardId: string; u
   const ready = maitWeatherReady(config);
   const moduleChoices = [...new Map([...(config.weatherModule ? [{ id: String(weatherModuleId), name: config.weatherModule.module_name ?? '' }] : []), ...modules].map(m => [m.id, m])).values()];
   const networkName = tested?.data.network_name ?? tested?.data.network?.name ?? connection.network_name;
+  const sensorModules = config.sensorModules;
+  // Addable sensors exclude the primary weather module, active sensor modules and
+  // modules already configured as irrigation controllers.
+  const addableSensorModules = modules.filter(m => m.id !== String(weatherModuleId ?? '') && !sensorModules.some(s => String(s.module_id) === m.id) && !config.controllerModules.some(c => String(c.module_id) === m.id));
   if (access.isPending) return <Card className="p-4">Checking MAIT access…</Card>;
   const content = <div className="space-y-4">
     <div className="flex flex-wrap items-center gap-3">
