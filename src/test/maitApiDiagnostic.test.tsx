@@ -215,7 +215,9 @@ describe("System Admin API section placement", () => {
         <AdminIntegrationsPage />
       </MemoryRouter>,
     );
-    fireEvent.click(await screen.findByRole("tab", { name: "API activity" }));
+    const tab = await screen.findByRole("tab", { name: "API activity" });
+    fireEvent.mouseDown(tab);
+    fireEvent.click(tab);
     expect(await screen.findByText("MAIT iNTELLiWeb API")).toBeVisible();
   });
 
