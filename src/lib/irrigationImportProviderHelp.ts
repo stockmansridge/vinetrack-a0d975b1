@@ -5,6 +5,7 @@
  * registry does not (yet) return `import_instructions` / `help_steps`.
  * It must never contain vineyard-, valve-, variety- or customer-specific data.
  */
+import galconLogo from "@/assets/providers/galcon.png.asset.json";
 export interface ProviderHelp {
   title: string;
   steps: string[];
