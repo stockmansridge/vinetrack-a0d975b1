@@ -6,6 +6,7 @@ import { AdminGate, AdminPageHeader } from "./_shared";
 import { MetricCard } from "@/components/admin/integrations/AdminIntegrationBits";
 import { AdminIntegrationDirectory } from "@/components/admin/integrations/AdminIntegrationDirectory";
 import { AdminApiMetricsPanel } from "@/components/admin/integrations/AdminApiMetricsPanel";
+import { MaitApiDiagnosticCard } from "@/components/admin/integrations/MaitApiDiagnosticCard";
 import { AdminApiRequestsPanel } from "@/components/admin/integrations/AdminApiRequestsPanel";
 import { AdminWebhooksTab } from "@/components/admin/integrations/AdminWebhooksPanel";
 import { AdminIntegrationAuditPanel } from "@/components/admin/integrations/AdminIntegrationAuditPanel";
