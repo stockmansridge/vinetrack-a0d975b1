@@ -16,6 +16,19 @@ export function providerCapabilityRows(provides: string[]) {
   ];
 }
 
+/** Official provider logo supplied by the vineyard team; falls back to the
+ *  typographic treatment when no logo asset is available. */
+function ProviderLogo({ name, logoUrl }: { name: string; logoUrl: string }) {
+  return (
+    <img
+      src={logoUrl}
+      alt={`${name} logo`}
+      className="h-8 w-auto max-w-[140px] shrink-0 object-contain"
+      loading="lazy"
+    />
+  );
+}
+
 /** Local typographic brand treatments; these do not claim to be official logos. */
 function ProviderWordmark({ name, mark, tone }: { name: string; mark: string; tone: string }) {
   const words = name === "Davis WeatherLink" ? <><span className="text-[10px] font-bold uppercase">DAVIS</span><span className="text-sm font-semibold">WeatherLink</span></>
