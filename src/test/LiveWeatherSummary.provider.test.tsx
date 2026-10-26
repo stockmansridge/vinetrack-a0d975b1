@@ -1,13 +1,14 @@
 // Focused behavioural proof that the Live Dashboard weather Refresh respects
 // the vineyard's configured LOCAL OBSERVATION provider, now that both Davis
 // and Weather Underground expose a canonical current-observation action.
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { act, render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const refreshDavisObservations = vi.fn();
 const refreshWundergroundObservations = vi.fn();
+const maitProxy = vi.fn();
 const fetchWeatherStatusForVineyard = vi.fn();
 const fetchServerObservationProviderSelection = vi.fn();
 const fetchLiveWeather = vi.fn();
@@ -23,6 +24,9 @@ vi.mock("@/lib/weatherStatusQuery", () => ({
 }));
 vi.mock("@/lib/wundergroundProxy", () => ({
   refreshWundergroundObservations: (...a: unknown[]) => refreshWundergroundObservations(...a),
+}));
+vi.mock("@/lib/maitIntelliwebQuery", () => ({
+  maitProxy: (...a: unknown[]) => maitProxy(...a),
 }));
 vi.mock("@/lib/fiveDayForecast", () => ({
   fetchFiveDayForecast: (...a: unknown[]) => fetchFiveDayForecast(...a),
@@ -83,8 +87,7 @@ const okForecast = {
   cache: { fetchedAt: new Date().toISOString() },
 };
 
-function renderPanel() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderPanel(qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   return render(
     <QueryClientProvider client={qc}>
       <LiveWeatherSummary vineyardId={VID} refetchIntervalMs={0} />
@@ -100,12 +103,29 @@ const pressRefresh = async () => {
 beforeEach(() => {
   refreshDavisObservations.mockReset().mockResolvedValue({ ok: true });
   refreshWundergroundObservations.mockReset().mockResolvedValue({ ok: true });
+  maitProxy.mockReset().mockResolvedValue({ partial: false });
   fetchWeatherStatusForVineyard.mockReset().mockResolvedValue(statusFor("none"));
   fetchServerObservationProviderSelection.mockReset().mockResolvedValue(null);
   fetchLiveWeather.mockReset();
   fetchFiveDayForecast.mockReset().mockResolvedValue(okForecast);
   toast.mockReset();
 });
+
+afterEach(() => vi.restoreAllMocks());
+
+const providerCases = [
+  { selection: "wunderground_pws", refresh: refreshWundergroundObservations },
+  { selection: "davis_weatherlink", refresh: refreshDavisObservations },
+  { selection: "mait_intelliweb", refresh: maitProxy },
+];
+
+function expectOnlyProviderRefresh(refresh: typeof maitProxy, count = 1) {
+  for (const candidate of providerCases) {
+    expect(candidate.refresh).toHaveBeenCalledTimes(candidate.refresh === refresh ? count : 0);
+  }
+  if (refresh === maitProxy) expect(maitProxy).toHaveBeenCalledWith(VID, "current");
+  else expect(refresh).toHaveBeenCalledWith(VID);
+}
 
 describe("manual Refresh respects the selected observation provider", () => {
   it("explicit davis_weatherlink: refreshes Davis only", async () => {
@@ -215,6 +235,63 @@ describe("manual Refresh respects the selected observation provider", () => {
 });
 
 describe("automatic stale top-up respects the selected provider", () => {
+  it.each(providerCases)("waits for delayed $selection resolution without consuming the throttle or rereading cached weather", async ({ selection, refresh }) => {
+    let resolveSelection: (value: string) => void = () => { throw new Error("Selection promise not initialized"); };
+    fetchServerObservationProviderSelection.mockReturnValue(new Promise<string>((resolve) => {
+      resolveSelection = resolve;
+    }));
+    const cached = { ...liveReading("manual"), stale: true };
+    fetchLiveWeather.mockResolvedValue(cached);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    qc.setQueryData(["live-weather", VID], cached);
+    qc.setQueryData(["five-day-forecast", VID], okForecast);
+    const clock = vi.spyOn(Date, "now").mockReturnValue(1_800_000_000_000);
+
+    renderPanel(qc);
+    await waitFor(() => expect(fetchServerObservationProviderSelection).toHaveBeenCalledWith(VID));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+    expect(qc.getQueryState(["local-observation-provider", VID])?.status).toBe("pending");
+    for (const candidate of providerCases) expect(candidate.refresh).not.toHaveBeenCalled();
+    expect(fetchLiveWeather).not.toHaveBeenCalled();
+    expect(qc.getQueryData(["live-weather", VID])).toEqual(cached);
+
+    // Same clock instant: an unresolved no-op must not have spent the five-minute throttle.
+    await act(async () => resolveSelection(selection));
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(fetchLiveWeather).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: /refresh/i })).not.toBeDisabled());
+    expectOnlyProviderRefresh(refresh);
+
+    // A real attempt, unlike the unresolved state, must establish the throttle.
+    const setStale = async (stale: boolean) => {
+      await act(async () => {
+        qc.setQueryData(["live-weather", VID], { ...cached, stale });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+    };
+    await setStale(false);
+    clock.mockReturnValue(1_800_000_000_000 + 5 * 60_000 - 1);
+    await setStale(true);
+    expectOnlyProviderRefresh(refresh);
+    await setStale(false);
+    clock.mockReturnValue(1_800_000_000_000 + 5 * 60_000);
+    await setStale(true);
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
+    expectOnlyProviderRefresh(refresh, 2);
+  });
+
+  it.each(providerCases)("manual Refresh retains the $selection helper and normalized reread path", async ({ selection, refresh }) => {
+    fetchServerObservationProviderSelection.mockResolvedValue(selection);
+    fetchLiveWeather.mockResolvedValue(liveReading(selection));
+    renderPanel();
+    await waitFor(() => expect(screen.getByRole("button", { name: /refresh/i })).not.toBeDisabled());
+    await pressRefresh();
+    await waitFor(() => expect(toast).toHaveBeenCalledWith({ title: "Weather updated" }));
+    expectOnlyProviderRefresh(refresh);
+    expect(fetchLiveWeather).toHaveBeenCalledTimes(2);
+    expect(fetchFiveDayForecast).toHaveBeenLastCalledWith(VID, { force: true });
+  });
+
   it("Davis vineyard: a stale cached observation triggers a Davis refresh", async () => {
     fetchServerObservationProviderSelection.mockResolvedValue("davis_weatherlink");
     fetchLiveWeather.mockResolvedValue({ ...liveReading("davis_weatherlink"), stale: true });
@@ -245,6 +322,7 @@ describe("automatic stale top-up respects the selected provider", () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(refreshDavisObservations).not.toHaveBeenCalled();
     expect(refreshWundergroundObservations).not.toHaveBeenCalled();
+    expect(maitProxy).not.toHaveBeenCalled();
   });
 });
 

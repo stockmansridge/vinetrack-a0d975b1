@@ -179,13 +179,16 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   // and never a provider that is not configured for this vineyard.
   useEffect(() => {
     if (!vineyardId || !weather || !weather.available || !weather.stale) return;
+    // The display's "none" fallback is not a resolved provider decision.
+    // Wait for the resolver before spending the automatic-refresh throttle.
+    if (!providerQ.isSuccess || providerQ.data == null) return;
     if (observationsRefreshing) return;
     if (Date.now() - autoObservationRefreshAt.current < 5 * 60_000) return;
     autoObservationRefreshAt.current = Date.now();
     let cancelled = false;
     (async () => {
       setObservationsRefreshing(true);
-      const res = await refreshObservationProvider(vineyardId, observationProvider);
+      const res = await refreshObservationProvider(vineyardId, providerQ.data);
       // Providers without an upstream refresh action simply re-read the cache.
       if (!cancelled && res.ok) await weatherQ.refetch({ cancelRefetch: true });
       if (!cancelled) setObservationsRefreshing(false);
@@ -194,7 +197,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vineyardId, weather?.available, (weather as any)?.stale, observationProvider]);
+  }, [vineyardId, weather?.available, (weather as any)?.stale, providerQ.isSuccess, providerQ.data]);
 
   const forecastBadge = (() => {
     if (forecastQ.isLoading) return { label: "Loading forecast…", title: undefined as string | undefined };
