@@ -259,16 +259,23 @@ describe("automatic stale top-up respects the selected provider", () => {
     await act(async () => resolveSelection(selection));
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(fetchLiveWeather).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: /refresh/i })).not.toBeDisabled());
     expectOnlyProviderRefresh(refresh);
 
     // A real attempt, unlike the unresolved state, must establish the throttle.
-    await act(async () => { qc.setQueryData(["live-weather", VID], { ...cached, stale: false }); });
+    const setStale = async (stale: boolean) => {
+      await act(async () => {
+        qc.setQueryData(["live-weather", VID], { ...cached, stale });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+    };
+    await setStale(false);
     clock.mockReturnValue(1_800_000_000_000 + 5 * 60_000 - 1);
-    await act(async () => { qc.setQueryData(["live-weather", VID], cached); });
+    await setStale(true);
     expectOnlyProviderRefresh(refresh);
-    await act(async () => { qc.setQueryData(["live-weather", VID], { ...cached, stale: false }); });
+    await setStale(false);
     clock.mockReturnValue(1_800_000_000_000 + 5 * 60_000);
-    await act(async () => { qc.setQueryData(["live-weather", VID], cached); });
+    await setStale(true);
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
     expectOnlyProviderRefresh(refresh, 2);
   });
