@@ -81,7 +81,8 @@ describe('MAIT setup actions', () => {
   });
   it('preselects saved weather module and inspects it using columns/latest', async () => {
     mocks.connected=true; mount(<MaitWeatherCard vineyardId="v" />);
-    expect(await screen.findByRole('combobox',{name:'Weather module'})).toHaveTextContent('weather · Weather');
+    // The module selection is restored by an effect after configuration loads.
+    await waitFor(() => expect(screen.getByRole('combobox',{name:'Weather module'})).toHaveTextContent('weather · Weather'));
     fireEvent.click(screen.getByRole('button',{name:'Inspect weather channels'}));
     await screen.findByRole('button',{name:'Confirm mapping'});
     const calls=(fetch as any).mock.calls.map((c:any)=>JSON.parse(c[1].body));

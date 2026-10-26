@@ -937,7 +937,7 @@ function LiveWeatherCard({
         <div className="space-y-3">
           {data.stale && (
             <div className="border-l-2 border-warning bg-warning/10 px-3 py-1.5 text-xs text-foreground">
-              Reading is stale (&gt; 1 hour old). Station may be offline.
+              Reading is stale. No recent station reading is available.
             </div>
           )}
           <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-5">

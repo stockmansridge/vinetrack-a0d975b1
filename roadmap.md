@@ -1,5 +1,11 @@
 # Roadmap
 
+## MAIT close-out and separate WU freshness audit
+- [x] Prove sensor mappings prefill from shared weather_mappings by module_id and view-only supplementary reads never call configuration; empty modules remain hidden. MAIT product behavior frozen for real-vineyard acceptance.
+- [x] Audit WU refresh/read/selection/timestamp/error paths independently. Current Weather manual Refresh resolves the server selection afresh, fetches the selected provider, then rereads cached weather; mount/poll only reread. Corrected only the stale banner's unsupported one-hour/offline claim. No refresh, selection, fallback or MAIT behavior changes.
+- [x] Run focused MAIT/weather/access regressions: 207/207 passed across 13 files (122 MAIT, 85 other); 7 new WU transport/freshness tests, 2 added sensor tests plus strengthened view-only test. Existing MAIT setup assertion now waits for its selection-restoring effect. Preview build OK; separate manual typecheck prohibited by harness workflow and not run. No backend/mobile changes or publication.
+- [ ] Live signed-in WU diagnosis — requires the affected vineyard/station and authenticated shared-backend access; confirm selected provider, upstream response, returned observed_at/is_stale and subsequent cache read. No customer station/account cause established. Dashboard automatic stale top-up has a provider-loading/throttle timing risk; no shared behavior changed in this separate audit.
+
 ## Weather provider setup help
 - [x] Restore visible Davis setup-help access in both configured states, opening the unchanged existing setup content and flow.
 - [x] Add MAIT card help with seven customer setup steps and irrigation guidance; 141 weather/MAIT tests passed across 8 files (5 new help tests). Preview build OK; separate typecheck not run (automatic compilation owns that check). Isolated desktop/mobile dialog verified; no backend/mobile changes or publication.
