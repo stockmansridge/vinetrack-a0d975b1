@@ -32,7 +32,18 @@ export async function maitAccess(vineyardId: string) {
   return { manage: manage === true, view: view === true };
 }
 export interface MaitResult { data: Row; status: number; partial: boolean; empty: boolean }
+// Stable messages for the live proxy's typed error envelopes. These stay
+// distinguishable from the generic status mappings so diagnostics can tell
+// a MAIT upstream 401/204/400 apart from a VineTrack session/permission failure.
+export const MAIT_AUTH_FAILED_MESSAGE = 'MAIT authentication failed. The supplied credentials were not accepted.';
+export const MAIT_NO_DATA_MESSAGE = 'MAIT returned no data for this request.';
+export const MAIT_BAD_REQUEST_MESSAGE = 'MAIT rejected the request format.';
 export function maitHttpResult(status: number, body: Row): MaitResult {
+  // Typed live-proxy error codes first: MAIT upstream 401 -> mait_authentication_failed,
+  // MAIT upstream 204 (test action) -> HTTP 404 mait_no_data, MAIT upstream 400 -> mait_bad_request.
+  if (body?.error === 'mait_authentication_failed') throw new Error(MAIT_AUTH_FAILED_MESSAGE);
+  if (body?.error === 'mait_no_data') throw new Error(MAIT_NO_DATA_MESSAGE);
+  if (body?.error === 'mait_bad_request') throw new Error(MAIT_BAD_REQUEST_MESSAGE);
   if (status === 401) throw new Error('Your session has expired. Sign in again to use MAIT.');
   if (status === 403) throw new Error('You do not have permission to use this MAIT action for this vineyard.');
   if (status === 400) throw new Error('MAIT could not accept this request. Check the credentials, module and date range.');

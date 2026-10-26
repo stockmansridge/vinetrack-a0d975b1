@@ -97,12 +97,37 @@ export function classifyMaitTrialError(error: unknown, testedAt: Date): MaitTria
     statusLine: "Error",
     message: raw || "The MAIT trial test could not be completed.",
   };
-  if (/session has expired/i.test(raw)) {
+  // MAIT upstream 401 (typed proxy envelope) — distinct from a VineTrack
+  // session-expired 401, which says nothing about MAIT authentication.
+  if (/MAIT authentication failed/i.test(raw)) {
     return {
       ...base,
       maitAuthAccepted: false,
       statusLine: "HTTP 401",
       message: "MAIT authentication failed — the documented trial credentials were not accepted.",
+    };
+  }
+  if (/session has expired/i.test(raw)) {
+    return {
+      ...base,
+      statusLine: "HTTP 401",
+      message: "Your VineTrack session has expired. Sign in again before running the MAIT diagnostic.",
+    };
+  }
+  // MAIT upstream 204 surfaces from the live proxy as HTTP 404 mait_no_data.
+  if (/MAIT returned no data/i.test(raw)) {
+    return {
+      ...base,
+      maitAuthAccepted: true,
+      statusLine: "HTTP 404",
+      message: "MAIT accepted the request but returned no module data.",
+    };
+  }
+  if (/MAIT rejected the request format|could not accept this request/i.test(raw)) {
+    return {
+      ...base,
+      statusLine: "HTTP 400",
+      message: "MAIT rejected the request format.",
     };
   }
   if (/do not have permission/i.test(raw)) {
@@ -111,13 +136,6 @@ export function classifyMaitTrialError(error: unknown, testedAt: Date): MaitTria
       statusLine: "HTTP 403",
       message:
         "The signed-in account or selected vineyard context is not authorised to run this diagnostic.",
-    };
-  }
-  if (/could not accept this request/i.test(raw)) {
-    return {
-      ...base,
-      statusLine: "HTTP 400",
-      message: "MAIT rejected the request format.",
     };
   }
   if (/could not be reached/i.test(raw)) {
