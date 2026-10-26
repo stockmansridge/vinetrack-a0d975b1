@@ -1374,7 +1374,7 @@ function WillyWeatherCard({
   }, [canEdit, configured, providerEligible, vineyardCenter, autoAssigning, vineyardId]);
 
   return (
-    <ProviderConnectionCard name="WillyWeather" mark="WillyWeather" icon={<Sun className="h-7 w-7" />} tone="text-warning" description="Local Australian forecasts." configured={configured} provides={PROVIDER_PROVIDES.willyweather} usedFor={usedFor}>
+    <ProviderConnectionCard name="WillyWeather" mark="WillyWeather" icon={<Sun className="h-7 w-7" />} tone="text-warning" description="Local Australian forecasts." configured={configured} provides={PROVIDER_PROVIDES.willyweather} usedFor={usedFor} logoUrl={willyWeatherLogo.url}>
       <div className="space-y-4">
 
           <p className="text-xs text-muted-foreground">
@@ -1733,7 +1733,7 @@ function WundergroundCard({
   const configured = merged.configured;
 
   return (
-    <ProviderConnectionCard name="Weather Underground" mark="WU" icon={<Thermometer className="h-7 w-7" />} tone="text-task-slashing" description="Personal weather station readings." configured={configured} provides={PROVIDER_PROVIDES.wunderground} usedFor={usedFor}>
+    <ProviderConnectionCard name="Weather Underground" mark="WU" icon={<Thermometer className="h-7 w-7" />} tone="text-task-slashing" description="Personal weather station readings." configured={configured} provides={PROVIDER_PROVIDES.wunderground} usedFor={usedFor} logoUrl={weatherUndergroundLogo.url}>
       <div className="space-y-4">
 
           <p className="text-xs text-muted-foreground">
