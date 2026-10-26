@@ -632,7 +632,7 @@ function DavisCard({
   const typedHasNew = apiKey.trim() !== "" || apiSecret.trim() !== "";
 
   return (
-    <ProviderConnectionCard name="Davis WeatherLink" mark="WeatherLink" icon={<Wind className="h-7 w-7" />} tone="text-task-weed" description="Your Davis station readings." configured={configured} provides={PROVIDER_PROVIDES.davis} usedFor={usedFor}>
+    <ProviderConnectionCard name="Davis WeatherLink" mark="WeatherLink" icon={<Wind className="h-7 w-7" />} tone="text-task-weed" description="Your Davis station readings." configured={configured} provides={PROVIDER_PROVIDES.davis} usedFor={usedFor} setupHelpLabel="Davis setup instructions">
       <div className="space-y-4">
 
           {status?.error && <div className="text-xs text-destructive">RPC error: {status.error}</div>}

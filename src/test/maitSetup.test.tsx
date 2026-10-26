@@ -23,6 +23,18 @@ beforeEach(() => { cleanup(); vi.clearAllMocks(); mocks.manage=true; mocks.conne
   return {data:true};
 }); vi.stubGlobal('fetch', vi.fn().mockImplementation(async (_url,init) => { const b=JSON.parse(init.body); if(b.action==='inspect_module') return new Response(JSON.stringify(maitInspectFixture)); return new Response(JSON.stringify({ok:true,network_name:'Farm network',modules:[{module_id:'weather',description:'Weather'},{module_id:'new-module',description:'New module'}]})); })); });
 describe('MAIT setup actions', () => {
+  it.each([true, false])('keeps MAIT card help available with connected=%s without performing a setup action', async (connected) => {
+    mocks.connected=connected; mocks.manage=false;
+    mount(<MaitWeatherCard vineyardId="v" usedFor={[]} />);
+    const help=await screen.findByRole('button',{name:'MAIT setup instructions'});
+    expect(help).toBeVisible();
+    const calls=mocks.rpc.mock.calls.length;
+    fireEvent.click(help);
+    expect(screen.getByRole('heading',{name:'How to configure MAIT iNTELLiWeb'})).toBeVisible();
+    expect(mocks.rpc.mock.calls.length).toBe(calls);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
+  });
   it('hides credential management from view-only members', async () => { mocks.manage=false; mount(<MaitWeatherCard vineyardId="v" />); await screen.findByText('Your vineyard owner or manager manages this MAIT connection.'); expect(screen.queryByRole('button',{name:'Connect MAIT'})).not.toBeInTheDocument(); expect(mocks.rpc.mock.calls.some(c=>c[0]==='get_mait_intelliweb_configuration')).toBe(false); });
   it('requires successful test before save and keeps typed password out of RPC until save', async () => {
     mount(<MaitWeatherCard vineyardId="v" />); fireEvent.click(await screen.findByRole('button',{name:'Connect MAIT'}));
