@@ -198,6 +198,22 @@ describe('MAIT supplementary sensor module configuration', () => {
   it('offers exactly the backend-constrained sensor metrics', () => {
     expect(MAIT_SENSOR_METRICS.map(([id]) => id)).toEqual(['soil_moisture', 'soil_temperature', 'leaf_wetness', 'none']);
   });
+  it('prefills supplementary saved mappings from weather_mappings by module_id, not a separate array', async () => {
+    // Deliberately reuse the same channel key in three modules: only the
+    // inspected sensor's saved metric/conversion may be restored.
+    mocks.config.weather_mappings = [
+      { module_id: 'weather', channel_key: 'SM1', canonical_metric: 'air_temperature', is_active: true, conversion_multiplier: 99, conversion_offset: 99 },
+      { module_id: 'leaf', channel_key: 'SM1', canonical_metric: 'leaf_wetness', is_active: true, conversion_multiplier: 7, conversion_offset: 8 },
+      { module_id: 'soil', channel_key: 'SM1', canonical_metric: 'soil_moisture', is_active: true, conversion_multiplier: 0.5, conversion_offset: 2 },
+    ];
+    expect(maitConfiguration(mocks.config).sensorModules.map(m => m.module_id)).toEqual(['soil', 'leaf']);
+    mount(<MaitWeatherCard vineyardId="v" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Inspect sensor channels for module soil' }));
+    expect(await screen.findByRole('combobox', { name: 'Use sensor channel SM1 as' })).toHaveTextContent('Soil moisture');
+    expect(screen.getByLabelText('Sensor channel SM1 multiplier')).toHaveValue(0.5);
+    expect(screen.getByLabelText('Sensor channel SM1 offset')).toHaveValue(2);
+    expect(mocks.rpc.mock.calls.some(c => c[0] === 'save_mait_intelliweb_sensor_channel_mapping')).toBe(false);
+  });
 });
 
 describe('MAIT supplementary current readings', () => {
@@ -221,6 +237,20 @@ describe('MAIT supplementary current readings', () => {
     expect(screen.queryByRole('button', { name: /Remove sensor module/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/Network ID/)).not.toBeInTheDocument();
     expect((fetch as any).mock.calls.map((c: any) => JSON.parse(c[1].body))).toContainEqual({ vineyardId: 'v', action: 'supplementary_current' });
+    expect(mocks.rpc.mock.calls.some(c => c[0] === 'get_mait_intelliweb_configuration')).toBe(false);
+    expect(mocks.rpc).toHaveBeenCalledWith('get_vineyard_weather_integration', { p_vineyard_id: 'v', p_provider: 'mait_intelliweb' });
+    expect(screen.queryByLabelText('Username')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
+  });
+  it('hides supplementary readings for a view-only member when supplementary_current returns empty modules', async () => {
+    mocks.manage = false;
+    vi.mocked(fetch).mockResolvedValue(json({ success: true, partial: false, modules: [] }));
+    mount(<MaitWeatherCard vineyardId="v" />);
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
+    expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string)).toEqual({ vineyardId: 'v', action: 'supplementary_current' });
+    expect(mocks.rpc.mock.calls.some(c => c[0] === 'get_mait_intelliweb_configuration')).toBe(false);
+    expect(screen.queryByText('Additional MAIT sensors')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Network ID/)).not.toBeInTheDocument();
   });
   it('keeps primary weather intact when a sensor module has no data', async () => {
     mount(<MaitWeatherCard vineyardId="v" />);
