@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
 import { ProviderConnectionCard } from '@/components/weather/ProviderConnectionCard';
+import maitLogo from '@/assets/providers/mait-industries.png.asset.json';
 import { MaitSetupHelp } from '@/components/mait/MaitSetupHelp';
 import { PROVIDER_PROVIDES } from '@/lib/weatherSourceSummary';
 import { Button } from '@/components/ui/button';
