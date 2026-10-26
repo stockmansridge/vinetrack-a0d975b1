@@ -195,13 +195,16 @@ describe("MAIT iNTELLiWeb API diagnostic card", () => {
   it("never renders the trial password in result or error output", async () => {
     mountCard();
     await runAndSettle();
-    expect(screen.queryByText(/trial/i)).not.toBeInTheDocument();
+    // The password constant must never appear as a rendered credential value.
+    expect(screen.queryByText(/^trial$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/password/i)).not.toBeInTheDocument();
 
     cleanup();
     mocks.maitProxy.mockRejectedValue(new Error("MAIT upstream exploded"));
     mountCard();
     await runAndSettle();
-    expect(screen.queryByText(/trial/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^trial$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/password/i)).not.toBeInTheDocument();
   });
 });
 
