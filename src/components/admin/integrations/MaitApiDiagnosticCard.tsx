@@ -528,9 +528,6 @@ function DeepResultPanel({ report }: { report: MaitDeepReport }) {
     </div>
   );
 }
-  if (value === null) return <span className="text-muted-foreground">Unknown</span>;
-  return value ? <span>Yes</span> : <span>No</span>;
-}
 
 function TrialResultPanel({ report }: { report: MaitTrialReport }) {
   const Icon =
