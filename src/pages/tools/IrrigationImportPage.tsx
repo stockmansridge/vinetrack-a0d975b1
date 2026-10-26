@@ -472,6 +472,14 @@ export default function IrrigationImportPage() {
 function ProviderInstructions({ help }: { help: ProviderHelp }) {
   return (
     <div className="rounded-lg border border-border bg-muted/40 p-4">
+      {help.logoUrl && (
+        <img
+          src={help.logoUrl}
+          alt="Provider logo"
+          className="mb-2 h-8 w-auto max-w-[160px] object-contain"
+          loading="lazy"
+        />
+      )}
       <p className="text-sm font-medium">{help.title}</p>
       <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
         {help.steps.map((s) => (

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
 import { ProviderConnectionCard } from '@/components/weather/ProviderConnectionCard';
+import maitLogo from '@/assets/providers/mait-industries.png.asset.json';
 import { MaitSetupHelp } from '@/components/mait/MaitSetupHelp';
 import { PROVIDER_PROVIDES } from '@/lib/weatherSourceSummary';
 import { Button } from '@/components/ui/button';
@@ -113,7 +114,7 @@ export function MaitWeatherCard({ vineyardId, usedFor }: { vineyardId: string; u
     <Dialog open={disconnect} onOpenChange={setDisconnect}><DialogContent><DialogHeader><DialogTitle>Disconnect MAIT?</DialogTitle><DialogDescription>The weather station and controllers share this connection. Historical irrigation records will remain unchanged.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setDisconnect(false)}>Cancel</Button><Button variant="destructive" disabled={action.isPending} onClick={() => run(async () => { await maitRpc('remove_mait_intelliweb_connection', vineyardId); setDisconnect(false); setModules([]); setChannels(null); await refresh(); })}>Disconnect</Button></DialogFooter></DialogContent></Dialog>
   </div>;
   if (!usedFor) return <Card id="mait" className="p-4 space-y-4 scroll-mt-6">{content}</Card>;
-  return <ProviderConnectionCard id="mait" name="MAIT iNTELLiWeb" mark="MAIT" icon={<Gauge className="h-7 w-7" />} tone="text-task-water" description="Weather stations & sensor networks." configured={connected} provides={PROVIDER_PROVIDES.mait} usedFor={usedFor} help={<MaitSetupHelp />}>{content}</ProviderConnectionCard>;
+  return <ProviderConnectionCard id="mait" name="MAIT iNTELLiWeb" mark="MAIT" icon={<Gauge className="h-7 w-7" />} tone="text-task-water" description="Weather stations & sensor networks." configured={connected} provides={PROVIDER_PROVIDES.mait} usedFor={usedFor} help={<MaitSetupHelp />} logoUrl={maitLogo.url}>{content}</ProviderConnectionCard>;
 }
 function ChannelRow({ channel, saved, vineyardId, moduleId, onSaved }: { channel: Row; saved?: Row; vineyardId: string; moduleId: string; onSaved: () => Promise<void> }) {
   const [metric, setMetric] = useState(saved?.is_active ? saved.canonical_metric : 'none');

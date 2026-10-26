@@ -6,6 +6,9 @@ import { useVineyard } from "@/context/VineyardContext";
 import { useDiagnosticPanel } from "@/lib/systemAdmin";
 import { Card } from "@/components/ui/card";
 import { ProviderConnectionCard } from "@/components/weather/ProviderConnectionCard";
+import davisLogo from "@/assets/providers/davis-instruments.png.asset.json";
+import willyWeatherLogo from "@/assets/providers/willyweather.png.asset.json";
+import weatherUndergroundLogo from "@/assets/providers/weather-underground.jpg.asset.json";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -632,7 +635,7 @@ function DavisCard({
   const typedHasNew = apiKey.trim() !== "" || apiSecret.trim() !== "";
 
   return (
-    <ProviderConnectionCard name="Davis WeatherLink" mark="WeatherLink" icon={<Wind className="h-7 w-7" />} tone="text-task-weed" description="Your Davis station readings." configured={configured} provides={PROVIDER_PROVIDES.davis} usedFor={usedFor} setupHelpLabel="Davis setup instructions">
+    <ProviderConnectionCard name="Davis WeatherLink" mark="WeatherLink" icon={<Wind className="h-7 w-7" />} tone="text-task-weed" description="Your Davis station readings." configured={configured} provides={PROVIDER_PROVIDES.davis} usedFor={usedFor} setupHelpLabel="Davis setup instructions" logoUrl={davisLogo.url}>
       <div className="space-y-4">
 
           {status?.error && <div className="text-xs text-destructive">RPC error: {status.error}</div>}
@@ -1371,7 +1374,7 @@ function WillyWeatherCard({
   }, [canEdit, configured, providerEligible, vineyardCenter, autoAssigning, vineyardId]);
 
   return (
-    <ProviderConnectionCard name="WillyWeather" mark="WillyWeather" icon={<Sun className="h-7 w-7" />} tone="text-warning" description="Local Australian forecasts." configured={configured} provides={PROVIDER_PROVIDES.willyweather} usedFor={usedFor}>
+    <ProviderConnectionCard name="WillyWeather" mark="WillyWeather" icon={<Sun className="h-7 w-7" />} tone="text-warning" description="Local Australian forecasts." configured={configured} provides={PROVIDER_PROVIDES.willyweather} usedFor={usedFor} logoUrl={willyWeatherLogo.url}>
       <div className="space-y-4">
 
           <p className="text-xs text-muted-foreground">
@@ -1730,7 +1733,7 @@ function WundergroundCard({
   const configured = merged.configured;
 
   return (
-    <ProviderConnectionCard name="Weather Underground" mark="WU" icon={<Thermometer className="h-7 w-7" />} tone="text-task-slashing" description="Personal weather station readings." configured={configured} provides={PROVIDER_PROVIDES.wunderground} usedFor={usedFor}>
+    <ProviderConnectionCard name="Weather Underground" mark="WU" icon={<Thermometer className="h-7 w-7" />} tone="text-task-slashing" description="Personal weather station readings." configured={configured} provides={PROVIDER_PROVIDES.wunderground} usedFor={usedFor} logoUrl={weatherUndergroundLogo.url}>
       <div className="space-y-4">
 
           <p className="text-xs text-muted-foreground">

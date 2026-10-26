@@ -16,6 +16,19 @@ export function providerCapabilityRows(provides: string[]) {
   ];
 }
 
+/** Official provider logo supplied by the vineyard team; falls back to the
+ *  typographic treatment when no logo asset is available. */
+function ProviderLogo({ name, logoUrl }: { name: string; logoUrl: string }) {
+  return (
+    <img
+      src={logoUrl}
+      alt={`${name} logo`}
+      className="h-8 w-auto max-w-[140px] shrink-0 object-contain"
+      loading="lazy"
+    />
+  );
+}
+
 /** Local typographic brand treatments; these do not claim to be official logos. */
 function ProviderWordmark({ name, mark, tone }: { name: string; mark: string; tone: string }) {
   const words = name === "Davis WeatherLink" ? <><span className="text-[10px] font-bold uppercase">DAVIS</span><span className="text-sm font-semibold">WeatherLink</span></>
@@ -27,10 +40,11 @@ function ProviderWordmark({ name, mark, tone }: { name: string; mark: string; to
 }
 
 /** Summary presentation only; provider-owned hooks and actions stay in the caller. */
-export function ProviderConnectionCard({ name, mark, icon, tone, description, configured, builtIn, provides, usedFor, children, id, help, setupHelpLabel }: {
+export function ProviderConnectionCard({ name, mark, icon, tone, description, configured, builtIn, provides, usedFor, children, id, help, setupHelpLabel, logoUrl }: {
   name: string; mark: string; icon: ReactNode; tone: string; description: string;
   configured?: boolean; builtIn?: boolean; provides: string[]; usedFor: string[];
   children?: ReactNode; id?: string; help?: ReactNode; setupHelpLabel?: string;
+  logoUrl?: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -38,7 +52,7 @@ export function ProviderConnectionCard({ name, mark, icon, tone, description, co
       <Card id={id} className="flex h-full min-w-0 scroll-mt-6 flex-col rounded-lg bg-card p-3 shadow-sm">
         <div className="flex min-h-10 items-center gap-2">
           {name === "Open-Meteo" && <span className="shrink-0 text-map-accent">{icon}</span>}
-          <ProviderWordmark name={name} mark={mark} tone={tone} />
+          {logoUrl ? <ProviderLogo name={name} logoUrl={logoUrl} /> : <ProviderWordmark name={name} mark={mark} tone={tone} />}
           {help && <div className="ml-auto self-start">{help}</div>}
           {setupHelpLabel && <div className="ml-auto self-start"><TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground" aria-label={setupHelpLabel} onClick={() => setOpen(true)}><HelpCircle className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{setupHelpLabel}</TooltipContent></Tooltip></TooltipProvider></div>}
         </div>
