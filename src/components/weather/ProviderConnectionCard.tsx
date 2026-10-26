@@ -26,10 +26,10 @@ function ProviderWordmark({ name, mark, tone }: { name: string; mark: string; to
 }
 
 /** Summary presentation only; provider-owned hooks and actions stay in the caller. */
-export function ProviderConnectionCard({ name, mark, icon, tone, description, configured, builtIn, provides, usedFor, children, id }: {
+export function ProviderConnectionCard({ name, mark, icon, tone, description, configured, builtIn, provides, usedFor, children, id, help }: {
   name: string; mark: string; icon: ReactNode; tone: string; description: string;
   configured?: boolean; builtIn?: boolean; provides: string[]; usedFor: string[];
-  children?: ReactNode; id?: string;
+  children?: ReactNode; id?: string; help?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -38,6 +38,7 @@ export function ProviderConnectionCard({ name, mark, icon, tone, description, co
         <div className="flex min-h-10 items-center gap-2">
           {name === "Open-Meteo" && <span className="shrink-0 text-map-accent">{icon}</span>}
           <ProviderWordmark name={name} mark={mark} tone={tone} />
+          {help && <div className="ml-auto self-start">{help}</div>}
         </div>
         <div className="flex flex-1 flex-col gap-2 pt-1">
           <div className="flex min-h-10 flex-col items-start gap-1">
