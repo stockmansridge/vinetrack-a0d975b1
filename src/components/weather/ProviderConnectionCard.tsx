@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from "react";
-import { Check, Settings2, ArrowRight, Minus } from "lucide-react";
+import { Check, Settings2, ArrowRight, Minus, HelpCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 /** Comparison labels map to existing provider capabilities, not new behaviour. */
 export function providerCapabilityRows(provides: string[]) {
@@ -26,10 +27,10 @@ function ProviderWordmark({ name, mark, tone }: { name: string; mark: string; to
 }
 
 /** Summary presentation only; provider-owned hooks and actions stay in the caller. */
-export function ProviderConnectionCard({ name, mark, icon, tone, description, configured, builtIn, provides, usedFor, children, id, help }: {
+export function ProviderConnectionCard({ name, mark, icon, tone, description, configured, builtIn, provides, usedFor, children, id, help, setupHelpLabel }: {
   name: string; mark: string; icon: ReactNode; tone: string; description: string;
   configured?: boolean; builtIn?: boolean; provides: string[]; usedFor: string[];
-  children?: ReactNode; id?: string; help?: ReactNode;
+  children?: ReactNode; id?: string; help?: ReactNode; setupHelpLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -39,6 +40,7 @@ export function ProviderConnectionCard({ name, mark, icon, tone, description, co
           {name === "Open-Meteo" && <span className="shrink-0 text-map-accent">{icon}</span>}
           <ProviderWordmark name={name} mark={mark} tone={tone} />
           {help && <div className="ml-auto self-start">{help}</div>}
+          {setupHelpLabel && <div className="ml-auto self-start"><TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground" aria-label={setupHelpLabel} onClick={() => setOpen(true)}><HelpCircle className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{setupHelpLabel}</TooltipContent></Tooltip></TooltipProvider></div>}
         </div>
         <div className="flex flex-1 flex-col gap-2 pt-1">
           <div className="flex min-h-10 flex-col items-start gap-1">

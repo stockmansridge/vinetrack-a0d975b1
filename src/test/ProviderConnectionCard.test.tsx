@@ -6,6 +6,17 @@ afterEach(cleanup);
 const props = { name: "Davis WeatherLink", mark: "WeatherLink", icon: null, tone: "", description: "Station", provides: ["Live observations"], usedFor: [] };
 
 describe("provider configuration entry", () => {
+  it.each([true, false])("keeps Davis help visible when configured is %s and opens the preserved setup content", (configured) => {
+    render(<ProviderConnectionCard {...props} configured={configured} setupHelpLabel="Davis setup instructions"><input aria-label="Existing station" defaultValue="North" /><p>Stored credentials are never displayed.</p></ProviderConnectionCard>);
+    const help = screen.getByRole("button", { name: "Davis setup instructions" });
+    expect(help).toBeVisible();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.click(help);
+    expect(screen.getByRole("dialog")).toBeVisible();
+    expect(screen.getByLabelText("Existing station")).toHaveValue("North");
+    expect(screen.getByText("Stored credentials are never displayed.")).toBeVisible();
+  });
+
   it("opens existing configuration only on explicit action and closes without a save", () => {
     render(<ProviderConnectionCard {...props} configured><input aria-label="Existing station" defaultValue="North" /></ProviderConnectionCard>);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
