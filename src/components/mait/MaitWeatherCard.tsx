@@ -118,7 +118,33 @@ export function MaitWeatherCard({ vineyardId, usedFor }: { vineyardId: string; u
         {!maitDailyRainConfirmed(mappings) && <p className="text-xs text-muted-foreground">Confirm a daily cumulative rainfall channel before enabling rainfall records.</p>}
         <Button disabled={action.isPending || !ready} onClick={() => run(async () => { await maitRpc('set_vineyard_current_observation_provider', vineyardId, { p_provider: MAIT_PROVIDER }); await refresh(); setNotice('MAIT selected for live observations.'); })}>Use MAIT for live observations</Button>
       </div>}
+      {connected && !editing && <div className="space-y-3 border-t pt-4">
+        <h3 className="font-medium">Additional MAIT sensor modules</h3>
+        <p className="text-sm text-muted-foreground">Some MAIT installations store soil moisture, soil temperature or leaf-wetness sensors in separate modules. You can add those modules here using the same MAIT connection — no second username or password is required.</p>
+        <p className="text-xs text-muted-foreground">One MAIT connection → primary weather module, additional sensor modules and irrigation controller modules.</p>
+        {sensorModules.map(sm => <div key={String(sm.module_id)} className="space-y-2 rounded-md border p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium">{sm.module_name || 'Sensor module'} · Module ID {String(sm.module_id)}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" aria-label={`Inspect sensor channels for module ${sm.module_id}`} disabled={action.isPending} onClick={() => run(async () => { const r = await maitProxy(vineyardId, 'inspect_module', { moduleId: sm.module_id, scope: 'existing' }); setSensorChannels(prev => ({ ...prev, [String(sm.module_id)]: maitChannels(r.data) })); if (r.empty) setNotice('MAIT returned no channels or readings.'); })}>Inspect sensor channels</Button>
+              <Button variant="outline" size="sm" aria-label={`Remove sensor module ${sm.module_id}`} disabled={action.isPending} onClick={() => setRemovingSensor(sm)}>Remove sensor module</Button>
+            </div>
+          </div>
+          {sensorChannels[String(sm.module_id)] && <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="p-2">Channel</th><th className="p-2">MAIT label</th><th className="p-2">Unit</th><th className="p-2">Latest value</th><th className="p-2">Use in VineTrack as</th></tr></thead><tbody>{sensorChannels[String(sm.module_id)].map(c => <SensorChannelRow key={`${sm.module_id}:${c.key}`} channel={c} saved={config.weatherMappings.find(m => String(m.channel_key) === c.key && String(m.module_id) === String(sm.module_id))} vineyardId={vineyardId} moduleId={String(sm.module_id)} onSaved={refresh} />)}</tbody></table>{!sensorChannels[String(sm.module_id)].length && <p className="p-2 text-muted-foreground">No channels returned.</p>}</div>}
+        </div>)}
+        {!sensorAdding
+          ? <Button variant="outline" disabled={action.isPending} onClick={() => run(async () => { if (!modules.length) { const r = await maitProxy(vineyardId, 'modules'); setModules(maitModules(r.data)); } setSensorAdding(true); })}>Add sensor module</Button>
+          : <div className="flex flex-wrap items-center gap-2">
+            <Choice label="Sensor module" value={sensorModuleId} onChange={setSensorModuleId} items={addableSensorModules.map(m => ({ value: m.id, label: `${m.id} · ${m.name}` }))} />
+            <Button disabled={action.isPending || !sensorModuleId} onClick={() => run(async () => { await setMaitSensorModule(vineyardId, sensorModuleId, addableSensorModules.find(m => m.id === sensorModuleId)?.name || null); setSensorAdding(false); setSensorModuleId(''); await refresh(); setNotice('Sensor module added. Inspect its channels to map sensors.'); })}>Save sensor module</Button>
+            <Button variant="ghost" onClick={() => { setSensorAdding(false); setSensorModuleId(''); }}>Cancel</Button>
+            {!addableSensorModules.length && <p className="text-sm text-muted-foreground">No additional MAIT modules are available to add.</p>}
+          </div>}
+      </div>}
+      {!connected && !editing && <p className="text-sm text-muted-foreground border-t pt-4">Connect MAIT first. Additional sensor modules use the same saved MAIT connection.</p>}
     </>}
+    {access.data?.view === true && connected && <MaitSupplementaryReadings vineyardId={vineyardId} timezone={timezone} />}
+    <Dialog open={!!removingSensor} onOpenChange={open => { if (!open) setRemovingSensor(null); }}><DialogContent><DialogHeader><DialogTitle>Remove sensor module?</DialogTitle><DialogDescription>This removes the module from VineTrack. It does not change anything in MAIT.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setRemovingSensor(null)}>Cancel</Button><Button variant="destructive" disabled={action.isPending} onClick={() => run(async () => { await removeMaitSensorModule(vineyardId, String(removingSensor.module_id)); setRemovingSensor(null); await refresh(); })}>Remove sensor module</Button></DialogFooter></DialogContent></Dialog>
     <Dialog open={disconnect} onOpenChange={setDisconnect}><DialogContent><DialogHeader><DialogTitle>Disconnect MAIT?</DialogTitle><DialogDescription>The weather station and controllers share this connection. Historical irrigation records will remain unchanged.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setDisconnect(false)}>Cancel</Button><Button variant="destructive" disabled={action.isPending} onClick={() => run(async () => { await maitRpc('remove_mait_intelliweb_connection', vineyardId); setDisconnect(false); setModules([]); setChannels(null); await refresh(); })}>Disconnect</Button></DialogFooter></DialogContent></Dialog>
   </div>;
   if (!usedFor) return <Card id="mait" className="p-4 space-y-4 scroll-mt-6">{content}</Card>;
