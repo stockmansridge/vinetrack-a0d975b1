@@ -258,6 +258,196 @@ describe("MAIT iNTELLiWeb API diagnostic card", () => {
   });
 });
 
+// Live trial_deep_test response contract (backend-owned trial credentials).
+const DEEP_PASS_RESULT = {
+  data: {
+    success: true,
+    diagnostic: "trial_deep_test",
+    overall: "pass",
+    partial: false,
+    read_only: true,
+    writes_performed: 0,
+    network: {
+      network_id: "1001",
+      network_name: "MAIT Trial Network",
+      modules_returned: 3,
+      module_52_present: true,
+    },
+    module: {
+      module_id: "52",
+      module_name: "St Andrews Tank House",
+      record_count: 120,
+      latest_datetime: "2019-02-10 08:00",
+      columns: [
+        {
+          channel_key: "c1",
+          channel_number: 1,
+          label: "Tank Level",
+          unit: "m",
+          latest_value: "1.42",
+        },
+        {
+          channel_key: "c2",
+          channel_number: 2,
+          label: "Pressure",
+          unit: "kPa",
+          latest_value: "210",
+        },
+      ],
+    },
+    usage: {
+      module_id: "52",
+      start_date: "2019-02-01",
+      end_date: "2019-02-10",
+      outputs: [
+        {
+          channel_number: 1,
+          channel_name: "Tank Fill Pump",
+          has_duration: true,
+          has_volume: true,
+          duration_key: "d1",
+          volume_key: "v1",
+        },
+      ],
+      events: [
+        {
+          datetime_raw: "02/02/2019 21:00",
+          channel_number: 1,
+          channel_name: "Tank Fill Pump",
+          duration_minutes: 45,
+          duration_source: "d",
+          volume_kl: 222.8,
+          volume_litres: 222800,
+          volume_source: "v",
+        },
+      ],
+    },
+    checks: [
+      { key: "module_list", status: "pass", message: "Module list returned." },
+      { key: "module_52", status: "pass", message: "Module 52 present." },
+      { key: "duration_parser", status: "pass", message: "Duration parsed." },
+      { key: "documented_sample", status: "info", message: "Sample may change." },
+    ],
+  },
+  status: 200,
+  partial: false,
+  empty: false,
+};
+
+async function runDeepAndSettle() {
+  fireEvent.click(screen.getByRole("button", { name: "Run full MAIT data test" }));
+  await screen.findByTestId("mait-deep-result");
+}
+
+describe("Full MAIT data diagnostic (trial_deep_test)", () => {
+  beforeEach(() => {
+    mocks.maitProxy.mockResolvedValue(DEEP_PASS_RESULT);
+  });
+
+  it("calls maitProxy with trial_deep_test and no credentials or arguments", async () => {
+    mountCard();
+    await runDeepAndSettle();
+    expect(mocks.maitProxy).toHaveBeenCalledTimes(1);
+    expect(mocks.maitProxy).toHaveBeenCalledWith("v1", "trial_deep_test", {});
+    const args = mocks.maitProxy.mock.calls[0][2] as Record<string, unknown>;
+    const serialised = JSON.stringify(args).toLowerCase();
+    expect(serialised).not.toContain("getdata");
+    expect(serialised).not.toContain("trial");
+    expect(serialised).not.toContain("password");
+    expect(serialised).not.toContain("username");
+  });
+
+  it("never calls save/configuration RPCs", async () => {
+    mountCard();
+    await runDeepAndSettle();
+    expect(mocks.saveMaitConnection).not.toHaveBeenCalled();
+  });
+
+  it("renders PASS with module columns, outputs, events and checks", async () => {
+    mountCard();
+    await runDeepAndSettle();
+    expect(screen.getByText("Full data diagnostic")).toBeVisible();
+    expect(screen.getByText("PASS")).toBeVisible();
+    // Read-only / writes visibility
+    const readOnlyRow = screen.getByText("Read-only").closest("div")!;
+    expect(readOnlyRow.textContent).toContain("Yes");
+    const writesRow = screen.getByText("Writes performed").closest("div")!;
+    expect(writesRow.textContent).toContain("0");
+    // Network summary
+    expect(screen.getByText("MAIT Trial Network")).toBeVisible();
+    // Module 52 parser section
+    expect(screen.getByText("Module 52 — current data parser")).toBeVisible();
+    expect(screen.getByText("St Andrews Tank House")).toBeVisible();
+    expect(screen.getByText("Tank Level")).toBeVisible();
+    expect(screen.getByText("1.42")).toBeVisible();
+    // Usage parser section
+    expect(screen.getByText("Module 52 — irrigation usage parser")).toBeVisible();
+    expect(screen.getByText(/2019-02-01/)).toBeVisible();
+    expect(screen.getAllByText("Tank Fill Pump").length).toBeGreaterThan(0);
+    expect(screen.getByText("02/02/2019 21:00")).toBeVisible();
+    expect(screen.getByText("222.8")).toBeVisible();
+    // Parser checks
+    expect(screen.getByText("Parser checks")).toBeVisible();
+    expect(screen.getByText(/duration_parser/)).toBeVisible();
+    expect(screen.getByText(/documented_sample/)).toBeVisible();
+  });
+
+  it("renders detailed checks even when backend overall is fail with HTTP 200", async () => {
+    mocks.maitProxy.mockResolvedValue({
+      ...DEEP_PASS_RESULT,
+      data: {
+        ...DEEP_PASS_RESULT.data,
+        overall: "fail",
+        checks: [
+          { key: "module_list", status: "pass", message: "Module list returned." },
+          { key: "volume_parser", status: "fail", message: "No volume columns found." },
+        ],
+      },
+    });
+    mountCard();
+    await runDeepAndSettle();
+    expect(screen.getByText("FAIL")).toBeVisible();
+    // Detailed sections/checks are preserved, not thrown away.
+    expect(screen.getByText("Parser checks")).toBeVisible();
+    expect(screen.getByText(/volume_parser/)).toBeVisible();
+    expect(screen.getByText(/No volume columns found/)).toBeVisible();
+    expect(screen.getByText("St Andrews Tank House")).toBeVisible();
+  });
+
+  it("renders PARTIAL prominently for HTTP 206 truncated data", async () => {
+    mocks.maitProxy.mockResolvedValue({ ...DEEP_PASS_RESULT, status: 206, partial: true });
+    mountCard();
+    await runDeepAndSettle();
+    expect(screen.getByText("PARTIAL")).toBeVisible();
+    expect(screen.getByText(/truncated the response \(HTTP 206\)/)).toBeVisible();
+    expect(screen.queryByText("PASS")).not.toBeInTheDocument();
+  });
+
+  it("reuses the typed error handling for permission failures", async () => {
+    mocks.maitProxy.mockRejectedValue(
+      new Error("You do not have permission to use this MAIT action for this vineyard."),
+    );
+    mountCard();
+    await runDeepAndSettle();
+    expect(screen.getByText("FAIL")).toBeVisible();
+    expect(
+      screen.getByText(
+        "The signed-in account or selected vineyard context is not authorised to run this diagnostic.",
+      ),
+    ).toBeVisible();
+    // Read-only guarantee still visible on error results.
+    const readOnlyRow = screen.getByText("Read-only").closest("div")!;
+    expect(readOnlyRow.textContent).toContain("Yes");
+  });
+
+  it("disables the deep-test button without a selected vineyard", () => {
+    mocks.vineyardId = null;
+    mountCard();
+    expect(screen.getByRole("button", { name: "Run full MAIT data test" })).toBeDisabled();
+    expect(mocks.maitProxy).not.toHaveBeenCalled();
+  });
+});
+
 describe("System Admin API section placement", () => {
   it("exposes the diagnostic on the admin Integrations API tab for system admins only", async () => {
     render(
