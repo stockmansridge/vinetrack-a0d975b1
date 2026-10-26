@@ -1,8 +1,8 @@
 # Roadmap
 
 ## Weather provider setup help
-- [ ] Restore visible Davis setup-help access while preserving its existing instructions and configuration flow.
-- [ ] Add MAIT card help with customer setup instructions; verify focused weather/MAIT tests and preview compilation, without publication.
+- [x] Restore visible Davis setup-help access in both configured states, opening the unchanged existing setup content and flow.
+- [x] Add MAIT card help with seven customer setup steps and irrigation guidance; 141 weather/MAIT tests passed across 8 files (5 new help tests). Preview build OK; separate typecheck not run (automatic compilation owns that check). Isolated desktop/mobile dialog verified; no backend/mobile changes or publication.
 
 ## Weather Settings visual refinement
 - [x] Match requested contained modules, compact five-column provider comparison, centred actions and source-card geometry.
