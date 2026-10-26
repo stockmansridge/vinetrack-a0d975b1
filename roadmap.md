@@ -1,8 +1,8 @@
 # Roadmap
 
 ## Dashboard automatic weather refresh race
-- [ ] Wait for resolved local observation provider before automatic refresh/throttle; preserve manual path and resolver/fallback contracts.
-- [ ] Prove delayed WU/Davis/MAIT resolution, resolved none, manual refresh and five-minute throttle with focused regressions; verify preview compilation. No backend/mobile changes or publication.
+- [x] Wait for successful local observation provider resolution before automatic refresh/throttle; preserve manual path and resolver/fallback contracts.
+- [x] Six new provider-neutral cases prove delayed WU/Davis/MAIT resolution without cache reread/throttle consumption, immediate refresh after resolution, five-minute throttle boundary, cross-provider isolation and unchanged manual refresh; existing resolved-none coverage retained. 187/187 tests passed across 10 files, including 17 dashboard provider tests; automatic preview compilation build OK. No backend/mobile changes or publication.
 
 ## MAIT close-out and separate WU freshness audit
 - [x] Prove sensor mappings prefill from shared weather_mappings by module_id and view-only supplementary reads never call configuration; empty modules remain hidden. MAIT product behavior frozen for real-vineyard acceptance.
