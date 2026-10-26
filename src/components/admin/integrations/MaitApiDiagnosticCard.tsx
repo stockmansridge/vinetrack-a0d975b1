@@ -138,13 +138,6 @@ export function classifyMaitTrialError(error: unknown, testedAt: Date): MaitTria
         "The signed-in account or selected vineyard context is not authorised to run this diagnostic.",
     };
   }
-  if (/could not accept this request/i.test(raw)) {
-    return {
-      ...base,
-      statusLine: "HTTP 400",
-      message: "MAIT rejected the request format.",
-    };
-  }
   if (/could not be reached/i.test(raw)) {
     return {
       ...base,
