@@ -14,6 +14,8 @@ export function maitConfiguration(value: unknown) {
     connection: maitRow(data.connection),
     weatherModule: modules.find(m => m.module_role === 'weather' && m.is_active === true),
     controllerModules: modules.filter(m => m.module_role === 'irrigation_controller' && m.is_active === true),
+    // Supplementary soil/leaf sensors live in separate MAIT modules on the same connection.
+    sensorModules: modules.filter(m => m.module_role === 'sensor' && m.is_active === true),
     weatherMappings: maitRows(data.weather_mappings),
     sync: maitRows(data.sync),
   };
@@ -88,7 +90,11 @@ export function maitWeatherReady(config: ReturnType<typeof maitConfiguration>) {
     MAIT_METRICS.some(([id]) => id !== 'none' && id === m.canonical_metric));
 }
 export function maitConversion(unit: string, metric: string): { multiplier: number; offset: number } | null {
-  const u = unit.trim().toLowerCase().replace(/°/g, '');
+  const raw = unit.trim().toLowerCase();
+  // MAIT reports wind direction with the degree symbol itself ("°") as the unit.
+  // Check the raw unit before the degree symbol is stripped for temperature handling.
+  if (metric === 'wind_direction' && ['°', 'deg', 'degree', 'degrees'].includes(raw)) return { multiplier: 1, offset: 0 };
+  const u = raw.replace(/°/g, '');
   if (metric === 'none') return { multiplier: 1, offset: 0 };
   if (['air_temperature', 'soil_temperature'].includes(metric)) {
     if (['c', 'celsius'].includes(u)) return { multiplier: 1, offset: 0 };
@@ -106,8 +112,47 @@ export function maitConversion(unit: string, metric: string): { multiplier: numb
     if (['in', 'inches'].includes(base)) return { multiplier: 25.4, offset: 0 };
   }
   if (['relative_humidity', 'soil_moisture'].includes(metric) && u === '%') return { multiplier: 1, offset: 0 };
-  if (metric === 'wind_direction' && ['degrees', 'deg'].includes(u)) return { multiplier: 1, offset: 0 };
   return null;
+}
+// Label-based wind mapping suggestions only — never auto-saved; the customer
+// still confirms each mapping explicitly.
+export const MAIT_WIND_INTERVAL_HINT = 'MAIT stations may provide interval minimum, average and maximum wind speeds rather than a separate instantaneous value. Review the MAIT labels before confirming.';
+export function maitWindSuggestion(label: string): 'wind_speed' | 'wind_gust' | 'none' | null {
+  const l = label.trim().toLowerCase().replace(/[\s_-]+/g, ' ');
+  if (!l.includes('wind') || !l.includes('speed')) return null;
+  if (/\b(avg|average|mean)\b/.test(l)) return 'wind_speed';
+  if (/\b(max|maximum|gust)\b/.test(l)) return 'wind_gust';
+  if (/\b(min|minimum)\b/.test(l)) return 'none';
+  return null;
+}
+// Supplementary sensor modules accept only these canonical metrics (backend-enforced).
+export const MAIT_SENSOR_METRICS = [
+  ['soil_moisture', 'Soil moisture'], ['soil_temperature', 'Soil temperature'], ['leaf_wetness', 'Leaf wetness'], ['none', 'Ignore'],
+] as const;
+export function setMaitSensorModule(vineyardId: string, moduleId: string, moduleName?: string | null) {
+  return maitRpc('set_mait_intelliweb_sensor_module', vineyardId, { p_module_id: moduleId, p_module_name: moduleName ?? null });
+}
+export function removeMaitSensorModule(vineyardId: string, moduleId: string) {
+  return maitRpc('remove_mait_intelliweb_sensor_module', vineyardId, { p_module_id: moduleId });
+}
+export interface MaitSupplementaryModule {
+  module_id: string; module_name: string | null; status: 'ok' | 'no_data' | 'error';
+  partial: boolean; observed_at: string | null;
+  readings: { canonical_metric: string; channel_key: string; channel_number: number | null; source_label: string | null; source_unit: string | null; raw_value: number | null; value: number | null }[];
+}
+// Normalise action=supplementary_current; only mapped sensor metrics are shown,
+// never unmapped channels or connection details.
+export function maitSupplementary(data: Row): MaitSupplementaryModule[] {
+  return maitRows(data.modules).map(m => ({
+    module_id: String(m.module_id ?? ''),
+    module_name: m.module_name ?? null,
+    status: (['ok', 'no_data', 'error'] as const).includes(m.status) ? m.status : 'error',
+    partial: m.partial === true,
+    observed_at: m.observed_at ?? null,
+    readings: maitRows(m.readings)
+      .filter(r => MAIT_SENSOR_METRICS.some(([id]) => id !== 'none' && id === r.canonical_metric))
+      .map(r => ({ canonical_metric: String(r.canonical_metric), channel_key: String(r.channel_key ?? ''), channel_number: r.channel_number ?? null, source_label: r.source_label ?? null, source_unit: r.source_unit ?? null, raw_value: r.raw_value ?? null, value: r.value ?? null })),
+  })).filter(m => m.module_id !== '');
 }
 export function maitDateWindow(timezone: string | null, now = new Date()) {
   const today = localToday(timezone, now);

@@ -16,7 +16,7 @@ import { Gauge } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fetchVineyard } from '@/lib/vineyardSettingsQuery';
-import { maitAccess, maitRpc, maitProxy, maitRow, maitConfiguration, maitWeatherReady, maitModules, maitChannels, maitConversion, maitDailyRainConfirmed, saveMaitConnection, MAIT_METRICS, MAIT_PROVIDER, type MaitResult } from '@/lib/maitIntelliwebQuery';
+import { maitAccess, maitRpc, maitProxy, maitRow, maitConfiguration, maitWeatherReady, maitModules, maitChannels, maitConversion, maitDailyRainConfirmed, saveMaitConnection, setMaitSensorModule, removeMaitSensorModule, maitWindSuggestion, maitSupplementary, MAIT_METRICS, MAIT_SENSOR_METRICS, MAIT_WIND_INTERVAL_HINT, MAIT_PROVIDER, type MaitResult } from '@/lib/maitIntelliwebQuery';
 
 type Row = Record<string, any>;
 export function useMait(vineyardId: string) {
@@ -49,6 +49,10 @@ export function MaitWeatherCard({ vineyardId, usedFor }: { vineyardId: string; u
   const [moduleId, setModuleId] = useState('');
   const [channels, setChannels] = useState<Row[] | null>(null);
   const [notice, setNotice] = useState('');
+  const [sensorAdding, setSensorAdding] = useState(false);
+  const [sensorModuleId, setSensorModuleId] = useState('');
+  const [sensorChannels, setSensorChannels] = useState<Record<string, Row[]>>({});
+  const [removingSensor, setRemovingSensor] = useState<Row | null>(null);
   useEffect(() => { setUsername(connection.username ?? ''); setNetworkId(connection.network_id ?? ''); setZone(timezone); setPassword(''); setTested(null); setModuleId(String(weatherModuleId ?? '')); setChannels(null); }, [connection.username, connection.network_id, weatherModuleId, timezone]);
   const refresh = async () => { await qc.invalidateQueries({ queryKey: ['mait', vineyardId] }); await qc.invalidateQueries({ queryKey: ['weather_status', vineyardId] }); await qc.invalidateQueries({ queryKey: ['local-observation-provider', vineyardId] }); await qc.invalidateQueries({ queryKey: ['live_weather', vineyardId] }); };
   const action = useMutation({ mutationFn: async (run: () => Promise<unknown>) => { if (!access.data?.manage) throw new Error('You do not have permission to manage this MAIT connection.'); return run(); }, onError: (e: Error) => setNotice(e.message) });
@@ -58,6 +62,10 @@ export function MaitWeatherCard({ vineyardId, usedFor }: { vineyardId: string; u
   const ready = maitWeatherReady(config);
   const moduleChoices = [...new Map([...(config.weatherModule ? [{ id: String(weatherModuleId), name: config.weatherModule.module_name ?? '' }] : []), ...modules].map(m => [m.id, m])).values()];
   const networkName = tested?.data.network_name ?? tested?.data.network?.name ?? connection.network_name;
+  const sensorModules = config.sensorModules;
+  // Addable sensors exclude the primary weather module, active sensor modules and
+  // modules already configured as irrigation controllers.
+  const addableSensorModules = modules.filter(m => m.id !== String(weatherModuleId ?? '') && !sensorModules.some(s => String(s.module_id) === m.id) && !config.controllerModules.some(c => String(c.module_id) === m.id));
   if (access.isPending) return <Card className="p-4">Checking MAIT access…</Card>;
   const content = <div className="space-y-4">
     <div className="flex flex-wrap items-center gap-3">
@@ -110,17 +118,48 @@ export function MaitWeatherCard({ vineyardId, usedFor }: { vineyardId: string; u
         {!maitDailyRainConfirmed(mappings) && <p className="text-xs text-muted-foreground">Confirm a daily cumulative rainfall channel before enabling rainfall records.</p>}
         <Button disabled={action.isPending || !ready} onClick={() => run(async () => { await maitRpc('set_vineyard_current_observation_provider', vineyardId, { p_provider: MAIT_PROVIDER }); await refresh(); setNotice('MAIT selected for live observations.'); })}>Use MAIT for live observations</Button>
       </div>}
+      {connected && !editing && <div className="space-y-3 border-t pt-4">
+        <h3 className="font-medium">Additional MAIT sensor modules</h3>
+        <p className="text-sm text-muted-foreground">Some MAIT installations store soil moisture, soil temperature or leaf-wetness sensors in separate modules. You can add those modules here using the same MAIT connection — no second username or password is required.</p>
+        <p className="text-xs text-muted-foreground">One MAIT connection → primary weather module, additional sensor modules and irrigation controller modules.</p>
+        {sensorModules.map(sm => <div key={String(sm.module_id)} className="space-y-2 rounded-md border p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium">{sm.module_name || 'Sensor module'} · Module ID {String(sm.module_id)}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" aria-label={`Inspect sensor channels for module ${sm.module_id}`} disabled={action.isPending} onClick={() => run(async () => { const r = await maitProxy(vineyardId, 'inspect_module', { moduleId: sm.module_id, scope: 'existing' }); setSensorChannels(prev => ({ ...prev, [String(sm.module_id)]: maitChannels(r.data) })); if (r.empty) setNotice('MAIT returned no channels or readings.'); })}>Inspect sensor channels</Button>
+              <Button variant="outline" size="sm" aria-label={`Remove sensor module ${sm.module_id}`} disabled={action.isPending} onClick={() => setRemovingSensor(sm)}>Remove sensor module</Button>
+            </div>
+          </div>
+          {sensorChannels[String(sm.module_id)] && <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="p-2">Channel</th><th className="p-2">MAIT label</th><th className="p-2">Unit</th><th className="p-2">Latest value</th><th className="p-2">Use in VineTrack as</th></tr></thead><tbody>{sensorChannels[String(sm.module_id)].map(c => <SensorChannelRow key={`${sm.module_id}:${c.key}`} channel={c} saved={config.weatherMappings.find(m => String(m.channel_key) === c.key && String(m.module_id) === String(sm.module_id))} vineyardId={vineyardId} moduleId={String(sm.module_id)} onSaved={refresh} />)}</tbody></table>{!sensorChannels[String(sm.module_id)].length && <p className="p-2 text-muted-foreground">No channels returned.</p>}</div>}
+        </div>)}
+        {!sensorAdding
+          ? <Button variant="outline" disabled={action.isPending} onClick={() => run(async () => { if (!modules.length) { const r = await maitProxy(vineyardId, 'modules'); setModules(maitModules(r.data)); } setSensorAdding(true); })}>Add sensor module</Button>
+          : <div className="flex flex-wrap items-center gap-2">
+            <Choice label="Sensor module" value={sensorModuleId} onChange={setSensorModuleId} items={addableSensorModules.map(m => ({ value: m.id, label: `${m.id} · ${m.name}` }))} />
+            <Button disabled={action.isPending || !sensorModuleId} onClick={() => run(async () => { await setMaitSensorModule(vineyardId, sensorModuleId, addableSensorModules.find(m => m.id === sensorModuleId)?.name || null); setSensorAdding(false); setSensorModuleId(''); await refresh(); setNotice('Sensor module added. Inspect its channels to map sensors.'); })}>Save sensor module</Button>
+            <Button variant="ghost" onClick={() => { setSensorAdding(false); setSensorModuleId(''); }}>Cancel</Button>
+            {!addableSensorModules.length && <p className="text-sm text-muted-foreground">No additional MAIT modules are available to add.</p>}
+          </div>}
+      </div>}
+      {!connected && !editing && <p className="text-sm text-muted-foreground border-t pt-4">Connect MAIT first. Additional sensor modules use the same saved MAIT connection.</p>}
     </>}
+    {access.data?.view === true && connected && <MaitSupplementaryReadings vineyardId={vineyardId} timezone={timezone} />}
+    <Dialog open={!!removingSensor} onOpenChange={open => { if (!open) setRemovingSensor(null); }}><DialogContent><DialogHeader><DialogTitle>Remove sensor module?</DialogTitle><DialogDescription>This removes the module from VineTrack. It does not change anything in MAIT.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setRemovingSensor(null)}>Cancel</Button><Button variant="destructive" disabled={action.isPending} onClick={() => run(async () => { await removeMaitSensorModule(vineyardId, String(removingSensor.module_id)); setRemovingSensor(null); await refresh(); })}>Remove sensor module</Button></DialogFooter></DialogContent></Dialog>
     <Dialog open={disconnect} onOpenChange={setDisconnect}><DialogContent><DialogHeader><DialogTitle>Disconnect MAIT?</DialogTitle><DialogDescription>The weather station and controllers share this connection. Historical irrigation records will remain unchanged.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setDisconnect(false)}>Cancel</Button><Button variant="destructive" disabled={action.isPending} onClick={() => run(async () => { await maitRpc('remove_mait_intelliweb_connection', vineyardId); setDisconnect(false); setModules([]); setChannels(null); await refresh(); })}>Disconnect</Button></DialogFooter></DialogContent></Dialog>
   </div>;
   if (!usedFor) return <Card id="mait" className="p-4 space-y-4 scroll-mt-6">{content}</Card>;
   return <ProviderConnectionCard id="mait" name="MAIT iNTELLiWeb" mark="MAIT" icon={<Gauge className="h-7 w-7" />} tone="text-task-water" description="Weather stations & sensor networks." configured={connected} provides={PROVIDER_PROVIDES.mait} usedFor={usedFor} help={<MaitSetupHelp />} logoUrl={maitLogo.url}>{content}</ProviderConnectionCard>;
 }
 function ChannelRow({ channel, saved, vineyardId, moduleId, onSaved }: { channel: Row; saved?: Row; vineyardId: string; moduleId: string; onSaved: () => Promise<void> }) {
-  const [metric, setMetric] = useState(saved?.is_active ? saved.canonical_metric : 'none');
+  // Label-based wind suggestion pre-selects the dropdown only; nothing is saved
+  // until the customer presses Confirm mapping.
+  const suggested = saved?.is_active ? null : maitWindSuggestion(channel.label ?? '');
+  const initialMetric = saved?.is_active ? saved.canonical_metric : suggested ?? 'none';
+  const initialConversion = maitConversion(channel.unit, initialMetric);
+  const [metric, setMetric] = useState(initialMetric);
   const [semantics, setSemantics] = useState(saved?.semantics ?? '');
-  const [multiplier, setMultiplier] = useState(String(saved?.conversion_multiplier ?? 1));
-  const [offset, setOffset] = useState(String(saved?.conversion_offset ?? 0));
+  const [multiplier, setMultiplier] = useState(String(saved?.conversion_multiplier ?? initialConversion?.multiplier ?? 1));
+  const [offset, setOffset] = useState(String(saved?.conversion_offset ?? initialConversion?.offset ?? 0));
   const [reviewed, setReviewed] = useState(false);
   const conversion = maitConversion(channel.unit, metric);
   const save = useMutation({ mutationFn: async () => {
@@ -132,8 +171,54 @@ function ChannelRow({ channel, saved, vineyardId, moduleId, onSaved }: { channel
   }, onSuccess: async () => { await onSaved(); toast.success('Channel mapping confirmed'); }, onError: (e: Error) => toast.error(e.message) });
   return <tr className="border-b align-top"><td className="p-2">{channel.number ?? channel.key}</td><td className="p-2">{channel.label || '—'}</td><td className="p-2">{channel.unit || '—'}</td><td className="p-2">{channel.value ?? '—'}</td><td className="p-2 space-y-2 min-w-64">
     <Choice label={`Use channel ${channel.key} as`} value={metric} items={MAIT_METRICS.map(([value, label]) => ({ value, label }))} onChange={v => { setMetric(v); setReviewed(false); setSemantics(''); const c = maitConversion(channel.unit, v); setMultiplier(String(c?.multiplier ?? 1)); setOffset(String(c?.offset ?? 0)); }} />
+    {suggested && <p className="text-xs text-muted-foreground">{MAIT_WIND_INTERVAL_HINT}</p>}
     {metric === 'rainfall' && <Choice label="Rainfall meaning" value={semantics} onChange={setSemantics} items={[{ value: 'daily_cumulative', label: 'Daily cumulative rainfall' }, { value: 'interval', label: 'Interval rainfall (not daily totals)' }, { value: 'unknown', label: 'Other / unknown (not daily totals)' }]} />}
     {metric !== 'none' && <details><summary className="cursor-pointer text-xs text-muted-foreground">{conversion ? 'Advanced conversion' : 'Review unit conversion'}</summary><div className="grid grid-cols-2 gap-2 py-2"><div><Label>Multiplier</Label><Input aria-label={`Channel ${channel.key} multiplier`} type="number" step="any" value={multiplier} onChange={e => { setMultiplier(e.target.value); setReviewed(true); }} /></div><div><Label>Offset</Label><Input aria-label={`Channel ${channel.key} offset`} type="number" step="any" value={offset} onChange={e => { setOffset(e.target.value); setReviewed(true); }} /></div></div>{!conversion && <Button size="sm" variant="outline" onClick={() => setReviewed(true)}>Confirm conversion</Button>}</details>}
     <Button size="sm" variant="outline" disabled={save.isPending || (metric === 'rainfall' && !semantics) || (!conversion && !reviewed && metric !== 'none')} onClick={() => save.mutate()}>Confirm mapping</Button>
   </td></tr>;
+}
+// Supplementary sensor channels map only to soil/leaf metrics and save through
+// the dedicated sensor mapping RPC — never the primary weather mapping RPC.
+function SensorChannelRow({ channel, saved, vineyardId, moduleId, onSaved }: { channel: Row; saved?: Row; vineyardId: string; moduleId: string; onSaved: () => Promise<void> }) {
+  const [metric, setMetric] = useState(saved?.is_active ? saved.canonical_metric : 'none');
+  const [multiplier, setMultiplier] = useState(String(saved?.conversion_multiplier ?? 1));
+  const [offset, setOffset] = useState(String(saved?.conversion_offset ?? 0));
+  const [reviewed, setReviewed] = useState(false);
+  const conversion = maitConversion(channel.unit, metric);
+  const save = useMutation({ mutationFn: async () => {
+    if (!MAIT_SENSOR_METRICS.some(([id]) => id === metric)) throw new Error('Choose a supported sensor metric.');
+    if (!conversion && !reviewed && metric !== 'none') throw new Error('Review unit conversion before confirming.');
+    if (!Number.isFinite(Number(multiplier)) || !Number.isFinite(Number(offset)) || !multiplier.trim() || !offset.trim()) throw new Error('Enter a valid conversion multiplier and offset.');
+    await maitRpc('save_mait_intelliweb_sensor_channel_mapping', vineyardId, { p_module_id: moduleId, p_channel_key: channel.key, p_canonical_metric: metric, p_channel_number: channel.number, p_source_label: channel.label || null, p_source_unit: channel.unit || null, p_semantics: null, p_conversion_multiplier: Number(multiplier), p_conversion_offset: Number(offset), p_is_active: metric !== 'none' });
+  }, onSuccess: async () => { await onSaved(); toast.success('Sensor mapping confirmed'); }, onError: (e: Error) => toast.error(e.message) });
+  return <tr className="border-b align-top"><td className="p-2">{channel.number ?? channel.key}</td><td className="p-2">{channel.label || '—'}</td><td className="p-2">{channel.unit || '—'}</td><td className="p-2">{channel.value ?? '—'}</td><td className="p-2 space-y-2 min-w-64">
+    <Choice label={`Use sensor channel ${channel.key} as`} value={metric} items={MAIT_SENSOR_METRICS.map(([value, label]) => ({ value, label }))} onChange={v => { setMetric(v); setReviewed(false); const c = maitConversion(channel.unit, v); setMultiplier(String(c?.multiplier ?? 1)); setOffset(String(c?.offset ?? 0)); }} />
+    {metric !== 'none' && <details><summary className="cursor-pointer text-xs text-muted-foreground">{conversion ? 'Advanced conversion' : 'Review unit conversion'}</summary><div className="grid grid-cols-2 gap-2 py-2"><div><Label>Multiplier</Label><Input aria-label={`Sensor channel ${channel.key} multiplier`} type="number" step="any" value={multiplier} onChange={e => { setMultiplier(e.target.value); setReviewed(true); }} /></div><div><Label>Offset</Label><Input aria-label={`Sensor channel ${channel.key} offset`} type="number" step="any" value={offset} onChange={e => { setOffset(e.target.value); setReviewed(true); }} /></div></div>{!conversion && <Button size="sm" variant="outline" onClick={() => setReviewed(true)}>Confirm conversion</Button>}</details>}
+    <Button size="sm" variant="outline" disabled={save.isPending || (!conversion && !reviewed && metric !== 'none')} onClick={() => save.mutate()}>Confirm mapping</Button>
+  </td></tr>;
+}
+// Read-only current readings from supplementary sensor modules. Visible to any
+// member who can view MAIT weather; a failed/empty module never affects the
+// primary MAIT weather source.
+export function MaitSupplementaryReadings({ vineyardId, timezone }: { vineyardId: string; timezone: string }) {
+  const query = useQuery({ queryKey: ['mait', vineyardId, 'supplementary-current'], queryFn: () => maitProxy(vineyardId, 'supplementary_current'), retry: false });
+  const modules = query.data ? maitSupplementary(query.data.data) : [];
+  if (!query.data || !modules.length) return null;
+  return <div className="space-y-3 border-t pt-4">
+    <h3 className="font-medium">Additional MAIT sensors</h3>
+    {query.data.partial && <p role="status" className="text-xs text-amber-700 dark:text-amber-300">MAIT returned only partial supplementary sensor data. Primary MAIT weather is unaffected.</p>}
+    {modules.map(m => <div key={m.module_id} className="space-y-1 rounded-md border p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium">{m.module_name || `Module ${m.module_id}`}</span>
+        {m.status === 'ok'
+          ? <Badge className="bg-success/15 text-success border-success/30">Live</Badge>
+          : <Badge variant="outline" className="text-muted-foreground">{m.status === 'no_data' ? 'No recent data' : 'Unavailable'}</Badge>}
+      </div>
+      {m.observed_at && <p className="text-xs text-muted-foreground">Observed {new Date(m.observed_at).toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short', timeZone: timezone })}</p>}
+      {m.status === 'ok' && <ul className="text-sm">{m.readings.map(r => {
+        const label = MAIT_SENSOR_METRICS.find(([id]) => id === r.canonical_metric)?.[1] ?? r.canonical_metric;
+        return <li key={r.channel_key}>{label}: {r.value ?? '—'}{r.value != null && r.source_unit ? ` ${r.source_unit}` : ''}</li>;
+      })}</ul>}
+    </div>)}
+  </div>;
 }
