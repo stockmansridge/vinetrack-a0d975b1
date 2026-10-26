@@ -53,6 +53,12 @@ vi.mock("@/components/BetaAdminBanner", () => ({ BetaAdminBanner: () => null }))
 
 import { MaitApiDiagnosticCard } from "@/components/admin/integrations/MaitApiDiagnosticCard";
 import AdminIntegrationsPage from "@/pages/admin/AdminIntegrationsPage";
+import {
+  maitHttpResult,
+  MAIT_AUTH_FAILED_MESSAGE,
+  MAIT_NO_DATA_MESSAGE,
+  MAIT_BAD_REQUEST_MESSAGE,
+} from "@/lib/maitIntelliwebQuery";
 
 const PASS_RESULT = {
   data: {
@@ -140,10 +146,8 @@ describe("MAIT iNTELLiWeb API diagnostic card", () => {
     expect(screen.queryByText("PASS")).not.toBeInTheDocument();
   });
 
-  it("maps 401 to the MAIT authentication failure message", async () => {
-    mocks.maitProxy.mockRejectedValue(
-      new Error("Your session has expired. Sign in again to use MAIT."),
-    );
+  it("maps a MAIT upstream 401 to the authentication failure message (auth accepted = No)", async () => {
+    mocks.maitProxy.mockRejectedValue(new Error(MAIT_AUTH_FAILED_MESSAGE));
     mountCard();
     await runAndSettle();
     expect(screen.getByText("FAIL")).toBeVisible();
@@ -152,6 +156,52 @@ describe("MAIT iNTELLiWeb API diagnostic card", () => {
         "MAIT authentication failed — the documented trial credentials were not accepted.",
       ),
     ).toBeVisible();
+    const authRow = screen.getByText("MAIT authentication accepted").closest("div")!;
+    expect(authRow.textContent).toContain("No");
+  });
+
+  it("maps a VineTrack session-expired 401 separately (auth accepted = Unknown)", async () => {
+    mocks.maitProxy.mockRejectedValue(
+      new Error("Your session has expired. Sign in again to use MAIT."),
+    );
+    mountCard();
+    await runAndSettle();
+    expect(screen.getByText("FAIL")).toBeVisible();
+    expect(
+      screen.getByText(
+        "Your VineTrack session has expired. Sign in again before running the MAIT diagnostic.",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.queryByText(/documented trial credentials were not accepted/),
+    ).not.toBeInTheDocument();
+    const authRow = screen.getByText("MAIT authentication accepted").closest("div")!;
+    expect(authRow.textContent).toContain("Unknown");
+  });
+
+  it("proves the live mait_no_data 404 envelope throws the stable no-data error", () => {
+    // Live proxy: MAIT upstream 204 -> action=test returns HTTP 404 mait_no_data.
+    expect(() => maitHttpResult(404, { error: "mait_no_data" })).toThrow(MAIT_NO_DATA_MESSAGE);
+    // And a MAIT upstream 401 / 400 stay distinct from a VineTrack session 401.
+    expect(() => maitHttpResult(401, { error: "mait_authentication_failed" })).toThrow(
+      MAIT_AUTH_FAILED_MESSAGE,
+    );
+    expect(() => maitHttpResult(400, { error: "mait_bad_request" })).toThrow(
+      MAIT_BAD_REQUEST_MESSAGE,
+    );
+    expect(() => maitHttpResult(401, {})).toThrow(/session has expired/);
+  });
+
+  it("shows the no-module-data result for the live mait_no_data envelope", async () => {
+    mocks.maitProxy.mockRejectedValue(new Error(MAIT_NO_DATA_MESSAGE));
+    mountCard();
+    await runAndSettle();
+    expect(screen.getByText("FAIL")).toBeVisible();
+    expect(
+      screen.getByText("MAIT accepted the request but returned no module data."),
+    ).toBeVisible();
+    const authRow = screen.getByText("MAIT authentication accepted").closest("div")!;
+    expect(authRow.textContent).toContain("Yes");
   });
 
   it("reports no module data for a 204 / empty response", async () => {
