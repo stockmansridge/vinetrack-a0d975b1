@@ -1,5 +1,10 @@
 # Roadmap
 
+## MAIT close-out and separate WU freshness audit
+- [ ] Prove sensor mappings prefill from shared weather_mappings by module_id and view-only supplementary reads never call configuration.
+- [ ] Audit WU refresh/read/selection/timestamp/error paths independently; change product code only for a proven narrow defect.
+- [ ] Run focused MAIT/weather/access regressions and inspect automatic compilation; no backend/mobile changes or publication.
+
 ## Weather provider setup help
 - [x] Restore visible Davis setup-help access in both configured states, opening the unchanged existing setup content and flow.
 - [x] Add MAIT card help with seven customer setup steps and irrigation guidance; 141 weather/MAIT tests passed across 8 files (5 new help tests). Preview build OK; separate typecheck not run (automatic compilation owns that check). Isolated desktop/mobile dialog verified; no backend/mobile changes or publication.
