@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { ProviderConnectionCard } from "@/components/weather/ProviderConnectionCard";
 import davisLogo from "@/assets/providers/davis-instruments.png.asset.json";
 import willyWeatherLogo from "@/assets/providers/willyweather.png.asset.json";
-import weatherUndergroundLogo from "@/assets/providers/weather-underground.jpg.asset.json";
+import weatherUndergroundLogo from "@/assets/providers/weather-underground-transparent.png";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1733,7 +1733,7 @@ function WundergroundCard({
   const configured = merged.configured;
 
   return (
-    <ProviderConnectionCard name="Weather Underground" mark="WU" icon={<Thermometer className="h-7 w-7" />} tone="text-task-slashing" description="Personal weather station readings." configured={configured} provides={PROVIDER_PROVIDES.wunderground} usedFor={usedFor} logoUrl={weatherUndergroundLogo.url}>
+    <ProviderConnectionCard name="Weather Underground" mark="WU" icon={<Thermometer className="h-7 w-7" />} tone="text-task-slashing" description="Personal weather station readings." configured={configured} provides={PROVIDER_PROVIDES.wunderground} usedFor={usedFor} logoUrl={weatherUndergroundLogo}>
       <div className="space-y-4">
 
           <p className="text-xs text-muted-foreground">
