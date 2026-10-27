@@ -201,7 +201,7 @@ export function UploadSampleDialog({
               </ul>
             )}
             <p className="text-xs text-muted-foreground">
-              VineTrack will read each report and ask you to confirm the extracted details before
+              VineTrack will read the report and ask you to confirm the extracted details before
               they are saved as confirmed data. The original files are kept as evidence and are
               never replaced.
             </p>
