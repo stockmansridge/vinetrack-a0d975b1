@@ -96,7 +96,20 @@ import { varietyKeyOf } from "@/lib/grapeAllocationModel";
 import { initialYieldTab, type YieldTab } from "@/lib/yieldTab";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 import { buildVarietyMap, resolvePaddockAllocations, useGrapeVarieties } from "@/lib/varietyResolver";
-import { summariseYieldSession, type SessionBlockInfo } from "@/lib/yieldSessionSummary";
+import { summariseYieldSession, type SessionBlockInfo, type SummariseOptions } from "@/lib/yieldSessionSummary";
+import {
+  BUNCH_WEIGHT_SOURCE_LABEL,
+  resolveBlockBunchWeight,
+  useYieldBunchWeights,
+} from "@/lib/yieldBunchWeights";
+import {
+  ESTIMATE_SOURCE_LABEL,
+  resolveBlockEstimateSource,
+  type BlockEstimateSource,
+} from "@/lib/yieldEstimateSource";
+import BunchWeightsPanel from "@/components/yield/BunchWeightsPanel";
+import ScoutStopsMap from "@/components/scout/ScoutStopsMap";
+import { parsePolygonPoints } from "@/lib/paddockGeometry";
 import RecordActualYieldDialog from "@/components/yield/RecordActualYieldDialog";
 import YieldDamageAdjustmentPanel from "@/components/YieldDamageAdjustmentPanel";
 import { Fragment } from "react";
@@ -362,19 +375,39 @@ export default function YieldReportsPage() {
     return list;
   }, [allRows, tab, from, to, activeVintage, completion, filter, rowVintage]);
 
+  // Master bunch weights (block override → variety master; no 150 g fallback).
+  // Refetching after a save recalculates every current trip estimate.
+  const bunchWeightsQ = useYieldBunchWeights(selectedVineyardId);
+  const bunchWeightFor = useMemo<NonNullable<SummariseOptions["bunchWeightFor"]>>(() => {
+    const rows = bunchWeightsQ.data ?? [];
+    const varietiesByBlock = new Map<string, { name: string | null; percent: number | null }[]>();
+    for (const b of blocksQ.data ?? []) {
+      varietiesByBlock.set(
+        b.id.toLowerCase(),
+        resolvePaddockAllocations(b.varietyAllocations, varietyMap).map((a) => ({
+          name: a.name ?? null,
+          percent: a.percent ?? null,
+        })),
+      );
+    }
+    return (blockId: string) =>
+      resolveBlockBunchWeight(rows, blockId, varietiesByBlock.get(blockId.toLowerCase()) ?? []);
+  }, [bunchWeightsQ.data, blocksQ.data, varietyMap]);
+
   // Session totals come from the same parser the detail sheet uses — one calculation only.
   const sessionSummaries = useMemo(() => {
     const blocks = blocksQ.data ?? [];
     const map = new Map<string, ReturnType<typeof summariseYieldSession>>();
-    for (const s of sessions) map.set(s.id, summariseYieldSession(s.payload, { blocks }));
+    for (const s of sessions) map.set(s.id, summariseYieldSession(s.payload, { blocks, bunchWeightFor }));
     return map;
-  }, [sessions, blocksQ.data]);
+  }, [sessions, blocksQ.data, bunchWeightFor]);
 
   /** Every session as a Bunch Count Trip, newest first (sql/187). */
   const trips = useMemo(
     () =>
       buildBunchCountTrips(sessions, {
         blocks: blocksQ.data ?? [],
+        bunchWeightFor,
         vintageOf: (iso) => {
           const d = new Date(iso);
           return Number.isNaN(d.getTime())
@@ -382,7 +415,7 @@ export default function YieldReportsPage() {
             : vintageForDate(d, seasonStartMonth, seasonStartDay);
         },
       }),
-    [sessions, blocksQ.data, seasonStartMonth, seasonStartDay],
+    [sessions, blocksQ.data, seasonStartMonth, seasonStartDay, bunchWeightFor],
   );
 
   /** Latest completed trip per block for the selected vintage — never summed. */
@@ -552,17 +585,21 @@ export default function YieldReportsPage() {
     const varietyTonnes = new Map<string, { name: string | null; tonnes: number; complete: boolean }>();
     const blockVarietyTonnes = new Map<string, { tonnes: number; complete: boolean }>();
 
-    const bunchByBlock = new Map<string, number>();
+    // A completed trip owns its block even when its tonnes are unavailable —
+    // never a silent fallback to the pruning estimate.
+    const sourceByBlock = new Map<string, BlockEstimateSource>();
     for (const [key, est] of currentEstimates) {
-      if (est.tonnes == null) continue;
-      bunchByBlock.set(key, est.tonnes);
-      estimatedByBlock.set(key, est.tonnes);
+      const src = resolveBlockEstimateSource(est, null);
+      sourceByBlock.set(key, src);
+      if (src.tonnes != null) estimatedByBlock.set(key, src.tonnes);
     }
 
     for (const block of seasonModel.blocks) {
       infoByBlock.set(block.paddockId.toLowerCase(), block);
       const bk = block.paddockId.toLowerCase();
-      const blockTonnes = bunchByBlock.get(bk) ?? block.tonnes;
+      const src = sourceByBlock.get(bk) ?? resolveBlockEstimateSource(undefined, block.tonnes);
+      sourceByBlock.set(bk, src);
+      const blockTonnes = src.tonnes;
       if (blockTonnes != null) estimatedByBlock.set(bk, blockTonnes);
 
       const shares = splitBlockEstimateToGroups(block, blockTonnes);
@@ -597,7 +634,7 @@ export default function YieldReportsPage() {
     const estimatedByBlockVariety = new Map<string, number>();
     for (const [k, v] of blockVarietyTonnes) if (v.complete) estimatedByBlockVariety.set(k, v.tonnes);
 
-    return { estimatedByBlock, estimatedByAllocation, estimatedByVariety, estimatedByBlockVariety, infoByBlock };
+    return { estimatedByBlock, estimatedByAllocation, estimatedByVariety, estimatedByBlockVariety, infoByBlock, sourceByBlock };
   }, [seasonModel, currentEstimates, plantingUnits]);
 
   // ---- Overview (quick view) for the selected vintage -----------------------
@@ -754,6 +791,7 @@ export default function YieldReportsPage() {
           >
             Yield Estimate Trips ({sessions.length})
           </TabsTrigger>
+          <TabsTrigger value="bunch-weights">Bunch Weights</TabsTrigger>
           <TabsTrigger
             value="historical"
           >
@@ -841,6 +879,17 @@ export default function YieldReportsPage() {
           />
         </TabsContent>
 
+        <TabsContent value="bunch-weights" className="mt-4">
+          <BunchWeightsPanel
+            vineyardId={selectedVineyardId}
+            role={currentRole}
+            blocks={allocationBlocks}
+            rows={bunchWeightsQ.data ?? []}
+            loading={bunchWeightsQ.isLoading}
+            error={bunchWeightsQ.error as Error | null}
+          />
+        </TabsContent>
+
         <TabsContent value="overview" className="mt-4 space-y-3">
           <SeasonEstimateHeader
             model={seasonModel}
@@ -855,6 +904,8 @@ export default function YieldReportsPage() {
             vintage={activeVintage === ANY ? null : activeVintage}
             estimateInfo={seasonEstimates.infoByBlock}
             bunchCountBlocks={currentEstimates}
+            sourceByBlock={seasonEstimates.sourceByBlock}
+            bunchWeightFor={bunchWeightFor}
           />
 
         </TabsContent>
@@ -1086,11 +1137,15 @@ function YieldOverviewGrid({
   vintage,
   estimateInfo,
   bunchCountBlocks,
+  sourceByBlock,
+  bunchWeightFor,
 }: {
   cards: OverviewBlockCard[];
   vintage: string | null;
   estimateInfo?: Map<string, SeasonYieldBlockEstimate>;
   bunchCountBlocks?: Map<string, unknown>;
+  sourceByBlock?: Map<string, BlockEstimateSource>;
+  bunchWeightFor?: NonNullable<SummariseOptions["bunchWeightFor"]>;
 }) {
   const rf = useRegionFormatters();
   if (!cards.length) {
@@ -1110,6 +1165,8 @@ function YieldOverviewGrid({
         {cards.map((c) => {
           const head = headline(c.estimatedTonnes, c.actualTonnes);
           const info = estimateInfo?.get(c.blockId.toLowerCase());
+          const src = sourceByBlock?.get(c.blockId.toLowerCase());
+          const weight = bunchWeightFor?.(c.blockId);
           return (
             <Card key={c.blockId} className="p-4 space-y-2.5">
               <div className="flex items-baseline justify-between gap-2">
@@ -1127,11 +1184,17 @@ function YieldOverviewGrid({
                 </div>
               </div>
 
+              <EstimateSourceLine source={src} weight={weight} />
+
               {!head && (
                 <div className="space-y-0.5">
                   <div className="text-[26px] font-bold leading-none text-muted-foreground">—</div>
                   <div className="text-xs text-muted-foreground">
-                    {info?.warnings.length
+                    {src?.unavailableReason === "bunch_weight_required"
+                      ? "Bunch weight required — set it on the Bunch Weights tab"
+                      : src?.unavailableReason === "vine_count_required"
+                      ? "Vine count required for this block"
+                      : info?.warnings.length
                       ? setupWarningLabel(info.warnings[0])
                       : "No estimate calculated yet"}
                   </div>
@@ -1252,6 +1315,47 @@ function YieldOverviewGrid({
   );
 }
 
+/** Estimate source + bunch weight in use; text labels, colour is secondary. */
+export function EstimateSourceLine({
+  source,
+  weight,
+}: {
+  source?: BlockEstimateSource;
+  weight?: { grams: number | null; source: keyof typeof BUNCH_WEIGHT_SOURCE_LABEL };
+}) {
+  if (!source && !weight) return null;
+  const isTrip = source?.kind === "yield_estimate_trip";
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-xs" data-testid="estimate-source-line">
+      {source && (
+        <Badge
+          variant="outline"
+          className={
+            isTrip
+              ? "border-primary/40 bg-primary/10 text-primary"
+              : "border-accent-foreground/30 bg-accent text-accent-foreground"
+          }
+        >
+          {ESTIMATE_SOURCE_LABEL[source.kind]}
+        </Badge>
+      )}
+      {weight && (
+        <span className="text-muted-foreground">
+          Bunch weight:{" "}
+          {weight.grams != null ? (
+            <span className="font-medium text-foreground tabular-nums">
+              {fmtNum(weight.grams, 1)} g
+            </span>
+          ) : (
+            <span className="font-medium text-destructive">Bunch weight not set</span>
+          )}
+          {weight.grams != null && ` · ${BUNCH_WEIGHT_SOURCE_LABEL[weight.source]}`}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** Which number leads a card: actual harvest always supersedes the estimate. */
 export function headline(
   estimated: number | null | undefined,
@@ -1292,10 +1396,12 @@ function YieldSheet({
   onDelete,
   deleting,
   canDelete,
+  bunchWeightFor,
 }: {
   row: AnyRow | null;
   vineyardId: string | null;
   blocks: SessionBlockInfo[];
+  bunchWeightFor?: SummariseOptions["bunchWeightFor"];
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onDelete: (row: AnyRow) => void;
@@ -1307,7 +1413,7 @@ function YieldSheet({
   const isHistorical = row?.__kind === "historical";
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-xl lg:w-[40vw] lg:max-w-[40vw] overflow-y-auto">
         <SheetHeader>
           <SheetTitle>
             {isHistorical ? "Historical yield" : "Estimation session"}
@@ -1318,7 +1424,7 @@ function YieldSheet({
           <HistoricalDetail row={row as HistoricalYieldRecord} vineyardId={vineyardId} />
         )}
         {row?.__kind === "session" && (
-          <SessionDetail row={row as YieldEstimationSession} blocks={blocks} />
+          <SessionDetail row={row as YieldEstimationSession} blocks={blocks} bunchWeightFor={bunchWeightFor} />
         )}
         {row && canDelete && (
           <div className="mt-6 border-t pt-4">
@@ -1402,6 +1508,31 @@ function HistoricalDetail({ row, vineyardId }: { row: HistoricalYieldRecord; vin
   );
 }
 
+/** Measured sample GPS points + block outlines for the trip map. */
+export function sessionSampleMapData(
+  summary: ReturnType<typeof summariseYieldSession>,
+  blocks: (SessionBlockInfo & { boundary?: [number, number][] })[],
+) {
+  const markers = summary.blocks.flatMap((b) =>
+    b.sites
+      .filter((s) => s.lat != null && s.lon != null && s.bunchesPerVine != null)
+      .map((s, i) => ({
+        id: `${b.blockId ?? "unknown"}-${s.siteIndex ?? i}-${i}`,
+        lat: s.lat as number,
+        lng: s.lon as number,
+        title: `${b.blockName ?? "Block"}${s.rowNumber != null ? ` · Row ${s.rowNumber}` : ""}${
+          s.bunchesPerVine != null ? ` · ${s.bunchesPerVine} bunches/vine` : ""
+        }`,
+        colour: "hsl(var(--primary))",
+      })),
+  );
+  const ids = new Set(summary.blocks.map((b) => (b.blockId ?? "").toLowerCase()));
+  const boundaries = blocks
+    .filter((b) => ids.has(b.id.toLowerCase()) && (b.boundary?.length ?? 0) > 2)
+    .map((b) => ({ id: b.id, name: b.name ?? null, ring: b.boundary as [number, number][] }));
+  return { markers, boundaries };
+}
+
 function fmtCoord(lat: any, lon: any): string | null {
   const la = Number(lat);
   const lo = Number(lon);
@@ -1412,18 +1543,21 @@ function fmtCoord(lat: any, lon: any): string | null {
 function SessionDetail({
   row,
   blocks,
+  bunchWeightFor,
 }: {
   row: YieldEstimationSession;
   blocks: SessionBlockInfo[];
+  bunchWeightFor?: SummariseOptions["bunchWeightFor"];
 }) {
   const rf = useRegionFormatters();
   const fmtDate = mkFmtDate(rf);
   const areaVal = mkAreaVal(rf);
   const yieldPerArea = mkYieldPerArea(rf);
   const summary = useMemo(
-    () => summariseYieldSession(row.payload, { blocks }),
-    [row.payload, blocks],
+    () => summariseYieldSession(row.payload, { blocks, bunchWeightFor }),
+    [row.payload, blocks, bunchWeightFor],
   );
+  const map = useMemo(() => sessionSampleMapData(summary, blocks), [summary, blocks]);
   const showDev = import.meta.env.DEV;
 
   return (
@@ -1444,6 +1578,15 @@ function SessionDetail({
         )}
       </Section>
 
+      <Section title="Sample locations">
+        <ScoutStopsMap
+          markers={map.markers}
+          boundaries={map.boundaries}
+          emptyMessage="No sample GPS locations or block boundaries are recorded for this trip."
+          footer={`${map.markers.length} recorded sample location${map.markers.length === 1 ? "" : "s"}. Markers show measured GPS only.`}
+        />
+      </Section>
+
       {summary.blocks.length > 0 ? (
         <Section title={`Blocks sampled (${summary.blocks.length})`}>
           <div className="space-y-3">
@@ -1459,9 +1602,23 @@ function SessionDetail({
                   <Field label="Sample sites" value={`${b.recordedCount} / ${b.siteCount}`} />
                   <Field label="Avg bunches / vine" value={fmtNum(b.avgBunchesPerVine)} />
                   <Field
-                    label="Avg bunch weight (kg)"
-                    value={`${fmtNum(b.bunchWeightKg, 3)}${b.bunchWeightIsDefault ? " (default)" : ""}`}
+                    label="Bunch weight (current)"
+                    value={
+                      b.bunchWeightKg != null
+                        ? `${fmtNum(b.bunchWeightKg * 1000, 1)} g · ${
+                            b.bunchWeightSource === "recorded"
+                              ? "Recorded on trip"
+                              : BUNCH_WEIGHT_SOURCE_LABEL[b.bunchWeightSource]
+                          }`
+                        : "Bunch weight not set"
+                    }
                   />
+                  {b.recordedBunchWeightKg != null && b.bunchWeightSource !== "recorded" && (
+                    <Field
+                      label="Recorded on trip (historical)"
+                      value={`${fmtNum(b.recordedBunchWeightKg * 1000, 1)} g`}
+                    />
+                  )}
                   <Field label="Vines" value={b.totalVines != null ? fmtNum(b.totalVines, 0) : "—"} />
                   {b.areaHa != null && <Field label="Area" value={areaVal(b.areaHa)} />}
                   <Field label="Total bunches" value={fmtNum(b.totalBunches, 0)} />
@@ -1541,7 +1698,7 @@ function SessionDetail({
             />
             {(summary.missing.bunchWeight || summary.missing.vines) && (
               <p className="text-xs text-muted-foreground pt-1">
-                {summary.missing.bunchWeight && "Some blocks use the default 0.15 kg bunch weight. "}
+                {summary.missing.bunchWeight && "Some blocks have no bunch weight set, so they are excluded from the total. "}
                 {summary.missing.vines && "Some blocks have no vine count, so they are excluded from the total."}
               </p>
             )}
@@ -1553,6 +1710,7 @@ function SessionDetail({
               calculate tonnes:
             </p>
             <ul className="list-disc list-inside text-xs text-muted-foreground space-y-0.5">
+              {summary.missing.bunchWeight && <li>Bunch weight (set it on the Bunch Weights tab)</li>}
               {summary.missing.vines && <li>Vine count on the block (set vine spacing or a vine count override)</li>}
               {summary.missing.area && <li>Block area (map the block boundary)</li>}
             </ul>
