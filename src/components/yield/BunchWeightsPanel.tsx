@@ -247,7 +247,28 @@ export default function BunchWeightsPanel({
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{fmtG(master.grams)}</TableCell>
                       <TableCell>
-                        <SourceBadge source={master.source} />
+                        {(() => {
+                          if (master.source !== "not_configured") return <SourceBadge source={master.source} />;
+                          const set = v.blocks.filter(
+                            (b) => resolveBunchWeight(rows, b.id, v.key).source === "block_override",
+                          ).length;
+                          if (set > 0 && set === v.blocks.length)
+                            return (
+                              <Badge variant="outline" className={`text-[10px] ${SOURCE_BADGE.block_override}`}>
+                                Configured per block
+                              </Badge>
+                            );
+                          if (set > 0)
+                            return (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] border-warning/40 bg-warning/10 text-warning"
+                              >
+                                Partially configured
+                              </Badge>
+                            );
+                          return <SourceBadge source="not_configured" />;
+                        })()}
                       </TableCell>
                       <TableCell>
                         {canEdit && (
