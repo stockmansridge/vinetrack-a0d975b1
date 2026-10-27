@@ -378,14 +378,29 @@ function safeFileName(name: string): string {
 export interface UploadSoilSampleInput {
   file: File;
   vineyardId: string;
-  sampledAt: string | null;
-  laboratory: string | null;
-  labPaddockName: string | null;
-  labSampleId: string | null;
-  depthFromCm: number | null;
-  depthToCm: number | null;
-  notes: string | null;
   uploadedBy: string | null;
+}
+
+/**
+ * Extracts a safe, human-readable detail from a Functions invocation error.
+ * FunctionsHttpError carries the response as `context`; when the function
+ * returned a JSON body with detail/error/message we surface that. Auth
+ * headers and tokens are never read or included.
+ */
+export async function describeFunctionError(e: unknown): Promise<string> {
+  const anyErr = e as any;
+  const ctx = anyErr?.context;
+  if (ctx && typeof ctx.json === "function") {
+    try {
+      const body = await ctx.json();
+      const detail = body?.detail ?? body?.error ?? body?.message;
+      if (typeof detail === "string" && detail.trim()) return detail;
+    } catch {
+      // fall through to the generic message
+    }
+  }
+  const msg = anyErr?.message;
+  return typeof msg === "string" && msg.trim() ? msg : String(e);
 }
 
 export interface UploadSoilSampleOutcome {
