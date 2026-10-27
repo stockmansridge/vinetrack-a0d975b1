@@ -48,7 +48,9 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
   const [dateTo, setDateTo] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
-  const [retryError, setRetryError] = useState<string | null>(null);
+  // Extraction failures render through the shared concise notice; only
+  // non-extraction problems (e.g. a missing document) use plain text.
+  const [retryFailure, setRetryFailure] = useState<{ raw: string | null; plain?: string } | null>(null);
   const qc = useQueryClient();
 
   // Retry reuses the existing sample + primary document ids; the evidence
