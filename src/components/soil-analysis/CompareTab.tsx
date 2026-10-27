@@ -27,6 +27,7 @@ import {
   formatMapValue,
   COMPARE_PROVISIONAL_BADGE,
 } from "@/lib/soilAnalysis";
+import { SoilAnalyteCombobox } from "./SoilAnalyteCombobox";
 import { formatDate } from "@/pages/admin/_shared";
 
 const db = supabase as any;
@@ -183,15 +184,12 @@ export function CompareTab() {
           </div>
           {mode === "values" && presentAnalytes.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
-              <select className={selectClass} value={analyteKey} onChange={(e) => setAnalyteKey(e.target.value)} aria-label="Compare analyte">
-                {categories.map((c) => (
-                  <optgroup key={c} label={c}>
-                    {presentAnalytes.filter((a) => (a.category ?? "Other") === c).map((a) => (
-                      <option key={a.key} value={a.key}>{a.display_name}</option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+              <SoilAnalyteCombobox
+                ariaLabel="Compare analyte"
+                value={analyteKey}
+                options={presentAnalytes.map((a) => ({ key: a.key, name: a.display_name, category: a.category ?? "Other" }))}
+                onChange={setAnalyteKey}
+              />
               {seriesOptions.length > 1 && (
                 <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Compare series">
                   <span className="text-xs text-muted-foreground">Series:</span>

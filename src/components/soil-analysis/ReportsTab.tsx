@@ -28,6 +28,7 @@ import {
   type SoilReportSeries,
 } from "@/lib/soilAnalysis";
 import { formatDate } from "@/pages/admin/_shared";
+import { SoilAnalyteCombobox } from "./SoilAnalyteCombobox";
 import { SoilReportMap, type SoilMapMode } from "./SoilReportMap";
 import { DEFAULT_SOIL_MAP_LABEL_MODE, type SoilMapLabelMode } from "@/lib/soilAnalysis";
 
@@ -180,27 +181,19 @@ export function ReportsTab({ onOpenSample }: { onOpenSample: (id: string) => voi
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Analyte</Label>
-              <select
-                className={selectClass}
+              <SoilAnalyteCombobox
+                ariaLabel="Report analyte"
                 value={analyteKey}
-                onChange={(e) => {
-                  setAnalyteKey(e.target.value);
-                  const options = seriesForAnalyte(series, e.target.value);
+                options={analyteGroups.flatMap(([category, items]) =>
+                  items.map((s) => ({ key: s.analyte_key, name: s.analyte_name, category })),
+                )}
+                onChange={(key) => {
+                  setAnalyteKey(key);
+                  const options = seriesForAnalyte(series, key);
                   setChosenSeriesKey(options.length === 1 ? seriesKey(options[0]) : "");
                   setSelectedPaddockId(null);
                 }}
-                aria-label="Report analyte"
-              >
-                {analyteGroups.map(([category, items]) => (
-                  <optgroup key={category} label={category}>
-                    {items.map((s) => (
-                      <option key={s.analyte_key} value={s.analyte_key}>
-                        {s.analyte_name}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+              />
             </div>
             {analyteSeries.length > 1 && (
               <div className="space-y-1">
