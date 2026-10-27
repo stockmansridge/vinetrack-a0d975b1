@@ -32,39 +32,45 @@ function SoilAnalysisInner() {
   const openSample = (id: string) => navigate(`/admin/soil-analysis/samples/${id}`);
 
   return (
-    <div className="p-4 md:p-6 max-w-6xl">
-      <AdminPageHeader
-        title="Soil Analysis"
-        subtitle="Laboratory soil reports, block mapping and trends"
-      />
-      <div className="flex items-center gap-2 mb-3">
-        <BetaAdminBanner />
-        <Badge variant="outline" className="border-warning/50 bg-warning/10 text-warning-foreground shrink-0">
-          Preview
-        </Badge>
+    // Reports uses the full Portal workspace width; the header, banner, tab
+    // strip and the other tabs keep the comfortable max-w-6xl column.
+    <div className="p-4 md:p-6 w-full max-w-none">
+      <div className="max-w-6xl">
+        <AdminPageHeader
+          title="Soil Analysis"
+          subtitle="Laboratory soil reports, block mapping and trends"
+        />
+        <div className="flex items-center gap-2 mb-3">
+          <BetaAdminBanner />
+          <Badge variant="outline" className="border-warning/50 bg-warning/10 text-warning-foreground shrink-0">
+            Preview
+          </Badge>
+        </div>
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setParams({ tab: v }, { replace: true })}>
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="samples">Soil Samples</TabsTrigger>
-          <TabsTrigger value="trends">Trends</TabsTrigger>
-          <TabsTrigger value="compare">Compare</TabsTrigger>
-          <TabsTrigger value="reports">Reports</TabsTrigger>
-        </TabsList>
-        <TabsContent value="overview" className="mt-4">
+        <div className="max-w-6xl">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="samples">Soil Samples</TabsTrigger>
+            <TabsTrigger value="trends">Trends</TabsTrigger>
+            <TabsTrigger value="compare">Compare</TabsTrigger>
+            <TabsTrigger value="reports">Reports</TabsTrigger>
+          </TabsList>
+        </div>
+        <TabsContent value="overview" className="mt-4 max-w-6xl">
           <OverviewTab onOpenSample={openSample} />
         </TabsContent>
-        <TabsContent value="samples" className="mt-4">
+        <TabsContent value="samples" className="mt-4 max-w-6xl">
           <SamplesTab onOpenSample={openSample} />
         </TabsContent>
-        <TabsContent value="trends" className="mt-4">
+        <TabsContent value="trends" className="mt-4 max-w-6xl">
           <TrendsTab />
         </TabsContent>
-        <TabsContent value="compare" className="mt-4">
+        <TabsContent value="compare" className="mt-4 max-w-6xl">
           <CompareTab />
         </TabsContent>
-        <TabsContent value="reports" className="mt-4">
+        <TabsContent value="reports" className="mt-4 w-full max-w-none">
           <ReportsTab onOpenSample={openSample} />
         </TabsContent>
       </Tabs>

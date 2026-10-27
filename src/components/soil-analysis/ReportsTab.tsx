@@ -148,8 +148,8 @@ export function ReportsTab({ onOpenSample }: { onOpenSample: (id: string) => voi
   };
 
   return (
-    <div className="space-y-4">
-      <Card>
+    <div className="space-y-4 w-full max-w-none">
+      <Card className="w-full max-w-none">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Vineyard soil map</CardTitle>
         </CardHeader>
