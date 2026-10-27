@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FileText } from "lucide-react";
+import { FileText, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { BetaAdminBanner } from "@/components/BetaAdminBanner";
@@ -28,6 +28,7 @@ import {
   updateSoilResult,
   confirmSoilSample,
   retrySoilExtraction,
+  isSoilSampleDeletable,
   listAnalyteCatalogue,
   SAMPLE_STATUS_LABEL,
   SAMPLE_SCOPE_LABEL,
@@ -37,6 +38,7 @@ import {
   type SoilSampleScope,
 } from "@/lib/soilAnalysis";
 import { ExtractionErrorNotice } from "@/components/soil-analysis/ExtractionErrorNotice";
+import { DeleteSampleDialog } from "@/components/soil-analysis/DeleteSampleDialog";
 
 const db = supabase as any;
 
@@ -87,6 +89,7 @@ function DetailInner() {
   // A failed retry shows the concise notice with the raw detail collapsed;
   // saveState stays reserved for plain status text.
   const [retryFailure, setRetryFailure] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const sample = detailQuery.data?.sample;
   useEffect(() => {
@@ -494,6 +497,30 @@ function DetailInner() {
         {retryFailure && <ExtractionErrorNotice raw={retryFailure} />}
         {saveState && <span className="text-sm text-muted-foreground">{saveState}</span>}
       </div>
+
+      {isSoilSampleDeletable(sample.extraction_status) && (
+        <div className="mt-6 border-t pt-4">
+          <Button
+            variant="destructive"
+            className="gap-1.5"
+            onClick={() => setDeleteOpen(true)}
+          >
+            <Trash2 className="h-4 w-4" /> Delete sample permanently
+          </Button>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Only unapproved samples can be deleted. Confirmed samples are protected.
+          </p>
+        </div>
+      )}
+      <DeleteSampleDialog
+        sample={sample}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onDeleted={() => {
+          qc.invalidateQueries({ queryKey: ["soil-analysis"] });
+          navigate("/admin/soil-analysis?tab=samples");
+        }}
+      />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 // Soil Analysis — Stage 1 System Admin preview landing page.
-// Tabs: Overview | Soil Samples | Trends | Compare | Reports (coming soon).
+// Tabs: Overview | Soil Samples | Trends | Compare | Reports.
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import { OverviewTab } from "@/components/soil-analysis/OverviewTab";
 import { SamplesTab } from "@/components/soil-analysis/SamplesTab";
 import { TrendsTab } from "@/components/soil-analysis/TrendsTab";
 import { CompareTab } from "@/components/soil-analysis/CompareTab";
+import { ReportsTab } from "@/components/soil-analysis/ReportsTab";
 
 const TABS = ["overview", "samples", "trends", "compare", "reports"] as const;
 type SoilTab = (typeof TABS)[number];
@@ -49,9 +50,7 @@ function SoilAnalysisInner() {
           <TabsTrigger value="samples">Soil Samples</TabsTrigger>
           <TabsTrigger value="trends">Trends</TabsTrigger>
           <TabsTrigger value="compare">Compare</TabsTrigger>
-          <TabsTrigger value="reports" disabled title="Reports arrive in a later stage">
-            Reports (soon)
-          </TabsTrigger>
+          <TabsTrigger value="reports">Reports</TabsTrigger>
         </TabsList>
         <TabsContent value="overview" className="mt-4">
           <OverviewTab onOpenSample={openSample} />
@@ -64,6 +63,9 @@ function SoilAnalysisInner() {
         </TabsContent>
         <TabsContent value="compare" className="mt-4">
           <CompareTab />
+        </TabsContent>
+        <TabsContent value="reports" className="mt-4">
+          <ReportsTab onOpenSample={openSample} />
         </TabsContent>
       </Tabs>
     </div>

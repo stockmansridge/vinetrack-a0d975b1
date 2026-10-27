@@ -6,12 +6,13 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Upload } from "lucide-react";
+import { Trash2, Upload } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
 import {
   listSoilSamples,
   retrySoilExtraction,
+  isSoilSampleDeletable,
   SAMPLE_STATUS_LABEL,
   SAMPLE_SCOPE_LABEL,
   type SoilSample,
@@ -19,6 +20,7 @@ import {
 } from "@/lib/soilAnalysis";
 import { formatDate } from "@/pages/admin/_shared";
 import { UploadSampleDialog } from "./UploadSampleDialog";
+import { DeleteSampleDialog } from "./DeleteSampleDialog";
 import { ExtractionErrorNotice } from "./ExtractionErrorNotice";
 
 const db = supabase as any;
@@ -49,6 +51,7 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
   const [dateTo, setDateTo] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SoilSample | null>(null);
   // Extraction failures render through the shared concise notice; only
   // non-extraction problems (e.g. a missing document) use plain text.
   const [retryFailure, setRetryFailure] = useState<{ raw: string | null; plain?: string } | null>(null);
@@ -175,6 +178,7 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
                 <th className="px-4 py-2 font-medium">Depth</th>
                 <th className="px-4 py-2 font-medium">Lab / sample ID</th>
                 <th className="px-4 py-2 font-medium">Status</th>
+                <th className="px-4 py-2 font-medium"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -208,6 +212,22 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
                       )}
                     </div>
                   </td>
+                  <td className="px-4 py-2 text-right">
+                    {isSoilSampleDeletable(s.extraction_status) && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget(s);
+                        }}
+                        aria-label={`Delete ${s.lab_paddock_name ?? "sample"} permanently`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -225,6 +245,14 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
         open={uploadOpen}
         onOpenChange={setUploadOpen}
         onUploaded={(sample) => onOpenSample(sample.id)}
+      />
+      <DeleteSampleDialog
+        sample={deleteTarget}
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        onDeleted={() => qc.invalidateQueries({ queryKey: ["soil-analysis"] })}
       />
     </div>
   );
