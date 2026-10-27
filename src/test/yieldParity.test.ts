@@ -96,14 +96,14 @@ describe("yield estimation session parser", () => {
     expect(b.recordedCount).toBe(2);
     expect(b.avgBunchesPerVine).toBe(25);
     expect(b.bunchWeightKg).toBe(0.2);
-    expect(b.bunchWeightIsDefault).toBe(false);
+    expect(b.bunchWeightSource).toBe("recorded");
     expect(b.totalBunches).toBe(25000);
     expect(b.estimatedYieldTonnes).toBeCloseTo(5, 6);
     expect(s.totalEstTonnes).toBeCloseTo(5, 6);
     expect(s.samplesPerHectare).toBe(20);
   });
 
-  it("falls back to the legacy flat bunch weight and defaults", () => {
+  it("falls back to the legacy flat bunch weight, never to 0.15 kg", () => {
     const s = summariseYieldSession(
       { ...canonical, blockBunchWeightsKg: undefined, averageBunchWeightKg: 0.18 },
       { blocks: [{ id: blockId, name: "Block A", areaHa: 2, vineCount: 1000 }] },
@@ -114,8 +114,11 @@ describe("yield estimation session parser", () => {
       { ...canonical, blockBunchWeightsKg: undefined },
       { blocks: [{ id: blockId, name: "Block A", areaHa: 2, vineCount: 1000 }] },
     );
-    expect(d.blocks[0].bunchWeightKg).toBe(0.15);
-    expect(d.blocks[0].bunchWeightIsDefault).toBe(true);
+    // No silent 0.15 kg fallback: unknown weight → no manufactured tonnes.
+    expect(d.blocks[0].bunchWeightKg).toBeNull();
+    expect(d.blocks[0].bunchWeightSource).toBe("not_configured");
+    expect(d.blocks[0].estimatedYieldTonnes).toBeNull();
+    expect(d.missing.bunchWeight).toBe(true);
   });
 
   it("reports missing vine counts instead of guessing", () => {
