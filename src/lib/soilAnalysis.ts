@@ -43,7 +43,7 @@ export type SoilDocumentExtractionStatus =
   | "review_required"
   | "failed";
 
-export type SoilSampleScope = "unmapped" | "whole_block" | "row_range" | "point";
+export type SoilSampleScope = "unmapped" | "whole_block" | "row_range" | "point" | "multi_block";
 
 export type SoilDesiredDirection = "range" | "higher" | "lower" | "context_only";
 
@@ -162,6 +162,180 @@ export interface SoilBlockAlias {
 }
 
 // ---------------------------------------------------------------------------
+// Block mappings — one laboratory sample can cover MULTIPLE VineTrack blocks.
+// public.soil_sample_block_mappings is the authority. The legacy
+// soil_samples.sample_scope / paddock_id / row_start / row_end columns are
+// synchronised by the soil_analysis_set_block_mappings RPC (0 mappings =>
+// unmapped, 1 => legacy fields set, >1 => multi_block) and are only ever a
+// display fallback for rows that predate the backfill. The Portal NEVER
+// forces a multi-block sample into one paddock_id.
+// ---------------------------------------------------------------------------
+
+export type SoilMappingScope = "whole_block" | "row_range";
+
+export interface SoilBlockMapping {
+  id: string;
+  sample_id: string;
+  vineyard_id: string;
+  paddock_id: string;
+  mapping_scope: SoilMappingScope;
+  row_start: number | null;
+  row_end: number | null;
+  mapping_confidence: number | null;
+  notes: string | null;
+  sort_order: number;
+  // joined display field
+  block_name?: string | null;
+}
+
+/** Editable mapping row (review UI) — identity is always the paddock_id. */
+export interface SoilBlockMappingInput {
+  paddock_id: string;
+  mapping_scope: SoilMappingScope;
+  row_start: number | null;
+  row_end: number | null;
+}
+
+export async function listSampleBlockMappings(sampleId: string): Promise<SoilBlockMapping[]> {
+  const { data, error } = await db
+    .from("soil_sample_block_mappings")
+    .select("*, paddocks(name)")
+    .eq("sample_id", sampleId)
+    .order("sort_order")
+    .order("id");
+  if (error) throw error;
+  return (data ?? []).map((row: any) => ({
+    ...row,
+    block_name: row.paddocks?.name ?? null,
+    paddocks: undefined,
+  })) as SoilBlockMapping[];
+}
+
+/** Mappings for many samples at once, keyed by sample_id (list/overview). */
+export async function listBlockMappingsForSamples(
+  sampleIds: string[],
+): Promise<Map<string, SoilBlockMapping[]>> {
+  const map = new Map<string, SoilBlockMapping[]>();
+  if (sampleIds.length === 0) return map;
+  const { data, error } = await db
+    .from("soil_sample_block_mappings")
+    .select("*, paddocks(name)")
+    .in("sample_id", sampleIds)
+    .order("sort_order")
+    .order("id");
+  if (error) throw error;
+  for (const row of data ?? []) {
+    const mapping = {
+      ...row,
+      block_name: (row as any).paddocks?.name ?? null,
+      paddocks: undefined,
+    } as SoilBlockMapping;
+    map.set(mapping.sample_id, [...(map.get(mapping.sample_id) ?? []), mapping]);
+  }
+  return map;
+}
+
+export const MAPPING_BLOCK_REQUIRED_MESSAGE = "Choose a block for each block-coverage row.";
+export const MAPPING_ROWS_REQUIRED_MESSAGE =
+  "Enter valid row numbers for each row-range row (Row to must be greater than or equal to Row from).";
+export const MAPPING_EMPTY_MESSAGE =
+  "Add at least one block-coverage row, or choose Not mapped.";
+
+/**
+ * Client-side validation for the repeatable block-coverage list. Fails
+ * closed with a human message BEFORE any write, so an invalid state (e.g.
+ * the old row_range-with-no-block case) can never reach the database.
+ */
+export function validateBlockMappings(rows: SoilBlockMappingInput[]): string | null {
+  if (rows.length === 0) return MAPPING_EMPTY_MESSAGE;
+  for (const row of rows) {
+    if (!row.paddock_id) return MAPPING_BLOCK_REQUIRED_MESSAGE;
+    if (row.mapping_scope === "row_range") {
+      const from = row.row_start;
+      const to = row.row_end;
+      if (
+        from == null ||
+        to == null ||
+        !Number.isInteger(from) ||
+        !Number.isInteger(to) ||
+        from < 1 ||
+        to < from
+      ) {
+        return MAPPING_ROWS_REQUIRED_MESSAGE;
+      }
+    }
+  }
+  return null;
+}
+
+/** RPC payload — row bounds are only sent for row-range rows. */
+export function buildMappingPayload(rows: SoilBlockMappingInput[]): Array<Record<string, unknown>> {
+  return rows.map((r) => ({
+    paddock_id: r.paddock_id,
+    mapping_scope: r.mapping_scope,
+    row_start: r.mapping_scope === "row_range" ? r.row_start : null,
+    row_end: r.mapping_scope === "row_range" ? r.row_end : null,
+    mapping_confidence: null,
+    notes: null,
+  }));
+}
+
+/**
+ * Atomically REPLACES the sample's block mappings in ONE call. The RPC also
+ * synchronises the legacy soil_samples fields (including multi_block), so
+ * the Portal never writes sample_scope/paddock_id/row_start/row_end directly
+ * for block coverage.
+ */
+export async function setSoilSampleBlockMappings(
+  sampleId: string,
+  rows: SoilBlockMappingInput[],
+): Promise<void> {
+  const { error } = await db.rpc("soil_analysis_set_block_mappings", {
+    p_sample_id: sampleId,
+    p_mappings: buildMappingPayload(rows),
+  });
+  if (error) throw error;
+}
+
+/** One line per mapping, for tooltips/popovers on multi-block samples. */
+export function mappingSummaryLines(mappings: SoilBlockMapping[]): string[] {
+  return mappings.map((m) =>
+    m.mapping_scope === "row_range"
+      ? `${m.block_name ?? "Block"} · Rows ${m.row_start ?? "?"}–${m.row_end ?? "?"}`
+      : `${m.block_name ?? "Block"} · Whole block`,
+  );
+}
+
+/**
+ * Display label for the VineTrack mapping column. Mapping rows are the
+ * authority; the legacy sample fields are only used when no mapping rows
+ * exist. A multi-block sample is never collapsed to one arbitrary block.
+ */
+export function mappingSummaryLabel(
+  sample: Pick<SoilSample, "sample_scope" | "paddock_id" | "row_start" | "row_end" | "block_name">,
+  mappings: SoilBlockMapping[] | undefined,
+): string {
+  const rows = mappings ?? [];
+  if (rows.length === 1) {
+    const m = rows[0];
+    return m.mapping_scope === "row_range"
+      ? `${m.block_name ?? "Block"} · Rows ${m.row_start ?? "?"}–${m.row_end ?? "?"}`
+      : (m.block_name ?? "Whole block");
+  }
+  if (rows.length > 1) return `${rows.length} blocks`;
+  // Legacy fallback only — no mapping rows exist for this sample.
+  if (sample.sample_scope === "row_range" && sample.paddock_id) {
+    return `${sample.block_name ?? "Block"} · Rows ${sample.row_start ?? "?"}–${sample.row_end ?? "?"}`;
+  }
+  if (sample.sample_scope === "whole_block" && sample.paddock_id) {
+    return sample.block_name ?? "Whole block";
+  }
+  if (sample.sample_scope === "point") return `${sample.block_name ?? "Block"} (point)`;
+  if (sample.sample_scope === "multi_block") return "Multiple blocks";
+  return SAMPLE_SCOPE_LABEL.unmapped;
+}
+
+// ---------------------------------------------------------------------------
 // Labels — restrained, lab-status-only language
 // ---------------------------------------------------------------------------
 
@@ -186,6 +360,7 @@ export const SAMPLE_SCOPE_LABEL: Record<SoilSampleScope, string> = {
   whole_block: "Whole block",
   row_range: "Row range",
   point: "Point",
+  multi_block: "Multiple blocks",
 };
 
 /** Lab-status display. Green is never labelled as an agronomic guarantee. */
