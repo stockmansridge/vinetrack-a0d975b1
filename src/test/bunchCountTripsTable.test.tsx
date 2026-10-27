@@ -52,11 +52,36 @@ describe("Yield Estimate Trips table", () => {
     const { trip, cells } = setup({ multiple: true });
     expect(trip.totalEstimatedTonnes).toBe(7);
     expect(trip.summary.totalAreaHa).toBe(3);
+    expect(trip.summary.sampledAreaHa).toBe(3);
     expect(cells[6]).toHaveTextContent(/^2\.33 t\/ha$/);
   });
 
   it("shows dashes without a master even when historical weights exist", () => {
     const { trip, cells } = setup({ weight: null });
+    expect(trip.totalEstimatedTonnes).toBeNull();
+    expect(cells[5]).toHaveTextContent(/^—$/);
+    expect(cells[6]).toHaveTextContent(/^—$/);
+  });
+
+  it("excludes selected blocks without recorded samples from the density denominator", () => {
+    const { trip, cells } = setup({ multiple: true, unsampled: true });
+    expect(trip.summary.blocks.find((b) => b.blockId === "c")?.recordedCount).toBe(0);
+    expect(trip.summary.totalAreaHa).toBe(7);
+    expect(trip.summary.sampledAreaHa).toBe(3);
+    expect(trip.totalEstimatedTonnes).toBe(7);
+    expect(cells[6]).toHaveTextContent(/^2\.33 t\/ha$/);
+  });
+
+  it("keeps the single sampled block density unchanged", () => {
+    const { trip, cells } = setup();
+    expect(trip.summary.sampledAreaHa).toBe(2);
+    expect(trip.totalEstimatedTonnes).toBe(5);
+    expect(cells[6]).toHaveTextContent(/^2\.5 t\/ha$/);
+  });
+
+  it("keeps missing-master density unknown with an unsampled selected block", () => {
+    const { trip, cells } = setup({ multiple: true, unsampled: true, weight: null });
+    expect(trip.summary.sampledAreaHa).toBe(3);
     expect(trip.totalEstimatedTonnes).toBeNull();
     expect(cells[5]).toHaveTextContent(/^—$/);
     expect(cells[6]).toHaveTextContent(/^—$/);

@@ -86,6 +86,8 @@ export interface SessionSummary {
   routeSourceSessionId: string | null;
   blocks: SessionBlockSummary[];
   totalAreaHa: number | null;
+  /** Physical area of blocks with recorded bunch counts only; trip-table density denominator. */
+  sampledAreaHa: number | null;
   totalEstTonnes: number | null;
   /** Undamaged total — always recoverable. */
   totalBaseTonnes: number | null;
@@ -324,6 +326,10 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
   blocks.sort((a, b) => (a.blockName ?? "").localeCompare(b.blockName ?? ""));
 
   const areaValues = blocks.map((b) => b.areaHa).filter((v): v is number => v != null);
+  const sampledAreaValues = blocks
+    .filter((b) => b.recordedCount > 0)
+    .map((b) => b.areaHa)
+    .filter((v): v is number => v != null);
   const tonnesValues = blocks
     .map((b) => b.estimatedYieldTonnes)
     .filter((v): v is number => v != null);
@@ -340,6 +346,7 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
     routeSourceSessionId,
     blocks,
     totalAreaHa: areaValues.length ? areaValues.reduce((a, b) => a + b, 0) : null,
+    sampledAreaHa: sampledAreaValues.length ? sampledAreaValues.reduce((a, b) => a + b, 0) : null,
     totalEstTonnes: tonnesValues.length ? tonnesValues.reduce((a, b) => a + b, 0) : null,
     totalBaseTonnes: baseValues.length ? baseValues.reduce((a, b) => a + b, 0) : null,
     hasAnySamples: blocks.some((b) => b.recordedCount > 0),

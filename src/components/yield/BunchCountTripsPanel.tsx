@@ -143,7 +143,7 @@ export default function BunchCountTripsPanel({
             {trips.map((t) => {
               const isCurrent = liveTripIds.has(t.id);
               const open = expanded === t.id;
-              const areaHa = t.summary.totalAreaHa;
+              const areaHa = t.summary.sampledAreaHa;
               const blockNames = (t.sampledBlocks.length
                 ? t.sampledBlocks.map((b) => b.blockName ?? "Unnamed block")
                 : t.blockNames).join(", ");
