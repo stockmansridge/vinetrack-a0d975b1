@@ -46,6 +46,10 @@ const STEPS = [
     title: "Reports",
     body: "Use the vineyard soil map to see how a selected analyte varies across your blocks. Switch between measured values and laboratory status, select blocks for detail, and use the as-of date to review earlier results.",
   },
+  {
+    title: "Traffic Lights",
+    body: "See the latest laboratory status grouped into Low, Satisfactory and High across your selected blocks. VineTrack preserves the laboratory's exact status wording; results without one of those statuses remain under Other / Not stated rather than being reinterpreted.",
+  },
 ] as const;
 
 export default function SoilAnalysisHelpDialog() {
@@ -69,7 +73,7 @@ export default function SoilAnalysisHelpDialog() {
             <DialogTitle className="text-xl">How Soil Analysis Works</DialogTitle>
             <DialogDescription className="sr-only">
               How to upload, review, map and confirm soil samples, and use Trends, Compare and
-              Reports.
+              Traffic Lights and Reports.
             </DialogDescription>
           </DialogHeader>
 
