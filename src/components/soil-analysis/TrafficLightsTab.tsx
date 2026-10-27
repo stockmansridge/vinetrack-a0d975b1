@@ -98,7 +98,9 @@ export function TrafficLightsTab() {
                 <h3 className={`flex items-center gap-2 border-b pb-2 text-sm font-semibold uppercase ${section.accent}`}><Circle className="h-3 w-3 fill-current" aria-hidden />{section.title} · {counts[section.bucket]}</h3>
                 {!group.size && <p className="text-sm text-muted-foreground">No results</p>}
                 {[...group.values()].sort((a, b) => name(a[0]).localeCompare(name(b[0])) || a[0].analyteKey.localeCompare(b[0].analyteKey)).map((items) => {
-                  const raw = items.flatMap((s) => s.entries);
+                  // Compare metadata across every visible latest snapshot for this analyte,
+                  // even when its blocks sit in different traffic sections.
+                  const raw = filtered.filter((s) => s.analyteKey === items[0].analyteKey).flatMap((s) => s.entries);
                   const mixed = new Set(raw.map((r) => JSON.stringify([r.method?.trim().toLowerCase() || null, r.unit?.trim() || null]))).size > 1;
                   return <article key={items[0].analyteKey} className={`min-w-0 rounded-md border ${section.surface}`}>
                     <header className="px-3 py-2"><h4 className="font-semibold">{name(items[0])}</h4>
