@@ -1,5 +1,10 @@
 # Roadmap
 
+## Soil Analysis pre-release improvements
+- [ ] Verify existing multi-block Trends against requested block-isolation and selection safeguards.
+- [ ] Add confirmed, mapping-aware Traffic Lights latest snapshots, source-status groups, filters and eighth help topic.
+- [ ] Run focused and release regressions; verify desktop/mobile presentation and report final revision. No backend/mobile changes or publication.
+
 ## Soil Analysis multi-block Trends (Portal only)
 - [x] Add analyte-filtered multi-block reads and shared block selection; preserve existing lifecycle semantics.
 - [x] Render compatible series with separate per-block raw points, date averages, summaries and Block-first table; update only Trends help copy.
