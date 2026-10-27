@@ -1051,6 +1051,7 @@ export default function YieldReportsPage() {
         onDelete={(r) => del.mutate(r)}
         deleting={del.isPending}
         canDelete={canManageYields}
+        bunchWeightFor={bunchWeightFor}
       />
 
 

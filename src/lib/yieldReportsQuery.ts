@@ -21,6 +21,7 @@
 //   live inside `payload` / `block_results` JSONB. Therefore the only safe
 //   relationship is `vineyard_id`.
 import { supabase } from "@/integrations/ios-supabase/client";
+import { parsePolygonPoints } from "@/lib/paddockGeometry";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { authoritativeVineCount, physicalVineCountOverride } from "@/lib/paddockRowVines";
 import type { SessionBlockInfo } from "@/lib/yieldSessionSummary";
@@ -118,6 +119,8 @@ export type YieldBlockInfo = SessionBlockInfo & {
   /** Active physical override (block or COMPLETE row total), else null. */
   physicalVineCount: number | null;
   vineCountSource: "block_override" | "row_effective" | "fallback";
+  /** Block outline as [lat, lng] (trip sample map context). */
+  boundary?: [number, number][];
 };
 
 /** Pure mapper: authoritative vine count (same as Block Overview). */
@@ -132,6 +135,7 @@ export function toYieldBlockInfo(p: any): YieldBlockInfo {
     physicalVineCount: physicalVineCountOverride(p)?.count ?? null,
     vineCountSource: auth.source,
     varietyAllocations: p.variety_allocations ?? null,
+    boundary: parsePolygonPoints(p.polygon_points).map((pt) => [pt.lat, pt.lng] as [number, number]),
   };
 }
 
