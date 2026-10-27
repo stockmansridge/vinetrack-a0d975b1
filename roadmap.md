@@ -1,9 +1,11 @@
 # Roadmap
 
 ## Released Traffic Lights refinement
-- [ ] Add explicit latest/as-of controls, direct status filtering, clickable counts and collapsed analyte detail.
-- [ ] Add optional cached AI screening through the deployed endpoint only, preserving source statuses and safe errors.
-- [ ] Run Soil Analysis/release regressions, verify desktop/mobile and live endpoint where session permits, then publish the Portal and report revision.
+- [x] Add explicit latest/as-of controls, direct status filtering, clickable counts and collapsed analyte detail.
+- [x] Add optional cached AI screening through the deployed endpoint only, preserving source statuses and safe errors; sorted unique ids, max 150 per call, one-hour session cache, no automatic retries.
+- [x] Final regressions: 329 tests across 22 files passed. Desktop/mobile isolated fixture flow verified High-only view, raw links, labelled AI/source statuses, on/off restoration/cache and time controls; no overflow/runtime errors. Automatic preview compilation clean.
+- [ ] Live endpoint/vineyard acceptance — blocked: no managed preview auth users; external vineyard session unavailable, so endpoint envelope and real classifications remain unverified.
+- [ ] Publish the tested Portal refinement and report revision.
 
 ## Soil Analysis pre-release improvements
 - [x] Verify existing multi-block Trends against requested block-isolation and selection safeguards (17 existing tests); implementation already complete and preserved.
