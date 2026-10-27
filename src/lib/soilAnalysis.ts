@@ -1,7 +1,8 @@
-// Soil Analysis — Stage 1 System Admin preview (Portal only).
+// Soil Analysis — released customer feature (Portal).
 //
 // Data authority is the shared VineTrack backend. The live tables are
-// System Admin-only under RLS; this module is the single place that names
+// vineyard-scoped under RLS (members read; owner/manager/supervisor/operator
+// and System Admin support write); this module is the single place that names
 // their columns so any schema adjustment by the database owner lands in
 // one file.
 //
@@ -10,17 +11,15 @@
 //   are immutable extraction provenance; user corrections only ever write
 //   value_numeric / value_text / analyte_key and set is_user_corrected.
 // - method / unit / lab range / lab status have no duplicate source copies
-//   in the schema, so the Portal treats them as read-only in Stage 1.
+//   in the schema, so the Portal treats them as read-only.
 // - The uploaded document is evidence and is never replaced or deleted.
 // - No agronomic recommendations: status language comes only from the
 //   laboratory's own range/status fields and catalogue desired_direction.
 
 import { supabase } from "@/integrations/ios-supabase/client";
-import { SOIL_ANALYSIS_FLAG } from "@/lib/navigationConfig";
 
 const db = supabase as any;
 
-export { SOIL_ANALYSIS_FLAG };
 export const SOIL_DOCUMENT_BUCKET = "soil-analysis-documents";
 export const SOIL_EXTRACT_FUNCTION = "soil-analysis-extract";
 
@@ -957,8 +956,8 @@ export async function uploadSoilSample(input: UploadSoilSampleInput): Promise<Up
     .single();
   if (docErr) throw docErr;
 
-  // Invoke the live parser. It verifies the JWT and re-checks System Admin +
-  // the preview flag server-side, then moves records to review_required or
+  // Invoke the live parser. It verifies the JWT and vineyard
+  // membership server-side, then moves records to review_required or
   // failed. An invocation failure must not strand the upload at "pending".
   try {
     const { error: fnErr } = await supabase.functions.invoke(SOIL_EXTRACT_FUNCTION, {
@@ -1129,7 +1128,7 @@ export async function confirmSoilSample(
 }
 
 // method / unit / lab range / lab status are intentionally NOT editable in
-// Stage 1: the schema keeps no duplicate source copies for them, so a Portal
+// The schema keeps no duplicate source copies for them, so a Portal
 // edit would silently overwrite extraction evidence.
 const RESULT_EDITABLE_FIELDS = [
   "analyte_key",

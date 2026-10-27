@@ -1,11 +1,9 @@
-// Soil Analysis — Stage 1 System Admin preview landing page.
+// Soil Analysis — customer-facing landing page (Resources). Access is the
+// normal RequireVineyard + role route matrix; backend RLS is vineyard-scoped.
 // Tabs: Overview | Soil Samples | Trends | Compare | Reports.
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { BetaAdminBanner } from "@/components/BetaAdminBanner";
 import { AdminPageHeader } from "./_shared";
-import { SoilAnalysisGate } from "@/components/soil-analysis/SoilAnalysisGate";
 import { OverviewTab } from "@/components/soil-analysis/OverviewTab";
 import { SamplesTab } from "@/components/soil-analysis/SamplesTab";
 import { TrendsTab } from "@/components/soil-analysis/TrendsTab";
@@ -16,20 +14,12 @@ const TABS = ["overview", "samples", "trends", "compare", "reports"] as const;
 type SoilTab = (typeof TABS)[number];
 
 export default function SoilAnalysisPage() {
-  return (
-    <SoilAnalysisGate>
-      <SoilAnalysisInner />
-    </SoilAnalysisGate>
-  );
-}
-
-function SoilAnalysisInner() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const raw = params.get("tab") ?? "overview";
   const tab: SoilTab = (TABS as readonly string[]).includes(raw) ? (raw as SoilTab) : "overview";
 
-  const openSample = (id: string) => navigate(`/admin/soil-analysis/samples/${id}`);
+  const openSample = (id: string) => navigate(`/soil-analysis/samples/${id}`);
 
   return (
     // Reports uses the full Portal workspace width; the header, banner, tab
@@ -40,12 +30,6 @@ function SoilAnalysisInner() {
           title="Soil Analysis"
           subtitle="Laboratory soil reports, block mapping and trends"
         />
-        <div className="flex items-center gap-2 mb-3">
-          <BetaAdminBanner />
-          <Badge variant="outline" className="border-warning/50 bg-warning/10 text-warning-foreground shrink-0">
-            Preview
-          </Badge>
-        </div>
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setParams({ tab: v }, { replace: true })}>

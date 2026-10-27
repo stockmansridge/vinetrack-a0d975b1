@@ -232,8 +232,7 @@ describe("preserved behaviour", () => {
     expect(lib).toContain('db.rpc("soil_analysis_report_series"');
     expect(lib).toContain('db.rpc("soil_analysis_map_report"');
   });
-  it("System Admin + feature flag gate is unchanged", () => {
-    const gate = readFileSync("src/components/soil-analysis/SoilAnalysisGate.tsx", "utf8");
-    expect(gate).toContain("SOIL_ANALYSIS_FLAG");
+  it("released feature has no System Admin / flag gate", () => {
+    expect(detail).not.toContain("SoilAnalysisGate");
   });
 });

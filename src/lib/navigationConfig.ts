@@ -43,7 +43,6 @@ import { canAccessRoute } from "@/lib/rolePermissions";
 import { isAustralianVineyard } from "@/lib/wineGrapeLevyAccess";
 
 /** Feature flag gating the Stage 1 Soil Analysis admin preview. */
-export const SOIL_ANALYSIS_FLAG = "soil_analysis_admin_preview";
 
 export type NavGroup = "Overview" | "Vineyard" | "Work" | "Resources" | "Settings";
 
@@ -468,6 +467,34 @@ export const ACTIVITIES: NavActivity[] = [
     ],
   },
   {
+    id: "soil-analysis",
+    label: "Soil Analysis",
+    group: "Resources",
+    icon: FlaskConical,
+    views: [
+      {
+        id: "soil-analysis.overview",
+        label: "Soil Analysis",
+        path: "/soil-analysis",
+        family: ["/soil-analysis/samples"],
+        keywords: [
+          "soil",
+          "soil analysis",
+          "soil sample",
+          "laboratory",
+          "lab report",
+          "nutrition",
+          "carbon",
+          "pH",
+          "nutrients",
+          "trends",
+          "compare",
+          "soil map",
+        ],
+      },
+    ],
+  },
+  {
     id: "reports",
     label: "Reports & Exports",
     group: "Resources",
@@ -616,7 +643,6 @@ const SYSTEM_ADMIN_ITEM_LIST: SystemAdminItem[] = [
   { label: "Invitations", path: "/admin/invitations", icon: UserCog },
   { label: "Integrations", path: "/admin/integrations", icon: Plug },
   { label: "Chemical Catalogue Review", path: "/admin/chemical-v3", icon: Beaker },
-  { label: "Soil Analysis (Preview)", path: "/admin/soil-analysis", icon: FlaskConical, featureFlag: SOIL_ANALYSIS_FLAG },
   { label: "Block Troubleshooter", path: "/admin/block-troubleshooter", icon: ShieldCheck },
   { label: "Support Requests", path: "/admin/support-requests", icon: AlertTriangle },
   { label: "Email List", path: "/admin/email-list", icon: Mail },
@@ -669,7 +695,6 @@ export const SYSTEM_ADMIN_GROUPS: SystemAdminGroup[] = [
       systemAdminItem("Work Tasks"),
       systemAdminItem("Trips"),
       systemAdminItem("Chemical Catalogue Review"),
-      systemAdminItem("Soil Analysis (Preview)"),
     ],
   },
   {

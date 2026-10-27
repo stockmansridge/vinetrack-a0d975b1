@@ -3,7 +3,7 @@
 // Editable metadata and block mapping write only to the live metadata /
 // mapping columns; source_value_numeric / source_value_text provenance is
 // shown read-only and never overwritten. method / unit / lab range / lab
-// status are read-only in Stage 1 because the schema keeps no duplicate
+// status are read-only because the schema keeps no duplicate
 // source copies for them. Saving edits never confirms a sample — only the
 // explicit Confirm action sets confirmed + verified_by + verified_at.
 // The original document opens through a short-lived signed URL.
@@ -18,9 +18,7 @@ import { Label } from "@/components/ui/label";
 import { FileText, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useAuth } from "@/context/AuthContext";
-import { BetaAdminBanner } from "@/components/BetaAdminBanner";
 import { AdminPageHeader, formatDate } from "./_shared";
-import { SoilAnalysisGate } from "@/components/soil-analysis/SoilAnalysisGate";
 import {
   getSoilSampleDetail,
   getSoilDocumentSignedUrl,
@@ -66,11 +64,7 @@ import { DeleteSampleDialog } from "@/components/soil-analysis/DeleteSampleDialo
 const db = supabase as any;
 
 export default function SoilSampleDetailPage() {
-  return (
-    <SoilAnalysisGate>
-      <DetailInner />
-    </SoilAnalysisGate>
-  );
+  return <DetailInner />;
 }
 
 function DetailInner() {
@@ -372,9 +366,8 @@ function DetailInner() {
       <AdminPageHeader
         title="Review soil sample"
         subtitle={`${sample.vineyard_name ?? "Vineyard"} · ${formatDate(sample.sampled_at)}`}
-        back="/admin/soil-analysis"
+        back="/soil-analysis"
       />
-      <BetaAdminBanner />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -764,7 +757,7 @@ function DetailInner() {
             {confirming ? "Confirming…" : "Confirm reviewed sample"}
           </Button>
         )}
-        <Button variant="outline" onClick={() => navigate("/admin/soil-analysis")}>Back to Soil Analysis</Button>
+        <Button variant="outline" onClick={() => navigate("/soil-analysis")}>Back to Soil Analysis</Button>
         {retryFailure && <ExtractionErrorNotice raw={retryFailure} />}
         {saveState && <span className="text-sm text-muted-foreground">{saveState}</span>}
       </div>
@@ -789,7 +782,7 @@ function DetailInner() {
         onOpenChange={setDeleteOpen}
         onDeleted={() => {
           qc.invalidateQueries({ queryKey: ["soil-analysis"] });
-          navigate("/admin/soil-analysis?tab=samples");
+          navigate("/soil-analysis?tab=samples");
         }}
       />
     </div>

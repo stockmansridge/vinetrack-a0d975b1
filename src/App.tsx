@@ -146,6 +146,7 @@ import AdminBillingPreviewPage from "./pages/admin/AdminBillingPreviewPage";
 import ChemicalV3LabPage from "./pages/admin/ChemicalV3LabPage";
 import SoilAnalysisPage from "./pages/admin/SoilAnalysisPage";
 import SoilSampleDetailPage from "./pages/admin/SoilSampleDetailPage";
+import { LegacySoilSampleRedirect } from "./components/soil-analysis/LegacySoilSampleRedirect";
 import AccountBillingPage from "./pages/account/BillingPage";
 
 // Central read-only guard: every useMutation is checked before it runs, and a
@@ -268,6 +269,8 @@ const App = () => (
                     <Route path="/setup/vineyard" element={<VineyardSettingsPage />} />
                     <Route path="/setup/region-units" element={<VineyardRegionSettingsPage />} />
                     <Route path="/setup/operational-preferences" element={<OperationalPreferencesPage />} />
+                    <Route path="/soil-analysis" element={<SoilAnalysisPage />} />
+                    <Route path="/soil-analysis/samples/:id" element={<SoilSampleDetailPage />} />
                     <Route path="/reports" element={<ReportsIndexPage />} />
                     <Route path="/reports/trips" element={<TripReportsPage />} />
                     <Route path="/reports/work-tasks" element={<WorkTaskReportsPage />} />
@@ -320,8 +323,8 @@ const App = () => (
                     <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
                     <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
                     <Route path="/admin/chemical-v3" element={<ChemicalV3LabPage />} />
-                    <Route path="/admin/soil-analysis" element={<SoilAnalysisPage />} />
-                    <Route path="/admin/soil-analysis/samples/:id" element={<SoilSampleDetailPage />} />
+                    <Route path="/admin/soil-analysis" element={<Navigate to="/soil-analysis" replace />} />
+                    <Route path="/admin/soil-analysis/samples/:id" element={<LegacySoilSampleRedirect />} />
                     <Route path="/admin/users" element={<AdminUsersPage />} />
                     <Route path="/admin/users/:id" element={<AdminUserDetailPage />} />
                     <Route path="/admin/vineyards" element={<AdminVineyardsPage />} />
