@@ -1,7 +1,7 @@
 // Soil Samples list — filterable register of uploaded laboratory reports.
 // The sample lifecycle is extraction_status; there is no separate status.
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -190,7 +190,20 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
                     {s.lab_sample_id ? <span className="text-muted-foreground"> · {s.lab_sample_id}</span> : null}
                   </td>
                   <td className="px-4 py-2">
-                    <Badge variant="outline">{SAMPLE_STATUS_LABEL[s.extraction_status]}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{SAMPLE_STATUS_LABEL[s.extraction_status]}</Badge>
+                      {s.extraction_status === "failed" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={retryingId === s.id}
+                          onClick={(e) => retry(e, s)}
+                          aria-label={`Retry extraction for ${s.lab_paddock_name ?? "sample"}`}
+                        >
+                          {retryingId === s.id ? "Extracting…" : "Retry"}
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -198,6 +211,7 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
           </table>
         )}
       </Card>
+      {retryError && <div className="text-sm text-destructive">{retryError}</div>}
 
       <UploadSampleDialog
         open={uploadOpen}
