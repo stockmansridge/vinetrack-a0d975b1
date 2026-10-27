@@ -9,8 +9,10 @@ import { initMapKit } from "@/lib/mapkit";
 import { parsePolygonPoints, polygonCentroid, type LatLng } from "@/lib/paddockGeometry";
 import {
   SOIL_MAP_NO_DATA_COLOR,
-  formatMapValue,
   labStatusMapColor,
+  soilMapLabelSpec,
+  DEFAULT_SOIL_MAP_LABEL_MODE,
+  type SoilMapLabelMode,
   valueScaleColor,
   type SoilMapReportRow,
 } from "@/lib/soilAnalysis";
@@ -25,6 +27,8 @@ interface Props {
   unit: string | null;
   selectedId: string | null;
   onSelect: (paddockId: string) => void;
+  /** Smart (default): short low-priority labels MapKit may hide on collision. */
+  labelMode?: SoilMapLabelMode;
   height?: number | string;
 }
 
@@ -34,6 +38,7 @@ export function SoilReportMap({
   unit,
   selectedId,
   onSelect,
+  labelMode = DEFAULT_SOIL_MAP_LABEL_MODE,
   // Responsive tall viewport: ~65–72vh on desktop, floored so the map stays
   // usable on short screens and capped so it never runs away on very tall
   // displays. Width comes from the full-width Reports container.
@@ -166,14 +171,11 @@ export function SoilReportMap({
       poly.addEventListener("select", () => onSelect(p.row.paddock_id));
       newOverlays.push(poly);
 
-      // Block name + value chip at the centroid when there is room.
-      if (p.centroid && validPt(p.centroid) && p.row.paddock_name) {
-        const name = p.row.paddock_name;
+      // Value label at the centroid. Polygons stay clickable even when a
+      // label is hidden by MapKit collision handling or labels are Off.
+      const spec = soilMapLabelSpec(p.row, { mode: labelMode, selected: isSelected, unit });
+      if (spec && p.centroid && validPt(p.centroid)) {
         const id = p.row.paddock_id;
-        const valueLabel =
-          p.row.value_numeric != null
-            ? `${name} · ${formatMapValue(p.row.value_numeric)}${unit ? ` ${unit}` : ""}`
-            : name;
         const ann = new mapkit.Annotation(
           new mapkit.Coordinate(p.centroid.lat, p.centroid.lng),
           () => {
@@ -181,12 +183,23 @@ export function SoilReportMap({
             el.className = "vt-name-chip";
             el.style.pointerEvents = "auto";
             el.style.cursor = "pointer";
-            el.textContent = valueLabel;
+            if (spec.selected) {
+              el.style.fontWeight = "700";
+              el.style.outline = "2px solid #1f2937";
+            }
+            el.textContent = spec.text;
             el.addEventListener("click", (ev) => {
               ev.stopPropagation();
               onSelect(id);
             });
             return el;
+          },
+          {
+            collisionMode: mapkit.Annotation.CollisionMode.Rectangle,
+            displayPriority:
+              spec.priority === "required"
+                ? mapkit.Annotation.DisplayPriority.Required
+                : mapkit.Annotation.DisplayPriority.Low,
           },
         );
         try {
@@ -223,7 +236,7 @@ export function SoilReportMap({
       didFitRef.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapReady, parsed, mode, unit, selectedId, min, max]);
+  }, [mapReady, parsed, mode, unit, selectedId, min, max, labelMode]);
 
   useEffect(() => {
     didFitRef.current = false;

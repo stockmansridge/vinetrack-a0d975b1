@@ -29,6 +29,7 @@ import {
 } from "@/lib/soilAnalysis";
 import { formatDate } from "@/pages/admin/_shared";
 import { SoilReportMap, type SoilMapMode } from "./SoilReportMap";
+import { DEFAULT_SOIL_MAP_LABEL_MODE, type SoilMapLabelMode } from "@/lib/soilAnalysis";
 
 type SortKey = "block" | "value" | "date";
 
@@ -46,6 +47,7 @@ export function ReportsTab({ onOpenSample }: { onOpenSample: (id: string) => voi
   const [chosenSeriesKey, setChosenSeriesKey] = useState<string>("");
   const [asOf, setAsOf] = useState<string>("");
   const [mode, setMode] = useState<SoilMapMode>("value");
+  const [labelMode, setLabelMode] = useState<SoilMapLabelMode>(DEFAULT_SOIL_MAP_LABEL_MODE);
   const [selectedPaddockId, setSelectedPaddockId] = useState<string | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "block", dir: 1 });
 
@@ -248,6 +250,21 @@ export function ReportsTab({ onOpenSample }: { onOpenSample: (id: string) => voi
                 </Button>
               </div>
             </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Labels</Label>
+              <div className="flex gap-1" role="group" aria-label="Map labels">
+                {(["smart", "all", "off"] as const).map((m) => (
+                  <Button
+                    key={m}
+                    size="sm"
+                    variant={labelMode === m ? "default" : "outline"}
+                    onClick={() => setLabelMode(m)}
+                  >
+                    {m === "smart" ? "Smart" : m === "all" ? "All" : "Off"}
+                  </Button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {seriesQuery.isLoading ? (
@@ -321,6 +338,7 @@ export function ReportsTab({ onOpenSample }: { onOpenSample: (id: string) => voi
                   unit={unit}
                   selectedId={selectedPaddockId}
                   onSelect={setSelectedPaddockId}
+                  labelMode={labelMode}
                 />
               )}
 
