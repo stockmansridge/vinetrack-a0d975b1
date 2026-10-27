@@ -1,5 +1,5 @@
 // Soil Analysis — Stage 1 System Admin preview landing page.
-// Tabs: Overview | Soil Samples | Trends | Compare | Reports (coming soon).
+// Tabs: Overview | Soil Samples | Trends | Compare | Reports.
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";

@@ -256,7 +256,7 @@ export function ReportsTab({ onOpenSample }: { onOpenSample: (id: string) => voi
             <div className="text-sm text-destructive">
               {(seriesQuery.error as Error).message}
             </div>
-          ) series.length === 0 ? (
+          ) : series.length === 0 ? (
             <div className="text-sm text-muted-foreground">
               No confirmed, mapped soil results yet. Confirm reviewed samples with a block mapping
               and they will appear here.
