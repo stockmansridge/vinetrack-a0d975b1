@@ -48,15 +48,19 @@ export function bunchWeightVarieties(blocks: BunchWeightBlock[]): BunchWeightVar
   return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-const SOURCE_BADGE: Record<BunchWeightSource, string> = {
+const SOURCE_BADGE: Record<BunchWeightSource | "partial", string> = {
   block_override: "border-primary/40 bg-primary/10 text-primary",
   variety_default: "border-border bg-secondary text-secondary-foreground",
   not_configured: "border-destructive/40 bg-destructive/10 text-destructive",
+  partial: "border-warning/50 bg-warning/10 text-warning-foreground",
 };
+
+/** Every source badge shares one shape so the column reads as a uniform list. */
+const BADGE_BASE = "inline-flex min-w-[10.5rem] justify-center whitespace-nowrap text-[10px] font-medium";
 
 export function SourceBadge({ source }: { source: BunchWeightSource }) {
   return (
-    <Badge variant="outline" className={`text-[10px] ${SOURCE_BADGE[source]}`}>
+    <Badge variant="outline" className={`${BADGE_BASE} ${SOURCE_BADGE[source]}`}>
       {BUNCH_WEIGHT_SOURCE_LABEL[source]}
     </Badge>
   );
@@ -282,7 +286,6 @@ export default function BunchWeightsPanel({
                           </>
                         );
                       })()}
-                      </TableCell>
                       <TableCell>
                         {canEdit && (
                           <WeightEditor
