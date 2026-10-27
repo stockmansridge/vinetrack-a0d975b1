@@ -36,7 +36,7 @@ const STEPS = [
   },
   {
     title: "Trends",
-    body: "Choose a block and analyte to follow measured values through time. Where several samples share a date, VineTrack keeps the individual results visible and may show a clearly labelled date average to make the trend easier to read.",
+    body: "Choose one or more blocks and an analyte to follow measured values through time. Each block keeps its own trend line; where several samples for the same block share a date, VineTrack keeps the individual results visible and may show a clearly labelled date average.",
   },
   {
     title: "Compare",

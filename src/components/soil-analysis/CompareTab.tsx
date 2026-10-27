@@ -28,6 +28,7 @@ import {
   COMPARE_PROVISIONAL_BADGE,
 } from "@/lib/soilAnalysis";
 import { SoilAnalyteCombobox } from "./SoilAnalyteCombobox";
+import { SoilBlockSelector } from "./SoilBlockSelector";
 import { formatDate } from "@/pages/admin/_shared";
 
 const db = supabase as any;
@@ -132,8 +133,6 @@ export function CompareTab() {
     categoryOf,
   });
 
-  const toggleBlock = (id: string) =>
-    setSelectedBlocks((prev) => (prev.includes(id) ? prev.filter((b) => b !== id) : [...prev, id]));
   const selectClass = "rounded-md border border-input bg-background px-2 py-1.5 text-sm";
   const depth = (s: { sample_depth_from_cm: number | null; sample_depth_to_cm: number | null }) =>
     s.sample_depth_from_cm != null ? `${s.sample_depth_from_cm}–${s.sample_depth_to_cm ?? "?"} cm` : "—";
@@ -150,32 +149,7 @@ export function CompareTab() {
               Status overview
             </Button>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">Blocks:</span>
-            {blocks.map((b) => (
-              <Button
-                key={b.id}
-                size="sm"
-                variant={selectedBlocks.includes(b.id) ? "default" : "outline"}
-                onClick={() => toggleBlock(b.id)}
-              >
-                {b.name}
-              </Button>
-            ))}
-            {blocks.length > 0 && (
-              <>
-                <Button size="sm" variant="ghost" onClick={() => setSelectedBlocks(blocks.map((b) => b.id))}>
-                  All blocks
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setSelectedBlocks([])}>
-                  Clear
-                </Button>
-              </>
-            )}
-            {blocks.length === 0 && (
-              <span className="text-sm text-muted-foreground">No blocks for the selected vineyard.</span>
-            )}
-          </div>
+          <SoilBlockSelector blocks={blocks} selected={selectedBlocks} onChange={setSelectedBlocks} />
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium text-muted-foreground">Sample period:</span>
             <Input type="date" className="w-auto" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} aria-label="Period from" />
