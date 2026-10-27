@@ -246,6 +246,14 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
         onOpenChange={setUploadOpen}
         onUploaded={(sample) => onOpenSample(sample.id)}
       />
+      <DeleteSampleDialog
+        sample={deleteTarget}
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        onDeleted={() => qc.invalidateQueries({ queryKey: ["soil-analysis"] })}
+      />
     </div>
   );
 }
