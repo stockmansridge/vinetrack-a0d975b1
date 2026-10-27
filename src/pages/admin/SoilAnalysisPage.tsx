@@ -10,6 +10,7 @@ import { OverviewTab } from "@/components/soil-analysis/OverviewTab";
 import { SamplesTab } from "@/components/soil-analysis/SamplesTab";
 import { TrendsTab } from "@/components/soil-analysis/TrendsTab";
 import { CompareTab } from "@/components/soil-analysis/CompareTab";
+import { ReportsTab } from "@/components/soil-analysis/ReportsTab";
 
 const TABS = ["overview", "samples", "trends", "compare", "reports"] as const;
 type SoilTab = (typeof TABS)[number];
@@ -49,9 +50,7 @@ function SoilAnalysisInner() {
           <TabsTrigger value="samples">Soil Samples</TabsTrigger>
           <TabsTrigger value="trends">Trends</TabsTrigger>
           <TabsTrigger value="compare">Compare</TabsTrigger>
-          <TabsTrigger value="reports" disabled title="Reports arrive in a later stage">
-            Reports (soon)
-          </TabsTrigger>
+          <TabsTrigger value="reports">Reports</TabsTrigger>
         </TabsList>
         <TabsContent value="overview" className="mt-4">
           <OverviewTab onOpenSample={openSample} />
