@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useVineyard } from "@/context/VineyardContext";
-import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import { useIsSystemAdmin, useFeatureFlags } from "@/lib/systemAdmin";
 import { useIrrigationCapabilities } from "@/lib/irrigationQuery";
 import { useBillingVineyards } from "@/lib/customerBillingQuery";
 import type { NavViewer } from "@/lib/navigationConfig";
@@ -17,12 +17,14 @@ export function useNavViewer(): NavViewer {
   const { capabilities, isLoading: irrigationLoading } =
     useIrrigationCapabilities(selectedVineyardId) as any;
   const { data: billingVineyards = [], isLoading: billingLoading } = useBillingVineyards();
+  const { data: featureFlags = [] } = useFeatureFlags();
 
   return useMemo(
     () => ({
       role: currentRole,
       vineyardCountry: currentCountry,
       isSystemAdmin: !!isSystemAdmin,
+      featureFlags: featureFlags.filter((f) => f.is_enabled).map((f) => f.key),
       irrigation: {
         records: !!capabilities?.can_view_irrigation_records,
         reports: !!capabilities?.can_view_irrigation_reports,
@@ -36,6 +38,7 @@ export function useNavViewer(): NavViewer {
       currentCountry,
       isSystemAdmin,
       adminLoading,
+      featureFlags,
       capabilities?.can_view_irrigation_records,
       capabilities?.can_view_irrigation_reports,
       capabilities?.can_manage_irrigation_setup,
