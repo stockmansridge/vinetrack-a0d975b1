@@ -178,7 +178,7 @@ describe("routes and preview removal", () => {
     expect(app).toContain('<Route path="/admin/soil-analysis/samples/:id" element={<LegacySoilSampleRedirect />} />');
   });
   it("no Portal source references the retired preview flag", () => {
-    const files = execSync("rg -l soil_analysis_admin_preview src || true").toString().trim();
+    const files = execSync("rg -l soil_analysis_admin_preview src --glob "!src/test/soilAnalysisAccess.test.tsx" || true").toString().trim();
     expect(files).toBe("");
   });
   it("central read-only mutation guard is untouched (no Soil-specific gate)", () => {

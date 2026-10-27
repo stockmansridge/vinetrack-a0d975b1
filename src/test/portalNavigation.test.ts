@@ -60,6 +60,7 @@ describe("Portal navigation — destinations", () => {
       "Yield & Harvest",
       "Irrigation",
       "Equipment & Fuel",
+      "Soil Analysis",
       "Reports & Exports",
       "Vineyard Settings",
     ]);
