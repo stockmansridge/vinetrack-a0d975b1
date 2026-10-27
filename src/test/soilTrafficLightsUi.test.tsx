@@ -47,14 +47,14 @@ describe("Traffic Lights presentation", () => {
   });
   it.each(["Low", "Satisfactory", "High", "Other"])("directly filters to %s only", async (label) => {
     mount(); await screen.findByRole("region", { name: "Low laboratory statuses" });
-    fireEvent.click(within(screen.getByRole("group", { name: "Status visibility" })).getByRole("button", { name: label, exact: true }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Status visibility" })).getByRole("button", { name: label }));
     expect(screen.getAllByRole("region")).toHaveLength(1);
     expect(screen.getByRole("region").getAttribute("aria-label")).toBe(`${label === "Other" ? "Other / Not stated" : label} laboratory statuses`);
   });
   it("High summary selects High without other sections; All restores four", async () => {
     mount(); await screen.findByRole("region", { name: "Low laboratory statuses" });
     fireEvent.click(screen.getByRole("button", { name: "Show High" })); expect(screen.getAllByRole("region")).toHaveLength(1);
-    fireEvent.click(within(screen.getByRole("group", { name: "Status visibility" })).getByRole("button", { name: "All", exact: true }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Status visibility" })).getByRole("button", { name: "All" }));
     expect(screen.getAllByRole("region")).toHaveLength(4);
   });
   it("groups default collapsed and support expand/collapse all", async () => {

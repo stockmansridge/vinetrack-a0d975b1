@@ -5,7 +5,7 @@ import { buildSoilTrafficSnapshots, type BlockAnalyteResult } from "@/lib/soilAn
 import { indicateSoilSnapshots, requestSoilIndications, soilIndicationResultIds, type SoilIndication } from "@/lib/soilTrafficIndication";
 const row = (id: string, status: string | null, block = "a", date = "2026-01-01") => ({ id, analyte_key: "ca", lab_status: status, matched_paddock_id: block, sample: { id, sampled_at: date, extraction_status: "confirmed" } }) as BlockAnalyteResult;
 const indication = (id: string, value: SoilIndication["indication"]): SoilIndication => ({ result_id: id, indication: value, confidence: 0.82, reason: "Screening only", basis: "lab_range" });
-beforeEach(() => mock.invoke.mockReset());
+beforeEach(() => { mock.invoke.mockReset(); });
 describe("read-only AI screening", () => {
   it("requests sorted unique Other entries only, excluding rated entries even in mixed snapshots", () => {
     const snapshots = buildSoilTrafficSnapshots([row("z", null), row("rated", "Low"), row("z", null, "b"), row("a", "Acidic", "c"), row("old", null, "c", "2025-01-01")]);

@@ -75,7 +75,7 @@ export function TrafficLightsTab() {
   return <div className="min-w-0 space-y-4">
     <div>
       <h2 className="text-lg font-semibold">Latest laboratory statuses</h2>
-      <p className="text-sm text-muted-foreground">Laboratory status wording only — not a VineTrack agronomic judgement.</p>
+      <p className="text-sm text-muted-foreground">Laboratory statuses remain the source of truth. Optional AI indications are labelled separately.</p>
     </div>
     <SoilBlockSelector blocks={blocks} selected={selected} onChange={(ids) => setSelection({ vineyardId: selectedVineyardId, ids })} />
     <div className="flex flex-wrap items-end gap-3">
@@ -112,7 +112,7 @@ export function TrafficLightsTab() {
       : <>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Latest status counts">
           {sections.map((section) => <Button key={section.bucket} variant="outline" aria-label={`Show ${section.bucket === "other" ? "Other" : section.title}`} aria-pressed={status === section.bucket} onClick={() => setStatus(section.bucket)} className={`h-auto min-w-0 flex-col items-start rounded-md border p-3 ${section.surface} ${status === section.bucket ? "ring-2 ring-ring" : ""}`}>
-            <div className={`flex items-center gap-2 text-sm font-semibold ${section.accent}`}><Circle className="h-3 w-3 fill-current" aria-hidden />{section.title}</div>
+            <div className={`flex max-w-full items-center gap-2 whitespace-normal text-left text-sm font-semibold ${section.accent}`}><Circle className="h-3 w-3 shrink-0 fill-current" aria-hidden />{section.title}</div>
             <div className="mt-1 text-2xl font-semibold" aria-label={`${section.title} count`}>{counts[section.bucket]}</div>
             {aiEnabled && <span className="mt-1 text-xs text-muted-foreground">{filtered.filter((s) => s.bucket === section.bucket && s.sourceBucket !== "other").length + filtered.filter((s) => s.bucket === section.bucket && s.sourceBucket === "other" && s.bucket === "other").length} lab · {filtered.filter((s) => s.bucket === section.bucket && s.sourceBucket === "other" && s.bucket !== "other").length} AI</span>}
           </Button>)}
@@ -140,7 +140,7 @@ export function TrafficLightsTab() {
                       {items.sort((a, b) => blockName(a.paddockId).localeCompare(blockName(b.paddockId))).map((s) => <div key={s.paddockId} className="min-w-0 px-3 py-2">
                         <div className="flex flex-wrap justify-between gap-x-3 text-sm"><span className="font-semibold">{blockName(s.paddockId)}</span><time dateTime={s.date}>{formatDate(s.date)}</time></div>
                         {s.aiLabel && <div className="mt-2 rounded-md border border-dashed border-current p-2 text-xs"><span className="inline-flex items-center gap-1 font-semibold"><Sparkles className="h-3 w-3" aria-hidden />{s.aiLabel}</span>
-                          {s.aiEntries?.map((r) => <p key={r.result_id} className="mt-1 text-muted-foreground">{Math.round(r.confidence * 100)}% confidence · {r.reason}</p>)}</div>}
+                          {s.aiEntries?.map((r) => <p key={r.result_id} className="mt-1 break-words text-muted-foreground">{Math.round(r.confidence * 100)}% confidence · {r.reason}</p>)}</div>}
                         {s.statusLabel === "Mixed latest statuses" && <p className="mt-1 text-xs font-semibold text-muted-foreground">Mixed latest statuses</p>}
                         {s.entries.map((r) => <div key={r.id} className="mt-2 min-w-0 space-y-1 text-sm">
                           <div className="flex flex-wrap items-baseline gap-x-2"><span className="font-medium">{r.value_numeric ?? r.value_text ?? "—"}{r.unit ? ` ${r.unit}` : ""}</span><span>{s.aiLabel ? "Lab: " : ""}{r.lab_status?.trim() || "Not stated"}</span></div>
