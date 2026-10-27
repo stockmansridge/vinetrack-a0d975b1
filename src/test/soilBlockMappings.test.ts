@@ -11,10 +11,8 @@ import {
   mappingSummaryLines,
   formatDataError,
   buildCompareMatrix,
-  MAPPING_BLOCK_REQUIRED_MESSAGE,
   SAMPLE_SCOPE_LABEL,
   type SoilBlockMapping,
-  type SoilBlockMappingInput,
 } from "@/lib/soilAnalysis";
 
 const lib = readFileSync("src/lib/soilAnalysis.ts", "utf8");
@@ -31,6 +29,8 @@ const mapping = (over: Partial<SoilBlockMapping>): SoilBlockMapping =>
     mapping_scope: "whole_block",
     row_start: null,
     row_end: null,
+    row_numbers: null,
+    row_ids: null,
     mapping_confidence: null,
     notes: null,
     sort_order: 0,
@@ -63,48 +63,23 @@ describe("review page loads existing mappings", () => {
 });
 
 describe("mapping payloads", () => {
-  it("one whole-block mapping produces a single whole_block payload row", () => {
-    const payload = buildMappingPayload([
-      { paddock_id: "b1", mapping_scope: "whole_block", row_start: null, row_end: null },
+  const known = new Map([["b1", [31, 32, 33]], ["b2", [1, 2]]]);
+  it("all rows ticked => whole_block without row_numbers", () => {
+    expect(buildMappingPayload([{ paddock_id: "b1", selected: [33, 31, 32] }], known)).toEqual([
+      { paddock_id: "b1", mapping_scope: "whole_block", mapping_confidence: null, notes: null },
     ]);
-    expect(payload).toEqual([
-      {
-        paddock_id: "b1",
-        mapping_scope: "whole_block",
-        row_start: null,
-        row_end: null,
-        mapping_confidence: null,
-        notes: null,
-      },
-    ]);
-  });
-  it("one row-range mapping keeps its row bounds", () => {
-    const payload = buildMappingPayload([
-      { paddock_id: "b1", mapping_scope: "row_range", row_start: 30, row_end: 69 },
-    ]);
-    expect(payload[0]).toMatchObject({ mapping_scope: "row_range", row_start: 30, row_end: 69 });
   });
   it("two+ block mappings produce ONE payload with all rows", () => {
-    const rows: SoilBlockMappingInput[] = [
-      { paddock_id: "b1", mapping_scope: "row_range", row_start: 30, row_end: 69 },
-      { paddock_id: "b2", mapping_scope: "whole_block", row_start: null, row_end: null },
-    ];
-    const payload = buildMappingPayload(rows);
-    expect(payload).toHaveLength(2);
+    const payload = buildMappingPayload(
+      [{ paddock_id: "b1", selected: [31] }, { paddock_id: "b2", selected: [1, 2] }],
+      known,
+    );
     expect(payload.map((p) => p.paddock_id)).toEqual(["b1", "b2"]);
-    // The writer sends the whole array in a single RPC call.
     const start = lib.indexOf("export async function setSoilSampleBlockMappings");
     const writer = lib.slice(start, lib.indexOf("\n}", start));
     expect(writer).toContain('db.rpc("soil_analysis_set_block_mappings"');
-    expect(writer).toContain("p_mappings: buildMappingPayload(rows)");
+    expect(writer).toContain("p_mappings: buildMappingPayload(rows, knownRows)");
     expect(writer).not.toContain(".insert(");
-  });
-  it("row bounds are stripped from whole-block rows", () => {
-    const payload = buildMappingPayload([
-      { paddock_id: "b1", mapping_scope: "whole_block", row_start: 5, row_end: 9 },
-    ]);
-    expect(payload[0].row_start).toBeNull();
-    expect(payload[0].row_end).toBeNull();
   });
 });
 
@@ -121,7 +96,7 @@ describe("save flow", () => {
   });
   it("metadata save never writes sample_scope/paddock_id/row bounds before the RPC", () => {
     const metadataIdx = saveFn.indexOf("await updateSoilSample(sample.id, {");
-    const rpcIdx = saveFn.indexOf("setSoilSampleBlockMappings(sample.id, mappingRows)");
+    const rpcIdx = saveFn.indexOf("setSoilSampleBlockMappings(sample.id, mappingRows, knownRows)");
     expect(rpcIdx).toBeGreaterThan(metadataIdx);
     const metadataBlock = saveFn.slice(metadataIdx, rpcIdx);
     expect(metadataBlock).not.toContain("sample_scope");
@@ -130,7 +105,7 @@ describe("save flow", () => {
     expect(metadataBlock).not.toContain("row_end");
   });
   it("validation runs before any write", () => {
-    const validateIdx = saveFn.indexOf("validateBlockMappings(mappingRows)");
+    const validateIdx = saveFn.indexOf("validateBlockMappings(mappingRows, knownRows)");
     const writeIdx = saveFn.indexOf("await updateSoilSample(sample.id, {");
     expect(validateIdx).toBeGreaterThan(-1);
     expect(validateIdx).toBeLessThan(writeIdx);
@@ -140,33 +115,12 @@ describe("save flow", () => {
   });
 });
 
-describe("client validation", () => {
-  it("rejects a block-coverage row without a selected block", () => {
-    expect(
-      validateBlockMappings([
-        { paddock_id: "", mapping_scope: "row_range", row_start: 30, row_end: 69 },
-      ]),
-    ).toBe(MAPPING_BLOCK_REQUIRED_MESSAGE);
-    expect(MAPPING_BLOCK_REQUIRED_MESSAGE).toBe("Choose a block for each block-coverage row.");
-  });
-  it("rejects invalid row bounds", () => {
-    const base = { paddock_id: "b1", mapping_scope: "row_range" as const };
-    expect(validateBlockMappings([{ ...base, row_start: null, row_end: 69 }])).toMatch(/row numbers/);
-    expect(validateBlockMappings([{ ...base, row_start: 69, row_end: 30 }])).toMatch(/row numbers/);
-    expect(validateBlockMappings([{ ...base, row_start: 0, row_end: 30 }])).toMatch(/row numbers/);
-    expect(validateBlockMappings([{ ...base, row_start: 30, row_end: 69 }])).toBeNull();
-  });
-  it("requires at least one row in block coverage mode", () => {
-    expect(validateBlockMappings([])).toMatch(/at least one block-coverage row/);
-  });
-});
-
 describe("Samples list / Overview display", () => {
   it("0 mappings => Unmapped", () => {
     expect(mappingSummaryLabel(legacySample, [])).toBe("Unmapped");
   });
   it("1 whole-block mapping => block name", () => {
-    expect(mappingSummaryLabel(legacySample, [mapping({})])).toBe("Pinot Noir");
+    expect(mappingSummaryLabel(legacySample, [mapping({})])).toBe("Pinot Noir · All rows");
   });
   it("1 row-range mapping => Block · Rows X–Y", () => {
     expect(
@@ -178,7 +132,7 @@ describe("Samples list / Overview display", () => {
   it(">1 mappings => 'N blocks' and never one arbitrary block", () => {
     const rows = [mapping({}), mapping({ id: "m2", paddock_id: "b2", block_name: "Primitivo" })];
     expect(mappingSummaryLabel(legacySample, rows)).toBe("2 blocks");
-    expect(mappingSummaryLines(rows)).toEqual(["Pinot Noir · Whole block", "Primitivo · Whole block"]);
+    expect(mappingSummaryLines(rows)).toEqual(["Pinot Noir · All rows", "Primitivo · All rows"]);
   });
   it("legacy fields are only used when no mapping rows exist", () => {
     const legacy = {
@@ -191,7 +145,7 @@ describe("Samples list / Overview display", () => {
     };
     expect(mappingSummaryLabel(legacy, [])).toBe("East Bottom · Rows 30–69");
     // Mapping rows win over legacy fields.
-    expect(mappingSummaryLabel(legacy, [mapping({})])).toBe("Pinot Noir");
+    expect(mappingSummaryLabel(legacy, [mapping({})])).toBe("Pinot Noir · All rows");
   });
   it("the list shows the multi-block detail on hover", () => {
     expect(list).toContain("mappingSummaryLines(rows).join");
