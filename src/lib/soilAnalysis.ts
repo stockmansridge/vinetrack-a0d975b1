@@ -207,6 +207,45 @@ export interface SoilBlockMappingInput {
   selected: number[];
 }
 
+export async function listSampleBlockMappings(sampleId: string): Promise<SoilBlockMapping[]> {
+  const { data, error } = await db
+    .from("soil_sample_block_mappings")
+    .select("*, paddocks(name)")
+    .eq("sample_id", sampleId)
+    .order("sort_order")
+    .order("id");
+  if (error) throw error;
+  return (data ?? []).map((row: any) => ({
+    ...row,
+    block_name: row.paddocks?.name ?? null,
+    paddocks: undefined,
+  })) as SoilBlockMapping[];
+}
+
+/** Mappings for many samples at once, keyed by sample_id (list/overview). */
+export async function listBlockMappingsForSamples(
+  sampleIds: string[],
+): Promise<Map<string, SoilBlockMapping[]>> {
+  const map = new Map<string, SoilBlockMapping[]>();
+  if (sampleIds.length === 0) return map;
+  const { data, error } = await db
+    .from("soil_sample_block_mappings")
+    .select("*, paddocks(name)")
+    .in("sample_id", sampleIds)
+    .order("sort_order")
+    .order("id");
+  if (error) throw error;
+  for (const row of data ?? []) {
+    const mapping = {
+      ...row,
+      block_name: (row as any).paddocks?.name ?? null,
+      paddocks: undefined,
+    } as SoilBlockMapping;
+    map.set(mapping.sample_id, [...(map.get(mapping.sample_id) ?? []), mapping]);
+  }
+  return map;
+}
+
 /** Known row numbers for a block from the live paddocks.rows array, ascending. */
 export function blockRowNumbers(rows: unknown): number[] {
   if (!Array.isArray(rows)) return [];
