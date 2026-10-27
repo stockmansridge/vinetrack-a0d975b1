@@ -423,6 +423,7 @@ export async function getSoilSampleDetail(id: string): Promise<{
   sample: SoilSample;
   documents: SoilSampleDocument[];
   results: SoilSampleResult[];
+  mappings: SoilBlockMapping[];
 }> {
   const { data: sample, error } = await db
     .from("soil_samples")
@@ -431,15 +432,17 @@ export async function getSoilSampleDetail(id: string): Promise<{
     .maybeSingle();
   if (error) throw error;
   if (!sample) throw new Error("Soil sample not found.");
-  const [{ data: docs, error: docErr }, { data: results, error: resErr }] = await Promise.all([
-    db.from("soil_sample_documents").select("*").eq("sample_id", id).order("created_at"),
-    db
-      .from("soil_sample_results")
-      .select("*")
-      .eq("sample_id", id)
-      .order("sort_order", { nullsFirst: false })
-      .order("created_at"),
-  ]);
+  const [{ data: docs, error: docErr }, { data: results, error: resErr }, mappings] =
+    await Promise.all([
+      db.from("soil_sample_documents").select("*").eq("sample_id", id).order("created_at"),
+      db
+        .from("soil_sample_results")
+        .select("*")
+        .eq("sample_id", id)
+        .order("sort_order", { nullsFirst: false })
+        .order("created_at"),
+      listSampleBlockMappings(id),
+    ]);
   if (docErr) throw docErr;
   if (resErr) throw resErr;
   return {
@@ -452,6 +455,7 @@ export async function getSoilSampleDetail(id: string): Promise<{
     } as SoilSample,
     documents: (docs ?? []) as SoilSampleDocument[],
     results: (results ?? []) as SoilSampleResult[],
+    mappings,
   };
 }
 
