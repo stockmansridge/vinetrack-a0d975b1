@@ -14,7 +14,7 @@ vi.mock("recharts", () => ({
 }));
 import { TrendsTab } from "@/components/soil-analysis/TrendsTab";
 const result = (block: string, id: string, value: number, date = "2026-01-01", method: string | null = null) => ({ id, analyte_key: "ca", value_numeric: value, unit: "ppm", method, matched_paddock_id: block, sample: { id, sampled_at: date, created_at: date, laboratory: "Lab", lab_sample_id: id } });
-function mount() { const client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); return render(<QueryClientProvider client={client}><TrendsTab /></QueryClientProvider>); }
+function mount() { const client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); return { ...render(<QueryClientProvider client={client}><TrendsTab /></QueryClientProvider>), client }; }
 beforeEach(() => { mock.vineyard = "v1"; mock.lines = []; mock.scatters = []; mock.read.mockReset().mockImplementation(async (ids: string[]) => [result("a", "a1", 10), result("a", "a2", 20), result("b", "b1", 100)].filter((r) => ids.includes(r.matched_paddock_id))); });
 async function chooseAll() { fireEvent.click(await screen.findByRole("button", { name: "All blocks" })); fireEvent.click(screen.getByRole("button", { name: "Select Calcium" })); await screen.findByRole("region", { name: "Block A trend summary" }); }
 describe("multi-block Trends interactions", () => {
@@ -61,7 +61,7 @@ describe("multi-block Trends interactions", () => {
     await screen.findByRole("region", { name: "Block A trend summary" }); expect(screen.getAllByTestId("trend-line")).toHaveLength(1); expect(screen.getByText("2 / 1")).toBeTruthy();
   });
   it("vineyard changes clear old block ids before querying", async () => {
-    const view = mount(); await chooseAll(); mock.vineyard = "v2"; view.rerender(<QueryClientProvider client={new QueryClient()}><TrendsTab /></QueryClientProvider>);
-    await screen.findByText(/Choose one or more blocks/); expect(screen.getByRole("button", { name: "Block A" }).getAttribute("aria-pressed")).toBe("false");
+    const view = mount(); await chooseAll(); mock.vineyard = "v2"; view.rerender(<QueryClientProvider client={view.client}><TrendsTab /></QueryClientProvider>);
+    await screen.findByText(/Choose one or more blocks/); expect((await screen.findByRole("button", { name: "Block A" })).getAttribute("aria-pressed")).toBe("false");
   });
 });

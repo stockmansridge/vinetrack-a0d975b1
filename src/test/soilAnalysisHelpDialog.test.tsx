@@ -49,6 +49,7 @@ describe("Soil Analysis help dialog", () => {
     expect(
       within(dlg).getByText(/does not replace agronomic advice/i),
     ).toBeTruthy();
+    expect(within(dlg).getByText("Choose one or more blocks and an analyte to follow measured values through time. Each block keeps its own trend line; where several samples for the same block share a date, VineTrack keeps the individual results visible and may show a clearly labelled date average.")).toBeTruthy();
     const closeButtons = within(dlg).getAllByRole("button", { name: "Close" });
     fireEvent.click(closeButtons[closeButtons.length - 1]);
     expect(screen.queryByRole("dialog")).toBeNull();
