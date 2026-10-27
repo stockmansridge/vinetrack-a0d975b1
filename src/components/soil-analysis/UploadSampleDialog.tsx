@@ -140,11 +140,11 @@ export function UploadSampleDialog({
         </DialogHeader>
         <div className="space-y-3 text-sm">
           <div className="space-y-1">
-            <Label>Report files (PDF, JPG, PNG or WebP, up to 15 MB each)</Label>
+            <Label id="soil-file-label">Report files (PDF, JPG, PNG or WebP, up to 15 MB each)</Label>
             <div
               role="button"
               tabIndex={0}
-              aria-label="Choose or drop report files"
+              aria-labelledby="soil-file-label"
               className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed px-4 py-6 text-center transition-colors ${
                 dragOver
                   ? "border-primary bg-primary/5"
