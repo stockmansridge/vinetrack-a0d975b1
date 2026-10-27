@@ -13,10 +13,11 @@
 //   laboratory's own range/status fields.
 
 import { supabase } from "@/integrations/ios-supabase/client";
+import { SOIL_ANALYSIS_FLAG } from "@/lib/navigationConfig";
 
 const db = supabase as any;
 
-export const SOIL_ANALYSIS_FLAG = "soil_analysis_admin_preview";
+export { SOIL_ANALYSIS_FLAG };
 export const SOIL_DOCUMENT_BUCKET = "soil-analysis-documents";
 
 // ---------------------------------------------------------------------------

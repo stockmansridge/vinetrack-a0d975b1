@@ -41,7 +41,9 @@ import {
 } from "lucide-react";
 import { canAccessRoute } from "@/lib/rolePermissions";
 import { isAustralianVineyard } from "@/lib/wineGrapeLevyAccess";
-import { SOIL_ANALYSIS_FLAG } from "@/lib/soilAnalysis";
+
+/** Feature flag gating the Stage 1 Soil Analysis admin preview. */
+export const SOIL_ANALYSIS_FLAG = "soil_analysis_admin_preview";
 
 export type NavGroup = "Overview" | "Vineyard" | "Work" | "Resources" | "Settings";
 
