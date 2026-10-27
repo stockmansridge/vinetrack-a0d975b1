@@ -61,7 +61,7 @@ export function CompareTab() {
 
   const analyteKeys = useMemo(() => {
     const present = new Set(rows.map((r) => r.analyte_key).filter(Boolean) as string[]);
-    return analytes.filter((a) => present.has(a.analyte_key)).map((a) => a.analyte_key);
+    return analytes.filter((a) => present.has(a.key)).map((a) => a.key);
   }, [rows, analytes]);
 
   const matrix = useMemo(
@@ -70,7 +70,7 @@ export function CompareTab() {
   );
 
   const analyteName = (key: string) =>
-    analytes.find((a) => a.analyte_key === key)?.display_name ?? key;
+    analytes.find((a) => a.key === key)?.display_name ?? key;
   const blockName = (id: string) => blocks.find((b) => b.id === id)?.name ?? "Block";
 
   const toggleBlock = (id: string) =>

@@ -1,7 +1,8 @@
 // Upload a laboratory report: creates the pending soil_samples row, stores
-// the original document in the private bucket and records it. No extraction
-// is simulated — the sample shows "Awaiting extraction" until the backend
-// parser exists.
+// the original document in the private bucket, records it, then invokes the
+// deployed soil-analysis-extract parser. If the parser cannot start, the
+// upload is preserved and shown as "Extraction failed" — evidence is never
+// deleted.
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -33,7 +34,7 @@ export function UploadSampleDialog({
 
   const [file, setFile] = useState<File | null>(null);
   const [vineyardId, setVineyardId] = useState<string>(selectedVineyardId ?? "");
-  const [sampleDate, setSampleDate] = useState("");
+  const [sampledAt, setSampledAt] = useState("");
   const [laboratory, setLaboratory] = useState("");
   const [labPaddockName, setLabPaddockName] = useState("");
   const [labSampleId, setLabSampleId] = useState("");
@@ -53,10 +54,10 @@ export function UploadSampleDialog({
     if (!effectiveVineyard) return setError("Choose a vineyard before uploading.");
     setBusy(true);
     try {
-      const sample = await uploadSoilSample({
+      const outcome = await uploadSoilSample({
         file,
         vineyardId: effectiveVineyard,
-        sampleDate: sampleDate || null,
+        sampledAt: sampledAt || null,
         laboratory: laboratory || null,
         labPaddockName: labPaddockName || null,
         labSampleId: labSampleId || null,
@@ -66,7 +67,14 @@ export function UploadSampleDialog({
         uploadedBy: user?.id ?? null,
       });
       qc.invalidateQueries({ queryKey: ["soil-analysis"] });
-      onUploaded(sample);
+      if (!outcome.extractionStarted) {
+        // Records are preserved; the sample list shows "Extraction failed".
+        setError(
+          `The report was uploaded and kept, but automatic extraction could not start: ${outcome.extractionError}. The sample is marked "Extraction failed" — you can retry later.`,
+        );
+        return;
+      }
+      onUploaded(outcome.sample);
       onOpenChange(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -83,7 +91,7 @@ export function UploadSampleDialog({
         </DialogHeader>
         <div className="space-y-3 text-sm">
           <div className="space-y-1">
-            <Label htmlFor="soil-file">Report file (PDF, JPG, PNG or WebP)</Label>
+            <Label htmlFor="soil-file">Report file (PDF, JPG, PNG or WebP, up to 15 MB)</Label>
             <Input
               id="soil-file"
               ref={fileRef}
@@ -92,8 +100,8 @@ export function UploadSampleDialog({
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
             <p className="text-xs text-muted-foreground">
-              The original file is kept as evidence and is never replaced. Results stay
-              “Awaiting extraction” until the backend parser processes them.
+              The original file is kept as evidence and is never replaced. Results are extracted
+              automatically and then held for your review.
             </p>
           </div>
 
@@ -117,7 +125,7 @@ export function UploadSampleDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label htmlFor="soil-date">Sample date</Label>
-              <Input id="soil-date" type="date" value={sampleDate} onChange={(e) => setSampleDate(e.target.value)} />
+              <Input id="soil-date" type="date" value={sampledAt} onChange={(e) => setSampledAt(e.target.value)} />
             </div>
             <div className="space-y-1">
               <Label htmlFor="soil-lab">Laboratory</Label>

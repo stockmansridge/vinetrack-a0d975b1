@@ -1,16 +1,19 @@
 // Soil Analysis — Stage 1 System Admin preview (Portal only).
 //
-// Data authority is the shared VineTrack backend (iOS Supabase project).
-// The live tables are System Admin-only under RLS; this module is the single
-// place that names their columns so any schema adjustment by the database
-// owner lands in one file.
+// Data authority is the shared VineTrack backend. The live tables are
+// System Admin-only under RLS; this module is the single place that names
+// their columns so any schema adjustment by the database owner lands in
+// one file.
 //
 // Safety rules enforced here:
-// - source_* columns are immutable extraction provenance; user corrections
-//   only ever write value_* / mapping fields and set is_user_corrected.
+// - source_value_numeric / source_value_text and the document raw_extraction
+//   are immutable extraction provenance; user corrections only ever write
+//   value_numeric / value_text / analyte_key and set is_user_corrected.
+// - method / unit / lab range / lab status have no duplicate source copies
+//   in the schema, so the Portal treats them as read-only in Stage 1.
 // - The uploaded document is evidence and is never replaced or deleted.
 // - No agronomic recommendations: status language comes only from the
-//   laboratory's own range/status fields.
+//   laboratory's own range/status fields and catalogue desired_direction.
 
 import { supabase } from "@/integrations/ios-supabase/client";
 import { SOIL_ANALYSIS_FLAG } from "@/lib/navigationConfig";
@@ -19,36 +22,63 @@ const db = supabase as any;
 
 export { SOIL_ANALYSIS_FLAG };
 export const SOIL_DOCUMENT_BUCKET = "soil-analysis-documents";
+export const SOIL_EXTRACT_FUNCTION = "soil-analysis-extract";
 
 // ---------------------------------------------------------------------------
 // Types (live table contract)
 // ---------------------------------------------------------------------------
 
-export type SoilSampleStatus = "pending" | "review_required" | "confirmed";
-export type SoilExtractionStatus = "awaiting_extraction" | "extracted" | "failed";
-export type SoilMappingType = "unmapped" | "block" | "row_range" | "point";
+/** Sample lifecycle — there is no separate status column. */
+export type SoilSampleStatus =
+  | "pending"
+  | "processing"
+  | "review_required"
+  | "confirmed"
+  | "failed";
+
+export type SoilDocumentExtractionStatus =
+  | "pending"
+  | "processing"
+  | "parsed"
+  | "review_required"
+  | "failed";
+
+export type SoilSampleScope = "unmapped" | "whole_block" | "row_range" | "point";
+
+export type SoilDesiredDirection = "range" | "higher" | "lower" | "context_only";
 
 export interface SoilSample {
   id: string;
   vineyard_id: string;
   paddock_id: string | null;
-  mapping_type: SoilMappingType;
-  row_from: number | null;
-  row_to: number | null;
-  point_lat: number | null;
-  point_lng: number | null;
-  sample_date: string | null;
-  laboratory: string | null;
-  lab_sample_id: string | null;
   lab_paddock_name: string | null;
-  depth_from_cm: number | null;
-  depth_to_cm: number | null;
-  status: SoilSampleStatus;
-  extraction_status: SoilExtractionStatus;
+  sample_scope: SoilSampleScope;
+  row_start: number | null;
+  row_end: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  sampled_at: string | null;
+  received_at: string | null;
+  reported_at: string | null;
+  sample_depth_from_cm: number | null;
+  sample_depth_to_cm: number | null;
+  laboratory: string | null;
+  lab_code: string | null;
+  order_number: string | null;
+  lab_sample_id: string | null;
+  client_agronomist: string | null;
+  crop: string | null;
+  soil_type: string | null;
   notes: string | null;
+  extraction_status: SoilSampleStatus;
+  extraction_confidence: number | null;
+  mapping_confidence: number | null;
   created_by: string | null;
+  verified_by: string | null;
+  verified_at: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
   // joined display fields
   block_name?: string | null;
   vineyard_name?: string | null;
@@ -57,61 +87,78 @@ export interface SoilSample {
 export interface SoilSampleDocument {
   id: string;
   sample_id: string;
+  vineyard_id: string;
+  storage_bucket: string;
   storage_path: string;
   original_filename: string;
   mime_type: string | null;
-  byte_size: number | null;
+  size_bytes: number | null;
+  sha256: string | null;
+  is_primary: boolean;
+  source_page_count: number | null;
+  extraction_status: SoilDocumentExtractionStatus;
+  extraction_model: string | null;
+  parser_version: string | null;
+  raw_extraction: unknown | null;
+  extraction_error: string | null;
   uploaded_by: string | null;
   created_at: string;
+  updated_at: string;
 }
 
 export interface SoilSampleResult {
   id: string;
   sample_id: string;
-  // Immutable extraction provenance — never written by the Portal.
-  source_analyte: string | null;
-  source_method: string | null;
-  source_unit: string | null;
-  source_value: string | null;
-  source_range_low: number | null;
-  source_range_high: number | null;
-  source_lab_status: string | null;
-  source_page: number | null;
-  // Current (possibly corrected) values.
   analyte_key: string | null;
+  original_analyte_name: string;
+  display_name: string;
   method: string | null;
   unit: string | null;
+  // Immutable extraction provenance — never written by the Portal.
+  source_value_numeric: number | null;
+  source_value_text: string | null;
+  // Current (possibly corrected) values.
   value_numeric: number | null;
   value_text: string | null;
-  lab_range_low: number | null;
-  lab_range_high: number | null;
+  lab_range_min: number | null;
+  lab_range_max: number | null;
+  lab_range_text: string | null;
   lab_status: string | null;
-  confidence: number | null;
-  is_verified: boolean;
+  desired_value_numeric: number | null;
+  source_page: number | null;
+  source_section: string | null;
+  extraction_confidence: number | null;
+  is_user_verified: boolean;
   is_user_corrected: boolean;
+  notes: string | null;
+  sort_order: number | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface SoilAnalyte {
-  id: string;
-  analyte_key: string;
+  key: string;
   display_name: string;
   category: string | null;
-  default_unit: string | null;
-  method_group: string | null;
-  /** null = no direction metadata; never guess improving/declining. */
-  higher_is_better: boolean | null;
+  canonical_unit: string | null;
+  desired_direction: SoilDesiredDirection;
+  description: string | null;
+  is_active: boolean;
   created_at: string;
+  updated_at: string;
 }
 
 export interface SoilBlockAlias {
   id: string;
   vineyard_id: string;
-  lab_paddock_name: string;
-  paddock_id: string;
+  alias: string;
+  normalized_alias: string;
+  paddock_id: string | null;
+  row_start: number | null;
+  row_end: number | null;
   created_by: string | null;
   created_at: string;
+  updated_at: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -119,20 +166,24 @@ export interface SoilBlockAlias {
 // ---------------------------------------------------------------------------
 
 export const SAMPLE_STATUS_LABEL: Record<SoilSampleStatus, string> = {
-  pending: "Pending",
+  pending: "Awaiting extraction",
+  processing: "Extracting",
   review_required: "Review required",
   confirmed: "Confirmed",
-};
-
-export const EXTRACTION_STATUS_LABEL: Record<SoilExtractionStatus, string> = {
-  awaiting_extraction: "Awaiting extraction",
-  extracted: "Extracted",
   failed: "Extraction failed",
 };
 
-export const MAPPING_TYPE_LABEL: Record<SoilMappingType, string> = {
+export const DOCUMENT_EXTRACTION_LABEL: Record<SoilDocumentExtractionStatus, string> = {
+  pending: "Awaiting extraction",
+  processing: "Extracting",
+  parsed: "Parsed",
+  review_required: "Review required",
+  failed: "Extraction failed",
+};
+
+export const SAMPLE_SCOPE_LABEL: Record<SoilSampleScope, string> = {
   unmapped: "Unmapped",
-  block: "Whole block",
+  whole_block: "Whole block",
   row_range: "Row range",
   point: "Point",
 };
@@ -165,7 +216,6 @@ export interface SoilSampleFilters {
   paddockId?: string | null;
   laboratory?: string | null;
   status?: SoilSampleStatus | null;
-  extractionStatus?: SoilExtractionStatus | null;
   dateFrom?: string | null;
   dateTo?: string | null;
 }
@@ -174,15 +224,15 @@ export async function listSoilSamples(filters: SoilSampleFilters = {}): Promise<
   let q = db
     .from("soil_samples")
     .select("*, paddocks(name), vineyards(name)")
-    .order("sample_date", { ascending: false, nullsFirst: false })
+    .is("deleted_at", null)
+    .order("sampled_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
   if (filters.vineyardId) q = q.eq("vineyard_id", filters.vineyardId);
   if (filters.paddockId) q = q.eq("paddock_id", filters.paddockId);
   if (filters.laboratory) q = q.eq("laboratory", filters.laboratory);
-  if (filters.status) q = q.eq("status", filters.status);
-  if (filters.extractionStatus) q = q.eq("extraction_status", filters.extractionStatus);
-  if (filters.dateFrom) q = q.gte("sample_date", filters.dateFrom);
-  if (filters.dateTo) q = q.lte("sample_date", filters.dateTo);
+  if (filters.status) q = q.eq("extraction_status", filters.status);
+  if (filters.dateFrom) q = q.gte("sampled_at", filters.dateFrom);
+  if (filters.dateTo) q = q.lte("sampled_at", filters.dateTo);
   const { data, error } = await q;
   if (error) throw error;
   return (data ?? []).map((row: any) => ({
@@ -208,7 +258,12 @@ export async function getSoilSampleDetail(id: string): Promise<{
   if (!sample) throw new Error("Soil sample not found.");
   const [{ data: docs, error: docErr }, { data: results, error: resErr }] = await Promise.all([
     db.from("soil_sample_documents").select("*").eq("sample_id", id).order("created_at"),
-    db.from("soil_sample_results").select("*").eq("sample_id", id).order("created_at"),
+    db
+      .from("soil_sample_results")
+      .select("*")
+      .eq("sample_id", id)
+      .order("sort_order", { nullsFirst: false })
+      .order("created_at"),
   ]);
   if (docErr) throw docErr;
   if (resErr) throw resErr;
@@ -229,6 +284,7 @@ export async function listAnalyteCatalogue(): Promise<SoilAnalyte[]> {
   const { data, error } = await db
     .from("soil_analyte_catalogue")
     .select("*")
+    .eq("is_active", true)
     .order("category", { nullsFirst: false })
     .order("display_name");
   if (error) throw error;
@@ -240,7 +296,7 @@ export async function listBlockAliases(vineyardId: string): Promise<SoilBlockAli
     .from("soil_block_aliases")
     .select("*")
     .eq("vineyard_id", vineyardId)
-    .order("lab_paddock_name");
+    .order("alias");
   if (error) throw error;
   return (data ?? []) as SoilBlockAlias[];
 }
@@ -254,7 +310,8 @@ export async function listBlockAnalyteResults(
     .from("soil_sample_results")
     .select("*, soil_samples!inner(*, paddocks(name))")
     .eq("analyte_key", analyteKey)
-    .eq("soil_samples.paddock_id", paddockId);
+    .eq("soil_samples.paddock_id", paddockId)
+    .is("soil_samples.deleted_at", null);
   if (error) throw error;
   const rows = (data ?? []).map((row: any) => {
     const { soil_samples: s, ...result } = row;
@@ -264,14 +321,14 @@ export async function listBlockAnalyteResults(
     };
   });
   rows.sort((a: any, b: any) =>
-    String(a.sample.sample_date ?? a.sample.created_at).localeCompare(
-      String(b.sample.sample_date ?? b.sample.created_at),
+    String(a.sample.sampled_at ?? a.sample.created_at).localeCompare(
+      String(b.sample.sampled_at ?? b.sample.created_at),
     ),
   );
   return rows;
 }
 
-/** Results for a set of blocks within a sample-date period (Compare tab). */
+/** Results for a set of blocks within a sampled-at period (Compare tab). */
 export async function listBlockPeriodResults(
   paddockIds: string[],
   dateFrom: string | null,
@@ -281,9 +338,10 @@ export async function listBlockPeriodResults(
   let q = db
     .from("soil_sample_results")
     .select("*, soil_samples!inner(*, paddocks(name))")
-    .in("soil_samples.paddock_id", paddockIds);
-  if (dateFrom) q = q.gte("soil_samples.sample_date", dateFrom);
-  if (dateTo) q = q.lte("soil_samples.sample_date", dateTo);
+    .in("soil_samples.paddock_id", paddockIds)
+    .is("soil_samples.deleted_at", null);
+  if (dateFrom) q = q.gte("soil_samples.sampled_at", dateFrom);
+  if (dateTo) q = q.lte("soil_samples.sampled_at", dateTo);
   const { data, error } = await q;
   if (error) throw error;
   return (data ?? []).map((row: any) => {
@@ -296,11 +354,11 @@ export async function listBlockPeriodResults(
 }
 
 // ---------------------------------------------------------------------------
-// Upload — creates pending records only; never fakes extraction
+// Upload — creates pending records, then invokes the live parser function
 // ---------------------------------------------------------------------------
 
 export const SOIL_UPLOAD_ACCEPT = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
-export const SOIL_UPLOAD_MAX_BYTES = 20 * 1024 * 1024;
+export const SOIL_UPLOAD_MAX_BYTES = 15 * 1024 * 1024;
 
 const ACCEPTED_MIME = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
 
@@ -309,7 +367,7 @@ export function validateSoilUpload(file: { name: string; type: string; size: num
   if (!SOIL_UPLOAD_ACCEPT.includes(ext) || (file.type && !ACCEPTED_MIME.has(file.type))) {
     return "Choose a PDF, JPG, PNG or WebP laboratory report.";
   }
-  if (file.size > SOIL_UPLOAD_MAX_BYTES) return "Files must be 20 MB or smaller.";
+  if (file.size > SOIL_UPLOAD_MAX_BYTES) return "Files must be 15 MB or smaller.";
   return null;
 }
 
@@ -320,7 +378,7 @@ function safeFileName(name: string): string {
 export interface UploadSoilSampleInput {
   file: File;
   vineyardId: string;
-  sampleDate: string | null;
+  sampledAt: string | null;
   laboratory: string | null;
   labPaddockName: string | null;
   labSampleId: string | null;
@@ -330,13 +388,23 @@ export interface UploadSoilSampleInput {
   uploadedBy: string | null;
 }
 
+export interface UploadSoilSampleOutcome {
+  sample: SoilSample;
+  document: SoilSampleDocument;
+  /** True when the parser accepted the job; false when it failed up front. */
+  extractionStarted: boolean;
+  extractionError: string | null;
+}
+
 /**
- * Creates the soil_samples row (pending / awaiting extraction), uploads the
- * original document to the private bucket and records it in
- * soil_sample_documents. No extraction is simulated — the record waits for
- * the backend parser.
+ * Creates the soil_samples row (pending), uploads the original document to
+ * the private bucket, records it in soil_sample_documents, then invokes the
+ * deployed soil-analysis-extract function with both ids. The function moves
+ * the sample/document to review_required (or failed). If the invocation
+ * itself fails, the sample is marked failed but the uploaded document and
+ * sample history are always preserved — evidence is never deleted.
  */
-export async function uploadSoilSample(input: UploadSoilSampleInput): Promise<SoilSample> {
+export async function uploadSoilSample(input: UploadSoilSampleInput): Promise<UploadSoilSampleOutcome> {
   const invalid = validateSoilUpload(input.file);
   if (invalid) throw new Error(invalid);
   if (!input.vineyardId) throw new Error("Choose a vineyard before uploading.");
@@ -345,16 +413,15 @@ export async function uploadSoilSample(input: UploadSoilSampleInput): Promise<So
     .from("soil_samples")
     .insert({
       vineyard_id: input.vineyardId,
-      mapping_type: "unmapped",
-      sample_date: input.sampleDate,
+      sample_scope: "unmapped",
+      sampled_at: input.sampledAt,
       laboratory: input.laboratory,
       lab_paddock_name: input.labPaddockName,
       lab_sample_id: input.labSampleId,
-      depth_from_cm: input.depthFromCm,
-      depth_to_cm: input.depthToCm,
+      sample_depth_from_cm: input.depthFromCm,
+      sample_depth_to_cm: input.depthToCm,
       notes: input.notes,
-      status: "pending",
-      extraction_status: "awaiting_extraction",
+      extraction_status: "pending",
       created_by: input.uploadedBy,
     })
     .select()
@@ -367,17 +434,47 @@ export async function uploadSoilSample(input: UploadSoilSampleInput): Promise<So
     .upload(storagePath, input.file, { upsert: false, contentType: input.file.type || undefined });
   if (upErr) throw new Error(`Document upload failed: ${upErr.message}`);
 
-  const { error: docErr } = await db.from("soil_sample_documents").insert({
-    sample_id: sample.id,
-    storage_path: storagePath,
-    original_filename: input.file.name,
-    mime_type: input.file.type || null,
-    byte_size: input.file.size,
-    uploaded_by: input.uploadedBy,
-  });
+  const { data: document, error: docErr } = await db
+    .from("soil_sample_documents")
+    .insert({
+      sample_id: sample.id,
+      vineyard_id: input.vineyardId,
+      storage_path: storagePath,
+      original_filename: input.file.name,
+      mime_type: input.file.type || null,
+      size_bytes: input.file.size,
+      uploaded_by: input.uploadedBy,
+    })
+    .select()
+    .single();
   if (docErr) throw docErr;
 
-  return sample as SoilSample;
+  // Invoke the live parser. It verifies the JWT and re-checks System Admin +
+  // the preview flag server-side, then moves records to review_required or
+  // failed. An invocation failure must not strand the upload at "pending".
+  try {
+    const { error: fnErr } = await supabase.functions.invoke(SOIL_EXTRACT_FUNCTION, {
+      body: { sample_id: sample.id, document_id: document.id },
+    });
+    if (fnErr) throw fnErr;
+    return { sample: sample as SoilSample, document: document as SoilSampleDocument, extractionStarted: true, extractionError: null };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    await db
+      .from("soil_samples")
+      .update({ extraction_status: "failed" })
+      .eq("id", sample.id);
+    await db
+      .from("soil_sample_documents")
+      .update({ extraction_status: "failed", extraction_error: message })
+      .eq("id", document.id);
+    return {
+      sample: { ...(sample as SoilSample), extraction_status: "failed" },
+      document: { ...(document as SoilSampleDocument), extraction_status: "failed", extraction_error: message },
+      extractionStarted: false,
+      extractionError: message,
+    };
+  }
 }
 
 /** Signed short-lived URL for the private evidence document. */
@@ -391,24 +488,30 @@ export async function getSoilDocumentSignedUrl(storagePath: string, expiresInSec
 }
 
 // ---------------------------------------------------------------------------
-// Review edits — allow-listed writes; source_* provenance is never touched
+// Review edits — allow-listed writes; extraction provenance is never touched
 // ---------------------------------------------------------------------------
 
 const SAMPLE_EDITABLE_FIELDS = [
-  "sample_date",
+  "sampled_at",
+  "received_at",
+  "reported_at",
   "laboratory",
+  "lab_code",
+  "order_number",
   "lab_sample_id",
   "lab_paddock_name",
-  "depth_from_cm",
-  "depth_to_cm",
+  "client_agronomist",
+  "crop",
+  "soil_type",
+  "sample_depth_from_cm",
+  "sample_depth_to_cm",
   "notes",
-  "status",
   "paddock_id",
-  "mapping_type",
-  "row_from",
-  "row_to",
-  "point_lat",
-  "point_lng",
+  "sample_scope",
+  "row_start",
+  "row_end",
+  "latitude",
+  "longitude",
 ] as const;
 
 export type SoilSamplePatch = Partial<Pick<SoilSample, (typeof SAMPLE_EDITABLE_FIELDS)[number]>>;
@@ -429,24 +532,40 @@ export async function updateSoilSample(id: string, patch: SoilSamplePatch): Prom
   if (error) throw error;
 }
 
+/**
+ * Explicit Confirm action: marks the reviewed sample confirmed with the
+ * reviewing user and timestamp. Saving edits alone never confirms.
+ */
+export async function confirmSoilSample(id: string, userId: string): Promise<void> {
+  const { error } = await db
+    .from("soil_samples")
+    .update({
+      extraction_status: "confirmed",
+      verified_by: userId,
+      verified_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+// method / unit / lab range / lab status are intentionally NOT editable in
+// Stage 1: the schema keeps no duplicate source copies for them, so a Portal
+// edit would silently overwrite extraction evidence.
 const RESULT_EDITABLE_FIELDS = [
   "analyte_key",
-  "method",
-  "unit",
   "value_numeric",
   "value_text",
-  "lab_range_low",
-  "lab_range_high",
-  "lab_status",
-  "is_verified",
+  "is_user_verified",
+  "notes",
 ] as const;
 
 export type SoilResultPatch = Partial<Pick<SoilSampleResult, (typeof RESULT_EDITABLE_FIELDS)[number]>>;
 
 /**
- * Builds the result update payload. Only value and mapping-style fields are
- * allowed; source_* provenance keys are stripped even if a caller passes
- * them, and every correction is marked is_user_corrected.
+ * Builds the result update payload. Only current-value and mapping fields
+ * are allowed; source_value_numeric / source_value_text provenance keys are
+ * stripped even if a caller passes them, and every correction is marked
+ * is_user_corrected.
  */
 export function buildResultPatch(patch: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -554,21 +673,24 @@ export function buildTrendGroups(points: TrendPoint[]): TrendGroup[] {
 export type TrendDirection = "improving" | "declining" | "steady" | "not_classified";
 
 /**
- * Classifies the change between two comparable results ONLY when the
- * catalogue supplies direction metadata (higher_is_better). Without it the
- * change is reported neutrally — never an agronomic judgement.
+ * Classifies the change between two comparable results using the catalogue's
+ * desired_direction only:
+ * - higher / lower: direction of movement is classified.
+ * - range: movement is described relative to the lab range, never as
+ *   improving/declining.
+ * - context_only: never classified.
  */
 export function classifyChange(
   previous: number,
   current: number,
-  higherIsBetter: boolean | null | undefined,
+  desiredDirection: SoilDesiredDirection | null | undefined,
 ): { direction: TrendDirection; delta: number } {
   const delta = current - previous;
-  if (higherIsBetter === null || higherIsBetter === undefined) {
+  if (desiredDirection !== "higher" && desiredDirection !== "lower") {
     return { direction: "not_classified", delta };
   }
   if (delta === 0) return { direction: "steady", delta };
-  const improving = higherIsBetter ? delta > 0 : delta < 0;
+  const improving = desiredDirection === "higher" ? delta > 0 : delta < 0;
   return { direction: improving ? "improving" : "declining", delta };
 }
 
@@ -600,8 +722,8 @@ export function buildCompareMatrix(
       const candidates = forAnalyte
         .filter((r) => r.sample.paddock_id === paddockId)
         .sort((a, b) =>
-          String(b.sample.sample_date ?? b.sample.created_at).localeCompare(
-            String(a.sample.sample_date ?? a.sample.created_at),
+          String(b.sample.sampled_at ?? b.sample.created_at).localeCompare(
+            String(a.sample.sampled_at ?? a.sample.created_at),
           ),
         );
       return { paddockId, analyteKey, result: candidates[0] ?? null, mixedMethods };

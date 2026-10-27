@@ -2,7 +2,7 @@
 // with the same canonical analyte, compatible method and compatible unit are
 // drawn together; anything else is shown as a separate, labelled series or a
 // neutral "not comparable" note. Direction (improving/declining) is shown
-// only when the analyte catalogue carries direction metadata.
+// only when the analyte catalogue desired_direction is higher/lower.
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,7 +60,7 @@ export function TrendsTab() {
     queryFn: () => listBlockAnalyteResults(paddockId, analyteKey),
   });
 
-  const analyte = (analytesQuery.data ?? []).find((a) => a.analyte_key === analyteKey);
+  const analyte = (analytesQuery.data ?? []).find((a) => a.key === analyteKey);
   const points = (resultsQuery.data ?? []).map((r) => ({ result: r, sample: r.sample }));
   const groups = useMemo(() => buildTrendGroups(points), [resultsQuery.data]);
 
@@ -78,7 +78,7 @@ export function TrendsTab() {
         <select className={selectClass} value={analyteKey} onChange={(e) => setAnalyteKey(e.target.value)} aria-label="Trend analyte">
           <option value="">Choose an analyte…</option>
           {(analytesQuery.data ?? []).map((a) => (
-            <option key={a.analyte_key} value={a.analyte_key}>{a.display_name}</option>
+            <option key={a.key} value={a.key}>{a.display_name}</option>
           ))}
         </select>
       </div>
@@ -96,11 +96,11 @@ export function TrendsTab() {
       ) : (
         groups.map((group, gi) => {
           const chartData = group.points.map((p) => ({
-            date: p.sample.sample_date ?? p.sample.created_at,
+            date: p.sample.sampled_at ?? p.sample.created_at,
             value: p.result.value_numeric,
             depth:
-              p.sample.depth_from_cm != null
-                ? `${p.sample.depth_from_cm}–${p.sample.depth_to_cm ?? "?"} cm`
+              p.sample.sample_depth_from_cm != null
+                ? `${p.sample.sample_depth_from_cm}–${p.sample.sample_depth_to_cm ?? "?"} cm`
                 : "depth not recorded",
             method: p.result.method ?? "method not recorded",
             status: labStatusLabel(p.result.lab_status),
@@ -110,7 +110,7 @@ export function TrendsTab() {
           const prev = numeric[numeric.length - 2];
           const change =
             last && prev
-              ? classifyChange(prev.result.value_numeric!, last.result.value_numeric!, analyte?.higher_is_better)
+              ? classifyChange(prev.result.value_numeric!, last.result.value_numeric!, analyte?.desired_direction)
               : null;
           return (
             <Card key={gi}>
@@ -169,14 +169,14 @@ export function TrendsTab() {
                   <tbody>
                     {group.points.map((p) => (
                       <tr key={p.result.id} className="border-b last:border-0">
-                        <td className="py-1 pr-3">{formatDate(p.sample.sample_date)}</td>
+                        <td className="py-1 pr-3">{formatDate(p.sample.sampled_at)}</td>
                         <td className="py-1 pr-3">
                           {p.result.value_numeric ?? p.result.value_text ?? "—"} {p.result.unit ?? ""}
                         </td>
                         <td className="py-1 pr-3">{p.result.method ?? "—"}</td>
                         <td className="py-1 pr-3">
-                          {p.sample.depth_from_cm != null
-                            ? `${p.sample.depth_from_cm}–${p.sample.depth_to_cm ?? "?"} cm`
+                          {p.sample.sample_depth_from_cm != null
+                            ? `${p.sample.sample_depth_from_cm}–${p.sample.sample_depth_to_cm ?? "?"} cm`
                             : "—"}
                         </td>
                         <td className="py-1">{labStatusLabel(p.result.lab_status)}</td>

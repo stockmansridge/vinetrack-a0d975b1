@@ -1,7 +1,11 @@
 // Soil sample detail — Review Results screen.
 //
-// Editable metadata and block mapping write only to value_*/mapping fields;
-// source_* extraction provenance is shown read-only and never overwritten.
+// Editable metadata and block mapping write only to the live metadata /
+// mapping columns; source_value_numeric / source_value_text provenance is
+// shown read-only and never overwritten. method / unit / lab range / lab
+// status are read-only in Stage 1 because the schema keeps no duplicate
+// source copies for them. Saving edits never confirms a sample — only the
+// explicit Confirm action sets confirmed + verified_by + verified_at.
 // The original document opens through a short-lived signed URL.
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -13,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FileText } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
+import { useAuth } from "@/context/AuthContext";
 import { BetaAdminBanner } from "@/components/BetaAdminBanner";
 import { AdminPageHeader, formatDate } from "./_shared";
 import { SoilAnalysisGate } from "@/components/soil-analysis/SoilAnalysisGate";
@@ -21,14 +26,14 @@ import {
   getSoilDocumentSignedUrl,
   updateSoilSample,
   updateSoilResult,
+  confirmSoilSample,
   listAnalyteCatalogue,
   SAMPLE_STATUS_LABEL,
-  EXTRACTION_STATUS_LABEL,
-  MAPPING_TYPE_LABEL,
+  SAMPLE_SCOPE_LABEL,
   labStatusLabel,
   type SoilSample,
   type SoilSampleResult,
-  type SoilMappingType,
+  type SoilSampleScope,
 } from "@/lib/soilAnalysis";
 
 const db = supabase as any;
@@ -45,6 +50,7 @@ function DetailInner() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { user } = useAuth();
 
   const detailQuery = useQuery({
     queryKey: ["soil-analysis", "sample", id],
@@ -74,6 +80,7 @@ function DetailInner() {
   const [resultDrafts, setResultDrafts] = useState<Record<string, Partial<SoilSampleResult>>>({});
   const [saveState, setSaveState] = useState<string | null>(null);
   const [docError, setDocError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   const sample = detailQuery.data?.sample;
   useEffect(() => {
@@ -100,29 +107,51 @@ function DetailInner() {
     setSaveState(null);
     try {
       await updateSoilSample(sample.id, {
-        sample_date: (draft.sample_date as string) ?? null,
+        sampled_at: (draft.sampled_at as string) ?? null,
+        received_at: (draft.received_at as string) ?? null,
+        reported_at: (draft.reported_at as string) ?? null,
         laboratory: (draft.laboratory as string) ?? null,
+        lab_code: (draft.lab_code as string) ?? null,
+        order_number: (draft.order_number as string) ?? null,
         lab_sample_id: (draft.lab_sample_id as string) ?? null,
         lab_paddock_name: (draft.lab_paddock_name as string) ?? null,
-        depth_from_cm: (draft.depth_from_cm as number) ?? null,
-        depth_to_cm: (draft.depth_to_cm as number) ?? null,
+        client_agronomist: (draft.client_agronomist as string) ?? null,
+        crop: (draft.crop as string) ?? null,
+        soil_type: (draft.soil_type as string) ?? null,
+        sample_depth_from_cm: (draft.sample_depth_from_cm as number) ?? null,
+        sample_depth_to_cm: (draft.sample_depth_to_cm as number) ?? null,
         notes: (draft.notes as string) ?? null,
-        status: (draft.status as SoilSample["status"]) ?? sample.status,
-        mapping_type: (draft.mapping_type as SoilMappingType) ?? "unmapped",
+        sample_scope: (draft.sample_scope as SoilSampleScope) ?? "unmapped",
         paddock_id: (draft.paddock_id as string) ?? null,
-        row_from: (draft.row_from as number) ?? null,
-        row_to: (draft.row_to as number) ?? null,
-        point_lat: (draft.point_lat as number) ?? null,
-        point_lng: (draft.point_lng as number) ?? null,
+        row_start: (draft.row_start as number) ?? null,
+        row_end: (draft.row_end as number) ?? null,
+        latitude: (draft.latitude as number) ?? null,
+        longitude: (draft.longitude as number) ?? null,
       });
       for (const [rid, patch] of Object.entries(resultDrafts)) {
         if (Object.keys(patch).length > 0) await updateSoilResult(rid, patch);
       }
       setResultDrafts({});
       qc.invalidateQueries({ queryKey: ["soil-analysis"] });
-      setSaveState("Saved. Original extraction values are preserved.");
+      setSaveState("Saved. Original extraction values are preserved; the sample stays in review until you confirm it.");
     } catch (e) {
       setSaveState(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const confirm = async () => {
+    if (!user?.id) return;
+    setConfirming(true);
+    setSaveState(null);
+    try {
+      await save();
+      await confirmSoilSample(sample.id, user.id);
+      qc.invalidateQueries({ queryKey: ["soil-analysis"] });
+      setSaveState("Confirmed. The reviewed values are now the confirmed record.");
+    } catch (e) {
+      setSaveState(e instanceof Error ? e.message : String(e));
+    } finally {
+      setConfirming(false);
     }
   };
 
@@ -136,16 +165,26 @@ function DetailInner() {
     }
   };
 
-  const mappingType = (draft.mapping_type as SoilMappingType) ?? sample.mapping_type;
+  const sampleScope = (draft.sample_scope as SoilSampleScope) ?? sample.sample_scope;
   const analytes = analytesQuery.data ?? [];
   const blocks = blocksQuery.data ?? [];
+  const results = detailQuery.data?.results ?? [];
   const selectClass = "w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm";
+
+  const resultsEmptyMessage =
+    sample.extraction_status === "pending"
+      ? "Awaiting extraction — results appear here once the parser processes the document."
+      : sample.extraction_status === "processing"
+        ? "Extracting — the parser is processing the document now."
+        : sample.extraction_status === "failed"
+          ? "Extraction failed. The uploaded document is preserved above; check the document error and retry when the parser is available."
+          : "No results recorded for this sample.";
 
   return (
     <div className="p-4 md:p-6 max-w-6xl">
       <AdminPageHeader
         title="Review soil sample"
-        subtitle={`${sample.vineyard_name ?? "Vineyard"} · ${formatDate(sample.sample_date)}`}
+        subtitle={`${sample.vineyard_name ?? "Vineyard"} · ${formatDate(sample.sampled_at)}`}
         back="/admin/soil-analysis"
       />
       <BetaAdminBanner />
@@ -158,11 +197,27 @@ function DetailInner() {
           <CardContent className="grid grid-cols-2 gap-3 text-sm">
             <div className="space-y-1">
               <Label>Sample date</Label>
-              <Input type="date" value={(draft.sample_date as string) ?? ""} onChange={(e) => set("sample_date", e.target.value || null)} />
+              <Input type="date" value={(draft.sampled_at as string) ?? ""} onChange={(e) => set("sampled_at", e.target.value || null)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Received date</Label>
+              <Input type="date" value={(draft.received_at as string) ?? ""} onChange={(e) => set("received_at", e.target.value || null)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Reported date</Label>
+              <Input type="date" value={(draft.reported_at as string) ?? ""} onChange={(e) => set("reported_at", e.target.value || null)} />
             </div>
             <div className="space-y-1">
               <Label>Laboratory</Label>
               <Input value={(draft.laboratory as string) ?? ""} onChange={(e) => set("laboratory", e.target.value || null)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Lab code</Label>
+              <Input value={(draft.lab_code as string) ?? ""} onChange={(e) => set("lab_code", e.target.value || null)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Order number</Label>
+              <Input value={(draft.order_number as string) ?? ""} onChange={(e) => set("order_number", e.target.value || null)} />
             </div>
             <div className="space-y-1">
               <Label>Lab sample ID</Label>
@@ -173,12 +228,24 @@ function DetailInner() {
               <Input value={(draft.lab_paddock_name as string) ?? ""} onChange={(e) => set("lab_paddock_name", e.target.value || null)} />
             </div>
             <div className="space-y-1">
+              <Label>Client / agronomist</Label>
+              <Input value={(draft.client_agronomist as string) ?? ""} onChange={(e) => set("client_agronomist", e.target.value || null)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Crop</Label>
+              <Input value={(draft.crop as string) ?? ""} onChange={(e) => set("crop", e.target.value || null)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Soil type</Label>
+              <Input value={(draft.soil_type as string) ?? ""} onChange={(e) => set("soil_type", e.target.value || null)} />
+            </div>
+            <div className="space-y-1">
               <Label>Depth from (cm)</Label>
-              <Input type="number" value={(draft.depth_from_cm as any) ?? ""} onChange={(e) => set("depth_from_cm", e.target.value ? Number(e.target.value) : null)} />
+              <Input type="number" value={(draft.sample_depth_from_cm as any) ?? ""} onChange={(e) => set("sample_depth_from_cm", e.target.value ? Number(e.target.value) : null)} />
             </div>
             <div className="space-y-1">
               <Label>Depth to (cm)</Label>
-              <Input type="number" value={(draft.depth_to_cm as any) ?? ""} onChange={(e) => set("depth_to_cm", e.target.value ? Number(e.target.value) : null)} />
+              <Input type="number" value={(draft.sample_depth_to_cm as any) ?? ""} onChange={(e) => set("sample_depth_to_cm", e.target.value ? Number(e.target.value) : null)} />
             </div>
             <div className="space-y-1 col-span-2">
               <Label>Notes</Label>
@@ -186,18 +253,16 @@ function DetailInner() {
             </div>
             <div className="space-y-1">
               <Label>Status</Label>
-              <select className={selectClass} value={(draft.status as string) ?? sample.status} onChange={(e) => set("status", e.target.value)}>
-                {Object.entries(SAMPLE_STATUS_LABEL).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label>Extraction</Label>
               <div className="pt-1.5">
-                <Badge variant="outline">{EXTRACTION_STATUS_LABEL[sample.extraction_status]}</Badge>
+                <Badge variant="outline">{SAMPLE_STATUS_LABEL[sample.extraction_status]}</Badge>
               </div>
             </div>
+            {sample.verified_at && (
+              <div className="space-y-1">
+                <Label>Verified</Label>
+                <div className="pt-1.5 text-xs text-muted-foreground">{formatDate(sample.verified_at)}</div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -208,8 +273,8 @@ function DetailInner() {
           <CardContent className="grid grid-cols-2 gap-3 text-sm">
             <div className="space-y-1">
               <Label>Mapping</Label>
-              <select className={selectClass} value={mappingType} onChange={(e) => set("mapping_type", e.target.value)}>
-                {Object.entries(MAPPING_TYPE_LABEL).map(([k, v]) => (
+              <select className={selectClass} value={sampleScope} onChange={(e) => set("sample_scope", e.target.value)}>
+                {Object.entries(SAMPLE_SCOPE_LABEL).map(([k, v]) => (
                   <option key={k} value={k}>{v}</option>
                 ))}
               </select>
@@ -220,7 +285,7 @@ function DetailInner() {
                 className={selectClass}
                 value={(draft.paddock_id as string) ?? ""}
                 onChange={(e) => set("paddock_id", e.target.value || null)}
-                disabled={mappingType === "unmapped"}
+                disabled={sampleScope === "unmapped"}
               >
                 <option value="">Not mapped</option>
                 {blocks.map((b) => (
@@ -228,27 +293,27 @@ function DetailInner() {
                 ))}
               </select>
             </div>
-            {mappingType === "row_range" && (
+            {sampleScope === "row_range" && (
               <>
                 <div className="space-y-1">
                   <Label>Row from</Label>
-                  <Input type="number" value={(draft.row_from as any) ?? ""} onChange={(e) => set("row_from", e.target.value ? Number(e.target.value) : null)} />
+                  <Input type="number" value={(draft.row_start as any) ?? ""} onChange={(e) => set("row_start", e.target.value ? Number(e.target.value) : null)} />
                 </div>
                 <div className="space-y-1">
                   <Label>Row to</Label>
-                  <Input type="number" value={(draft.row_to as any) ?? ""} onChange={(e) => set("row_to", e.target.value ? Number(e.target.value) : null)} />
+                  <Input type="number" value={(draft.row_end as any) ?? ""} onChange={(e) => set("row_end", e.target.value ? Number(e.target.value) : null)} />
                 </div>
               </>
             )}
-            {mappingType === "point" && (
+            {sampleScope === "point" && (
               <>
                 <div className="space-y-1">
                   <Label>Latitude</Label>
-                  <Input type="number" step="any" value={(draft.point_lat as any) ?? ""} onChange={(e) => set("point_lat", e.target.value ? Number(e.target.value) : null)} />
+                  <Input type="number" step="any" value={(draft.latitude as any) ?? ""} onChange={(e) => set("latitude", e.target.value ? Number(e.target.value) : null)} />
                 </div>
                 <div className="space-y-1">
                   <Label>Longitude</Label>
-                  <Input type="number" step="any" value={(draft.point_lng as any) ?? ""} onChange={(e) => set("point_lng", e.target.value ? Number(e.target.value) : null)} />
+                  <Input type="number" step="any" value={(draft.longitude as any) ?? ""} onChange={(e) => set("longitude", e.target.value ? Number(e.target.value) : null)} />
                 </div>
               </>
             )}
@@ -272,6 +337,11 @@ function DetailInner() {
               <div key={doc.id} className="flex items-center gap-2">
                 <FileText className="h-4 w-4 text-muted-foreground" />
                 <span className="flex-1 truncate">{doc.original_filename}</span>
+                {doc.extraction_status === "failed" && doc.extraction_error && (
+                  <span className="text-xs text-destructive truncate max-w-64" title={doc.extraction_error}>
+                    {doc.extraction_error}
+                  </span>
+                )}
                 <Button size="sm" variant="outline" onClick={() => openDocument(doc.storage_path)}>
                   View source document
                 </Button>
@@ -287,12 +357,8 @@ function DetailInner() {
           <CardTitle className="text-sm">Measurements</CardTitle>
         </CardHeader>
         <CardContent className="p-0 overflow-auto">
-          {(detailQuery.data?.results ?? []).length === 0 ? (
-            <div className="text-sm text-muted-foreground px-4 pb-4">
-              {sample.extraction_status === "awaiting_extraction"
-                ? "Awaiting extraction — results appear here once the backend parser processes the document."
-                : "No results recorded for this sample."}
-            </div>
+          {results.length === 0 ? (
+            <div className="text-sm text-muted-foreground px-4 pb-4">{resultsEmptyMessage}</div>
           ) : (
             <table className="w-full text-xs">
               <thead>
@@ -311,17 +377,19 @@ function DetailInner() {
                 </tr>
               </thead>
               <tbody>
-                {(detailQuery.data?.results ?? []).map((r) => {
+                {results.map((r) => {
                   const d = resultDrafts[r.id] ?? {};
                   const value = (d.value_numeric ?? r.value_numeric) as number | null;
                   const analyteKey = (d.analyte_key ?? r.analyte_key) as string | null;
-                  const verified = (d.is_verified ?? r.is_verified) as boolean;
+                  const verified = (d.is_user_verified ?? r.is_user_verified) as boolean;
                   return (
                     <tr key={r.id} className="border-b last:border-0 align-top">
-                      <td className="px-3 py-2 font-medium">{r.source_analyte ?? "—"}</td>
-                      <td className="px-3 py-2">{r.source_method ?? r.method ?? "—"}</td>
-                      <td className="px-3 py-2">{r.source_unit ?? r.unit ?? "—"}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{r.source_value ?? "—"}</td>
+                      <td className="px-3 py-2 font-medium">{r.original_analyte_name ?? "—"}</td>
+                      <td className="px-3 py-2">{r.method ?? "—"}</td>
+                      <td className="px-3 py-2">{r.unit ?? "—"}</td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {r.source_value_numeric ?? r.source_value_text ?? "—"}
+                      </td>
                       <td className="px-3 py-2">
                         <Input
                           className="h-7 w-24 text-xs"
@@ -334,9 +402,9 @@ function DetailInner() {
                         />
                       </td>
                       <td className="px-3 py-2">
-                        {r.lab_range_low != null || r.lab_range_high != null
-                          ? `${r.lab_range_low ?? "?"}–${r.lab_range_high ?? "?"}`
-                          : "—"}
+                        {r.lab_range_min != null || r.lab_range_max != null
+                          ? `${r.lab_range_min ?? "?"}–${r.lab_range_max ?? "?"}`
+                          : (r.lab_range_text ?? "—")}
                       </td>
                       <td className="px-3 py-2">{labStatusLabel(r.lab_status)}</td>
                       <td className="px-3 py-2">
@@ -347,19 +415,19 @@ function DetailInner() {
                         >
                           <option value="">Unmapped</option>
                           {analytes.map((a) => (
-                            <option key={a.analyte_key} value={a.analyte_key}>{a.display_name}</option>
+                            <option key={a.key} value={a.key}>{a.display_name}</option>
                           ))}
                         </select>
                       </td>
                       <td className="px-3 py-2">
-                        {r.confidence != null ? `${Math.round(r.confidence * 100)}%` : "—"}
+                        {r.extraction_confidence != null ? `${Math.round(r.extraction_confidence * 100)}%` : "—"}
                       </td>
                       <td className="px-3 py-2">
                         <label className="flex items-center gap-1">
                           <input
                             type="checkbox"
                             checked={verified}
-                            onChange={(e) => setResult(r.id, "is_verified", e.target.checked)}
+                            onChange={(e) => setResult(r.id, "is_user_verified", e.target.checked)}
                           />
                           <span>Verified</span>
                         </label>
@@ -381,6 +449,11 @@ function DetailInner() {
 
       <div className="flex items-center gap-3 mt-4">
         <Button onClick={save}>Save review</Button>
+        {sample.extraction_status !== "confirmed" && (
+          <Button variant="outline" onClick={confirm} disabled={confirming}>
+            {confirming ? "Confirming…" : "Confirm reviewed sample"}
+          </Button>
+        )}
         <Button variant="outline" onClick={() => navigate("/admin/soil-analysis")}>Back to Soil Analysis</Button>
         {saveState && <span className="text-sm text-muted-foreground">{saveState}</span>}
       </div>
