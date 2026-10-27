@@ -279,7 +279,7 @@ function DetailInner() {
         setRetryFailure(outcome.error);
       }
     } catch (e) {
-      setSaveState(e instanceof Error ? e.message : String(e));
+      setSaveState(formatDataError(e));
     } finally {
       setRetrying(false);
     }
@@ -291,11 +291,10 @@ function DetailInner() {
       const url = await getSoilDocumentSignedUrl(path);
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (e) {
-      setDocError(e instanceof Error ? e.message : String(e));
+      setDocError(formatDataError(e));
     }
   };
 
-  const sampleScope = (draft.sample_scope as SoilSampleScope) ?? sample.sample_scope;
   const analytes = analytesQuery.data ?? [];
   const blocks = blocksQuery.data ?? [];
   const results = detailQuery.data?.results ?? [];
