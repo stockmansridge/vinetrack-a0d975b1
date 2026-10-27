@@ -178,6 +178,7 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
                 <th className="px-4 py-2 font-medium">Depth</th>
                 <th className="px-4 py-2 font-medium">Lab / sample ID</th>
                 <th className="px-4 py-2 font-medium">Status</th>
+                <th className="px-4 py-2 font-medium"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
