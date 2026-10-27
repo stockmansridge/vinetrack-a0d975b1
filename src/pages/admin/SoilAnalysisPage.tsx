@@ -30,8 +30,10 @@ export default function SoilAnalysisPage() {
         <AdminPageHeader
           title="Soil Analysis"
           subtitle="Laboratory soil reports, block mapping and trends"
+          back="/dashboard"
           titleExtra={<SoilAnalysisHelpDialog />}
         />
+
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setParams({ tab: v }, { replace: true })}>
