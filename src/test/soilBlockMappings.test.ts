@@ -93,7 +93,8 @@ describe("mapping payloads", () => {
     expect(payload).toHaveLength(2);
     expect(payload.map((p) => p.paddock_id)).toEqual(["b1", "b2"]);
     // The writer sends the whole array in a single RPC call.
-    const writer = lib.slice(lib.indexOf("export async function setSoilSampleBlockMappings"));
+    const start = lib.indexOf("export async function setSoilSampleBlockMappings");
+    const writer = lib.slice(start, lib.indexOf("\n}", start));
     expect(writer).toContain('db.rpc("soil_analysis_set_block_mappings"');
     expect(writer).toContain("p_mappings: buildMappingPayload(rows)");
     expect(writer).not.toContain(".insert(");
