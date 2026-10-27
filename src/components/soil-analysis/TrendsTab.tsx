@@ -1,4 +1,7 @@
-// One compatible visual series, with independent raw points and date-average lines per block.
+// One stacked graph section per selected analyte; within each, one compatible
+// visual series at a time, with independent raw points and date-average lines
+// per block. All analytes are fetched in ONE mapping-aware query per block
+// selection, so ticking analytes never refetches.
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -6,8 +9,8 @@ import { Button } from "@/components/ui/button";
 import { ComposedChart, Line, Scatter, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ResponsiveContainer } from "recharts";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
-import { listBlocksAnalyteResults, listAnalyteCatalogue, buildTrendSeries, splitTrendByBlocks, buildDateAverages, summariseTrend, labStatusLabel, formatMapValue, TREND_PROVISIONAL_BADGE } from "@/lib/soilAnalysis";
-import { SoilAnalyteCombobox } from "./SoilAnalyteCombobox";
+import { listBlocksTrendResults, listAnalyteCatalogue, buildTrendSeries, splitTrendByBlocks, buildDateAverages, summariseTrend, labStatusLabel, formatMapValue, TREND_PROVISIONAL_BADGE, type BlockAnalyteResult, type SoilAnalyte } from "@/lib/soilAnalysis";
+import { SoilAnalyteMultiSelect } from "./SoilAnalyteMultiSelect";
 import { SoilBlockSelector } from "./SoilBlockSelector";
 import { formatDate } from "@/pages/admin/_shared";
 
@@ -32,8 +35,7 @@ const styles = [
 export function TrendsTab() {
   const { selectedVineyardId } = useVineyard();
   const [selection, setSelection] = useState<{ vineyardId: string | null; ids: string[] }>({ vineyardId: selectedVineyardId, ids: [] });
-  const [analyteKey, setAnalyteKey] = useState("");
-  const [seriesKey, setSeriesKey] = useState("");
+  const [analyteKeys, setAnalyteKeys] = useState<string[]>([]);
   const blocksQuery = useQuery({
     queryKey: ["soil-analysis", "blocks", selectedVineyardId], enabled: !!selectedVineyardId,
     queryFn: async (): Promise<Array<{ id: string; name: string }>> => {
@@ -50,15 +52,64 @@ export function TrendsTab() {
       setSelection({ vineyardId: selectedVineyardId, ids: selectedBlocks });
   }, [selectedVineyardId, selection, blocks, selectedBlocks, blocksQuery.isSuccess]);
   const analytesQuery = useQuery({ queryKey: ["soil-analysis", "analytes"], queryFn: listAnalyteCatalogue });
+  // One mapping-aware read for every analyte across the selected blocks.
   const resultsQuery = useQuery({
-    queryKey: ["soil-analysis", "trend", selectedVineyardId, selectedBlocks, analyteKey],
-    enabled: selectedBlocks.length > 0 && !!analyteKey,
-    queryFn: () => listBlocksAnalyteResults(selectedBlocks, analyteKey),
+    queryKey: ["soil-analysis", "trend", selectedVineyardId, selectedBlocks],
+    enabled: selectedBlocks.length > 0,
+    queryFn: () => listBlocksTrendResults(selectedBlocks),
   });
   const analytes = analytesQuery.data ?? [];
-  const analyte = analytes.find((a) => a.key === analyteKey);
   const rows = resultsQuery.data ?? [];
-  const series = useMemo(() => buildTrendSeries((resultsQuery.data ?? []).map((r) => ({ result: r, sample: r.sample }))), [resultsQuery.data]);
+  const rowsByAnalyte = useMemo(() => {
+    const map = new Map<string, BlockAnalyteResult[]>();
+    for (const r of rows) {
+      const key = r.analyte_key ?? "";
+      map.set(key, [...(map.get(key) ?? []), r]);
+    }
+    return map;
+  }, [rows]);
+  // Stable order: canonical catalogue order first, unknown keys last by name.
+  const orderedKeys = useMemo(() => {
+    const catalogueIndex = new Map(analytes.map((a, i) => [a.key, i]));
+    const nameOf = (k: string) => analytes.find((a) => a.key === k)?.display_name ?? k;
+    return [...analyteKeys].sort((a, b) => {
+      const ia = catalogueIndex.get(a) ?? Number.MAX_SAFE_INTEGER;
+      const ib = catalogueIndex.get(b) ?? Number.MAX_SAFE_INTEGER;
+      return ia - ib || nameOf(a).localeCompare(nameOf(b)) || a.localeCompare(b);
+    });
+  }, [analyteKeys, analytes]);
+
+  return <div className="space-y-3 min-w-0">
+    <SoilBlockSelector blocks={blocks} selected={selectedBlocks} onChange={(ids) => setSelection({ vineyardId: selectedVineyardId, ids })} />
+    <div className="flex flex-wrap items-center gap-2">
+      <SoilAnalyteMultiSelect ariaLabel="Trend analytes" values={analyteKeys} options={analytes.map((a) => ({ key: a.key, name: a.display_name, category: a.category ?? "Other" }))} onChange={setAnalyteKeys} />
+    </div>
+    {!selectedBlocks.length ? <div className="text-sm text-muted-foreground py-6">Choose one or more blocks and an analyte to plot results over time.</div>
+      : !analyteKeys.length ? <div className="text-sm text-muted-foreground py-6">Select one or more analytes to view trends.</div>
+      : resultsQuery.isLoading ? <div className="text-sm text-muted-foreground py-6">Loading results…</div>
+      : resultsQuery.isError ? <div role="alert" className="text-sm text-destructive py-6">Unable to load results. Please try again.</div>
+      : <div className="space-y-6">
+        {orderedKeys.map((key) => <AnalyteTrendSection
+          key={key}
+          analyte={analytes.find((a) => a.key === key)}
+          analyteKey={key}
+          rows={rowsByAnalyte.get(key) ?? []}
+          blocks={blocks}
+          selectedBlocks={selectedBlocks}
+        />)}
+      </div>}
+  </div>;
+}
+
+function AnalyteTrendSection({ analyte, analyteKey, rows, blocks, selectedBlocks }: {
+  analyte: SoilAnalyte | undefined;
+  analyteKey: string;
+  rows: BlockAnalyteResult[];
+  blocks: Array<{ id: string; name: string }>;
+  selectedBlocks: string[];
+}) {
+  const [seriesKey, setSeriesKey] = useState("");
+  const series = useMemo(() => buildTrendSeries(rows.map((r) => ({ result: r, sample: r.sample }))), [rows]);
   useEffect(() => { if (!series.some((s) => s.key === seriesKey)) setSeriesKey(series[0]?.key ?? ""); }, [series, seriesKey]);
   const active = series.find((s) => s.key === seriesKey) ?? series[0] ?? null;
   const name = analyte?.display_name ?? analyteKey;
@@ -94,26 +145,22 @@ export function TrendsTab() {
       })}
     </div>;
   };
-  return <div className="space-y-3 min-w-0">
-    <SoilBlockSelector blocks={blocks} selected={selectedBlocks} onChange={(ids) => setSelection({ vineyardId: selectedVineyardId, ids })} />
-    <div className="flex flex-wrap items-center gap-2">
-      <SoilAnalyteCombobox ariaLabel="Trend analyte" value={analyteKey} options={analytes.map((a) => ({ key: a.key, name: a.display_name, category: a.category ?? "Other" }))} onChange={setAnalyteKey} />
-      {series.length > 1 && <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Trend series">
-        <span className="text-xs text-muted-foreground">Series:</span>
-        {series.map((s) => <Button key={s.key} size="sm" variant={active?.key === s.key ? "default" : "outline"} onClick={() => setSeriesKey(s.key)}>
-          {s.method ?? "Method not recorded"} · {s.unit ?? "unit not recorded"} ({s.points.length})
-        </Button>)}
-      </div>}
+  return <section aria-label={`${name} trend`} className="space-y-3 rounded-md border bg-card p-3">
+    <div className="flex flex-wrap items-center gap-2 text-sm">
+      <h2 className="text-base font-semibold">{name}</h2>
+      {active && <Badge variant="outline">{active.method ?? "Method not recorded"}</Badge>}
+      {active && <Badge variant="outline">{active.unit ?? "Unit not recorded"}</Badge>}
+      <span className="text-muted-foreground">{selectedBlocks.length} blocks selected</span>
+      {active?.provisional && <Badge variant="outline" className="border-warning/50 bg-warning/10 text-warning-foreground">{TREND_PROVISIONAL_BADGE}</Badge>}
     </div>
-    {!selectedBlocks.length || !analyteKey ? <div className="text-sm text-muted-foreground py-6">Choose one or more blocks and an analyte to plot results over time.</div>
-      : resultsQuery.isLoading ? <div className="text-sm text-muted-foreground py-6">Loading results…</div>
-      : resultsQuery.isError ? <div role="alert" className="text-sm text-destructive py-6">Unable to load results. Please try again.</div>
+    {!rows.length ? <div className="text-sm text-muted-foreground py-3">No results for the selected blocks yet.</div>
       : <>
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-semibold">{name}</span><Badge variant="outline">{active?.method ?? "Method not recorded"}</Badge>
-          <Badge variant="outline">{active?.unit ?? "Unit not recorded"}</Badge><span className="text-muted-foreground">{selectedBlocks.length} blocks selected</span>
-          {active?.provisional && <Badge variant="outline" className="border-warning/50 bg-warning/10 text-warning-foreground">{TREND_PROVISIONAL_BADGE}</Badge>}
-        </div>
+        {series.length > 1 && <div className="flex flex-wrap items-center gap-1" role="group" aria-label={`${name} trend series`}>
+          <span className="text-xs text-muted-foreground">Series:</span>
+          {series.map((s) => <Button key={s.key} size="sm" variant={active?.key === s.key ? "default" : "outline"} onClick={() => setSeriesKey(s.key)}>
+            {s.method ?? "Method not recorded"} · {s.unit ?? "unit not recorded"} ({s.points.length})
+          </Button>)}
+        </div>}
         <div className="divide-y rounded-md border bg-card" aria-label="Block trend summaries">
           {blockTrends.map((b) => <section key={b.paddockId} aria-label={`${b.name} trend summary`} className="p-3">
             <h3 className="text-sm font-semibold mb-2">{b.name}</h3>
@@ -132,7 +179,7 @@ export function TrendsTab() {
             </>}
           </section>)}
         </div>
-        {active && <div className="h-96 min-w-0" aria-label="Block trends chart">
+        {active && <div className="h-96 min-w-0" aria-label={`${name} block trends chart`}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart margin={{ top: 16, right: 16, bottom: 8, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
@@ -166,5 +213,5 @@ export function TrendsTab() {
           </table>
         </div>
       </>}
-  </div>;
+  </section>;
 }

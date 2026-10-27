@@ -749,16 +749,30 @@ export function soilTrafficCounts(snapshots: SoilTrafficSnapshot[]): Record<Soil
  * Preserve the single-block read's sample visibility / deletion semantics.
  */
 export async function listBlocksAnalyteResults(paddockIds: string[], analyteKey: string): Promise<BlockAnalyteResult[]> {
+  return listBlocksResults(paddockIds, analyteKey);
+}
+
+/**
+ * Mapping-aware multi-analyte Trends read: ONE query for every analyte across
+ * the selected blocks, so ticking analytes never causes N+1 refetches. Same
+ * sample visibility / deletion semantics as the single-analyte read.
+ */
+export async function listBlocksTrendResults(paddockIds: string[]): Promise<BlockAnalyteResult[]> {
+  return listBlocksResults(paddockIds);
+}
+
+async function listBlocksResults(paddockIds: string[], analyteKey?: string): Promise<BlockAnalyteResult[]> {
   if (paddockIds.length === 0) return [];
   const ids = [...new Set(paddockIds)];
   const byBlock = await sampleIdsForBlocks(ids);
   const sampleIds = [...new Set([...byBlock.values()].flat())];
   if (!sampleIds.length) return [];
-  const { data, error } = await db.from("soil_sample_results")
+  let query = db.from("soil_sample_results")
     .select("*, soil_samples!inner(*, paddocks(name))")
-    .eq("analyte_key", analyteKey)
     .in("sample_id", sampleIds)
     .is("soil_samples.deleted_at", null);
+  if (analyteKey) query = query.eq("analyte_key", analyteKey);
+  const { data, error } = await query;
   if (error) throw error;
   const out: BlockAnalyteResult[] = [];
   const seen = new Map<string, Set<string>>();

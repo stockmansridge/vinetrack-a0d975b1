@@ -77,7 +77,6 @@ describe("SoilAnalyteCombobox", () => {
 
 describe("tabs use the searchable picker", () => {
   for (const [file, label] of [
-    ["TrendsTab", "Trend analyte"],
     ["CompareTab", "Compare analyte"],
     ["ReportsTab", "Report analyte"],
   ]) {
@@ -88,6 +87,12 @@ describe("tabs use the searchable picker", () => {
       expect(src).not.toMatch(/<select[^>]*aria-label="(Trend|Compare|Report) analyte"/);
     });
   }
+  it("TrendsTab uses the searchable multi-select, not a plain analyte select", () => {
+    const src = readFileSync("src/components/soil-analysis/TrendsTab.tsx", "utf8");
+    expect(src).toContain("<SoilAnalyteMultiSelect");
+    expect(src).toContain('ariaLabel="Trend analytes"');
+    expect(src).not.toMatch(/<select[^>]*aria-label="Trend analyte"/);
+  });
   it("Compare still uses presentAnalytes", () => {
     const src = readFileSync("src/components/soil-analysis/CompareTab.tsx", "utf8");
     expect(src).toContain("options={presentAnalytes.map(");

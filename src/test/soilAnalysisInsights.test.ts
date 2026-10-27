@@ -104,7 +104,7 @@ describe("trend series policy", () => {
     expect(trends).not.toContain("groups.map(");
     expect(trends).not.toContain("Separate series — methods/units are not comparable");
     expect(trends.match(/<ComposedChart/g)).toHaveLength(1);
-    expect(trends).toContain('aria-label="Trend series"');
+    expect(trends).toContain('aria-label={`${name} trend series`}');
     expect(trends).toContain("VineTrack-derived");
   });
 });
