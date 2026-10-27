@@ -76,7 +76,7 @@ export function TrendsTab() {
       || blockName(a.matched_paddock_id).localeCompare(blockName(b.matched_paddock_id)) || a.id.localeCompare(b.id));
   const TooltipBody = ({ active: on, payload }: any) => {
     if (!on || !payload?.length) return null;
-    return <div className="rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-sm space-y-2">
+    return <div className="max-h-64 max-w-72 overflow-y-auto rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-sm space-y-2">
       {payload.map((item: any, i: number) => {
         const d = item.payload;
         if (d.p) {

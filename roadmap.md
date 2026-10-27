@@ -1,9 +1,10 @@
 # Roadmap
 
 ## Soil Analysis multi-block Trends (Portal only)
-- [ ] Add analyte-filtered multi-block reads and shared block selection; preserve existing lifecycle semantics.
-- [ ] Render compatible series with separate per-block raw points, date averages, summaries and Block-first table; update only Trends help copy.
-- [ ] Run focused and release/navigation regressions, verify preview, report tests and commit; do not publish or change backend/mobile.
+- [x] Add analyte-filtered multi-block reads and shared block selection; preserve existing lifecycle semantics.
+- [x] Render compatible series with separate per-block raw points, date averages, summaries and Block-first table; update only Trends help copy.
+- [x] 261 tests across 18 files passed (17 new multi-block tests); automatic preview compilation clean. Isolated real-chart desktop/mobile verification: seven data lines, 21 raw points, eight selected blocks including No data, labelled source/derived tooltips, no horizontal overflow or runtime errors. No publication/backend/mobile changes.
+- [ ] Live vineyard acceptance — blocked: preview session mint reports no auth users; authenticated Stockman's Ridge data not verified.
 
 ## Estimate source badge colours (Portal only)
 - [x] Swap the two estimate-source badges so Yield Estimate Trips carries the brighter green and Pruning Estimate the deep green tint.
