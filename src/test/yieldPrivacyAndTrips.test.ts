@@ -91,7 +91,12 @@ const session = (id: string, date: string, completed: boolean, bunches: number, 
 });
 
 const trips = (list: any[]) =>
-  buildBunchCountTrips(list, { blocks, vintageOf: () => 2026 });
+  buildBunchCountTrips(list, {
+    blocks,
+    vintageOf: () => 2026,
+    // Explicitly configured master weight (no silent default exists).
+    bunchWeightFor: () => ({ grams: 150, source: "variety_default" }),
+  });
 
 describe("Bunch Count Trip estimate selection", () => {
   it("the latest completed trip wins and trips are never summed", () => {
