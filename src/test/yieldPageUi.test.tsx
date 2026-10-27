@@ -177,14 +177,13 @@ describe("Yields page", () => {
     expect(row.textContent).toContain("5");
     expect(screen.getAllByText("CURRENT ESTIMATE").length).toBeGreaterThan(0);
     fireEvent.click(row);
-    await waitFor(() => expect(screen.getByText(/Block A/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(/Block A/).length).toBeGreaterThan(0));
   });
 
   it("shows the delete action to owners and managers", async () => {
     renderPage();
     await openEstimations();
-    fireEvent.click(await screen.findByTestId("trip-row-s1"));
-    fireEvent.click(await screen.findByRole("button", { name: /view full trip detail/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "View full trip details" }));
     expect(await screen.findByRole("button", { name: /delete session/i })).toBeInTheDocument();
   });
 
@@ -193,7 +192,7 @@ describe("Yields page", () => {
     renderPage();
     await openEstimations();
     fireEvent.click(await screen.findByTestId("trip-row-s1"));
-    fireEvent.click(await screen.findByRole("button", { name: /view full trip detail/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^view full trip detail$/i }));
     await screen.findByRole("dialog");
     expect(screen.queryByRole("button", { name: /delete/i })).toBeNull();
   });

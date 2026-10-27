@@ -27,7 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Eye, Trash2 } from "lucide-react";
 import type { BunchCountTrip, CurrentBlockEstimate } from "@/lib/bunchCountTrips";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
@@ -117,24 +117,25 @@ export default function BunchCountTripsPanel({
               <TableHead className="text-right">Samples</TableHead>
               <TableHead>Damage</TableHead>
               <TableHead>Route</TableHead>
+              <TableHead className="w-12"><span className="sr-only">Details</span></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading && (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-muted-foreground py-6">
+                <TableCell colSpan={11} className="text-center text-muted-foreground py-6">
                   Loading…
                 </TableCell>
               </TableRow>
             )}
             {error && (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-destructive py-6">{error}</TableCell>
+                <TableCell colSpan={11} className="text-center text-destructive py-6">{error}</TableCell>
               </TableRow>
             )}
             {!loading && !error && trips.length === 0 && (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                   No Bunch Count Trips recorded for this vintage.
                 </TableCell>
               </TableRow>
@@ -143,6 +144,9 @@ export default function BunchCountTripsPanel({
               const isCurrent = liveTripIds.has(t.id);
               const open = expanded === t.id;
               const areaHa = t.summary.totalAreaHa;
+              const blockNames = (t.sampledBlocks.length
+                ? t.sampledBlocks.map((b) => b.blockName ?? "Unnamed block")
+                : t.blockNames).join(", ");
               const source = t.routeSourceSessionId ? tripById.get(t.routeSourceSessionId) : null;
               return (
                 <Fragment key={t.id}>
@@ -174,7 +178,11 @@ export default function BunchCountTripsPanel({
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>{t.sampledBlocks.length || t.summary.blocks.length}</TableCell>
+                    <TableCell>
+                      <span className="block max-w-60 truncate" title={blockNames}>
+                        {blockNames || "—"}
+                      </span>
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {fmtNum(t.totalEstimatedTonnes)}
                     </TableCell>
@@ -192,10 +200,24 @@ export default function BunchCountTripsPanel({
                     <TableCell className="text-xs">
                       {t.routeReused ? "Route reused" : "New route"}
                     </TableCell>
+                    <TableCell className="w-12">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label="View full trip details"
+                        title="View full trip details"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenTrip(t.id);
+                        }}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                   {open && (
                     <TableRow className="bg-muted/30 hover:bg-muted/30">
-                      <TableCell colSpan={10}>
+                      <TableCell colSpan={11}>
                         <div className="space-y-2 py-1 text-xs">
                           <div className="flex flex-wrap gap-x-6 gap-y-1">
                             <span>
