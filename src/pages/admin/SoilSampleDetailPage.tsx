@@ -218,7 +218,7 @@ function DetailInner() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Sample metadata</CardTitle>
+            <CardTitle className="text-sm">Extracted from report</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-3 text-sm">
             <div className="space-y-1">
@@ -475,7 +475,12 @@ function DetailInner() {
 
       <div className="flex items-center gap-3 mt-4">
         <Button onClick={save}>Save review</Button>
-        {sample.extraction_status !== "confirmed" && (
+        {sample.extraction_status === "failed" && (
+          <Button variant="outline" onClick={retry} disabled={retrying}>
+            {retrying ? "Extracting…" : "Retry extraction"}
+          </Button>
+        )}
+        {sample.extraction_status !== "confirmed" && sample.extraction_status !== "failed" && (
           <Button variant="outline" onClick={confirm} disabled={confirming}>
             {confirming ? "Confirming…" : "Confirm reviewed sample"}
           </Button>
