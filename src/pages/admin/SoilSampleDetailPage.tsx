@@ -36,6 +36,7 @@ import {
   type SoilSampleResult,
   type SoilSampleScope,
 } from "@/lib/soilAnalysis";
+import { ExtractionErrorNotice } from "@/components/soil-analysis/ExtractionErrorNotice";
 
 const db = supabase as any;
 
@@ -83,6 +84,9 @@ function DetailInner() {
   const [docError, setDocError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  // A failed retry shows the concise notice with the raw detail collapsed;
+  // saveState stays reserved for plain status text.
+  const [retryFailure, setRetryFailure] = useState<string | null>(null);
 
   const sample = detailQuery.data?.sample;
   useEffect(() => {
@@ -166,14 +170,15 @@ function DetailInner() {
     }
     setRetrying(true);
     setSaveState(null);
+    setRetryFailure(null);
     try {
       const outcome = await retrySoilExtraction(sample.id, primaryDoc.id);
       qc.invalidateQueries({ queryKey: ["soil-analysis"] });
-      setSaveState(
-        outcome.ok
-          ? "Extraction finished — review the extracted details below, then confirm."
-          : `Extraction failed again: ${outcome.error}. The uploaded document is preserved.`,
-      );
+      if (outcome.ok) {
+        setSaveState("Extraction finished — review the extracted details below, then confirm.");
+      } else {
+        setRetryFailure(outcome.error);
+      }
     } catch (e) {
       setSaveState(e instanceof Error ? e.message : String(e));
     } finally {
@@ -203,7 +208,7 @@ function DetailInner() {
       : sample.extraction_status === "processing"
         ? "Extracting — the parser is processing the document now."
         : sample.extraction_status === "failed"
-          ? "Extraction failed. The uploaded document is preserved above; check the document error and retry when the parser is available."
+          ? "Extraction failed. The uploaded document is preserved; retry when ready."
           : "No results recorded for this sample.";
 
   return (
@@ -360,17 +365,17 @@ function DetailInner() {
             <div className="text-muted-foreground">No documents recorded.</div>
           ) : (
             (detailQuery.data?.documents ?? []).map((doc) => (
-              <div key={doc.id} className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                <span className="flex-1 truncate">{doc.original_filename}</span>
+              <div key={doc.id} className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <span className="flex-1 truncate">{doc.original_filename}</span>
+                  <Button size="sm" variant="outline" onClick={() => openDocument(doc.storage_path)}>
+                    View source document
+                  </Button>
+                </div>
                 {doc.extraction_status === "failed" && doc.extraction_error && (
-                  <span className="text-xs text-destructive truncate max-w-64" title={doc.extraction_error}>
-                    {doc.extraction_error}
-                  </span>
+                  <ExtractionErrorNotice raw={doc.extraction_error} className="space-y-0.5 text-xs" />
                 )}
-                <Button size="sm" variant="outline" onClick={() => openDocument(doc.storage_path)}>
-                  View source document
-                </Button>
               </div>
             ))
           )}
@@ -486,6 +491,7 @@ function DetailInner() {
           </Button>
         )}
         <Button variant="outline" onClick={() => navigate("/admin/soil-analysis")}>Back to Soil Analysis</Button>
+        {retryFailure && <ExtractionErrorNotice raw={retryFailure} />}
         {saveState && <span className="text-sm text-muted-foreground">{saveState}</span>}
       </div>
     </div>

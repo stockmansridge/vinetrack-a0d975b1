@@ -19,6 +19,7 @@ import {
 } from "@/lib/soilAnalysis";
 import { formatDate } from "@/pages/admin/_shared";
 import { UploadSampleDialog } from "./UploadSampleDialog";
+import { ExtractionErrorNotice } from "./ExtractionErrorNotice";
 
 const db = supabase as any;
 
@@ -48,14 +49,16 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
   const [dateTo, setDateTo] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
-  const [retryError, setRetryError] = useState<string | null>(null);
+  // Extraction failures render through the shared concise notice; only
+  // non-extraction problems (e.g. a missing document) use plain text.
+  const [retryFailure, setRetryFailure] = useState<{ raw: string | null; plain?: string } | null>(null);
   const qc = useQueryClient();
 
   // Retry reuses the existing sample + primary document ids; the evidence
   // file is never re-uploaded and no duplicate rows are created.
   const retry = async (e: React.MouseEvent, s: SoilSample) => {
     e.stopPropagation();
-    setRetryError(null);
+    setRetryFailure(null);
     setRetryingId(s.id);
     try {
       const { data: doc, error: docErr } = await db
@@ -66,14 +69,14 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
         .maybeSingle();
       if (docErr) throw docErr;
       if (!doc) {
-        setRetryError("No source document is recorded for that sample, so extraction cannot be retried.");
+        setRetryFailure({ raw: null, plain: "No source document is recorded for that sample, so extraction cannot be retried." });
         return;
       }
       const outcome = await retrySoilExtraction(s.id, doc.id);
       qc.invalidateQueries({ queryKey: ["soil-analysis"] });
-      if (!outcome.ok) setRetryError(`Extraction failed again: ${outcome.error}`);
+      if (!outcome.ok) setRetryFailure({ raw: outcome.error });
     } catch (err) {
-      setRetryError(err instanceof Error ? err.message : String(err));
+      setRetryFailure({ raw: null, plain: err instanceof Error ? err.message : String(err) });
     } finally {
       setRetryingId(null);
     }
@@ -211,7 +214,12 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
           </table>
         )}
       </Card>
-      {retryError && <div className="text-sm text-destructive">{retryError}</div>}
+      {retryFailure &&
+        (retryFailure.raw ? (
+          <ExtractionErrorNotice raw={retryFailure.raw} />
+        ) : (
+          <div className="text-sm text-destructive">{retryFailure.plain}</div>
+        ))}
 
       <UploadSampleDialog
         open={uploadOpen}

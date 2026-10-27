@@ -10,6 +10,8 @@ import {
   buildCompareMatrix,
   isOutsideLabRange,
   labStatusLabel,
+  EXTRACTION_FAILED_MESSAGE,
+  cleanExtractionDetail,
   type SoilSample,
   type SoilSampleResult,
 } from "@/lib/soilAnalysis";
@@ -212,5 +214,70 @@ describe("lab status language", () => {
     expect(isOutsideLabRange("low")).toBe(true);
     expect(isOutsideLabRange("high")).toBe(true);
     expect(isOutsideLabRange("within_range")).toBe(false);
+  });
+});
+
+describe("extraction failure presentation", () => {
+  const RAW_OPENAI_ERROR =
+    `Edge function returned 500: Error, ` +
+    JSON.stringify({
+      error: "extraction_failed",
+      detail: `openai_400:${JSON.stringify(
+        { error: { message: "Invalid 'input[0].content[1].file_data'.", type: "invalid_request_error" } },
+        null,
+        2,
+      )}`,
+    });
+
+  // The value actually stored in extraction_error: the parser detail with
+  // pretty-printed JSON whose newlines were never re-escaped.
+  const RAW_STORED_DETAIL = `openai_400:{
+  "error": {
+    "message": "Invalid 'input[0].content[1].file_data'.",
+    "type": "invalid_request_error"
+  }
+}`;
+
+  it("keeps one concise main message for every failure", () => {
+    expect(EXTRACTION_FAILED_MESSAGE).toBe(
+      "Extraction failed. The report is preserved — retry when ready.",
+    );
+  });
+
+  it("extracts the human message from a nested OpenAI/edge error", () => {
+    expect(cleanExtractionDetail(RAW_OPENAI_ERROR)).toBe(
+      "Invalid 'input[0].content[1].file_data'.",
+    );
+  });
+
+  it("extracts the human message from the stored detail with raw newlines", () => {
+    expect(cleanExtractionDetail(RAW_STORED_DETAIL)).toBe(
+      "Invalid 'input[0].content[1].file_data'.",
+    );
+  });
+
+  it("cleans a prefixed provider detail without an outer edge wrapper", () => {
+    const raw = `openai_400:{"error":{"message":"The report file could not be read."}}`;
+    expect(cleanExtractionDetail(raw)).toBe("The report file could not be read.");
+  });
+
+  it("keeps a plain human detail as one line", () => {
+    expect(cleanExtractionDetail("OpenAI quota exceeded for the organisation.")).toBe(
+      "OpenAI quota exceeded for the organisation.",
+    );
+  });
+
+  it("collapses embedded newlines and runs of whitespace", () => {
+    expect(cleanExtractionDetail("Parser could not\n  read  page 1 of the report.")).toBe(
+      "Parser could not read page 1 of the report.",
+    );
+  });
+
+  it("returns null for codes, raw JSON and empty values — main message only", () => {
+    expect(cleanExtractionDetail("extraction_failed")).toBeNull();
+    expect(cleanExtractionDetail('{"error":"extraction_failed"}')).toBeNull();
+    expect(cleanExtractionDetail("")).toBeNull();
+    expect(cleanExtractionDetail(null)).toBeNull();
+    expect(cleanExtractionDetail(undefined)).toBeNull();
   });
 });

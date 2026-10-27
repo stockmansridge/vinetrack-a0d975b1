@@ -18,6 +18,7 @@ import {
   SOIL_UPLOAD_ACCEPT,
   type SoilSample,
 } from "@/lib/soilAnalysis";
+import { ExtractionErrorNotice } from "./ExtractionErrorNotice";
 
 export function UploadSampleDialog({
   open,
@@ -36,12 +37,14 @@ export function UploadSampleDialog({
   const [file, setFile] = useState<File | null>(null);
   const [vineyardId, setVineyardId] = useState<string>(selectedVineyardId ?? "");
   const [error, setError] = useState<string | null>(null);
+  const [extractionFailure, setExtractionFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const effectiveVineyard = vineyardId || selectedVineyardId || "";
 
   const submit = async () => {
     setError(null);
+    setExtractionFailure(null);
     if (!file) return setError("Choose a laboratory report file.");
     const invalid = validateSoilUpload(file);
     if (invalid) return setError(invalid);
@@ -55,10 +58,8 @@ export function UploadSampleDialog({
       });
       qc.invalidateQueries({ queryKey: ["soil-analysis"] });
       if (!outcome.extractionStarted) {
-        // Records are preserved; the sample list shows "Extraction failed".
-        setError(
-          `The report was uploaded and kept, but extraction could not start: ${outcome.extractionError}. The sample is marked "Extraction failed" — you can retry from the sample page.`,
-        );
+        // Records are preserved; shown via the concise failure notice.
+        setExtractionFailure(outcome.extractionError);
         return;
       }
       onUploaded(outcome.sample);
@@ -111,6 +112,7 @@ export function UploadSampleDialog({
           </div>
 
           {error && <div className="text-sm text-destructive">{error}</div>}
+          {extractionFailure && <ExtractionErrorNotice raw={extractionFailure} />}
 
           <div className="flex justify-start gap-2 pt-1">
             <Button onClick={submit} disabled={busy}>

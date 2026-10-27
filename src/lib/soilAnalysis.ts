@@ -403,6 +403,134 @@ export async function describeFunctionError(e: unknown): Promise<string> {
   return typeof msg === "string" && msg.trim() ? msg : String(e);
 }
 
+/**
+ * The single main message shown whenever extraction fails. The raw backend
+ * detail is never shown inline — it is cleaned into a one-liner (if useful)
+ * and kept behind a collapsed admin "Technical details" disclosure.
+ */
+export const EXTRACTION_FAILED_MESSAGE =
+  "Extraction failed. The report is preserved — retry when ready.";
+
+/** Returns the first complete {…} object embedded in a string, if any. */
+function firstJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start === -1) return null;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escape) escape = false;
+      else if (ch === "\\") escape = true;
+      else if (ch === '"') inString = false;
+    } else if (ch === '"') inString = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+/**
+ * JSON.parse that tolerates raw newlines/tabs inside string values — parser
+ * details frequently embed pretty-printed JSON whose control characters were
+ * never re-escaped when the body was stored.
+ */
+function parseJsonTolerant(text: string): any | null {
+  try {
+    return JSON.parse(text);
+  } catch {
+    // repair below
+  }
+  let out = "";
+  let inString = false;
+  let escape = false;
+  for (const ch of text) {
+    if (!inString) {
+      if (ch === '"') inString = true;
+      out += ch;
+      continue;
+    }
+    if (escape) {
+      escape = false;
+      out += ch;
+    } else if (ch === "\\") {
+      escape = true;
+      out += ch;
+    } else if (ch === '"') {
+      inString = false;
+      out += ch;
+    } else if (ch === "\n") out += "\\n";
+    else if (ch === "\r") out += "\\r";
+    else if (ch === "\t") out += "\\t";
+    else out += ch;
+  }
+  try {
+    return JSON.parse(out);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Strips provider prefixes (e.g. "openai_400:") and JSON wrappers from a
+ * detail string, returning the readable human message inside, if any.
+ */
+function unwrapHumanDetail(value: string): string | null {
+  let v = value.trim();
+  const colon = v.indexOf(":");
+  if (colon > 0 && /^[a-z0-9_]+$/i.test(v.slice(0, colon))) {
+    v = v.slice(colon + 1).trim();
+  }
+  const obj = firstJsonObject(v);
+  if (obj) {
+    try {
+      const nested = parseJsonTolerant(obj);
+      const m = nested?.error?.message ?? nested?.message;
+      if (typeof m === "string" && m.trim()) return m.trim();
+    } catch {
+      // not JSON after all — fall through to the plain-text check
+    }
+  }
+  const rest = (obj ? v.replace(obj, " ") : v).replace(/\s+/g, " ").trim();
+  // A readable sentence: plain words with spaces, no JSON braces.
+  if (rest && !rest.includes("{") && !rest.includes("}") && rest.includes(" ")) return rest;
+  return null;
+}
+
+/**
+ * Turns a raw extraction error string into a cleaned, single-line human
+ * summary, or null when nothing human-useful can be extracted (callers then
+ * show only EXTRACTION_FAILED_MESSAGE and keep the raw text for the admin
+ * technical disclosure). Never throws and never reads anything but the
+ * string it is given.
+ */
+export function cleanExtractionDetail(raw: string | null | undefined): string | null {
+  if (!raw || typeof raw !== "string" || !raw.trim()) return null;
+  const text = raw.trim();
+  let human: string | null = null;
+  const obj = firstJsonObject(text);
+  if (obj) {
+    try {
+      const body = parseJsonTolerant(obj);
+      const detail = body?.detail ?? body?.error ?? body?.message;
+      if (typeof detail === "string" && detail.trim()) {
+        human = unwrapHumanDetail(detail);
+      }
+    } catch {
+      // fall through to plain-text handling
+    }
+  }
+  if (!human) human = unwrapHumanDetail(text);
+  if (!human) return null;
+  // Always a single, clean line.
+  const line = human.replace(/\s+/g, " ").trim();
+  return line && !line.startsWith("{") ? line : null;
+}
+
 export interface UploadSoilSampleOutcome {
   sample: SoilSample;
   document: SoilSampleDocument;
