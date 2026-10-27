@@ -1,5 +1,9 @@
 # Roadmap
 
+## Yield Estimate Trips table follow-up (Portal only)
+- [x] Show sampled block names with full-name access and add a row-end shortcut to the existing trip drawer, without toggling inline expansion.
+- [ ] Protect master-weight tonnes, sampled-area density and missing-weight dashes; run focused Yields regressions and check automatic preview compilation. No calculation/backend/mobile changes or publication.
+
 ## Yields bunch weights (Portal only)
 - [x] Bunch Weights tab (after Yield Estimate Trips) with variety master + block overrides via live RPCs
 - [x] Remove 0.15 kg fallback from current trip calcs; resolve master weights; historical payload weight labelled
