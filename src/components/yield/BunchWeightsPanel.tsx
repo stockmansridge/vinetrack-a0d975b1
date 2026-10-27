@@ -245,30 +245,43 @@ export default function BunchWeightsPanel({
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{fmtG(master.grams)}</TableCell>
-                      <TableCell>
-                        {(() => {
-                          if (master.source !== "not_configured") return <SourceBadge source={master.source} />;
-                          const set = v.blocks.filter(
-                            (b) => resolveBunchWeight(rows, b.id, v.key).source === "block_override",
-                          ).length;
-                          if (set > 0 && set === v.blocks.length)
-                            return (
-                              <Badge variant="outline" className={`text-[10px] ${SOURCE_BADGE.block_override}`}>
-                                Configured per block
+                      {(() => {
+                        // Roll up the weights actually used by this variety's blocks.
+                        const eff = v.blocks.map((b) => resolveBunchWeight(rows, b.id, v.key));
+                        const grams = eff.map((e) => e.grams).filter((g): g is number => g != null);
+                        const set = eff.filter((e) => e.grams != null).length;
+                        const min = grams.length ? Math.min(...grams) : null;
+                        const max = grams.length ? Math.max(...grams) : null;
+                        const weightText =
+                          min == null
+                            ? fmtG(master.grams)
+                            : min === max
+                              ? fmtG(min)
+                              : `${fmtG(min).replace(" g", "")}–${fmtG(max)}`;
+                        let label: string = BUNCH_WEIGHT_SOURCE_LABEL.not_configured;
+                        let cls = SOURCE_BADGE.not_configured;
+                        const allOverride = eff.length > 0 && eff.every((e) => e.source === "block_override");
+                        if (master.source !== "not_configured" && set === eff.length) {
+                          label = allOverride ? "Configured per block" : BUNCH_WEIGHT_SOURCE_LABEL.variety_default;
+                          cls = allOverride ? SOURCE_BADGE.block_override : SOURCE_BADGE.variety_default;
+                        } else if (set > 0 && set === eff.length) {
+                          label = "Configured per block";
+                          cls = SOURCE_BADGE.block_override;
+                        } else if (set > 0) {
+                          label = `Partially configured (${set}/${eff.length})`;
+                          cls = SOURCE_BADGE.partial;
+                        }
+                        return (
+                          <>
+                            <TableCell className="text-right tabular-nums">{weightText}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className={`${BADGE_BASE} ${cls}`}>
+                                {label}
                               </Badge>
-                            );
-                          if (set > 0)
-                            return (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] border-warning/40 bg-warning/10 text-warning"
-                              >
-                                Partially configured
-                              </Badge>
-                            );
-                          return <SourceBadge source="not_configured" />;
-                        })()}
+                            </TableCell>
+                          </>
+                        );
+                      })()}
                       </TableCell>
                       <TableCell>
                         {canEdit && (
