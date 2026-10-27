@@ -30,13 +30,27 @@ import {
   retrySoilExtraction,
   isSoilSampleDeletable,
   listAnalyteCatalogue,
+  setSoilSampleBlockMappings,
+  validateBlockMappings,
+  formatDataError,
   SAMPLE_STATUS_LABEL,
-  SAMPLE_SCOPE_LABEL,
   labStatusLabel,
   type SoilSample,
   type SoilSampleResult,
-  type SoilSampleScope,
+  type SoilBlockMappingInput,
 } from "@/lib/soilAnalysis";
+
+type CoverageMode = "not_mapped" | "block" | "point";
+
+/** Compact variety context for the block selector — display only; the
+ *  mapping always stores just the paddock_id. */
+function varietyContext(allocations: unknown): string | null {
+  if (!Array.isArray(allocations)) return null;
+  const names = allocations
+    .map((a: any) => String(a?.varietyName ?? a?.variety_name ?? a?.name ?? "").trim())
+    .filter(Boolean);
+  return names.length > 0 ? [...new Set(names)].join(" · ") : null;
+}
 import { ExtractionErrorNotice } from "@/components/soil-analysis/ExtractionErrorNotice";
 import { DeleteSampleDialog } from "@/components/soil-analysis/DeleteSampleDialog";
 
@@ -68,10 +82,10 @@ function DetailInner() {
   const blocksQuery = useQuery({
     queryKey: ["soil-analysis", "blocks", detailQuery.data?.sample.vineyard_id],
     enabled: !!detailQuery.data?.sample.vineyard_id,
-    queryFn: async (): Promise<Array<{ id: string; name: string }>> => {
+    queryFn: async (): Promise<Array<{ id: string; name: string; variety_allocations: unknown }>> => {
       const { data, error } = await db
         .from("paddocks")
-        .select("id, name")
+        .select("id, name, variety_allocations")
         .eq("vineyard_id", detailQuery.data!.sample.vineyard_id)
         .is("deleted_at", null)
         .order("name");
@@ -90,11 +104,60 @@ function DetailInner() {
   // saveState stays reserved for plain status text.
   const [retryFailure, setRetryFailure] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // Block coverage: a repeatable list of mapping rows. soil_sample_block_mappings
+  // is the authority; legacy sample fields are only a fallback when no rows exist.
+  const [coverageMode, setCoverageMode] = useState<CoverageMode>("not_mapped");
+  const [mappingRows, setMappingRows] = useState<SoilBlockMappingInput[]>([]);
+  const [initialisedFor, setInitialisedFor] = useState<string | null>(null);
 
   const sample = detailQuery.data?.sample;
+  const mappings = detailQuery.data?.mappings;
   useEffect(() => {
-    if (sample) setDraft({ ...sample });
-  }, [sample?.id]);
+    if (!sample || !mappings || initialisedFor === sample.id) return;
+    setDraft({ ...sample });
+    if (sample.sample_scope === "point") {
+      setCoverageMode("point");
+      setMappingRows([]);
+    } else if (mappings.length > 0) {
+      setCoverageMode("block");
+      setMappingRows(
+        mappings.map((m) => ({
+          paddock_id: m.paddock_id,
+          mapping_scope: m.mapping_scope,
+          row_start: m.row_start,
+          row_end: m.row_end,
+        })),
+      );
+    } else if (
+      sample.paddock_id &&
+      (sample.sample_scope === "whole_block" || sample.sample_scope === "row_range")
+    ) {
+      // Legacy fallback only — this sample predates the mappings backfill.
+      setCoverageMode("block");
+      setMappingRows([
+        {
+          paddock_id: sample.paddock_id,
+          mapping_scope: sample.sample_scope,
+          row_start: sample.row_start,
+          row_end: sample.row_end,
+        },
+      ]);
+    } else {
+      setCoverageMode("not_mapped");
+      setMappingRows([]);
+    }
+    setInitialisedFor(sample.id);
+  }, [sample?.id, mappings]);
+
+  const updateMappingRow = (idx: number, patch: Partial<SoilBlockMappingInput>) =>
+    setMappingRows((rows) => rows.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  const addMappingRow = () =>
+    setMappingRows((rows) => [
+      ...rows,
+      { paddock_id: "", mapping_scope: "whole_block", row_start: null, row_end: null },
+    ]);
+  const removeMappingRow = (idx: number) =>
+    setMappingRows((rows) => rows.filter((_, i) => i !== idx));
 
   if (detailQuery.isLoading) {
     return <div className="p-6 text-sm text-muted-foreground">Loading sample…</div>;
@@ -112,9 +175,23 @@ function DetailInner() {
   const setResult = (rid: string, key: keyof SoilSampleResult, value: unknown) =>
     setResultDrafts((d) => ({ ...d, [rid]: { ...d[rid], [key]: value } }));
 
-  const save = async () => {
+  // Returns true when everything saved; false when validation failed or a
+  // write errored (the human-readable message is already in saveState).
+  const save = async (): Promise<boolean> => {
     setSaveState(null);
+    // Validate block coverage BEFORE any write so an invalid state (e.g. a
+    // row range with no block) can never reach the database.
+    if (coverageMode === "block") {
+      const invalid = validateBlockMappings(mappingRows);
+      if (invalid) {
+        setSaveState(invalid);
+        return false;
+      }
+    }
     try {
+      // 1. Metadata only. sample_scope / paddock_id / row_start / row_end
+      //    are owned by the atomic mappings RPC for block coverage and are
+      //    NEVER written directly here.
       await updateSoilSample(sample.id, {
         sampled_at: (draft.sampled_at as string) ?? null,
         received_at: (draft.received_at as string) ?? null,
@@ -130,21 +207,39 @@ function DetailInner() {
         sample_depth_from_cm: (draft.sample_depth_from_cm as number) ?? null,
         sample_depth_to_cm: (draft.sample_depth_to_cm as number) ?? null,
         notes: (draft.notes as string) ?? null,
-        sample_scope: (draft.sample_scope as SoilSampleScope) ?? "unmapped",
-        paddock_id: (draft.paddock_id as string) ?? null,
-        row_start: (draft.row_start as number) ?? null,
-        row_end: (draft.row_end as number) ?? null,
-        latitude: (draft.latitude as number) ?? null,
-        longitude: (draft.longitude as number) ?? null,
       });
+      // 2. Block mappings — ONE atomic RPC call, never N separate inserts.
+      //    The RPC also synchronises the legacy sample fields (including
+      //    multi_block when more than one block is mapped).
+      if (coverageMode === "block") {
+        await setSoilSampleBlockMappings(sample.id, mappingRows);
+      } else {
+        // Not mapped and Sampling point both clear block mappings.
+        await setSoilSampleBlockMappings(sample.id, []);
+        if (coverageMode === "point") {
+          // A sampling point is a sample-level location, not a block mapping.
+          await updateSoilSample(sample.id, {
+            sample_scope: "point",
+            paddock_id: null,
+            row_start: null,
+            row_end: null,
+            latitude: (draft.latitude as number) ?? null,
+            longitude: (draft.longitude as number) ?? null,
+          });
+        }
+      }
+      // 3. Result corrections (provenance-safe patches only).
       for (const [rid, patch] of Object.entries(resultDrafts)) {
         if (Object.keys(patch).length > 0) await updateSoilResult(rid, patch);
       }
       setResultDrafts({});
+      // Refetch: the RPC may have changed sample_scope (e.g. multi_block).
       qc.invalidateQueries({ queryKey: ["soil-analysis"] });
       setSaveState("Saved. Original extraction values are preserved; the sample stays in review until you confirm it.");
+      return true;
     } catch (e) {
-      setSaveState(e instanceof Error ? e.message : String(e));
+      setSaveState(formatDataError(e));
+      return false;
     }
   };
 
@@ -153,12 +248,13 @@ function DetailInner() {
     setConfirming(true);
     setSaveState(null);
     try {
-      await save();
+      const saved = await save();
+      if (!saved) return; // validation message already shown
       await confirmSoilSample(sample.id, user.id);
       qc.invalidateQueries({ queryKey: ["soil-analysis"] });
       setSaveState("Confirmed. The reviewed values are now the confirmed record.");
     } catch (e) {
-      setSaveState(e instanceof Error ? e.message : String(e));
+      setSaveState(formatDataError(e));
     } finally {
       setConfirming(false);
     }
@@ -183,7 +279,7 @@ function DetailInner() {
         setRetryFailure(outcome.error);
       }
     } catch (e) {
-      setSaveState(e instanceof Error ? e.message : String(e));
+      setSaveState(formatDataError(e));
     } finally {
       setRetrying(false);
     }
@@ -195,11 +291,10 @@ function DetailInner() {
       const url = await getSoilDocumentSignedUrl(path);
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (e) {
-      setDocError(e instanceof Error ? e.message : String(e));
+      setDocError(formatDataError(e));
     }
   };
 
-  const sampleScope = (draft.sample_scope as SoilSampleScope) ?? sample.sample_scope;
   const analytes = analytesQuery.data ?? [];
   const blocks = blocksQuery.data ?? [];
   const results = detailQuery.data?.results ?? [];
@@ -302,45 +397,118 @@ function DetailInner() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">VineTrack block mapping</CardTitle>
+            <CardTitle className="text-sm">VineTrack block coverage</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3 text-sm">
+          <CardContent className="space-y-3 text-sm">
+            <p className="text-xs text-muted-foreground">
+              Link this laboratory sample to the VineTrack blocks it represents. The
+              laboratory paddock name is preserved separately.
+            </p>
             <div className="space-y-1">
-              <Label>Mapping</Label>
-              <select className={selectClass} value={sampleScope} onChange={(e) => set("sample_scope", e.target.value)}>
-                {Object.entries(SAMPLE_SCOPE_LABEL).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label>Block</Label>
+              <Label>Coverage</Label>
               <select
                 className={selectClass}
-                value={(draft.paddock_id as string) ?? ""}
-                onChange={(e) => set("paddock_id", e.target.value || null)}
-                disabled={sampleScope === "unmapped"}
+                value={coverageMode}
+                onChange={(e) => setCoverageMode(e.target.value as CoverageMode)}
+                aria-label="Coverage mode"
               >
-                <option value="">Not mapped</option>
-                {blocks.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
+                <option value="not_mapped">Not mapped</option>
+                <option value="block">Block coverage</option>
+                <option value="point">Sampling point</option>
               </select>
             </div>
-            {sampleScope === "row_range" && (
-              <>
-                <div className="space-y-1">
-                  <Label>Row from</Label>
-                  <Input type="number" value={(draft.row_start as any) ?? ""} onChange={(e) => set("row_start", e.target.value ? Number(e.target.value) : null)} />
-                </div>
-                <div className="space-y-1">
-                  <Label>Row to</Label>
-                  <Input type="number" value={(draft.row_end as any) ?? ""} onChange={(e) => set("row_end", e.target.value ? Number(e.target.value) : null)} />
-                </div>
-              </>
+
+            {coverageMode === "block" && (
+              <div className="space-y-2">
+                {mappingRows.map((row, idx) => (
+                  <div key={idx} className="rounded-md border border-border p-2 space-y-2">
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1 space-y-1">
+                        <Label>Block</Label>
+                        <select
+                          className={selectClass}
+                          value={row.paddock_id}
+                          onChange={(e) => updateMappingRow(idx, { paddock_id: e.target.value })}
+                          aria-label={`Mapping block ${idx + 1}`}
+                        >
+                          <option value="">Choose a block…</option>
+                          {blocks.map((b) => {
+                            const varieties = varietyContext(b.variety_allocations);
+                            return (
+                              <option key={b.id} value={b.id}>
+                                {varieties ? `${b.name} — ${varieties}` : b.name}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => removeMappingRow(idx)}
+                        aria-label={`Remove mapping ${idx + 1}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap items-end gap-2">
+                      <div className="space-y-1">
+                        <Label>Coverage</Label>
+                        <select
+                          className={selectClass}
+                          value={row.mapping_scope}
+                          onChange={(e) =>
+                            updateMappingRow(idx, {
+                              mapping_scope: e.target.value as SoilBlockMappingInput["mapping_scope"],
+                            })
+                          }
+                          aria-label={`Mapping coverage ${idx + 1}`}
+                        >
+                          <option value="whole_block">Whole block</option>
+                          <option value="row_range">Row range</option>
+                        </select>
+                      </div>
+                      {row.mapping_scope === "row_range" && (
+                        <>
+                          <div className="space-y-1">
+                            <Label>Row from</Label>
+                            <Input
+                              type="number"
+                              className="w-24"
+                              value={row.row_start ?? ""}
+                              onChange={(e) =>
+                                updateMappingRow(idx, {
+                                  row_start: e.target.value ? Number(e.target.value) : null,
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Row to</Label>
+                            <Input
+                              type="number"
+                              className="w-24"
+                              value={row.row_end ?? ""}
+                              onChange={(e) =>
+                                updateMappingRow(idx, {
+                                  row_end: e.target.value ? Number(e.target.value) : null,
+                                })
+                              }
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <Button size="sm" variant="outline" onClick={addMappingRow}>
+                  + Add another block
+                </Button>
+              </div>
             )}
-            {sampleScope === "point" && (
-              <>
+
+            {coverageMode === "point" && (
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label>Latitude</Label>
                   <Input type="number" step="any" value={(draft.latitude as any) ?? ""} onChange={(e) => set("latitude", e.target.value ? Number(e.target.value) : null)} />
@@ -349,12 +517,8 @@ function DetailInner() {
                   <Label>Longitude</Label>
                   <Input type="number" step="any" value={(draft.longitude as any) ?? ""} onChange={(e) => set("longitude", e.target.value ? Number(e.target.value) : null)} />
                 </div>
-              </>
+              </div>
             )}
-            <div className="col-span-2 text-xs text-muted-foreground">
-              The laboratory's paddock name stays stored separately; this mapping only links the
-              sample to VineTrack blocks.
-            </div>
           </CardContent>
         </Card>
       </div>

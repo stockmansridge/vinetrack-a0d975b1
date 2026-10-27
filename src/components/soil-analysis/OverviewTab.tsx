@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/ios-supabase/client";
 import {
   listSoilSamples,
+  listBlockMappingsForSamples,
+  mappingSummaryLabel,
   SAMPLE_STATUS_LABEL,
   labStatusLabel,
   isOutsideLabRange,
@@ -34,6 +36,23 @@ export function OverviewTab({ onOpenSample }: { onOpenSample: (id: string) => vo
   const samples = samplesQuery.data ?? [];
   const results = resultsQuery.data ?? [];
 
+  // Block mappings are the authority for which blocks a sample belongs to;
+  // a multi-block sample appears under EACH mapped block. Legacy
+  // paddock_id is only a fallback when no mapping rows exist.
+  const sampleIds = useMemo(() => samples.map((s) => s.id), [samples]);
+  const mappingsQuery = useQuery({
+    queryKey: ["soil-analysis", "mappings", "overview", sampleIds],
+    enabled: sampleIds.length > 0,
+    queryFn: () => listBlockMappingsForSamples(sampleIds),
+  });
+  const mappings = mappingsQuery.data;
+
+  const blockIdsFor = (s: SoilSample): Array<{ id: string; name: string | null }> => {
+    const rows = mappings?.get(s.id);
+    if (rows && rows.length > 0) return rows.map((m) => ({ id: m.paddock_id, name: m.block_name ?? null }));
+    return s.paddock_id ? [{ id: s.paddock_id, name: s.block_name ?? null }] : [];
+  };
+
   const counts = useMemo(() => {
     const c: Record<string, number> = { pending: 0, processing: 0, review_required: 0, confirmed: 0, failed: 0 };
     for (const s of samples) c[s.extraction_status] = (c[s.extraction_status] ?? 0) + 1;
@@ -41,19 +60,25 @@ export function OverviewTab({ onOpenSample }: { onOpenSample: (id: string) => vo
   }, [samples]);
 
   const latestByBlock = useMemo(() => {
-    const map = new Map<string, SoilSample>();
+    const map = new Map<string, { sample: SoilSample; blockName: string | null }>();
     for (const s of samples) {
-      if (!s.paddock_id) continue;
-      const existing = map.get(s.paddock_id);
-      const when = s.sampled_at ?? s.created_at;
-      if (!existing || when > (existing.sampled_at ?? existing.created_at)) {
-        map.set(s.paddock_id, s);
+      for (const b of blockIdsFor(s)) {
+        const existing = map.get(b.id);
+        const when = s.sampled_at ?? s.created_at;
+        if (!existing || when > (existing.sample.sampled_at ?? existing.sample.created_at)) {
+          map.set(b.id, { sample: s, blockName: b.name });
+        }
       }
     }
-    return [...map.values()].sort((a, b) =>
-      String(b.sampled_at ?? b.created_at).localeCompare(String(a.sampled_at ?? a.created_at)),
-    );
-  }, [samples]);
+    return [...map.entries()]
+      .map(([blockId, v]) => ({ blockId, ...v }))
+      .sort((a, b) =>
+        String(b.sample.sampled_at ?? b.sample.created_at).localeCompare(
+          String(a.sample.sampled_at ?? a.sample.created_at),
+        ),
+      );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [samples, mappings]);
 
   const issues = useMemo(() => {
     const sampleById = new Map(samples.map((s) => [s.id, s]));
@@ -65,23 +90,31 @@ export function OverviewTab({ onOpenSample }: { onOpenSample: (id: string) => vo
 
   const blockSummaries = useMemo(() => {
     const map = new Map<string, { name: string; samples: number; analytes: Set<string> }>();
+    const sampleBlocks = new Map<string, Array<{ id: string; name: string | null }>>();
     for (const s of samples) {
-      if (!s.paddock_id) continue;
-      const entry = map.get(s.paddock_id) ?? {
-        name: s.block_name ?? "Unnamed block",
-        samples: 0,
-        analytes: new Set<string>(),
-      };
-      entry.samples += 1;
-      map.set(s.paddock_id, entry);
+      const blocks = blockIdsFor(s);
+      sampleBlocks.set(s.id, blocks);
+      for (const b of blocks) {
+        const entry = map.get(b.id) ?? {
+          name: b.name ?? "Unnamed block",
+          samples: 0,
+          analytes: new Set<string>(),
+        };
+        entry.samples += 1;
+        map.set(b.id, entry);
+      }
     }
-    const sampleBlock = new Map(samples.map((s) => [s.id, s.paddock_id]));
     for (const r of results) {
-      const pid = sampleBlock.get(r.sample_id);
-      if (pid && r.analyte_key) map.get(pid)?.analytes.add(r.analyte_key);
+      if (!r.analyte_key) continue;
+      for (const b of sampleBlocks.get(r.sample_id) ?? []) {
+        map.get(b.id)?.analytes.add(r.analyte_key);
+      }
     }
-    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [samples, results]);
+    return [...map.entries()]
+      .map(([id, v]) => ({ id, ...v }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [samples, results, mappings]);
 
   if (samplesQuery.isLoading) {
     return <div className="text-sm text-muted-foreground py-8">Loading soil samples…</div>;
@@ -151,17 +184,17 @@ export function OverviewTab({ onOpenSample }: { onOpenSample: (id: string) => vo
                 </tr>
               </thead>
               <tbody>
-                {latestByBlock.map((s) => (
+                {latestByBlock.map((row) => (
                   <tr
-                    key={s.id}
+                    key={`${row.blockId}-${row.sample.id}`}
                     className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
-                    onClick={() => onOpenSample(s.id)}
+                    onClick={() => onOpenSample(row.sample.id)}
                   >
-                    <td className="px-4 py-2 font-medium">{s.block_name ?? "—"}</td>
-                    <td className="px-4 py-2">{formatDate(s.sampled_at)}</td>
-                    <td className="px-4 py-2">{s.laboratory ?? "—"}</td>
+                    <td className="px-4 py-2 font-medium">{row.blockName ?? "—"}</td>
+                    <td className="px-4 py-2">{formatDate(row.sample.sampled_at)}</td>
+                    <td className="px-4 py-2">{row.sample.laboratory ?? "—"}</td>
                     <td className="px-4 py-2">
-                      <Badge variant="outline">{SAMPLE_STATUS_LABEL[s.extraction_status]}</Badge>
+                      <Badge variant="outline">{SAMPLE_STATUS_LABEL[row.sample.extraction_status]}</Badge>
                     </td>
                   </tr>
                 ))}
@@ -198,7 +231,9 @@ export function OverviewTab({ onOpenSample }: { onOpenSample: (id: string) => vo
                     className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
                     onClick={() => sample && onOpenSample(sample.id)}
                   >
-                    <td className="px-4 py-2 font-medium">{sample?.block_name ?? "—"}</td>
+                    <td className="px-4 py-2 font-medium">
+                      {sample ? mappingSummaryLabel(sample, mappings?.get(sample.id)) : "—"}
+                    </td>
                     <td className="px-4 py-2">{result.original_analyte_name ?? result.analyte_key ?? "—"}</td>
                     <td className="px-4 py-2">
                       {result.value_numeric ?? result.value_text ?? "—"} {result.unit ?? ""}
@@ -219,7 +254,7 @@ export function OverviewTab({ onOpenSample }: { onOpenSample: (id: string) => vo
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {blockSummaries.map((b) => (
-          <Card key={b.name}>
+          <Card key={b.id}>
             <CardHeader className="pb-1">
               <CardTitle className="text-sm">{b.name}</CardTitle>
             </CardHeader>

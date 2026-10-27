@@ -11,10 +11,12 @@ import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
 import {
   listSoilSamples,
+  listBlockMappingsForSamples,
+  mappingSummaryLabel,
+  mappingSummaryLines,
   retrySoilExtraction,
   isSoilSampleDeletable,
   SAMPLE_STATUS_LABEL,
-  SAMPLE_SCOPE_LABEL,
   type SoilSample,
   type SoilSampleStatus,
 } from "@/lib/soilAnalysis";
@@ -32,14 +34,6 @@ function depthLabel(s: SoilSample): string {
   return `${s.sample_depth_from_cm ?? s.sample_depth_to_cm} cm`;
 }
 
-function mappingLabel(s: SoilSample): string {
-  if (s.sample_scope === "row_range" && s.row_start != null) {
-    return `${s.block_name ?? "Block"} rows ${s.row_start}–${s.row_end ?? s.row_start}`;
-  }
-  if (s.sample_scope === "point") return `${s.block_name ?? "Block"} (point)`;
-  if (s.sample_scope === "whole_block") return s.block_name ?? "Whole block";
-  return SAMPLE_SCOPE_LABEL.unmapped;
-}
 
 export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => void }) {
   const { memberships, selectedVineyardId } = useVineyard();
@@ -117,6 +111,15 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
       }),
   });
 
+  // Block mappings are the display authority for the VineTrack mapping
+  // column; legacy sample fields are only a fallback inside the label helper.
+  const sampleIds = useMemo(() => (samplesQuery.data ?? []).map((s) => s.id), [samplesQuery.data]);
+  const mappingsQuery = useQuery({
+    queryKey: ["soil-analysis", "mappings", sampleIds],
+    enabled: sampleIds.length > 0,
+    queryFn: () => listBlockMappingsForSamples(sampleIds),
+  });
+
   const laboratories = useMemo(() => {
     const set = new Set<string>();
     for (const s of samplesQuery.data ?? []) if (s.laboratory) set.add(s.laboratory);
@@ -190,7 +193,18 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
                 >
                   <td className="px-4 py-2">{formatDate(s.sampled_at)}</td>
                   <td className="px-4 py-2">{s.lab_paddock_name ?? "—"}</td>
-                  <td className="px-4 py-2 font-medium">{mappingLabel(s)}</td>
+                  <td className="px-4 py-2 font-medium">
+                    {(() => {
+                      const rows = mappingsQuery.data?.get(s.id);
+                      const label = mappingSummaryLabel(s, rows);
+                      // Multi-block samples show "N blocks" with the full
+                      // block/coverage list on hover — never one arbitrary block.
+                      if (rows && rows.length > 1) {
+                        return <span title={mappingSummaryLines(rows).join("\n")}>{label}</span>;
+                      }
+                      return label;
+                    })()}
+                  </td>
                   <td className="px-4 py-2">{depthLabel(s)}</td>
                   <td className="px-4 py-2">
                     {s.laboratory ?? "—"}

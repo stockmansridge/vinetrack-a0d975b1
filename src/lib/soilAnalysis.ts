@@ -43,7 +43,7 @@ export type SoilDocumentExtractionStatus =
   | "review_required"
   | "failed";
 
-export type SoilSampleScope = "unmapped" | "whole_block" | "row_range" | "point";
+export type SoilSampleScope = "unmapped" | "whole_block" | "row_range" | "point" | "multi_block";
 
 export type SoilDesiredDirection = "range" | "higher" | "lower" | "context_only";
 
@@ -162,6 +162,180 @@ export interface SoilBlockAlias {
 }
 
 // ---------------------------------------------------------------------------
+// Block mappings — one laboratory sample can cover MULTIPLE VineTrack blocks.
+// public.soil_sample_block_mappings is the authority. The legacy
+// soil_samples.sample_scope / paddock_id / row_start / row_end columns are
+// synchronised by the soil_analysis_set_block_mappings RPC (0 mappings =>
+// unmapped, 1 => legacy fields set, >1 => multi_block) and are only ever a
+// display fallback for rows that predate the backfill. The Portal NEVER
+// forces a multi-block sample into one paddock_id.
+// ---------------------------------------------------------------------------
+
+export type SoilMappingScope = "whole_block" | "row_range";
+
+export interface SoilBlockMapping {
+  id: string;
+  sample_id: string;
+  vineyard_id: string;
+  paddock_id: string;
+  mapping_scope: SoilMappingScope;
+  row_start: number | null;
+  row_end: number | null;
+  mapping_confidence: number | null;
+  notes: string | null;
+  sort_order: number;
+  // joined display field
+  block_name?: string | null;
+}
+
+/** Editable mapping row (review UI) — identity is always the paddock_id. */
+export interface SoilBlockMappingInput {
+  paddock_id: string;
+  mapping_scope: SoilMappingScope;
+  row_start: number | null;
+  row_end: number | null;
+}
+
+export async function listSampleBlockMappings(sampleId: string): Promise<SoilBlockMapping[]> {
+  const { data, error } = await db
+    .from("soil_sample_block_mappings")
+    .select("*, paddocks(name)")
+    .eq("sample_id", sampleId)
+    .order("sort_order")
+    .order("id");
+  if (error) throw error;
+  return (data ?? []).map((row: any) => ({
+    ...row,
+    block_name: row.paddocks?.name ?? null,
+    paddocks: undefined,
+  })) as SoilBlockMapping[];
+}
+
+/** Mappings for many samples at once, keyed by sample_id (list/overview). */
+export async function listBlockMappingsForSamples(
+  sampleIds: string[],
+): Promise<Map<string, SoilBlockMapping[]>> {
+  const map = new Map<string, SoilBlockMapping[]>();
+  if (sampleIds.length === 0) return map;
+  const { data, error } = await db
+    .from("soil_sample_block_mappings")
+    .select("*, paddocks(name)")
+    .in("sample_id", sampleIds)
+    .order("sort_order")
+    .order("id");
+  if (error) throw error;
+  for (const row of data ?? []) {
+    const mapping = {
+      ...row,
+      block_name: (row as any).paddocks?.name ?? null,
+      paddocks: undefined,
+    } as SoilBlockMapping;
+    map.set(mapping.sample_id, [...(map.get(mapping.sample_id) ?? []), mapping]);
+  }
+  return map;
+}
+
+export const MAPPING_BLOCK_REQUIRED_MESSAGE = "Choose a block for each block-coverage row.";
+export const MAPPING_ROWS_REQUIRED_MESSAGE =
+  "Enter valid row numbers for each row-range row (Row to must be greater than or equal to Row from).";
+export const MAPPING_EMPTY_MESSAGE =
+  "Add at least one block-coverage row, or choose Not mapped.";
+
+/**
+ * Client-side validation for the repeatable block-coverage list. Fails
+ * closed with a human message BEFORE any write, so an invalid state (e.g.
+ * the old row_range-with-no-block case) can never reach the database.
+ */
+export function validateBlockMappings(rows: SoilBlockMappingInput[]): string | null {
+  if (rows.length === 0) return MAPPING_EMPTY_MESSAGE;
+  for (const row of rows) {
+    if (!row.paddock_id) return MAPPING_BLOCK_REQUIRED_MESSAGE;
+    if (row.mapping_scope === "row_range") {
+      const from = row.row_start;
+      const to = row.row_end;
+      if (
+        from == null ||
+        to == null ||
+        !Number.isInteger(from) ||
+        !Number.isInteger(to) ||
+        from < 1 ||
+        to < from
+      ) {
+        return MAPPING_ROWS_REQUIRED_MESSAGE;
+      }
+    }
+  }
+  return null;
+}
+
+/** RPC payload — row bounds are only sent for row-range rows. */
+export function buildMappingPayload(rows: SoilBlockMappingInput[]): Array<Record<string, unknown>> {
+  return rows.map((r) => ({
+    paddock_id: r.paddock_id,
+    mapping_scope: r.mapping_scope,
+    row_start: r.mapping_scope === "row_range" ? r.row_start : null,
+    row_end: r.mapping_scope === "row_range" ? r.row_end : null,
+    mapping_confidence: null,
+    notes: null,
+  }));
+}
+
+/**
+ * Atomically REPLACES the sample's block mappings in ONE call. The RPC also
+ * synchronises the legacy soil_samples fields (including multi_block), so
+ * the Portal never writes sample_scope/paddock_id/row_start/row_end directly
+ * for block coverage.
+ */
+export async function setSoilSampleBlockMappings(
+  sampleId: string,
+  rows: SoilBlockMappingInput[],
+): Promise<void> {
+  const { error } = await db.rpc("soil_analysis_set_block_mappings", {
+    p_sample_id: sampleId,
+    p_mappings: buildMappingPayload(rows),
+  });
+  if (error) throw error;
+}
+
+/** One line per mapping, for tooltips/popovers on multi-block samples. */
+export function mappingSummaryLines(mappings: SoilBlockMapping[]): string[] {
+  return mappings.map((m) =>
+    m.mapping_scope === "row_range"
+      ? `${m.block_name ?? "Block"} · Rows ${m.row_start ?? "?"}–${m.row_end ?? "?"}`
+      : `${m.block_name ?? "Block"} · Whole block`,
+  );
+}
+
+/**
+ * Display label for the VineTrack mapping column. Mapping rows are the
+ * authority; the legacy sample fields are only used when no mapping rows
+ * exist. A multi-block sample is never collapsed to one arbitrary block.
+ */
+export function mappingSummaryLabel(
+  sample: Pick<SoilSample, "sample_scope" | "paddock_id" | "row_start" | "row_end" | "block_name">,
+  mappings: SoilBlockMapping[] | undefined,
+): string {
+  const rows = mappings ?? [];
+  if (rows.length === 1) {
+    const m = rows[0];
+    return m.mapping_scope === "row_range"
+      ? `${m.block_name ?? "Block"} · Rows ${m.row_start ?? "?"}–${m.row_end ?? "?"}`
+      : (m.block_name ?? "Whole block");
+  }
+  if (rows.length > 1) return `${rows.length} blocks`;
+  // Legacy fallback only — no mapping rows exist for this sample.
+  if (sample.sample_scope === "row_range" && sample.paddock_id) {
+    return `${sample.block_name ?? "Block"} · Rows ${sample.row_start ?? "?"}–${sample.row_end ?? "?"}`;
+  }
+  if (sample.sample_scope === "whole_block" && sample.paddock_id) {
+    return sample.block_name ?? "Whole block";
+  }
+  if (sample.sample_scope === "point") return `${sample.block_name ?? "Block"} (point)`;
+  if (sample.sample_scope === "multi_block") return "Multiple blocks";
+  return SAMPLE_SCOPE_LABEL.unmapped;
+}
+
+// ---------------------------------------------------------------------------
 // Labels — restrained, lab-status-only language
 // ---------------------------------------------------------------------------
 
@@ -186,6 +360,7 @@ export const SAMPLE_SCOPE_LABEL: Record<SoilSampleScope, string> = {
   whole_block: "Whole block",
   row_range: "Row range",
   point: "Point",
+  multi_block: "Multiple blocks",
 };
 
 /** Lab-status display. Green is never labelled as an agronomic guarantee. */
@@ -248,6 +423,7 @@ export async function getSoilSampleDetail(id: string): Promise<{
   sample: SoilSample;
   documents: SoilSampleDocument[];
   results: SoilSampleResult[];
+  mappings: SoilBlockMapping[];
 }> {
   const { data: sample, error } = await db
     .from("soil_samples")
@@ -256,15 +432,17 @@ export async function getSoilSampleDetail(id: string): Promise<{
     .maybeSingle();
   if (error) throw error;
   if (!sample) throw new Error("Soil sample not found.");
-  const [{ data: docs, error: docErr }, { data: results, error: resErr }] = await Promise.all([
-    db.from("soil_sample_documents").select("*").eq("sample_id", id).order("created_at"),
-    db
-      .from("soil_sample_results")
-      .select("*")
-      .eq("sample_id", id)
-      .order("sort_order", { nullsFirst: false })
-      .order("created_at"),
-  ]);
+  const [{ data: docs, error: docErr }, { data: results, error: resErr }, mappings] =
+    await Promise.all([
+      db.from("soil_sample_documents").select("*").eq("sample_id", id).order("created_at"),
+      db
+        .from("soil_sample_results")
+        .select("*")
+        .eq("sample_id", id)
+        .order("sort_order", { nullsFirst: false })
+        .order("created_at"),
+      listSampleBlockMappings(id),
+    ]);
   if (docErr) throw docErr;
   if (resErr) throw resErr;
   return {
@@ -277,6 +455,7 @@ export async function getSoilSampleDetail(id: string): Promise<{
     } as SoilSample,
     documents: (docs ?? []) as SoilSampleDocument[],
     results: (results ?? []) as SoilSampleResult[],
+    mappings,
   };
 }
 
@@ -301,16 +480,47 @@ export async function listBlockAliases(vineyardId: string): Promise<SoilBlockAli
   return (data ?? []) as SoilBlockAlias[];
 }
 
+/**
+ * Sample ids linked to each requested block. soil_sample_block_mappings is
+ * the authority; the legacy soil_samples.paddock_id link is unioned in as a
+ * fallback for rows that predate the backfill. A sample mapped to several
+ * blocks therefore appears in EACH block's history, and the same sample can
+ * never be listed twice within the SAME block.
+ */
+async function sampleIdsForBlocks(paddockIds: string[]): Promise<Map<string, string[]>> {
+  const byBlock = new Map<string, Set<string>>();
+  const add = (blockId: string, sampleId: string) => {
+    if (!byBlock.has(blockId)) byBlock.set(blockId, new Set());
+    byBlock.get(blockId)!.add(sampleId);
+  };
+  const [{ data: maps, error: mapErr }, { data: legacy, error: legErr }] = await Promise.all([
+    db.from("soil_sample_block_mappings").select("sample_id, paddock_id").in("paddock_id", paddockIds),
+    db
+      .from("soil_samples")
+      .select("id, paddock_id")
+      .in("paddock_id", paddockIds)
+      .is("deleted_at", null),
+  ]);
+  if (mapErr) throw mapErr;
+  if (legErr) throw legErr;
+  for (const m of maps ?? []) add(m.paddock_id, m.sample_id);
+  for (const s of legacy ?? []) add(s.paddock_id, s.id);
+  return new Map([...byBlock].map(([k, v]) => [k, [...v]]));
+}
+
 /** Results for one block + analyte across time, oldest first, with sample context. */
 export async function listBlockAnalyteResults(
   paddockId: string,
   analyteKey: string,
 ): Promise<Array<SoilSampleResult & { sample: SoilSample }>> {
+  const byBlock = await sampleIdsForBlocks([paddockId]);
+  const sampleIds = byBlock.get(paddockId) ?? [];
+  if (sampleIds.length === 0) return [];
   const { data, error } = await db
     .from("soil_sample_results")
     .select("*, soil_samples!inner(*, paddocks(name))")
     .eq("analyte_key", analyteKey)
-    .eq("soil_samples.paddock_id", paddockId)
+    .in("sample_id", sampleIds)
     .is("soil_samples.deleted_at", null);
   if (error) throw error;
   const rows = (data ?? []).map((row: any) => {
@@ -328,29 +538,45 @@ export async function listBlockAnalyteResults(
   return rows;
 }
 
-/** Results for a set of blocks within a sampled-at period (Compare tab). */
+/**
+ * Results for a set of blocks within a sampled-at period (Compare tab).
+ * Each row carries matched_paddock_id — the block THIS row belongs to — so
+ * a multi-block sample appears once per relevant block without ever
+ * duplicating the measurement within the same block.
+ */
 export async function listBlockPeriodResults(
   paddockIds: string[],
   dateFrom: string | null,
   dateTo: string | null,
-): Promise<Array<SoilSampleResult & { sample: SoilSample }>> {
+): Promise<Array<SoilSampleResult & { sample: SoilSample; matched_paddock_id: string }>> {
   if (paddockIds.length === 0) return [];
+  const byBlock = await sampleIdsForBlocks(paddockIds);
+  const allSampleIds = [...new Set([...byBlock.values()].flat())];
+  if (allSampleIds.length === 0) return [];
   let q = db
     .from("soil_sample_results")
     .select("*, soil_samples!inner(*, paddocks(name))")
-    .in("soil_samples.paddock_id", paddockIds)
+    .in("sample_id", allSampleIds)
     .is("soil_samples.deleted_at", null);
   if (dateFrom) q = q.gte("soil_samples.sampled_at", dateFrom);
   if (dateTo) q = q.lte("soil_samples.sampled_at", dateTo);
   const { data, error } = await q;
   if (error) throw error;
-  return (data ?? []).map((row: any) => {
-    const { soil_samples: s, ...result } = row;
-    return {
-      ...result,
-      sample: { ...s, block_name: s?.paddocks?.name ?? null, paddocks: undefined } as SoilSample,
-    };
-  });
+  const out: Array<SoilSampleResult & { sample: SoilSample; matched_paddock_id: string }> = [];
+  for (const row of data ?? []) {
+    const { soil_samples: s, ...result } = row as any;
+    const sample = {
+      ...s,
+      block_name: s?.paddocks?.name ?? null,
+      paddocks: undefined,
+    } as SoilSample;
+    for (const pid of paddockIds) {
+      if ((byBlock.get(pid) ?? []).includes(s.id)) {
+        out.push({ ...(result as SoilSampleResult), sample, matched_paddock_id: pid });
+      }
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -401,6 +627,30 @@ export async function describeFunctionError(e: unknown): Promise<string> {
   }
   const msg = anyErr?.message;
   return typeof msg === "string" && msg.trim() ? msg : String(e);
+}
+
+/**
+ * Safe one-line formatter for Supabase/PostgREST errors. PostgREST errors
+ * are plain objects (NOT Error instances), so String(e) renders the useless
+ * "[object Object]" — this formatter prefers error.message, then
+ * error.details, then a safe JSON.stringify, and finally a generic message.
+ * It never renders a raw object in JSX.
+ */
+export function formatDataError(e: unknown): string {
+  if (e == null) return "Something went wrong. Please try again.";
+  if (typeof e === "string") return e.trim() || "Something went wrong. Please try again.";
+  const anyErr = e as any;
+  const message = anyErr?.message;
+  if (typeof message === "string" && message.trim()) return message.trim();
+  const details = anyErr?.details;
+  if (typeof details === "string" && details.trim()) return details.trim();
+  try {
+    const json = JSON.stringify(e);
+    if (json && json !== "{}") return json;
+  } catch {
+    // not serialisable — fall through to the generic message
+  }
+  return "Something went wrong. Please try again.";
 }
 
 /**
@@ -892,7 +1142,7 @@ export interface CompareCell {
 }
 
 export function buildCompareMatrix(
-  rows: Array<SoilSampleResult & { sample: SoilSample }>,
+  rows: Array<SoilSampleResult & { sample: SoilSample; matched_paddock_id?: string }>,
   paddockIds: string[],
   analyteKeys: string[],
 ): CompareCell[][] {
@@ -904,7 +1154,9 @@ export function buildCompareMatrix(
     const mixedMethods = signatures.size > 1;
     return paddockIds.map((paddockId) => {
       const candidates = forAnalyte
-        .filter((r) => r.sample.paddock_id === paddockId)
+        // matched_paddock_id (from block mappings) is the authority; the
+        // legacy sample.paddock_id link is only a fallback.
+        .filter((r) => (r.matched_paddock_id ?? r.sample.paddock_id) === paddockId)
         .sort((a, b) =>
           String(b.sample.sampled_at ?? b.sample.created_at).localeCompare(
             String(a.sample.sampled_at ?? a.sample.created_at),
