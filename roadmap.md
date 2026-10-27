@@ -200,7 +200,7 @@
 - [x] Vineyard Costings: Estimated Yield tab — cost/t by block & variety, SQL 221 estimate defaults, in-memory scenario overrides with reset
 
 ## Soil Analysis Stage 1 pilot (System Admin preview, Portal only)
-- [ ] Nav + routes gated by System Admin AND soil_analysis_admin_preview flag; hidden/blocked otherwise.
-- [ ] Landing tabs Overview | Soil Samples | Trends | Compare (+ disabled Reports); upload to private bucket; Review Results preserving source_* provenance.
-- [ ] Trend/compare comparability guards (method+unit, Colwell vs Mehlich, DTPA); lab-range-only status language.
-- [ ] Focused tests + build; no SQL/schema/mobile changes, no publication.
+- [x] Nav + routes gated by System Admin AND soil_analysis_admin_preview flag; hidden/blocked otherwise.
+- [x] Landing tabs Overview | Soil Samples | Trends | Compare (+ disabled Reports); upload to private bucket; Review Results preserving source_* provenance.
+- [x] Trend/compare comparability guards (method+unit, Colwell vs Mehlich, DTPA); lab-range-only status language.
+- [x] Focused tests (70/70 across 4 files) + build; no SQL/schema/mobile changes, no publication. Assumed column contract centralised in src/lib/soilAnalysis.ts pending owner confirmation; backend parser endpoint outstanding (records show Awaiting extraction).
