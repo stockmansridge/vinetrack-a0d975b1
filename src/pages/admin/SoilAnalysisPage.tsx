@@ -30,6 +30,7 @@ export default function SoilAnalysisPage() {
         <AdminPageHeader
           title="Soil Analysis"
           subtitle="Laboratory soil reports, block mapping and trends"
+          titleExtra={<SoilAnalysisHelpDialog />}
         />
       </div>
 
