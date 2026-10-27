@@ -33,6 +33,7 @@ import {
   formatMapValue,
   TREND_PROVISIONAL_BADGE,
 } from "@/lib/soilAnalysis";
+import { SoilAnalyteCombobox } from "./SoilAnalyteCombobox";
 import { formatDate } from "@/pages/admin/_shared";
 
 const db = supabase as any;
@@ -87,14 +88,6 @@ export function TrendsTab() {
   }, [series, seriesKey]);
   const active = series.find((s) => s.key === seriesKey) ?? series[0] ?? null;
 
-  const analytesByCategory = useMemo(() => {
-    const m = new Map<string, typeof analytes>();
-    for (const a of analytes) {
-      const c = a.category ?? "Other";
-      m.set(c, [...(m.get(c) ?? []), a]);
-    }
-    return [...m.entries()];
-  }, [analytes]);
 
   const name = analyte?.display_name ?? analyteKey;
   const summary = active ? summariseTrend(active, name, analyte?.desired_direction) : null;
@@ -148,16 +141,12 @@ export function TrendsTab() {
             <option key={b.id} value={b.id}>{b.name}</option>
           ))}
         </select>
-        <select className={selectClass} value={analyteKey} onChange={(e) => setAnalyteKey(e.target.value)} aria-label="Trend analyte">
-          <option value="">Choose an analyte…</option>
-          {analytesByCategory.map(([cat, list]) => (
-            <optgroup key={cat} label={cat}>
-              {list.map((a) => (
-                <option key={a.key} value={a.key}>{a.display_name}</option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+        <SoilAnalyteCombobox
+          ariaLabel="Trend analyte"
+          value={analyteKey}
+          options={analytes.map((a) => ({ key: a.key, name: a.display_name, category: a.category ?? "Other" }))}
+          onChange={setAnalyteKey}
+        />
         {series.length > 1 && (
           <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Trend series">
             <span className="text-xs text-muted-foreground">Series:</span>
