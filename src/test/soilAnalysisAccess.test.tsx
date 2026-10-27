@@ -1,5 +1,5 @@
-// Soil Analysis Stage 1 — access gating, upload record creation, parser
-// invocation and the explicit Confirm action.
+// Soil Analysis Stage 1 — access gating, minimal upload, parser invocation,
+// retry behaviour and safe error surfacing.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { render, screen } from "@testing-library/react";
@@ -12,7 +12,7 @@ const uploads: Array<{ bucket: string; path: string }> = [];
 const invocations: Array<{ fn: string; body: any }> = [];
 let sampleId = "sample-1";
 let documentId = "doc-1";
-let invokeError: Error | null = null;
+let invokeError: any = null;
 
 function makeQuery(table: string) {
   const q: any = {
@@ -69,14 +69,28 @@ vi.mock("@/lib/systemAdmin", () => ({
   }),
 }));
 
+// --- mock auth + vineyard context for the dialog --------------------------
+vi.mock("@/context/AuthContext", () => ({
+  useAuth: () => ({ user: { id: "u1" } }),
+}));
+vi.mock("@/context/VineyardContext", () => ({
+  useVineyard: () => ({
+    memberships: [{ vineyard_id: "v1", vineyard_name: "Test Vineyard" }],
+    selectedVineyardId: "v1",
+  }),
+}));
+
 import {
   uploadSoilSample,
+  retrySoilExtraction,
   confirmSoilSample,
+  describeFunctionError,
   SOIL_ANALYSIS_FLAG,
   SOIL_DOCUMENT_BUCKET,
   SOIL_EXTRACT_FUNCTION,
 } from "@/lib/soilAnalysis";
 import { SoilAnalysisGate } from "@/components/soil-analysis/SoilAnalysisGate";
+import { UploadSampleDialog } from "@/components/soil-analysis/UploadSampleDialog";
 import {
   searchDestinations,
   SYSTEM_ADMIN_ITEMS,
@@ -93,18 +107,7 @@ const viewer = (over: Partial<NavViewer>): NavViewer => ({
   ...over,
 });
 
-const uploadInput = (file: File) => ({
-  file,
-  vineyardId: "v1",
-  sampledAt: "2026-02-01",
-  laboratory: "Lab A",
-  labPaddockName: "Hill Block",
-  labSampleId: "L-9",
-  depthFromCm: 0,
-  depthToCm: 10,
-  notes: null,
-  uploadedBy: "u1",
-});
+const uploadInput = (file: File) => ({ file, vineyardId: "v1", uploadedBy: "u1" });
 
 beforeEach(() => {
   inserts.length = 0;
@@ -173,8 +176,30 @@ describe("route gate", () => {
   });
 });
 
+describe("minimal upload dialog", () => {
+  it("asks only for the file and vineyard — no manual metadata fields", () => {
+    render(
+      <MemoryRouter>
+        <UploadSampleDialog open onOpenChange={() => {}} onUploaded={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("Upload & read report")).toBeTruthy();
+    expect(screen.getByLabelText(/Report file/)).toBeTruthy();
+    expect(screen.getByLabelText("Vineyard")).toBeTruthy();
+    // The parser fills these; the dialog must not ask for them up front.
+    expect(screen.queryByLabelText("Sample date")).toBeNull();
+    expect(screen.queryByLabelText("Laboratory")).toBeNull();
+    expect(screen.queryByLabelText("Lab paddock name")).toBeNull();
+    expect(screen.queryByLabelText("Lab sample ID")).toBeNull();
+    expect(screen.queryByLabelText("Depth from (cm)")).toBeNull();
+    expect(screen.queryByLabelText("Depth to (cm)")).toBeNull();
+    expect(screen.queryByLabelText("Notes")).toBeNull();
+    expect(screen.getByText(/VineTrack will read the report/)).toBeTruthy();
+  });
+});
+
 describe("upload creates pending records and invokes the parser", () => {
-  it("creates the sample, stores the document and records it with live columns", async () => {
+  it("inserts only the minimal sample columns; metadata stays for the parser", async () => {
     const file = new File(["pdf"], "Hill Block 2026.pdf", { type: "application/pdf" });
     const outcome = await uploadSoilSample(uploadInput(file));
 
@@ -182,17 +207,12 @@ describe("upload creates pending records and invokes the parser", () => {
     expect(outcome.extractionStarted).toBe(true);
 
     const sampleInsert = inserts.find((i) => i.table === "soil_samples");
-    expect(sampleInsert?.payload).toMatchObject({
+    expect(sampleInsert?.payload).toEqual({
       vineyard_id: "v1",
-      extraction_status: "pending",
       sample_scope: "unmapped",
-      sampled_at: "2026-02-01",
-      lab_paddock_name: "Hill Block",
-      sample_depth_from_cm: 0,
-      sample_depth_to_cm: 10,
+      extraction_status: "pending",
+      created_by: "u1",
     });
-    // No separate lifecycle column exists on the live table.
-    expect("status" in (sampleInsert?.payload ?? {})).toBe(false);
 
     expect(uploads).toHaveLength(1);
     expect(uploads[0].bucket).toBe(SOIL_DOCUMENT_BUCKET);
@@ -216,7 +236,7 @@ describe("upload creates pending records and invokes the parser", () => {
     expect(invocations[0].body).toEqual({ sample_id: sampleId, document_id: documentId });
   });
 
-  it("preserves the sample and document and marks them failed when the parser cannot start", async () => {
+  it("leaves exactly one sample + one document, marked failed, when the parser cannot start", async () => {
     invokeError = new Error("parser unavailable");
     const file = new File(["pdf"], "report.pdf", { type: "application/pdf" });
     const outcome = await uploadSoilSample(uploadInput(file));
@@ -225,9 +245,8 @@ describe("upload creates pending records and invokes the parser", () => {
     expect(outcome.extractionError).toMatch(/parser unavailable/);
     expect(outcome.sample.extraction_status).toBe("failed");
 
-    // Evidence is preserved: both inserts happened, nothing was deleted.
-    expect(inserts.some((i) => i.table === "soil_samples")).toBe(true);
-    expect(inserts.some((i) => i.table === "soil_sample_documents")).toBe(true);
+    expect(inserts.filter((i) => i.table === "soil_samples")).toHaveLength(1);
+    expect(inserts.filter((i) => i.table === "soil_sample_documents")).toHaveLength(1);
     expect(uploads).toHaveLength(1);
 
     const sampleUpdate = updates.find((u) => u.table === "soil_samples" && u.id === sampleId);
@@ -242,6 +261,64 @@ describe("upload creates pending records and invokes the parser", () => {
     expect(inserts).toHaveLength(0);
     expect(uploads).toHaveLength(0);
     expect(invocations).toHaveLength(0);
+  });
+});
+
+describe("retry extraction", () => {
+  it("reuses existing ids, resets pending state, clears the error and re-invokes", async () => {
+    const outcome = await retrySoilExtraction("sample-1", "doc-1");
+    expect(outcome.ok).toBe(true);
+
+    // No duplicate rows and no re-upload.
+    expect(inserts).toHaveLength(0);
+    expect(uploads).toHaveLength(0);
+
+    const sampleUpdate = updates.find((u) => u.table === "soil_samples" && u.id === "sample-1");
+    expect(sampleUpdate?.payload).toEqual({ extraction_status: "pending" });
+    const docUpdate = updates.find((u) => u.table === "soil_sample_documents" && u.id === "doc-1");
+    expect(docUpdate?.payload).toEqual({ extraction_status: "pending", extraction_error: null });
+
+    expect(invocations).toHaveLength(1);
+    expect(invocations[0].fn).toBe(SOIL_EXTRACT_FUNCTION);
+    expect(invocations[0].body).toEqual({ sample_id: "sample-1", document_id: "doc-1" });
+  });
+
+  it("preserves evidence and surfaces the failure detail when retry fails", async () => {
+    invokeError = new Error("OpenAI quota exceeded");
+    const outcome = await retrySoilExtraction("sample-1", "doc-1");
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error).toMatch(/OpenAI quota exceeded/);
+
+    expect(inserts).toHaveLength(0);
+    expect(uploads).toHaveLength(0);
+    const failedSample = updates.filter(
+      (u) => u.table === "soil_samples" && u.payload.extraction_status === "failed",
+    );
+    expect(failedSample).toHaveLength(1);
+    const failedDoc = updates.find(
+      (u) => u.table === "soil_sample_documents" && u.payload.extraction_status === "failed",
+    );
+    expect(failedDoc?.payload.extraction_error).toMatch(/OpenAI quota exceeded/);
+  });
+});
+
+describe("function error detail", () => {
+  it("surfaces the JSON detail body from a FunctionsHttpError-style error", async () => {
+    const err = {
+      name: "FunctionsHttpError",
+      message: "Edge Function returned a non-2xx status code",
+      context: { json: () => Promise.resolve({ detail: "Report pages could not be read" }) },
+    };
+    await expect(describeFunctionError(err)).resolves.toBe("Report pages could not be read");
+  });
+
+  it("falls back to the error message when no JSON body is available", async () => {
+    await expect(describeFunctionError(new Error("Failed to send a request to the Edge Function"))).resolves.toBe(
+      "Failed to send a request to the Edge Function",
+    );
+    await expect(
+      describeFunctionError({ context: { json: () => Promise.reject(new Error("not json")) }, message: "relay down" }),
+    ).resolves.toBe("relay down");
   });
 });
 
