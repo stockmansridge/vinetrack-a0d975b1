@@ -658,6 +658,41 @@ export async function listBlockAnalyteResults(
   return rows;
 }
 
+export type BlockAnalyteResult = SoilSampleResult & { sample: SoilSample; matched_paddock_id: string };
+
+/** Mapping-aware Trends read; filter the analyte on the server, not after a broad read.
+ * Preserve the single-block read's sample visibility / deletion semantics.
+ */
+export async function listBlocksAnalyteResults(paddockIds: string[], analyteKey: string): Promise<BlockAnalyteResult[]> {
+  if (paddockIds.length === 0) return [];
+  const ids = [...new Set(paddockIds)];
+  const byBlock = await sampleIdsForBlocks(ids);
+  const sampleIds = [...new Set([...byBlock.values()].flat())];
+  if (!sampleIds.length) return [];
+  const { data, error } = await db.from("soil_sample_results")
+    .select("*, soil_samples!inner(*, paddocks(name))")
+    .eq("analyte_key", analyteKey)
+    .in("sample_id", sampleIds)
+    .is("soil_samples.deleted_at", null);
+  if (error) throw error;
+  const out: BlockAnalyteResult[] = [];
+  const seen = new Map<string, Set<string>>();
+  for (const row of data ?? []) {
+    const { soil_samples: s, ...result } = row;
+    const sample = { ...s, block_name: s?.paddocks?.name ?? null, paddocks: undefined } as SoilSample;
+    for (const id of ids) {
+      if (!(byBlock.get(id) ?? []).includes(sample.id)) continue;
+      const blockSeen = seen.get(id) ?? new Set<string>();
+      if (blockSeen.has(result.id)) continue;
+      blockSeen.add(result.id);
+      seen.set(id, blockSeen);
+      out.push({ ...result, sample, matched_paddock_id: id });
+    }
+  }
+  return out.sort((a, b) => String(a.sample.sampled_at ?? a.sample.created_at).localeCompare(String(b.sample.sampled_at ?? b.sample.created_at))
+    || a.matched_paddock_id.localeCompare(b.matched_paddock_id) || a.id.localeCompare(b.id));
+}
+
 /**
  * Results for a set of blocks within a sampled-at period (Compare tab).
  * Each row carries matched_paddock_id — the block THIS row belongs to — so
@@ -1370,6 +1405,15 @@ export interface DateAveragePoint {
   /** VineTrack-derived arithmetic mean of raw numeric results on this date. */
   average: number;
   count: number;
+}
+
+/** Partition BEFORE averaging or summarising. A block without this series stays present. */
+export function splitTrendByBlocks(active: TrendSeries | null, rows: BlockAnalyteResult[], paddockIds: string[]): Array<{ paddockId: string; series: TrendSeries | null }> {
+  return paddockIds.map((paddockId) => {
+    const points = rows.filter((r) => r.matched_paddock_id === paddockId && visualSeriesKey(r) === active?.key)
+      .map((r) => ({ result: r, sample: r.sample }));
+    return { paddockId, series: active && points.length ? { ...active, points } : null };
+  });
 }
 
 export function buildDateAverages(points: TrendPoint[]): DateAveragePoint[] {
