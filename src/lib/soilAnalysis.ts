@@ -435,6 +435,47 @@ function firstJsonObject(text: string): string | null {
 }
 
 /**
+ * JSON.parse that tolerates raw newlines/tabs inside string values — parser
+ * details frequently embed pretty-printed JSON whose control characters were
+ * never re-escaped when the body was stored.
+ */
+function parseJsonTolerant(text: string): unknown | null {
+  try {
+    return JSON.parse(text);
+  } catch {
+    // repair below
+  }
+  let out = "";
+  let inString = false;
+  let escape = false;
+  for (const ch of text) {
+    if (!inString) {
+      if (ch === '"') inString = true;
+      out += ch;
+      continue;
+    }
+    if (escape) {
+      escape = false;
+      out += ch;
+    } else if (ch === "\\") {
+      escape = true;
+      out += ch;
+    } else if (ch === '"') {
+      inString = false;
+      out += ch;
+    } else if (ch === "\n") out += "\\n";
+    else if (ch === "\r") out += "\\r";
+    else if (ch === "\t") out += "\\t";
+    else out += ch;
+  }
+  try {
+    return JSON.parse(out);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Strips provider prefixes (e.g. "openai_400:") and JSON wrappers from a
  * detail string, returning the readable human message inside, if any.
  */
