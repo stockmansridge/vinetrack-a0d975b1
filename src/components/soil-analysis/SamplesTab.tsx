@@ -19,6 +19,7 @@ import {
 } from "@/lib/soilAnalysis";
 import { formatDate } from "@/pages/admin/_shared";
 import { UploadSampleDialog } from "./UploadSampleDialog";
+import { ExtractionErrorNotice } from "./ExtractionErrorNotice";
 
 const db = supabase as any;
 
@@ -47,7 +48,7 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
-  RETRY_PLACEHOLDER
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   // Extraction failures render through the shared concise notice; only
   // non-extraction problems (e.g. a missing document) use plain text.
   const [retryFailure, setRetryFailure] = useState<{ raw: string | null; plain?: string } | null>(null);
