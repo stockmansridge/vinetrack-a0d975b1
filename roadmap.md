@@ -1,5 +1,9 @@
 # Roadmap
 
+## Traffic Lights AI v2 provenance
+- [ ] Require valid response scope, label same-sample nitrogen context, and version the AI query key to exclude v1 cache.
+- [ ] Run Traffic Lights/release regressions and automatic compilation, then deploy Portal and report revision; no backend changes.
+
 ## Released Traffic Lights refinement
 - [x] Add explicit latest/as-of controls, direct status filtering, clickable counts and collapsed analyte detail.
 - [x] Add optional cached AI screening through the deployed endpoint only, preserving source statuses and safe errors; sorted unique ids, max 150 per call, one-hour session cache, no automatic retries.

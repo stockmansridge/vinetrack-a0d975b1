@@ -7,6 +7,7 @@ export interface SoilIndication {
   confidence: number;
   reason: string;
   basis: "lab_range" | "general_viticulture" | "insufficient_context";
+  scope: "result" | "sample_nitrogen_context";
 }
 export type IndicatedSnapshot = SoilTrafficSnapshot & { sourceBucket: SoilTrafficBucket; aiLabel?: string; aiEntries?: SoilIndication[] };
 
@@ -33,7 +34,8 @@ export async function requestSoilIndications(vineyardId: string, ids: string[]):
       if (!row || typeof row.result_id !== "string" || !batch.includes(row.result_id) || seen.has(row.result_id)
         || !["low", "satisfactory", "high", "unable"].includes(row.indication)
         || typeof row.confidence !== "number" || !Number.isFinite(row.confidence) || row.confidence < 0 || row.confidence > 1
-        || typeof row.reason !== "string" || !["lab_range", "general_viticulture", "insufficient_context"].includes(row.basis)) {
+        || typeof row.reason !== "string" || !["lab_range", "general_viticulture", "insufficient_context"].includes(row.basis)
+        || !["result", "sample_nitrogen_context"].includes(row.scope)) {
         throw new Error("AI indication is unavailable. Laboratory statuses are still shown.");
       }
       seen.add(row.result_id);
@@ -53,13 +55,14 @@ export function indicateSoilSnapshots(snapshots: SoilTrafficSnapshot[], indicati
     const unrated = s.entries.filter((r) => soilTrafficBucket(r.lab_status) === "other");
     if (!unrated.length) return original;
     const aiEntries = unrated.flatMap((r) => byId.get(r.id) ? [byId.get(r.id) as SoilIndication] : []);
+    const nitrogenContext = aiEntries.some((r) => r.scope === "sample_nitrogen_context");
     if (aiEntries.length !== unrated.length || aiEntries.some((r) => r.indication === "unable")) {
-      return { ...original, aiLabel: "AI: Unable to rate", aiEntries };
+      return { ...original, aiLabel: nitrogenContext ? "AI nitrogen context: Unable to rate" : "AI: Unable to rate", aiEntries };
     }
     const buckets = new Set(s.entries.map((r) => soilTrafficBucket(r.lab_status) === "other" ? byId.get(r.id)?.indication : soilTrafficBucket(r.lab_status)));
     if (buckets.size !== 1) return { ...original, aiLabel: "AI: Mixed indications", aiEntries };
     const bucket = aiEntries[0]?.indication;
     if (!bucket || bucket === "unable") return original;
-    return { ...original, bucket, aiLabel: `AI indication: ${bucket[0].toUpperCase()}${bucket.slice(1)}`, aiEntries };
+    return { ...original, bucket, aiLabel: `${nitrogenContext ? "AI nitrogen context" : "AI indication"}: ${bucket[0].toUpperCase()}${bucket.slice(1)}`, aiEntries };
   });
 }
