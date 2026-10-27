@@ -95,7 +95,11 @@ function renderWithRouter(routePath: string, initialPath: string, element: React
 
 describe("Soil Analysis back navigation", () => {
   it("landing page header returns to the customer dashboard", async () => {
-    const { container } = renderWithRouter("/soil-analysis", <SoilAnalysisPage />);
+    const { container } = renderWithRouter(
+      "/soil-analysis",
+      "/soil-analysis",
+      <SoilAnalysisPage />,
+    );
     const back = container.querySelector("button")!;
     fireEvent.click(back);
     expect(await screen.findByText("dashboard landing")).toBeTruthy();
@@ -104,6 +108,7 @@ describe("Soil Analysis back navigation", () => {
 
   it("sample detail header returns to /soil-analysis", async () => {
     const { container } = renderWithRouter(
+      "/soil-analysis/samples/:id",
       "/soil-analysis/samples/s-1",
       <SoilSampleDetailPage />,
     );
@@ -114,9 +119,14 @@ describe("Soil Analysis back navigation", () => {
   });
 
   it("sample detail footer action returns to /soil-analysis", async () => {
-    renderWithRouter("/soil-analysis/samples/s-1", <SoilSampleDetailPage />);
+    renderWithRouter(
+      "/soil-analysis/samples/:id",
+      "/soil-analysis/samples/s-1",
+      <SoilSampleDetailPage />,
+    );
     await screen.findByRole("heading", { name: "Review soil sample" });
     fireEvent.click(screen.getByRole("button", { name: "Back to Soil Analysis" }));
     expect(await screen.findByText("soil-analysis landing")).toBeTruthy();
   });
 });
+
