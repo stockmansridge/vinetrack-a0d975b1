@@ -30,13 +30,27 @@ import {
   retrySoilExtraction,
   isSoilSampleDeletable,
   listAnalyteCatalogue,
+  setSoilSampleBlockMappings,
+  validateBlockMappings,
+  formatDataError,
   SAMPLE_STATUS_LABEL,
-  SAMPLE_SCOPE_LABEL,
   labStatusLabel,
   type SoilSample,
   type SoilSampleResult,
-  type SoilSampleScope,
+  type SoilBlockMappingInput,
 } from "@/lib/soilAnalysis";
+
+type CoverageMode = "not_mapped" | "block" | "point";
+
+/** Compact variety context for the block selector — display only; the
+ *  mapping always stores just the paddock_id. */
+function varietyContext(allocations: unknown): string | null {
+  if (!Array.isArray(allocations)) return null;
+  const names = allocations
+    .map((a: any) => String(a?.varietyName ?? a?.variety_name ?? a?.name ?? "").trim())
+    .filter(Boolean);
+  return names.length > 0 ? [...new Set(names)].join(" · ") : null;
+}
 import { ExtractionErrorNotice } from "@/components/soil-analysis/ExtractionErrorNotice";
 import { DeleteSampleDialog } from "@/components/soil-analysis/DeleteSampleDialog";
 
@@ -68,10 +82,10 @@ function DetailInner() {
   const blocksQuery = useQuery({
     queryKey: ["soil-analysis", "blocks", detailQuery.data?.sample.vineyard_id],
     enabled: !!detailQuery.data?.sample.vineyard_id,
-    queryFn: async (): Promise<Array<{ id: string; name: string }>> => {
+    queryFn: async (): Promise<Array<{ id: string; name: string; variety_allocations: unknown }>> => {
       const { data, error } = await db
         .from("paddocks")
-        .select("id, name")
+        .select("id, name, variety_allocations")
         .eq("vineyard_id", detailQuery.data!.sample.vineyard_id)
         .is("deleted_at", null)
         .order("name");
