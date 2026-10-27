@@ -4,7 +4,7 @@ vi.mock("@/integrations/ios-supabase/client", () => ({ supabase: { functions: { 
 import { buildSoilTrafficSnapshots, type BlockAnalyteResult } from "@/lib/soilAnalysis";
 import { indicateSoilSnapshots, requestSoilIndications, soilIndicationResultIds, type SoilIndication } from "@/lib/soilTrafficIndication";
 const row = (id: string, status: string | null, block = "a", date = "2026-01-01") => ({ id, analyte_key: "ca", lab_status: status, matched_paddock_id: block, sample: { id, sampled_at: date, extraction_status: "confirmed" } }) as BlockAnalyteResult;
-const indication = (id: string, value: SoilIndication["indication"]): SoilIndication => ({ result_id: id, indication: value, confidence: 0.82, reason: "Screening only", basis: "lab_range" });
+const indication = (id: string, value: SoilIndication["indication"]): SoilIndication => ({ result_id: id, indication: value, confidence: 0.82, reason: "Screening only", basis: "lab_range", scope: "result" });
 beforeEach(() => { mock.invoke.mockReset(); });
 describe("read-only AI screening", () => {
   it("requests sorted unique Other entries only, excluding rated entries even in mixed snapshots", () => {
@@ -19,6 +19,25 @@ describe("read-only AI screening", () => {
     expect(out[1]).toMatchObject({ bucket: "high", sourceBucket: "high" }); expect(out[1].aiLabel).toBeUndefined();
     expect(snapshots).toEqual(original); expect(out[0].entries[0].lab_status).toBe("Acidic");
     expect(indicateSoilSnapshots(snapshots)[0].bucket).toBe("other");
+  });
+  it.each(["low", "satisfactory", "high"] as const)("labels %s as nitrogen context if any relevant entry uses companion nitrate", (bucket) => {
+    const snapshots = buildSoilTrafficSnapshots([row("one", null), row("two", "Acidic")]);
+    const out = indicateSoilSnapshots(snapshots, [indication("one", bucket), { ...indication("two", bucket), scope: "sample_nitrogen_context" }]);
+    expect(out[0]).toMatchObject({ bucket, aiLabel: `AI nitrogen context: ${bucket[0].toUpperCase()}${bucket.slice(1)}` });
+    expect(out[0].aiEntries?.[1].reason).toBe("Screening only");
+    expect(indicateSoilSnapshots(snapshots)[0].bucket).toBe("other");
+  });
+  it("labels unable nitrogen context without moving source grouping", () => {
+    expect(indicateSoilSnapshots(buildSoilTrafficSnapshots([row("one", null)]), [{ ...indication("one", "unable"), scope: "sample_nitrogen_context" }])[0]).toMatchObject({ bucket: "other", aiLabel: "AI nitrogen context: Unable to rate" });
+  });
+  it.each([undefined, null, "", "sample", 1])("rejects missing/malformed scope %s", async (scope) => {
+    mock.invoke.mockResolvedValue({ data: { classifications: [{ ...indication("one", "high"), scope }] } });
+    await expect(requestSoilIndications("v", ["one"])).rejects.toThrow("AI indication is unavailable");
+    expect(mock.invoke).toHaveBeenCalledTimes(1);
+  });
+  it.each(["result", "sample_nitrogen_context"] as const)("accepts required %s scope", async (scope) => {
+    mock.invoke.mockResolvedValue({ data: { classifications: [{ ...indication("one", "high"), scope }] } });
+    expect(await requestSoilIndications("v", ["one"])).toEqual([{ ...indication("one", "high"), scope }]);
   });
   it("unable stays Other", () => {
     expect(indicateSoilSnapshots(buildSoilTrafficSnapshots([row("one", null)]), [indication("one", "unable")])[0]).toMatchObject({ bucket: "other", aiLabel: "AI: Unable to rate" });
