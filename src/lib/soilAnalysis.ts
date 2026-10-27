@@ -488,7 +488,7 @@ function unwrapHumanDetail(value: string): string | null {
   const obj = firstJsonObject(v);
   if (obj) {
     try {
-      const nested = JSON.parse(obj);
+      const nested = parseJsonTolerant(obj);
       const m = nested?.error?.message ?? nested?.message;
       if (typeof m === "string" && m.trim()) return m.trim();
     } catch {
@@ -515,7 +515,7 @@ export function cleanExtractionDetail(raw: string | null | undefined): string | 
   const obj = firstJsonObject(text);
   if (obj) {
     try {
-      const body = JSON.parse(obj);
+      const body = parseJsonTolerant(obj);
       const detail = body?.detail ?? body?.error ?? body?.message;
       if (typeof detail === "string" && detail.trim()) {
         human = unwrapHumanDetail(detail);
