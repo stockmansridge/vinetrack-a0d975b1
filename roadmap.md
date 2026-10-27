@@ -1,12 +1,12 @@
 # Roadmap
 
 ## Yields bunch weights (Portal only)
-- [ ] Bunch Weights tab (after Yield Estimate Trips) with variety master + block overrides via live RPCs
-- [ ] Remove 0.15 kg fallback from current trip calcs; resolve master weights; historical payload weight labelled
-- [ ] Overview: completed trip wins, weight-required state, bunch weight + coloured source labels
-- [ ] Trip drawer ~40vw + sample map
-- [ ] Grape Allocation Block column
-- [ ] Focused tests
+- [x] Bunch Weights tab (after Yield Estimate Trips) with variety master + block overrides via live RPCs
+- [x] Remove 0.15 kg fallback from current trip calcs; resolve master weights; historical payload weight labelled
+- [x] Overview: completed trip wins, weight-required state, bunch weight + coloured source labels
+- [x] Trip drawer ~40vw + sample map
+- [x] Grape Allocation Block column
+- [x] Focused tests (204/204 across 21 yield files)
 
 
 ## Dashboard automatic weather refresh race
