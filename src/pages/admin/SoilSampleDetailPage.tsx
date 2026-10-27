@@ -104,11 +104,60 @@ function DetailInner() {
   // saveState stays reserved for plain status text.
   const [retryFailure, setRetryFailure] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // Block coverage: a repeatable list of mapping rows. soil_sample_block_mappings
+  // is the authority; legacy sample fields are only a fallback when no rows exist.
+  const [coverageMode, setCoverageMode] = useState<CoverageMode>("not_mapped");
+  const [mappingRows, setMappingRows] = useState<SoilBlockMappingInput[]>([]);
+  const [initialisedFor, setInitialisedFor] = useState<string | null>(null);
 
   const sample = detailQuery.data?.sample;
+  const mappings = detailQuery.data?.mappings;
   useEffect(() => {
-    if (sample) setDraft({ ...sample });
-  }, [sample?.id]);
+    if (!sample || !mappings || initialisedFor === sample.id) return;
+    setDraft({ ...sample });
+    if (sample.sample_scope === "point") {
+      setCoverageMode("point");
+      setMappingRows([]);
+    } else if (mappings.length > 0) {
+      setCoverageMode("block");
+      setMappingRows(
+        mappings.map((m) => ({
+          paddock_id: m.paddock_id,
+          mapping_scope: m.mapping_scope,
+          row_start: m.row_start,
+          row_end: m.row_end,
+        })),
+      );
+    } else if (
+      sample.paddock_id &&
+      (sample.sample_scope === "whole_block" || sample.sample_scope === "row_range")
+    ) {
+      // Legacy fallback only — this sample predates the mappings backfill.
+      setCoverageMode("block");
+      setMappingRows([
+        {
+          paddock_id: sample.paddock_id,
+          mapping_scope: sample.sample_scope,
+          row_start: sample.row_start,
+          row_end: sample.row_end,
+        },
+      ]);
+    } else {
+      setCoverageMode("not_mapped");
+      setMappingRows([]);
+    }
+    setInitialisedFor(sample.id);
+  }, [sample?.id, mappings]);
+
+  const updateMappingRow = (idx: number, patch: Partial<SoilBlockMappingInput>) =>
+    setMappingRows((rows) => rows.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  const addMappingRow = () =>
+    setMappingRows((rows) => [
+      ...rows,
+      { paddock_id: "", mapping_scope: "whole_block", row_start: null, row_end: null },
+    ]);
+  const removeMappingRow = (idx: number) =>
+    setMappingRows((rows) => rows.filter((_, i) => i !== idx));
 
   if (detailQuery.isLoading) {
     return <div className="p-6 text-sm text-muted-foreground">Loading sample…</div>;
