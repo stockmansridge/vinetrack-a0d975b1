@@ -81,6 +81,41 @@ describe("Traffic Lights presentation", () => {
     fireEvent.click(screen.getByRole("switch")); expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.getByLabelText("Other / Not stated count").textContent).toBe("1"); expect(screen.queryByText(/private provider/)).toBeNull(); expect(mock.invoke).toHaveBeenCalledTimes(1);
   });
+  it.each(["unable", "mixed"])("shows %s AI outcomes under Other with original raw entries", async (outcome) => {
+    mock.read.mockResolvedValue([row("acid", null, "a", "ph"), row("second", "Slightly acidic", "a", "ph")]);
+    mock.invoke.mockResolvedValue({ data: { classifications: [
+      { result_id: "acid", indication: outcome === "unable" ? "unable" : "low", confidence: 0.82, reason: "Screening", basis: "general_viticulture" },
+      { result_id: "second", indication: "high", confidence: 0.82, reason: "Screening", basis: "general_viticulture" },
+    ] } });
+    mount(); await screen.findByRole("region", { name: "Other / Not stated laboratory statuses" }); fireEvent.click(screen.getByRole("switch"));
+    await waitFor(() => expect(mock.invoke).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Show Other" }));
+    fireEvent.click(within(screen.getByRole("region")).getByRole("button", { name: /pH/ }));
+    expect(await screen.findByText(outcome === "unable" ? "AI: Unable to rate" : "AI: Mixed indications")).toBeTruthy();
+    expect(screen.getByLabelText("Other / Not stated count").textContent).toBe("1");
+    expect(screen.getByText("Lab: Not stated")).toBeTruthy(); expect(screen.getAllByRole("link")).toHaveLength(2);
+  });
+  it("shows nonblocking AI loading while lab-rated content remains available", async () => {
+    let finish: ((value: unknown) => void) | undefined;
+    mock.invoke.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    mount(); await screen.findByRole("region", { name: "Low laboratory statuses" }); fireEvent.click(screen.getByRole("switch"));
+    expect(await screen.findByRole("status")).toHaveTextContent("Analysing unrated results…");
+    fireEvent.click(screen.getByRole("button", { name: "Show Low" })); fireEvent.click(within(screen.getByRole("region")).getByRole("button", { name: /Calcium/ }));
+    expect(screen.getByText("Very Low")).toBeTruthy();
+    finish?.({ data: { classifications: [{ result_id: "acid", indication: "high", confidence: 0.82, reason: "Screening", basis: "general_viticulture" }] } });
+    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
+  });
+  it("as-of AI uses only the latest eligible dataset, not excluded later dates", async () => {
+    mock.read.mockImplementation(async (_ids: string[], asOf: string | null) => asOf ? [{ ...row("historical", null, "a", "ph"), sample: { ...row("historical", null).sample, sampled_at: "2025-01-01" } }] : [row("acid", null, "a", "ph")]);
+    mock.invoke.mockImplementation(async (_name, { body }) => ({ data: { classifications: body.result_ids.map((id: string) => ({ result_id: id, indication: "high", confidence: 0.82, reason: "Screening", basis: "general_viticulture" })) } }));
+    mount(); await screen.findByRole("region", { name: "Low laboratory statuses" });
+    fireEvent.click(screen.getByLabelText("Time")); fireEvent.click(screen.getByRole("option", { name: "As of date" }));
+    fireEvent.change(screen.getByLabelText("As of date"), { target: { value: "2025-12-31" } });
+    await waitFor(() => expect(mock.read).toHaveBeenLastCalledWith(["a", "b"], "2025-12-31"));
+    fireEvent.click(screen.getByRole("switch"));
+    await waitFor(() => expect(mock.invoke).toHaveBeenCalledWith("soil-analysis-viticulture-indicate", { body: { vineyard_id: "v", result_ids: ["historical"] } }));
+    expect(mock.invoke).toHaveBeenCalledTimes(1);
+  });
   it("search/category/status do not broaden or repeat AI requests and block selection excludes results", async () => {
     mount(); await screen.findByRole("region", { name: "Low laboratory statuses" }); fireEvent.click(screen.getByRole("button", { name: "Block A" }));
     fireEvent.click(screen.getByRole("switch")); await waitFor(() => expect(mock.read).toHaveBeenLastCalledWith(["b"], null)); expect(mock.invoke).not.toHaveBeenCalled();
