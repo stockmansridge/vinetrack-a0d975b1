@@ -7,7 +7,7 @@
 // source copies for them. Saving edits never confirms a sample — only the
 // explicit Confirm action sets confirmed + verified_by + verified_at.
 // The original document opens through a short-lived signed URL.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +33,9 @@ import {
   setSoilSampleBlockMappings,
   validateBlockMappings,
   formatDataError,
+  hasConfirmableSampleDate,
+  MissingSampleDateError,
+  CONFIRM_DATE_REQUIRED_MESSAGE,
   blockRowNumbers,
   initialSelection,
   rowSelectionSummary,
@@ -118,6 +121,9 @@ function DetailInner() {
   const [mappingRows, setMappingRows] = useState<SoilBlockMappingInput[]>([]);
   const [initialisedFor, setInitialisedFor] = useState<string | null>(null);
   const [suggestionApplied, setSuggestionApplied] = useState(false);
+  // Set when Confirm was attempted without a sample date (emphasised helper).
+  const [dateRequiredFlag, setDateRequiredFlag] = useState(false);
+  const sampleDateRef = useRef<HTMLInputElement>(null);
 
   const sample = detailQuery.data?.sample;
   const mappings = detailQuery.data?.mappings;
@@ -278,11 +284,26 @@ function DetailInner() {
     try {
       const saved = await save();
       if (!saved) return; // validation message already shown
-      await confirmSoilSample(sample.id, user.id);
+      // soil_samples_confirmed_date_chk: never attempt confirmation without
+      // a sample date — the review is saved, explain what is missing instead.
+      const sampledAt = (draft.sampled_at as string | null | undefined) ?? null;
+      if (!hasConfirmableSampleDate(sampledAt)) {
+        setDateRequiredFlag(true);
+        setSaveState(CONFIRM_DATE_REQUIRED_MESSAGE);
+        sampleDateRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+        sampleDateRef.current?.focus();
+        return;
+      }
+      await confirmSoilSample(sample.id, user.id, sampledAt);
       qc.invalidateQueries({ queryKey: ["soil-analysis"] });
       setSaveState("Confirmed. The reviewed values are now the confirmed record.");
     } catch (e) {
-      setSaveState(formatDataError(e));
+      if (e instanceof MissingSampleDateError) {
+        setDateRequiredFlag(true);
+        setSaveState(CONFIRM_DATE_REQUIRED_MESSAGE);
+      } else {
+        setSaveState(formatDataError(e));
+      }
     } finally {
       setConfirming(false);
     }
@@ -362,8 +383,24 @@ function DetailInner() {
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-3 text-sm">
             <div className="space-y-1">
-              <Label>Sample date</Label>
-              <Input type="date" value={(draft.sampled_at as string) ?? ""} onChange={(e) => set("sampled_at", e.target.value || null)} />
+              <Label htmlFor="soil-sample-date">Sample date</Label>
+              <Input
+                id="soil-sample-date"
+                ref={sampleDateRef}
+                type="date"
+                value={(draft.sampled_at as string) ?? ""}
+                aria-invalid={dateRequiredFlag && !hasConfirmableSampleDate(draft.sampled_at) ? true : undefined}
+                aria-describedby="soil-sample-date-help"
+                onChange={(e) => set("sampled_at", e.target.value || null)}
+              />
+              {sample.extraction_status !== "confirmed" && !hasConfirmableSampleDate(draft.sampled_at) && (
+                <p
+                  id="soil-sample-date-help"
+                  className={`text-xs ${dateRequiredFlag ? "text-destructive font-medium" : "text-muted-foreground"}`}
+                >
+                  Required before confirmation.
+                </p>
+              )}
             </div>
             <div className="space-y-1">
               <Label>Received date</Label>

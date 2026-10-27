@@ -1091,7 +1091,32 @@ export async function updateSoilSample(id: string, patch: SoilSamplePatch): Prom
  * Explicit Confirm action: marks the reviewed sample confirmed with the
  * reviewing user and timestamp. Saving edits alone never confirms.
  */
-export async function confirmSoilSample(id: string, userId: string): Promise<void> {
+export const CONFIRM_DATE_REQUIRED_MESSAGE =
+  "Review saved. Add a sample date before confirming this soil sample.";
+
+/** soil_samples_confirmed_date_chk: a confirmed sample must have sampled_at. */
+export function hasConfirmableSampleDate(sampledAt: unknown): boolean {
+  return typeof sampledAt === "string" && sampledAt.trim().length > 0;
+}
+
+export class MissingSampleDateError extends Error {
+  constructor() {
+    super(CONFIRM_DATE_REQUIRED_MESSAGE);
+    this.name = "MissingSampleDateError";
+  }
+}
+
+/**
+ * Pass the current sampled_at so the client refuses before the database
+ * check constraint can surface as a raw error. Omitting it keeps legacy
+ * behaviour (the database constraint still enforces the rule).
+ */
+export async function confirmSoilSample(
+  id: string,
+  userId: string,
+  ...rest: [sampledAt?: string | null]
+): Promise<void> {
+  if (rest.length > 0 && !hasConfirmableSampleDate(rest[0])) throw new MissingSampleDateError();
   const { error } = await db
     .from("soil_samples")
     .update({
