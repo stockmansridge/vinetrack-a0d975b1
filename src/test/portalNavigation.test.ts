@@ -157,13 +157,13 @@ describe("Portal navigation — access", () => {
 });
 
 describe("Portal navigation — System Admin grouping", () => {
-  it("keeps all 32 destinations represented exactly once", () => {
+  it("keeps all 31 destinations represented exactly once (Soil Analysis moved to Resources)", () => {
     const grouped = [
       SYSTEM_ADMIN_DASHBOARD,
       ...SYSTEM_ADMIN_GROUPS.flatMap((group) => group.items),
     ];
-    expect(grouped).toHaveLength(32);
-    expect(new Set(grouped.map((item) => item.path)).size).toBe(32);
+    expect(grouped).toHaveLength(31);
+    expect(new Set(grouped.map((item) => item.path)).size).toBe(31);
     expect(grouped.map((item) => item.path)).toEqual(SYSTEM_ADMIN_ITEMS.map((item) => item.path));
   });
 
