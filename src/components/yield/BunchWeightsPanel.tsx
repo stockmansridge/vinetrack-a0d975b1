@@ -219,7 +219,7 @@ export default function BunchWeightsPanel({
             {!loading &&
               varieties.map((v) => {
                 const master = resolveBunchWeight(rows, null, v.key);
-                const isOpen = open.has(v.key);
+                const isOpen = !collapsed.has(v.key);
                 return (
                   <Fragment key={v.key}>
                     <TableRow data-testid={`variety-row-${v.key}`}>
