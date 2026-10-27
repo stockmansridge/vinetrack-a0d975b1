@@ -236,12 +236,25 @@ export function UploadSampleDialog({
           </div>
 
           {error && <div className="text-sm text-destructive">{error}</div>}
-          {failures.map((f) => (
-            <div key={f.name} className="space-y-1">
-              <div className="text-xs font-medium">{f.name}</div>
-              <ExtractionErrorNotice raw={f.message} />
-            </div>
-          ))}
+          {results.length > 0 && (
+            <ul className="space-y-2">
+              {results.map((r) => (
+                <li key={r.name} className="space-y-1">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate font-medium">{r.name}</span>
+                    {r.ok ? (
+                      <span className="shrink-0 text-primary">Extracted — Review required</span>
+                    ) : (
+                      <span className="shrink-0 text-destructive">
+                        Extraction failed — Retry available
+                      </span>
+                    )}
+                  </div>
+                  {!r.ok && <ExtractionErrorNotice raw={r.message} />}
+                </li>
+              ))}
+            </ul>
+          )}
 
           <div className="flex justify-start gap-2 pt-1">
             <Button onClick={submit} disabled={busy}>
