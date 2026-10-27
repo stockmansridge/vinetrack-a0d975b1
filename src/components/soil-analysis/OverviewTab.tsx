@@ -184,17 +184,17 @@ export function OverviewTab({ onOpenSample }: { onOpenSample: (id: string) => vo
                 </tr>
               </thead>
               <tbody>
-                {latestByBlock.map((s) => (
+                {latestByBlock.map((row) => (
                   <tr
-                    key={s.id}
+                    key={`${row.blockId}-${row.sample.id}`}
                     className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
-                    onClick={() => onOpenSample(s.id)}
+                    onClick={() => onOpenSample(row.sample.id)}
                   >
-                    <td className="px-4 py-2 font-medium">{s.block_name ?? "—"}</td>
-                    <td className="px-4 py-2">{formatDate(s.sampled_at)}</td>
-                    <td className="px-4 py-2">{s.laboratory ?? "—"}</td>
+                    <td className="px-4 py-2 font-medium">{row.blockName ?? "—"}</td>
+                    <td className="px-4 py-2">{formatDate(row.sample.sampled_at)}</td>
+                    <td className="px-4 py-2">{row.sample.laboratory ?? "—"}</td>
                     <td className="px-4 py-2">
-                      <Badge variant="outline">{SAMPLE_STATUS_LABEL[s.extraction_status]}</Badge>
+                      <Badge variant="outline">{SAMPLE_STATUS_LABEL[row.sample.extraction_status]}</Badge>
                     </td>
                   </tr>
                 ))}
@@ -231,7 +231,9 @@ export function OverviewTab({ onOpenSample }: { onOpenSample: (id: string) => vo
                     className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
                     onClick={() => sample && onOpenSample(sample.id)}
                   >
-                    <td className="px-4 py-2 font-medium">{sample?.block_name ?? "—"}</td>
+                    <td className="px-4 py-2 font-medium">
+                      {sample ? mappingSummaryLabel(sample, mappings?.get(sample.id)) : "—"}
+                    </td>
                     <td className="px-4 py-2">{result.original_analyte_name ?? result.analyte_key ?? "—"}</td>
                     <td className="px-4 py-2">
                       {result.value_numeric ?? result.value_text ?? "—"} {result.unit ?? ""}
@@ -252,7 +254,7 @@ export function OverviewTab({ onOpenSample }: { onOpenSample: (id: string) => vo
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {blockSummaries.map((b) => (
-          <Card key={b.name}>
+          <Card key={b.id}>
             <CardHeader className="pb-1">
               <CardTitle className="text-sm">{b.name}</CardTitle>
             </CardHeader>
