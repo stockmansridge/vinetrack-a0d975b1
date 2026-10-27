@@ -114,7 +114,7 @@ describe("multi-analyte Trends", () => {
     fireEvent.change(screen.getByPlaceholderText("Search analytes…"), { target: { value: "cations" } });
     fireEvent.click(screen.getByRole("button", { name: "Select all visible" }));
     expect(screen.getByRole("combobox", { name: "Trend analytes" }).textContent).toContain("2 analytes selected");
-    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear analytes" }));
     expect(screen.getByRole("combobox", { name: "Trend analytes" }).textContent).toContain("Choose analytes");
   });
   it("toggling analytes never refetches; one read per block selection", async () => {
