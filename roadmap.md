@@ -1,5 +1,10 @@
 # Roadmap
 
+## Soil Analysis multi-block Trends (Portal only)
+- [ ] Add analyte-filtered multi-block reads and shared block selection; preserve existing lifecycle semantics.
+- [ ] Render compatible series with separate per-block raw points, date averages, summaries and Block-first table; update only Trends help copy.
+- [ ] Run focused and release/navigation regressions, verify preview, report tests and commit; do not publish or change backend/mobile.
+
 ## Estimate source badge colours (Portal only)
 - [x] Swap the two estimate-source badges so Yield Estimate Trips carries the brighter green and Pruning Estimate the deep green tint.
 - [x] 43/43 tests across 3 focused Yields files (two new badge-colour safeguards); preview build OK. No SQL/mobile/unrelated changes or publication.
