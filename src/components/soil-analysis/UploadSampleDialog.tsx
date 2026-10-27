@@ -21,9 +21,10 @@ import {
 } from "@/lib/soilAnalysis";
 import { ExtractionErrorNotice } from "./ExtractionErrorNotice";
 
-interface FileFailure {
+interface FileResult {
   name: string;
-  message: string;
+  ok: boolean;
+  message: string | null;
 }
 
 export function UploadSampleDialog({
@@ -44,7 +45,7 @@ export function UploadSampleDialog({
   const [files, setFiles] = useState<File[]>([]);
   const [vineyardId, setVineyardId] = useState<string>(selectedVineyardId ?? "");
   const [error, setError] = useState<string | null>(null);
-  const [failures, setFailures] = useState<FileFailure[]>([]);
+  const [results, setResults] = useState<FileResult[]>([]);
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
