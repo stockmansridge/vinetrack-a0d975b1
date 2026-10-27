@@ -4,7 +4,7 @@
 - [x] Verify existing multi-block Trends against requested block-isolation and selection safeguards (17 existing tests); implementation already complete and preserved.
 - [x] Add confirmed, mapping-aware Traffic Lights latest snapshots, source-status groups, filters and eighth help topic (32 new tests).
 - [x] Verify desktop/mobile Traffic Lights counts, Exceptions and sample links using isolated fixtures; no horizontal overflow/runtime errors. No backend/mobile changes or publication.
-- [ ] Final regression run and revision reporting.
+- [x] Final regressions: 296 tests across 21 files passed (32 new Traffic Lights tests, 17 retained multi-block tests); automatic preview compilation clean. Final revision reported in handoff.
 - [ ] Authenticated live-vineyard acceptance — blocked: preview session mint reports no auth users; fixtures are not live verification.
 
 ## Soil Analysis multi-block Trends (Portal only)
