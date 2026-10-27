@@ -218,7 +218,25 @@ describe("lab status language", () => {
 });
 
 describe("extraction failure presentation", () => {
-  const RAW_OPENAI_ERROR = `Edge function returned 500: Error, {"error":"extraction_failed","detail":"openai_400:{\n  \"error\": {\n    \"message\": \"Invalid 'input[0].content[1].file_data'.\",\n    \"type\": \"invalid_request_error\"\n  }\n}"}`;
+  const RAW_OPENAI_ERROR =
+    `Edge function returned 500: Error, ` +
+    JSON.stringify({
+      error: "extraction_failed",
+      detail: `openai_400:${JSON.stringify(
+        { error: { message: "Invalid 'input[0].content[1].file_data'.", type: "invalid_request_error" } },
+        null,
+        2,
+      )}`,
+    });
+
+  // The value actually stored in extraction_error: the parser detail with
+  // pretty-printed JSON whose newlines were never re-escaped.
+  const RAW_STORED_DETAIL = `openai_400:{
+  "error": {
+    "message": "Invalid 'input[0].content[1].file_data'.",
+    "type": "invalid_request_error"
+  }
+}`;
 
   it("keeps one concise main message for every failure", () => {
     expect(EXTRACTION_FAILED_MESSAGE).toBe(
@@ -228,6 +246,12 @@ describe("extraction failure presentation", () => {
 
   it("extracts the human message from a nested OpenAI/edge error", () => {
     expect(cleanExtractionDetail(RAW_OPENAI_ERROR)).toBe(
+      "Invalid 'input[0].content[1].file_data'.",
+    );
+  });
+
+  it("extracts the human message from the stored detail with raw newlines", () => {
+    expect(cleanExtractionDetail(RAW_STORED_DETAIL)).toBe(
       "Invalid 'input[0].content[1].file_data'.",
     );
   });
