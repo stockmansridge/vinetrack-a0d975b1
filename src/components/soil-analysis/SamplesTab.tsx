@@ -6,12 +6,13 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Upload } from "lucide-react";
+import { Trash2, Upload } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
 import {
   listSoilSamples,
   retrySoilExtraction,
+  isSoilSampleDeletable,
   SAMPLE_STATUS_LABEL,
   SAMPLE_SCOPE_LABEL,
   type SoilSample,
