@@ -33,6 +33,12 @@ import {
   setSoilSampleBlockMappings,
   validateBlockMappings,
   formatDataError,
+  blockRowNumbers,
+  initialSelection,
+  rowSelectionSummary,
+  parseReportRowRange,
+  suggestMappingsFromRange,
+  MAPPING_NO_CONFIGURED_ROWS_MESSAGE,
   SAMPLE_STATUS_LABEL,
   labStatusLabel,
   type SoilSample,
@@ -82,10 +88,12 @@ function DetailInner() {
   const blocksQuery = useQuery({
     queryKey: ["soil-analysis", "blocks", detailQuery.data?.sample.vineyard_id],
     enabled: !!detailQuery.data?.sample.vineyard_id,
-    queryFn: async (): Promise<Array<{ id: string; name: string; variety_allocations: unknown }>> => {
+    queryFn: async (): Promise<
+      Array<{ id: string; name: string; rows: unknown; variety_allocations: unknown }>
+    > => {
       const { data, error } = await db
         .from("paddocks")
-        .select("id, name, variety_allocations")
+        .select("id, name, rows, variety_allocations")
         .eq("vineyard_id", detailQuery.data!.sample.vineyard_id)
         .is("deleted_at", null)
         .order("name");
@@ -109,11 +117,18 @@ function DetailInner() {
   const [coverageMode, setCoverageMode] = useState<CoverageMode>("not_mapped");
   const [mappingRows, setMappingRows] = useState<SoilBlockMappingInput[]>([]);
   const [initialisedFor, setInitialisedFor] = useState<string | null>(null);
+  const [suggestionApplied, setSuggestionApplied] = useState(false);
 
   const sample = detailQuery.data?.sample;
   const mappings = detailQuery.data?.mappings;
+  const blockList = blocksQuery.data;
+  // paddock_id => known canonical row numbers from the live paddocks.rows.
+  const knownRows = new Map<string, number[]>(
+    (blockList ?? []).map((b) => [b.id, blockRowNumbers(b.rows)]),
+  );
   useEffect(() => {
-    if (!sample || !mappings || initialisedFor === sample.id) return;
+    if (!sample || !mappings || !blockList || initialisedFor === sample.id) return;
+    const known = (pid: string) => blockRowNumbers(blockList.find((b) => b.id === pid)?.rows);
     setDraft({ ...sample });
     if (sample.sample_scope === "point") {
       setCoverageMode("point");
@@ -123,9 +138,7 @@ function DetailInner() {
       setMappingRows(
         mappings.map((m) => ({
           paddock_id: m.paddock_id,
-          mapping_scope: m.mapping_scope,
-          row_start: m.row_start,
-          row_end: m.row_end,
+          selected: initialSelection(m, known(m.paddock_id)),
         })),
       );
     } else if (
@@ -137,9 +150,15 @@ function DetailInner() {
       setMappingRows([
         {
           paddock_id: sample.paddock_id,
-          mapping_scope: sample.sample_scope,
-          row_start: sample.row_start,
-          row_end: sample.row_end,
+          selected: initialSelection(
+            {
+              mapping_scope: sample.sample_scope,
+              row_numbers: null,
+              row_start: sample.row_start,
+              row_end: sample.row_end,
+            },
+            known(sample.paddock_id),
+          ),
         },
       ]);
     } else {
@@ -147,15 +166,24 @@ function DetailInner() {
       setMappingRows([]);
     }
     setInitialisedFor(sample.id);
-  }, [sample?.id, mappings]);
+  }, [sample?.id, mappings, blockList]);
 
   const updateMappingRow = (idx: number, patch: Partial<SoilBlockMappingInput>) =>
     setMappingRows((rows) => rows.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
-  const addMappingRow = () =>
-    setMappingRows((rows) => [
-      ...rows,
-      { paddock_id: "", mapping_scope: "whole_block", row_start: null, row_end: null },
-    ]);
+  const toggleRow = (idx: number, n: number) =>
+    setMappingRows((rows) =>
+      rows.map((r, i) =>
+        i !== idx
+          ? r
+          : {
+              ...r,
+              selected: r.selected.includes(n)
+                ? r.selected.filter((x) => x !== n)
+                : [...r.selected, n].sort((a, b) => a - b),
+            },
+      ),
+    );
+  const addMappingRow = () => setMappingRows((rows) => [...rows, { paddock_id: "", selected: [] }]);
   const removeMappingRow = (idx: number) =>
     setMappingRows((rows) => rows.filter((_, i) => i !== idx));
 
@@ -182,7 +210,7 @@ function DetailInner() {
     // Validate block coverage BEFORE any write so an invalid state (e.g. a
     // row range with no block) can never reach the database.
     if (coverageMode === "block") {
-      const invalid = validateBlockMappings(mappingRows);
+      const invalid = validateBlockMappings(mappingRows, knownRows);
       if (invalid) {
         setSaveState(invalid);
         return false;
@@ -212,7 +240,7 @@ function DetailInner() {
       //    The RPC also synchronises the legacy sample fields (including
       //    multi_block when more than one block is mapped).
       if (coverageMode === "block") {
-        await setSoilSampleBlockMappings(sample.id, mappingRows);
+        await setSoilSampleBlockMappings(sample.id, mappingRows, knownRows);
       } else {
         // Not mapped and Sampling point both clear block mappings.
         await setSoilSampleBlockMappings(sample.id, []);
@@ -297,6 +325,15 @@ function DetailInner() {
 
   const analytes = analytesQuery.data ?? [];
   const blocks = blocksQuery.data ?? [];
+  // Review suggestion only — never auto-saved or auto-confirmed.
+  const reportRange = parseReportRowRange((draft.lab_paddock_name as string) ?? sample.lab_paddock_name);
+  const suggestion = reportRange ? suggestMappingsFromRange(reportRange, blocks) : null;
+  const applySuggestion = () => {
+    if (!suggestion) return;
+    setCoverageMode("block");
+    setMappingRows(suggestion.mappings.map((m) => ({ ...m, selected: [...m.selected] })));
+    setSuggestionApplied(true);
+  };
   const results = detailQuery.data?.results ?? [];
   const selectClass = "w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm";
 
@@ -418,89 +455,122 @@ function DetailInner() {
               </select>
             </div>
 
+            {reportRange && suggestion && (
+              <div className="rounded-md border border-dashed border-border bg-muted/40 p-2 space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs">
+                    Report mentions rows {reportRange.from}–{reportRange.to}
+                  </span>
+                  {suggestion.mappings.length > 0 && (
+                    <Button size="sm" variant="outline" onClick={applySuggestion}>
+                      Apply row suggestion
+                    </Button>
+                  )}
+                </div>
+                {suggestion.missing.length > 0 && (
+                  <p className="text-xs text-destructive">
+                    {suggestion.missing.length === 1 ? "Row" : "Rows"}{" "}
+                    {rowSelectionSummary(suggestion.missing).replace(/^Rows? /, "")}{" "}
+                    {suggestion.missing.length === 1 ? "is" : "are"} not present in the current VineTrack row configuration.
+                  </p>
+                )}
+                {suggestionApplied && (
+                  <p className="text-xs text-muted-foreground">
+                    Suggestion applied for review — nothing is saved until you choose Save.
+                  </p>
+                )}
+              </div>
+            )}
+
             {coverageMode === "block" && (
               <div className="space-y-2">
-                {mappingRows.map((row, idx) => (
-                  <div key={idx} className="rounded-md border border-border p-2 space-y-2">
-                    <div className="flex items-end gap-2">
-                      <div className="flex-1 space-y-1">
-                        <Label>Block</Label>
-                        <select
-                          className={selectClass}
-                          value={row.paddock_id}
-                          onChange={(e) => updateMappingRow(idx, { paddock_id: e.target.value })}
-                          aria-label={`Mapping block ${idx + 1}`}
+                {mappingRows.map((row, idx) => {
+                  const known = row.paddock_id ? knownRows.get(row.paddock_id) ?? [] : [];
+                  const takenElsewhere = new Set(
+                    mappingRows.filter((_, i) => i !== idx).map((r) => r.paddock_id),
+                  );
+                  const allSelected = known.length > 0 && known.every((n) => row.selected.includes(n));
+                  return (
+                    <div key={idx} className="rounded-md border border-border p-2 space-y-2">
+                      <div className="flex items-end gap-2">
+                        <div className="flex-1 space-y-1">
+                          <Label>Block</Label>
+                          <select
+                            className={selectClass}
+                            value={row.paddock_id}
+                            onChange={(e) => {
+                              const pid = e.target.value;
+                              // New block: start with all its known rows ticked.
+                              updateMappingRow(idx, { paddock_id: pid, selected: [...(knownRows.get(pid) ?? [])] });
+                            }}
+                            aria-label={`Mapping block ${idx + 1}`}
+                          >
+                            <option value="">Choose a block…</option>
+                            {blocks.map((b) => {
+                              const varieties = varietyContext(b.variety_allocations);
+                              return (
+                                <option key={b.id} value={b.id} disabled={takenElsewhere.has(b.id)}>
+                                  {varieties ? `${b.name} — ${varieties}` : b.name}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => removeMappingRow(idx)}
+                          aria-label={`Remove mapping ${idx + 1}`}
                         >
-                          <option value="">Choose a block…</option>
-                          {blocks.map((b) => {
-                            const varieties = varietyContext(b.variety_allocations);
-                            return (
-                              <option key={b.id} value={b.id}>
-                                {varieties ? `${b.name} — ${varieties}` : b.name}
-                              </option>
-                            );
-                          })}
-                        </select>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => removeMappingRow(idx)}
-                        aria-label={`Remove mapping ${idx + 1}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <div className="flex flex-wrap items-end gap-2">
-                      <div className="space-y-1">
-                        <Label>Coverage</Label>
-                        <select
-                          className={selectClass}
-                          value={row.mapping_scope}
-                          onChange={(e) =>
-                            updateMappingRow(idx, {
-                              mapping_scope: e.target.value as SoilBlockMappingInput["mapping_scope"],
-                            })
-                          }
-                          aria-label={`Mapping coverage ${idx + 1}`}
-                        >
-                          <option value="whole_block">Whole block</option>
-                          <option value="row_range">Row range</option>
-                        </select>
-                      </div>
-                      {row.mapping_scope === "row_range" && (
-                        <>
-                          <div className="space-y-1">
-                            <Label>Row from</Label>
-                            <Input
-                              type="number"
-                              className="w-24"
-                              value={row.row_start ?? ""}
-                              onChange={(e) =>
-                                updateMappingRow(idx, {
-                                  row_start: e.target.value ? Number(e.target.value) : null,
-                                })
-                              }
-                            />
+                      {row.paddock_id && known.length === 0 && (
+                        <p className="text-xs text-destructive">{MAPPING_NO_CONFIGURED_ROWS_MESSAGE}</p>
+                      )}
+                      {row.paddock_id && known.length > 0 && (
+                        <div className="space-y-1.5">
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                            <span className="font-medium">
+                              {row.selected.length} of {known.length} rows selected
+                            </span>
+                            <span className="text-muted-foreground">
+                              {allSelected ? "All rows" : rowSelectionSummary(row.selected)}
+                            </span>
+                            <span className="flex-1" />
+                            <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => updateMappingRow(idx, { selected: [...known] })}>
+                              Select all rows
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => updateMappingRow(idx, { selected: [] })}>
+                              Clear
+                            </Button>
                           </div>
-                          <div className="space-y-1">
-                            <Label>Row to</Label>
-                            <Input
-                              type="number"
-                              className="w-24"
-                              value={row.row_end ?? ""}
-                              onChange={(e) =>
-                                updateMappingRow(idx, {
-                                  row_end: e.target.value ? Number(e.target.value) : null,
-                                })
-                              }
-                            />
+                          <div className="flex flex-wrap gap-1" role="group" aria-label={`Rows for mapping ${idx + 1}`}>
+                            {known.map((n) => {
+                              const on = row.selected.includes(n);
+                              return (
+                                <button
+                                  key={n}
+                                  type="button"
+                                  aria-pressed={on}
+                                  aria-label={`Row ${n}`}
+                                  onClick={() => toggleRow(idx, n)}
+                                  className={`min-w-[2.25rem] rounded border px-1.5 py-0.5 text-xs tabular-nums transition-colors ${
+                                    on
+                                      ? "border-primary bg-primary text-primary-foreground"
+                                      : "border-border bg-background text-muted-foreground hover:bg-muted"
+                                  }`}
+                                >
+                                  {n}
+                                </button>
+                              );
+                            })}
                           </div>
-                        </>
+                        </div>
                       )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 <Button size="sm" variant="outline" onClick={addMappingRow}>
                   + Add another block
                 </Button>
