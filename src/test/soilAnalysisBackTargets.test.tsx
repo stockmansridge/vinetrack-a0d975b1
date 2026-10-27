@@ -77,13 +77,13 @@ vi.mock("@/context/AuthContext", () => ({
 import SoilAnalysisPage from "@/pages/admin/SoilAnalysisPage";
 import SoilSampleDetailPage from "@/pages/admin/SoilSampleDetailPage";
 
-function renderWithRouter(initialPath: string, element: React.ReactElement) {
+function renderWithRouter(routePath: string, initialPath: string, element: React.ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[initialPath]}>
         <Routes>
-          <Route path={initialPath} element={element} />
+          <Route path={routePath} element={element} />
           <Route path="/dashboard" element={<div>dashboard landing</div>} />
           <Route path="/soil-analysis" element={<div>soil-analysis landing</div>} />
         </Routes>
@@ -91,6 +91,7 @@ function renderWithRouter(initialPath: string, element: React.ReactElement) {
     </QueryClientProvider>,
   );
 }
+
 
 describe("Soil Analysis back navigation", () => {
   it("landing page header returns to the customer dashboard", async () => {
