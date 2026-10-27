@@ -914,3 +914,225 @@ export function buildCompareMatrix(
     });
   });
 }
+
+// ---------------------------------------------------------------------------
+// Hard delete — unapproved samples only. The backend RLS/storage policies are
+// the authority (confirmed samples and their documents/results cannot be
+// deleted); the Portal mirrors that rule and fails closed. This is an
+// intentional HARD delete: no soft-delete, no deleted_at flag.
+// ---------------------------------------------------------------------------
+
+export const CONFIRMED_DELETE_MESSAGE = "Confirmed soil samples cannot be deleted.";
+
+/** Deletable: pending, processing, review_required, failed. Never confirmed. */
+export function isSoilSampleDeletable(status: SoilSampleStatus | null | undefined): boolean {
+  return status !== "confirmed";
+}
+
+/**
+ * Permanently deletes an unapproved sample:
+ * 1. fetches every soil_sample_documents row for the sample;
+ * 2. removes ALL document storage objects first — if storage removal fails
+ *    we STOP and keep every database row so evidence is never orphaned;
+ * 3. deletes the soil_samples row guarded by .neq('extraction_status',
+ *    'confirmed') so a concurrently confirmed sample is never removed;
+ *    child document/result rows cascade from the sample delete.
+ */
+export async function deleteSoilSample(sampleId: string): Promise<void> {
+  const { data: docs, error: docErr } = await db
+    .from("soil_sample_documents")
+    .select("id, storage_bucket, storage_path")
+    .eq("sample_id", sampleId);
+  if (docErr) throw docErr;
+
+  const byBucket = new Map<string, string[]>();
+  for (const doc of docs ?? []) {
+    const bucket = doc.storage_bucket || SOIL_DOCUMENT_BUCKET;
+    byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), doc.storage_path]);
+  }
+  for (const [bucket, paths] of byBucket) {
+    const { error: storageErr } = await db.storage.from(bucket).remove(paths);
+    if (storageErr) {
+      throw new Error(`Could not remove the uploaded source document: ${storageErr.message}`);
+    }
+  }
+
+  const { data: deleted, error: delErr } = await db
+    .from("soil_samples")
+    .delete()
+    .eq("id", sampleId)
+    .neq("extraction_status", "confirmed")
+    .select("id");
+  if (delErr) {
+    if (/confirmed|policy|permission|row-level/i.test(delErr.message)) {
+      throw new Error(CONFIRMED_DELETE_MESSAGE);
+    }
+    throw delErr;
+  }
+  // The guard matched no row — the sample became confirmed concurrently.
+  if (!deleted || deleted.length === 0) throw new Error(CONFIRMED_DELETE_MESSAGE);
+}
+
+// ---------------------------------------------------------------------------
+// Reports — the RPCs are the authority and return CONFIRMED samples only.
+// The Portal never queries review/failed samples for reporting, never mixes
+// method/unit series, and never interpolates across unsampled blocks.
+// ---------------------------------------------------------------------------
+
+export interface SoilReportSeries {
+  analyte_key: string;
+  analyte_name: string;
+  category: string | null;
+  method: string | null;
+  unit: string | null;
+  desired_direction: SoilDesiredDirection | null;
+  block_count: number;
+  sample_count: number;
+  first_sampled_at: string | null;
+  latest_sampled_at: string | null;
+}
+
+export interface SoilMapReportRow {
+  paddock_id: string;
+  paddock_name: string | null;
+  polygon_points: unknown;
+  sample_id: string | null;
+  sampled_at: string | null;
+  laboratory: string | null;
+  lab_sample_id: string | null;
+  sample_depth_from_cm: number | null;
+  sample_depth_to_cm: number | null;
+  value_numeric: number | null;
+  value_text: string | null;
+  lab_range_min: number | null;
+  lab_range_max: number | null;
+  lab_range_text: string | null;
+  lab_status: string | null;
+  extraction_confidence: number | null;
+  previous_sample_id: string | null;
+  previous_sampled_at: string | null;
+  previous_value_numeric: number | null;
+}
+
+export async function listSoilReportSeries(vineyardId: string): Promise<SoilReportSeries[]> {
+  const { data, error } = await db.rpc("soil_analysis_report_series", {
+    p_vineyard_id: vineyardId,
+  });
+  if (error) throw error;
+  return (data ?? []) as SoilReportSeries[];
+}
+
+export async function getSoilMapReport(input: {
+  vineyardId: string;
+  analyteKey: string;
+  method: string | null;
+  unit: string | null;
+  asOf?: string | null;
+}): Promise<SoilMapReportRow[]> {
+  const { data, error } = await db.rpc("soil_analysis_map_report", {
+    p_vineyard_id: input.vineyardId,
+    p_analyte_key: input.analyteKey,
+    p_method: input.method,
+    p_unit: input.unit,
+    p_as_of: input.asOf ?? null,
+  });
+  if (error) throw error;
+  return (data ?? []) as SoilMapReportRow[];
+}
+
+/** Default pilot series: Total Carbon when present, otherwise the first. */
+export function pickDefaultSeries(series: SoilReportSeries[]): SoilReportSeries | null {
+  if (series.length === 0) return null;
+  return (
+    series.find((s) => s.analyte_name.trim().toLowerCase() === "total carbon") ?? series[0]
+  );
+}
+
+/** All comparable series for one analyte — >1 means method/unit must be chosen explicitly. */
+export function seriesForAnalyte(
+  series: SoilReportSeries[],
+  analyteKey: string,
+): SoilReportSeries[] {
+  return series.filter((s) => s.analyte_key === analyteKey);
+}
+
+/** Stable identity for one comparable method/unit series. */
+export function seriesKey(s: Pick<SoilReportSeries, "method" | "unit">): string {
+  return `${s.method ?? ""}|${s.unit ?? ""}`;
+}
+
+// Sequential quantitative value scale (light → deep green). It is purely
+// quantitative — it never implies good/bad — and no-data blocks use a
+// distinct neutral grey so unsampled blocks are unmistakable.
+export const SOIL_MAP_NO_DATA_COLOR = "#b8bec4";
+const SCALE_LOW = { r: 227, g: 242, b: 232 };
+const SCALE_HIGH = { r: 27, g: 122, b: 67 };
+
+export function valueScaleColor(value: number, min: number, max: number): string {
+  if (!Number.isFinite(value) || !Number.isFinite(min) || !Number.isFinite(max)) {
+    return SOIL_MAP_NO_DATA_COLOR;
+  }
+  // Equal values (or a single value) use one stable midpoint colour — never
+  // divide by zero.
+  const t = max > min ? Math.min(1, Math.max(0, (value - min) / (max - min))) : 0.5;
+  const r = Math.round(SCALE_LOW.r + (SCALE_HIGH.r - SCALE_LOW.r) * t);
+  const g = Math.round(SCALE_LOW.g + (SCALE_HIGH.g - SCALE_LOW.g) * t);
+  const b = Math.round(SCALE_LOW.b + (SCALE_HIGH.b - SCALE_LOW.b) * t);
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+}
+
+export interface SoilMapStats {
+  totalBlocks: number;
+  withData: number;
+  min: number | null;
+  median: number | null;
+  max: number | null;
+  /** Only set when every value is a valid comparable number. */
+  average: number | null;
+  latestSampledAt: string | null;
+}
+
+export function summariseMapReport(rows: SoilMapReportRow[]): SoilMapStats {
+  const values = rows
+    .map((r) => r.value_numeric)
+    .filter((v): v is number => typeof v === "number" && Number.isFinite(v))
+    .sort((a, b) => a - b);
+  const n = values.length;
+  const median =
+    n === 0 ? null : n % 2 === 1 ? values[(n - 1) / 2] : (values[n / 2 - 1] + values[n / 2]) / 2;
+  const average = n === 0 ? null : values.reduce((a, b) => a + b, 0) / n;
+  const latestSampledAt = rows
+    .filter((r) => r.value_numeric != null && r.sampled_at)
+    .map((r) => r.sampled_at as string)
+    .sort()
+    .pop() ?? null;
+  return {
+    totalBlocks: rows.length,
+    withData: n,
+    min: n ? values[0] : null,
+    median,
+    max: n ? values[n - 1] : null,
+    average,
+    latestSampledAt,
+  };
+}
+
+// Lab status mode — categories come only from the laboratory's own
+// range/status fields; missing or unreliable values show "Not stated".
+export const LAB_STATUS_MAP_COLOR: Record<string, string> = {
+  low: "#d97706",
+  within_range: "#1b7a43",
+  high: "#b91c1c",
+  no_range: "#6b7280",
+  unknown: SOIL_MAP_NO_DATA_COLOR,
+};
+
+export function labStatusMapColor(status: string | null | undefined): string {
+  return LAB_STATUS_MAP_COLOR[status ?? "unknown"] ?? LAB_STATUS_MAP_COLOR.unknown;
+}
+
+/** Compact map/table number: up to 2 decimals, trailing zeros trimmed. */
+export function formatMapValue(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return String(Number(value.toFixed(2)));
+}
