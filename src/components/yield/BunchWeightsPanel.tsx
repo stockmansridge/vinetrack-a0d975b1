@@ -50,7 +50,10 @@ export function bunchWeightVarieties(blocks: BunchWeightBlock[]): BunchWeightVar
 
 const SOURCE_BADGE: Record<BunchWeightSource | "partial", string> = {
   block_override: "border-primary/40 bg-primary/10 text-primary",
-  variety_default: "border-border bg-secondary text-secondary-foreground",
+  // "border-border" is the same lightness as the secondary fill, so the outline
+  // vanished against a white card; muted-foreground keeps the neutral tone but
+  // stays visible in both themes.
+  variety_default: "border-muted-foreground/40 bg-secondary text-secondary-foreground",
   not_configured: "border-destructive/40 bg-destructive/10 text-destructive",
   partial: "border-warning/50 bg-warning/10 text-warning-foreground",
 };
