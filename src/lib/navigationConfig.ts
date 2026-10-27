@@ -695,7 +695,6 @@ export const SYSTEM_ADMIN_GROUPS: SystemAdminGroup[] = [
       systemAdminItem("Work Tasks"),
       systemAdminItem("Trips"),
       systemAdminItem("Chemical Catalogue Review"),
-      systemAdminItem("Soil Analysis (Preview)"),
     ],
   },
   {

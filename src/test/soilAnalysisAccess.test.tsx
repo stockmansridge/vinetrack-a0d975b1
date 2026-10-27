@@ -1,9 +1,17 @@
-// Soil Analysis Stage 1 — access gating, minimal upload, parser invocation,
+// Soil Analysis general release — customer access, minimal upload, parser invocation,
 // retry behaviour and safe error surfacing.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Routes, Route, useParams } from "react-router-dom";
+import { readFileSync, existsSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { LegacySoilSampleRedirect } from "@/components/soil-analysis/LegacySoilSampleRedirect";
+
+function Landed() {
+  const { id } = useParams();
+  return <div>landed {id}</div>;
+}
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // --- mock the shared backend client ---------------------------------------
@@ -86,16 +94,16 @@ import {
   retrySoilExtraction,
   confirmSoilSample,
   describeFunctionError,
-  SOIL_ANALYSIS_FLAG,
   SOIL_DOCUMENT_BUCKET,
   SOIL_EXTRACT_FUNCTION,
 } from "@/lib/soilAnalysis";
-import { SoilAnalysisGate } from "@/components/soil-analysis/SoilAnalysisGate";
 import { UploadSampleDialog } from "@/components/soil-analysis/UploadSampleDialog";
 import {
   searchDestinations,
   SYSTEM_ADMIN_ITEMS,
-  isSystemAdminItemVisible,
+  SYSTEM_ADMIN_GROUPS,
+  accessibleActivities,
+  resolveLocation,
   type NavViewer,
 } from "@/lib/navigationConfig";
 
@@ -118,62 +126,78 @@ beforeEach(() => {
   invokeError = null;
   adminState.isAdmin = true;
   adminState.loading = false;
-  adminState.flags = [SOIL_ANALYSIS_FLAG];
+  adminState.flags = [];
 });
 
-describe("navigation visibility", () => {
-  const item = SYSTEM_ADMIN_ITEMS.find((i) => i.path === "/admin/soil-analysis")!;
-
-  it("exists and is flag-gated", () => {
-    expect(item).toBeTruthy();
-    expect(item.featureFlag).toBe(SOIL_ANALYSIS_FLAG);
+describe("released navigation — Resources", () => {
+  const hasSoil = (v: NavViewer) =>
+    accessibleActivities(v).some(
+      (a) => a.id === "soil-analysis" && a.group === "Resources" && a.views.some((x) => x.path === "/soil-analysis"),
+    );
+  for (const role of ["owner", "manager", "supervisor", "operator"] as const) {
+    it(`${role} sees Resources → Soil Analysis without any feature flag`, () => {
+      expect(hasSoil(viewer({ role, featureFlags: [] }))).toBe(true);
+      expect(searchDestinations(viewer({ role })).some((d) => d.path === "/soil-analysis")).toBe(true);
+    });
+  }
+  it("System Admin sees the normal Resources entry", () => {
+    expect(hasSoil(viewer({ isSystemAdmin: true }))).toBe(true);
   });
-
-  it("is hidden from non-System-Admin search destinations", () => {
-    const dests = searchDestinations(viewer({ isSystemAdmin: false, featureFlags: [SOIL_ANALYSIS_FLAG] }));
-    expect(dests.some((d) => d.path === "/admin/soil-analysis")).toBe(false);
+  it("is absent from System Admin Operations and admin items", () => {
+    const ops = SYSTEM_ADMIN_GROUPS.find((g) => g.label === "Operations")!;
+    expect(ops.items.some((i) => /soil/i.test(i.label) || i.path.includes("soil"))).toBe(false);
+    expect(SYSTEM_ADMIN_ITEMS.some((i) => i.path.includes("soil"))).toBe(false);
   });
-
-  it("is hidden for System Admins when the flag is off", () => {
-    expect(isSystemAdminItemVisible(item, viewer({ isSystemAdmin: true, featureFlags: [] }))).toBe(false);
-    const dests = searchDestinations(viewer({ isSystemAdmin: true, featureFlags: [] }));
-    expect(dests.some((d) => d.path === "/admin/soil-analysis")).toBe(false);
+  it("sits between Equipment & Fuel and Reports & Exports", () => {
+    const ids = accessibleActivities(viewer({})).map((a) => a.id);
+    const i = ids.indexOf("soil-analysis");
+    expect(ids[i - 1]).toBe("equipment");
+    expect(ids[i + 1]).toBe("reports");
   });
-
-  it("is visible for System Admins when the flag is on", () => {
-    expect(
-      isSystemAdminItemVisible(item, viewer({ isSystemAdmin: true, featureFlags: [SOIL_ANALYSIS_FLAG] })),
-    ).toBe(true);
-    const dests = searchDestinations(viewer({ isSystemAdmin: true, featureFlags: [SOIL_ANALYSIS_FLAG] }));
-    expect(dests.some((d) => d.path === "/admin/soil-analysis")).toBe(true);
+  it("sample detail resolves into the Soil Analysis family", () => {
+    expect(resolveLocation("/soil-analysis/samples/abc").activity?.id).toBe("soil-analysis");
   });
 });
 
-describe("route gate", () => {
-  const renderGate = () =>
+describe("routes and preview removal", () => {
+  const app = readFileSync("src/App.tsx", "utf8");
+  const page = readFileSync("src/pages/admin/SoilAnalysisPage.tsx", "utf8");
+  const detail = readFileSync("src/pages/admin/SoilSampleDetailPage.tsx", "utf8");
+  it("customer routes exist without System Admin or Soil gates", () => {
+    expect(app).toContain('<Route path="/soil-analysis" element={<SoilAnalysisPage />} />');
+    expect(app).toContain('<Route path="/soil-analysis/samples/:id" element={<SoilSampleDetailPage />} />');
+    expect(existsSync("src/components/soil-analysis/SoilAnalysisGate.tsx")).toBe(false);
+    for (const src of [page, detail]) {
+      expect(src).not.toMatch(/SoilAnalysisGate|useSoilAnalysisAccess|useIsSystemAdmin|useFeatureFlag/);
+      expect(src).not.toMatch(/BetaAdminBanner|Preview|System Admins only|In development/);
+      expect(src).not.toContain("/admin/soil-analysis");
+    }
+  });
+  it("old admin URLs redirect", () => {
+    expect(app).toContain('<Route path="/admin/soil-analysis" element={<Navigate to="/soil-analysis" replace />} />');
+    expect(app).toContain('<Route path="/admin/soil-analysis/samples/:id" element={<LegacySoilSampleRedirect />} />');
+  });
+  it("no Portal source references the retired preview flag", () => {
+    const files = execSync("rg -l soil_analysis_admin_preview src || true").toString().trim();
+    expect(files).toBe("");
+  });
+  it("central read-only mutation guard is untouched (no Soil-specific gate)", () => {
+    const files = execSync("rg -l -i 'trial|can_write|TrialEndedDialog' src/components/soil-analysis src/pages/admin/Soil*.tsx || true").toString().trim();
+    expect(files).toBe("");
+  });
+});
+
+describe("legacy sample redirect", () => {
+  it("preserves the sample id", () => {
     render(
-      <MemoryRouter>
-        <SoilAnalysisGate>
-          <div>Soil Analysis content</div>
-        </SoilAnalysisGate>
+      <MemoryRouter initialEntries={["/admin/soil-analysis/samples/s-42"]}>
+        <Routes>
+          <Route path="/admin/soil-analysis/samples/:id" element={<LegacySoilSampleRedirect />} />
+          <Route path="/soil-analysis/samples/:id" element={<Landed />} />
+        </Routes>
       </MemoryRouter>,
     );
-
-  it("blocks non-System-Admin users", () => {
-    adminState.isAdmin = false;
-    renderGate();
-    expect(screen.queryByText("Soil Analysis content")).toBeNull();
-  });
-
-  it("blocks System Admins when the flag is disabled", () => {
-    adminState.flags = [];
-    renderGate();
-    expect(screen.queryByText("Soil Analysis content")).toBeNull();
-  });
-
-  it("renders for System Admins with the flag enabled", () => {
-    renderGate();
-    expect(screen.getByText("Soil Analysis content")).toBeTruthy();
+    expect(screen.getByText("landed s-42")).toBeTruthy();
   });
 });
 
