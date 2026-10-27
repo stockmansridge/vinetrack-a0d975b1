@@ -283,7 +283,7 @@ export function CompareTab() {
                     type="button"
                     className="grid w-full grid-cols-[9rem_1fr_auto] items-center gap-2 rounded px-1 py-1 text-left text-sm hover:bg-muted/60 disabled:cursor-default disabled:hover:bg-transparent"
                     disabled={!r.result}
-                    onClick={() => r.result && navigate(`/admin/soil-analysis/samples/${r.result.sample.id}`)}
+                    onClick={() => r.result && navigate(`/soil-analysis/samples/${r.result.sample.id}`)}
                     aria-label={`${blockName(r.paddockId)} ${r.result ? "open source sample" : "no result"}`}
                   >
                     <span className="truncate">
