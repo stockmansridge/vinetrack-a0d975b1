@@ -203,4 +203,5 @@
 - [x] Nav + routes gated by System Admin AND soil_analysis_admin_preview flag; hidden/blocked otherwise.
 - [x] Landing tabs Overview | Soil Samples | Trends | Compare (+ disabled Reports); upload to private bucket; Review Results preserving source_* provenance.
 - [x] Trend/compare comparability guards (method+unit, Colwell vs Mehlich, DTPA); lab-range-only status language.
-- [x] Focused tests (70/70 across 4 files) + build; no SQL/schema/mobile changes, no publication. Assumed column contract centralised in src/lib/soilAnalysis.ts pending owner confirmation; backend parser endpoint outstanding (records show Awaiting extraction).
+- [x] Focused tests + build; no SQL/schema/mobile changes, no publication.
+- [x] Reconciled to owner's introspected live schema (sampled_at, sample_scope, extraction_status lifecycle, size_bytes, source_value_*, key/desired_direction catalogue); upload invokes deployed soil-analysis-extract parser with sample_id+document_id, parser failure preserves records as failed; explicit Confirm writes confirmed+verified_by+verified_at; 15 MB limit; 26 focused + 56 nav/admin regression tests pass.
