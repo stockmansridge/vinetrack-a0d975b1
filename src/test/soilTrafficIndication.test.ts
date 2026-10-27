@@ -32,7 +32,7 @@ describe("read-only AI screening", () => {
   });
   it.each(["low", "satisfactory", "high"] as const)("labels %s as sample context when the endpoint used companion measurements", (bucket) => {
     const snapshots = buildSoilTrafficSnapshots([row("one", null), row("two", "Acidic")]);
-    const out = indicateSoilSnapshots(snapshots, [indication("one", bucket), { ...indication("two", bucket), scope: "sample_context" }]);
+    const out = indicateSoilSnapshots(snapshots, [{ ...indication("one", bucket), scope: "sample_context" }, { ...indication("two", bucket), scope: "sample_context" }]);
     expect(out[0]).toMatchObject({ bucket, aiLabel: `AI sample context: ${bucket[0].toUpperCase()}${bucket.slice(1)}` });
     expect(out[0].aiEntries?.every((r) => r.scope === "sample_context")).toBe(true);
     expect(indicateSoilSnapshots(snapshots)[0].bucket).toBe("other");
