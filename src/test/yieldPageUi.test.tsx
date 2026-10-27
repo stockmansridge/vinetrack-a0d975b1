@@ -183,8 +183,7 @@ describe("Yields page", () => {
   it("shows the delete action to owners and managers", async () => {
     renderPage();
     await openEstimations();
-    fireEvent.click(await screen.findByTestId("trip-row-s1"));
-    fireEvent.click(await screen.findByRole("button", { name: /^view full trip detail$/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "View full trip details" }));
     expect(await screen.findByRole("button", { name: /delete session/i })).toBeInTheDocument();
   });
 
