@@ -27,6 +27,7 @@ import {
   updateSoilSample,
   updateSoilResult,
   confirmSoilSample,
+  retrySoilExtraction,
   listAnalyteCatalogue,
   SAMPLE_STATUS_LABEL,
   SAMPLE_SCOPE_LABEL,
@@ -81,6 +82,7 @@ function DetailInner() {
   const [saveState, setSaveState] = useState<string | null>(null);
   const [docError, setDocError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   const sample = detailQuery.data?.sample;
   useEffect(() => {
@@ -155,6 +157,30 @@ function DetailInner() {
     }
   };
 
+  const retry = async () => {
+    const primaryDoc = (detailQuery.data?.documents ?? []).find((d) => d.is_primary)
+      ?? detailQuery.data?.documents?.[0];
+    if (!primaryDoc) {
+      setSaveState("No source document is recorded for this sample, so extraction cannot be retried.");
+      return;
+    }
+    setRetrying(true);
+    setSaveState(null);
+    try {
+      const outcome = await retrySoilExtraction(sample.id, primaryDoc.id);
+      qc.invalidateQueries({ queryKey: ["soil-analysis"] });
+      setSaveState(
+        outcome.ok
+          ? "Extraction finished — review the extracted details below, then confirm."
+          : `Extraction failed again: ${outcome.error}. The uploaded document is preserved.`,
+      );
+    } catch (e) {
+      setSaveState(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   const openDocument = async (path: string) => {
     setDocError(null);
     try {
@@ -192,7 +218,7 @@ function DetailInner() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Sample metadata</CardTitle>
+            <CardTitle className="text-sm">Extracted from report</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-3 text-sm">
             <div className="space-y-1">
@@ -449,7 +475,12 @@ function DetailInner() {
 
       <div className="flex items-center gap-3 mt-4">
         <Button onClick={save}>Save review</Button>
-        {sample.extraction_status !== "confirmed" && (
+        {sample.extraction_status === "failed" && (
+          <Button variant="outline" onClick={retry} disabled={retrying}>
+            {retrying ? "Extracting…" : "Retry extraction"}
+          </Button>
+        )}
+        {sample.extraction_status !== "confirmed" && sample.extraction_status !== "failed" && (
           <Button variant="outline" onClick={confirm} disabled={confirming}>
             {confirming ? "Confirming…" : "Confirm reviewed sample"}
           </Button>

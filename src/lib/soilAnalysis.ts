@@ -378,14 +378,29 @@ function safeFileName(name: string): string {
 export interface UploadSoilSampleInput {
   file: File;
   vineyardId: string;
-  sampledAt: string | null;
-  laboratory: string | null;
-  labPaddockName: string | null;
-  labSampleId: string | null;
-  depthFromCm: number | null;
-  depthToCm: number | null;
-  notes: string | null;
   uploadedBy: string | null;
+}
+
+/**
+ * Extracts a safe, human-readable detail from a Functions invocation error.
+ * FunctionsHttpError carries the response as `context`; when the function
+ * returned a JSON body with detail/error/message we surface that. Auth
+ * headers and tokens are never read or included.
+ */
+export async function describeFunctionError(e: unknown): Promise<string> {
+  const anyErr = e as any;
+  const ctx = anyErr?.context;
+  if (ctx && typeof ctx.json === "function") {
+    try {
+      const body = await ctx.json();
+      const detail = body?.detail ?? body?.error ?? body?.message;
+      if (typeof detail === "string" && detail.trim()) return detail;
+    } catch {
+      // fall through to the generic message
+    }
+  }
+  const msg = anyErr?.message;
+  return typeof msg === "string" && msg.trim() ? msg : String(e);
 }
 
 export interface UploadSoilSampleOutcome {
@@ -409,18 +424,12 @@ export async function uploadSoilSample(input: UploadSoilSampleInput): Promise<Up
   if (invalid) throw new Error(invalid);
   if (!input.vineyardId) throw new Error("Choose a vineyard before uploading.");
 
+  // Minimal insert: the parser fills sampled_at and all lab metadata.
   const { data: sample, error: sampleErr } = await db
     .from("soil_samples")
     .insert({
       vineyard_id: input.vineyardId,
       sample_scope: "unmapped",
-      sampled_at: input.sampledAt,
-      laboratory: input.laboratory,
-      lab_paddock_name: input.labPaddockName,
-      lab_sample_id: input.labSampleId,
-      sample_depth_from_cm: input.depthFromCm,
-      sample_depth_to_cm: input.depthToCm,
-      notes: input.notes,
       extraction_status: "pending",
       created_by: input.uploadedBy,
     })
@@ -459,7 +468,7 @@ export async function uploadSoilSample(input: UploadSoilSampleInput): Promise<Up
     if (fnErr) throw fnErr;
     return { sample: sample as SoilSample, document: document as SoilSampleDocument, extractionStarted: true, extractionError: null };
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
+    const message = await describeFunctionError(e);
     await db
       .from("soil_samples")
       .update({ extraction_status: "failed" })
@@ -474,6 +483,53 @@ export async function uploadSoilSample(input: UploadSoilSampleInput): Promise<Up
       extractionStarted: false,
       extractionError: message,
     };
+  }
+}
+
+export interface RetryExtractionOutcome {
+  ok: boolean;
+  error: string | null;
+}
+
+/**
+ * Retries extraction for a failed sample using the EXISTING sample and
+ * primary document ids — the evidence file is never re-uploaded and no
+ * duplicate rows are created. Resets both records to pending, clears the
+ * document error, then re-invokes the parser. On failure the records are
+ * marked failed with the surfaced detail and everything is preserved.
+ */
+export async function retrySoilExtraction(
+  sampleId: string,
+  documentId: string,
+): Promise<RetryExtractionOutcome> {
+  const { error: sampleErr } = await db
+    .from("soil_samples")
+    .update({ extraction_status: "pending" })
+    .eq("id", sampleId);
+  if (sampleErr) throw sampleErr;
+  const { error: docErr } = await db
+    .from("soil_sample_documents")
+    .update({ extraction_status: "pending", extraction_error: null })
+    .eq("id", documentId);
+  if (docErr) throw docErr;
+
+  try {
+    const { error: fnErr } = await supabase.functions.invoke(SOIL_EXTRACT_FUNCTION, {
+      body: { sample_id: sampleId, document_id: documentId },
+    });
+    if (fnErr) throw fnErr;
+    return { ok: true, error: null };
+  } catch (e) {
+    const message = await describeFunctionError(e);
+    await db
+      .from("soil_samples")
+      .update({ extraction_status: "failed" })
+      .eq("id", sampleId);
+    await db
+      .from("soil_sample_documents")
+      .update({ extraction_status: "failed", extraction_error: message })
+      .eq("id", documentId);
+    return { ok: false, error: message };
   }
 }
 
