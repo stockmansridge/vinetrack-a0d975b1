@@ -85,6 +85,20 @@ vi.mock("@/lib/yieldReportsQuery", async () => {
   };
 });
 
+// Current trip tonnes use the master bunch weight (no payload/0.15 kg fallback).
+vi.mock("@/lib/yieldBunchWeights", async () => {
+  const actual = await vi.importActual<any>("@/lib/yieldBunchWeights");
+  return {
+    ...actual,
+    useYieldBunchWeights: () => ({
+      data: [
+        { id: "bw1", vineyard_id: "v1", paddock_id: null, variety_key: "shiraz", variety_name: "Shiraz", bunch_weight_grams: 200, updated_at: null },
+      ],
+      isLoading: false,
+      error: null,
+    }),
+  };
+});
 vi.mock("@/components/YieldDamageAdjustmentPanel", () => ({ default: () => null }));
 vi.mock("@/components/yield/RecordActualYieldDialog", () => ({ default: () => null }));
 vi.mock("@/lib/userTablePreferencesQuery", () => ({

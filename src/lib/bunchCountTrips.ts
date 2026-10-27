@@ -17,6 +17,7 @@ import {
   type SessionBlockInfo,
   type SessionBlockSummary,
   type SessionSummary,
+  type SummariseOptions,
 } from "@/lib/yieldSessionSummary";
 
 export interface TripSessionInput {
@@ -54,6 +55,8 @@ export interface BunchCountTrip {
 export interface BuildTripsOptions {
   blocks?: SessionBlockInfo[];
   damageFactor?: (blockId: string) => number;
+  /** Current master bunch weight per block (no 0.15 kg fallback). */
+  bunchWeightFor?: SummariseOptions["bunchWeightFor"];
   /** Season-end vintage for a trip date (shared VintageResolver semantics). */
   vintageOf: (isoDate: string) => number | null;
 }
@@ -66,6 +69,7 @@ export function buildBunchCountTrips(
     const summary = summariseYieldSession(s.payload, {
       blocks: opts.blocks,
       damageFactor: opts.damageFactor,
+      bunchWeightFor: opts.bunchWeightFor,
     });
     const createdAt = s.session_created_at ?? s.created_at ?? null;
     const completedAt = s.completed_at ?? null;
@@ -113,6 +117,9 @@ export interface CurrentBlockEstimate {
   tripId: string;
   tripCompletedAt: string | null;
   recordedSites: number;
+  /** Weight used for tonnes, grams; null = "Bunch weight required". */
+  bunchWeightGrams: number | null;
+  bunchWeightSource: SessionBlockSummary["bunchWeightSource"];
 }
 
 /**
@@ -148,6 +155,8 @@ export function currentEstimatesByBlock(
         tripId: trip.id,
         tripCompletedAt: trip.completedAt,
         recordedSites: b.recordedCount,
+        bunchWeightGrams: b.bunchWeightKg != null ? b.bunchWeightKg * 1000 : null,
+        bunchWeightSource: b.bunchWeightSource,
       });
     }
   }

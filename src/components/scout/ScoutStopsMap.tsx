@@ -17,6 +17,9 @@ interface Props {
   markers: ScoutMapMarker[];
   /** Block boundary polygons (context), as [lat, lng] rings. */
   boundaries?: { id: string; name: string | null; ring: [number, number][] }[];
+  /** Optional copy overrides (defaults describe a Scout visit). */
+  emptyMessage?: string;
+  footer?: string;
 }
 
 type Provider = "checking" | "apple" | "unavailable";
@@ -26,7 +29,7 @@ type Provider = "checking" | "apple" | "unavailable";
  * stop/observation/photo GPS markers. Renders an honest empty state when
  * there is nothing measured to show — no centroid fabrication.
  */
-export default function ScoutStopsMap({ markers, boundaries = [] }: Props) {
+export default function ScoutStopsMap({ markers, boundaries = [], emptyMessage, footer }: Props) {
   const [provider, setProvider] = useState<Provider>("checking");
   const [el, setEl] = useState<HTMLDivElement | null>(null);
 
@@ -118,7 +121,7 @@ export default function ScoutStopsMap({ markers, boundaries = [] }: Props) {
   if (!hasAnything) {
     return (
       <Card className="p-3 text-xs text-muted-foreground">
-        No measured GPS locations or block boundaries are available for this visit.
+        {emptyMessage ?? "No measured GPS locations or block boundaries are available for this visit."}
       </Card>
     );
   }
@@ -145,7 +148,7 @@ export default function ScoutStopsMap({ markers, boundaries = [] }: Props) {
         )}
       </div>
       <div className="border-t px-3 py-2 text-xs text-muted-foreground">
-        {markerSummary} recorded on this visit. Markers show measured GPS only.
+        {footer ?? `${markerSummary} recorded on this visit. Markers show measured GPS only.`}
       </div>
     </Card>
   );

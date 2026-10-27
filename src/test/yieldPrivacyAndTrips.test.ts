@@ -91,7 +91,12 @@ const session = (id: string, date: string, completed: boolean, bunches: number, 
 });
 
 const trips = (list: any[]) =>
-  buildBunchCountTrips(list, { blocks, vintageOf: () => 2026 });
+  buildBunchCountTrips(list, {
+    blocks,
+    vintageOf: () => 2026,
+    // Explicitly configured master weight (no silent default exists).
+    bunchWeightFor: () => ({ grams: 150, source: "variety_default" }),
+  });
 
 describe("Bunch Count Trip estimate selection", () => {
   it("the latest completed trip wins and trips are never summed", () => {
@@ -144,7 +149,7 @@ describe("Bunch Count Trip estimate selection", () => {
   it("keeps the base observation recoverable when damage is applied", () => {
     const t = buildBunchCountTrips(
       [session("d", "2026-02-01T00:00:00Z", true, 20, { applyDamage: true })],
-      { blocks, vintageOf: () => 2026, damageFactor: () => 0.5 },
+      { blocks, vintageOf: () => 2026, damageFactor: () => 0.5, bunchWeightFor: () => ({ grams: 150, source: "variety_default" }) },
     );
     const e = currentEstimatesByBlock(t, 2026).get(B1)!;
     expect(e.baseTonnes).toBeCloseTo(3, 5);
@@ -156,7 +161,7 @@ describe("Bunch Count Trip estimate selection", () => {
   it("shows the undamaged estimate when the trip opts out of damage", () => {
     const t = buildBunchCountTrips(
       [session("d", "2026-02-01T00:00:00Z", true, 20, { applyDamage: false })],
-      { blocks, vintageOf: () => 2026, damageFactor: () => 0.5 },
+      { blocks, vintageOf: () => 2026, damageFactor: () => 0.5, bunchWeightFor: () => ({ grams: 150, source: "variety_default" }) },
     );
     const e = currentEstimatesByBlock(t, 2026).get(B1)!;
     expect(e.tonnes).toBeCloseTo(3, 5);

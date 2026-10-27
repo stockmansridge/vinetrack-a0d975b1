@@ -15,7 +15,14 @@
 //   avgBunchesPerVine = mean(recorded sites), rounded to 2 dp
 //   totalBunches      = totalVines × avgBunchesPerVine
 //   yieldKg           = totalBunches × bunchWeightKg × damageFactor
-import { blockEstimate, DEFAULT_BUNCH_WEIGHT_KG } from "@/lib/pruningYieldFormula";
+//
+// Bunch weight: CURRENT calculations use the resolved master bunch weight
+// (block override → variety master, src/lib/yieldBunchWeights.ts). There is no
+// 0.15 kg fallback: with no master configured the tonnes stay unknown. A weight
+// stored in the trip payload is kept only as historical/recorded evidence and
+// is used for tonnes only when no master resolver is supplied.
+import { blockEstimate } from "@/lib/pruningYieldFormula";
+import type { ResolvedBlockBunchWeight, BlockBunchWeightSource } from "@/lib/yieldBunchWeights";
 
 export interface SessionBlockInfo {
   id: string;
@@ -42,8 +49,12 @@ export interface SessionBlockSummary {
   areaHa: number | null;
   totalVines: number | null;
   vineCountKnown: boolean;
-  bunchWeightKg: number;
-  bunchWeightIsDefault: boolean;
+  /** Weight used for tonnes (kg); null = not configured, no tonnes. */
+  bunchWeightKg: number | null;
+  /** Where bunchWeightKg came from. "recorded" = trip payload evidence. */
+  bunchWeightSource: BlockBunchWeightSource | "recorded";
+  /** Weight recorded in the trip payload (historical evidence), if any. */
+  recordedBunchWeightKg: number | null;
   damageFactor: number;
   sites: SessionSite[];
   siteCount: number;
@@ -148,6 +159,8 @@ export interface SummariseOptions {
   blocks?: SessionBlockInfo[];
   /** Damage adjustment per block id; defaults to 1.0 (no reduction). */
   damageFactor?: (blockId: string) => number;
+  /** Current master bunch weight per block. When supplied it is authoritative. */
+  bunchWeightFor?: (blockId: string) => ResolvedBlockBunchWeight;
 }
 
 export function summariseYieldSession(payload: any, opts: SummariseOptions = {}): SessionSummary {
@@ -241,8 +254,17 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
     const avgRaw = recorded.length ? totalBunchesSampled / recorded.length : null;
     const avg = avgRaw == null ? null : Math.round(avgRaw * 100) / 100;
 
-    const weight = (blockId ? weights[blockId] : undefined) ?? flatWeight ?? DEFAULT_BUNCH_WEIGHT_KG;
-    const bunchWeightIsDefault = !(blockId && weights[blockId] != null) && flatWeight == null;
+    const recordedWeight = (blockId ? weights[blockId] : undefined) ?? flatWeight ?? null;
+    let weight: number | null;
+    let bunchWeightSource: SessionBlockSummary["bunchWeightSource"];
+    if (opts.bunchWeightFor) {
+      const r = blockId ? opts.bunchWeightFor(blockId) : { grams: null, source: "not_configured" as const };
+      weight = r.grams != null ? r.grams / 1000 : null;
+      bunchWeightSource = r.grams != null ? r.source : "not_configured";
+    } else {
+      weight = recordedWeight;
+      bunchWeightSource = recordedWeight != null ? "recorded" : "not_configured";
+    }
 
     // A trip's own stored/snapshotted vine count wins (historical trips are
     // never recalculated from today's block); otherwise the live
@@ -256,7 +278,7 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
     // current damage factor and only *displayed* when applyDamage is true.
     let base: { totalBunches: number; estimatedYieldKg: number; estimatedYieldTonnes: number } | null = null;
     let adjusted: typeof base = null;
-    if (avg != null && totalVines != null && totalVines > 0) {
+    if (avg != null && totalVines != null && totalVines > 0 && weight != null) {
       base = blockEstimate({
         totalVines,
         averageBunchesPerVine: avg,
@@ -280,7 +302,8 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
       totalVines,
       vineCountKnown: totalVines != null && totalVines > 0,
       bunchWeightKg: weight,
-      bunchWeightIsDefault,
+      bunchWeightSource,
+      recordedBunchWeightKg: recordedWeight,
       damageFactor,
       sites: g.sites,
       siteCount: g.sites.length,
@@ -323,7 +346,7 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
 
     missing: {
       sampleSites: blocks.every((b) => b.siteCount === 0),
-      bunchWeight: blocks.some((b) => b.bunchWeightIsDefault),
+      bunchWeight: blocks.some((b) => b.recordedCount > 0 && b.bunchWeightKg == null),
       area: blocks.some((b) => b.areaHa == null),
       vines: blocks.some((b) => !b.vineCountKnown),
     },

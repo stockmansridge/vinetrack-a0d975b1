@@ -45,6 +45,20 @@ import {
 } from "@/lib/grapeAllocationModel";
 import AllocationDialog from "@/components/yield/AllocationDialog";
 
+/** Block names for an allocation; no block rows = vineyard-wide "All blocks". */
+export function allocationBlockLabel(
+  rows: { paddock_id: string }[] | null | undefined,
+  names: Map<string, string>,
+): string {
+  if (!rows?.length) return "All blocks";
+  const out: string[] = [];
+  for (const r of rows) {
+    const n = names.get(String(r.paddock_id).toLowerCase()) ?? "Unknown block";
+    if (!out.includes(n)) out.push(n);
+  }
+  return out.join(", ");
+}
+
 export interface GrapeAllocationPanelProps {
   vineyardId: string | null;
   vintage: number | null;
@@ -267,7 +281,7 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
           <TableBody>
             {allocQ.isLoading && (
               <TableRow>
-                <TableCell colSpan={canSeeFinancials ? 7 : 6} className="text-center py-6 text-muted-foreground">
+                <TableCell colSpan={canSeeFinancials ? 8 : 7} className="text-center py-6 text-muted-foreground">
                   Loading…
                 </TableCell>
               </TableRow>
@@ -391,6 +405,7 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
             <TableRow>
               <TableHead>Type</TableHead>
               <TableHead>Variety</TableHead>
+              <TableHead>Block</TableHead>
               <TableHead>Destination / purchaser</TableHead>
               <TableHead>Contact</TableHead>
               <TableHead className="text-right">Tonnes</TableHead>
@@ -414,6 +429,7 @@ const GrapeAllocationPanel = forwardRef<GrapeAllocationPanelRef, GrapeAllocation
                   </Badge>
                 </TableCell>
                 <TableCell>{a.variety_name ?? "—"}</TableCell>
+                <TableCell className="text-sm">{allocationBlockLabel(a.blocks, blockName)}</TableCell>
                 <TableCell>
                   {a.allocation_type === "own_use"
                     ? a.destination_name ?? "—"

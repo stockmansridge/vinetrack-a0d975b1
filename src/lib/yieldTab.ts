@@ -7,6 +7,7 @@
 export const YIELD_TABS = [
   "overview",
   "sessions",
+  "bunch-weights",
   "historical",
   "picking",
   "allocation",
