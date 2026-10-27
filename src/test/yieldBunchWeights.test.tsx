@@ -5,10 +5,12 @@ import {
   resolveBunchWeight,
   resolveBlockBunchWeight,
   canEditBunchWeights,
+  blockVarietyIdentities,
   type YieldBunchWeightRow,
 } from "@/lib/yieldBunchWeights";
 import { summariseYieldSession } from "@/lib/yieldSessionSummary";
 import { buildBunchCountTrips, currentEstimatesByBlock } from "@/lib/bunchCountTrips";
+import { buildVarietyMap } from "@/lib/varietyResolver";
 import { resolveBlockEstimateSource } from "@/lib/yieldEstimateSource";
 import { YIELD_TABS, initialYieldTab } from "@/lib/yieldTab";
 import { allocationBlockLabel } from "@/components/yield/GrapeAllocationPanel";
@@ -30,25 +32,46 @@ const row = (o: Partial<YieldBunchWeightRow>): YieldBunchWeightRow => ({
 
 describe("master bunch weight resolution", () => {
   it("variety master applies to blocks without an override", () => {
-    const r = resolveBunchWeight([row({ id: "m" })], B1, "Shiraz");
+    const r = resolveBunchWeight([row({ id: "m" })], B1, "shiraz");
     expect(r).toEqual({ grams: 120, source: "variety_default", recordId: "m" });
   });
   it("block override takes precedence over the variety master", () => {
     const rows = [row({ id: "m" }), row({ id: "o", paddock_id: B1, bunch_weight_grams: 95 })];
-    expect(resolveBunchWeight(rows, B1, "Shiraz")).toEqual({ grams: 95, source: "block_override", recordId: "o" });
-    expect(resolveBunchWeight(rows, B2, "Shiraz").source).toBe("variety_default");
+    expect(resolveBunchWeight(rows, B1, "shiraz")).toEqual({ grams: 95, source: "block_override", recordId: "o" });
+    expect(resolveBunchWeight(rows, B2, "shiraz").source).toBe("variety_default");
   });
   it("missing master is explicitly not configured — never 150 g", () => {
-    const r = resolveBunchWeight([], B1, "Shiraz");
+    const r = resolveBunchWeight([], B1, "shiraz");
     expect(r.grams).toBeNull();
     expect(r.source).toBe("not_configured");
-    expect(resolveBlockBunchWeight([], B1, [{ name: "Shiraz" }]).grams).toBeNull();
+    expect(resolveBlockBunchWeight([], B1, [{ key: "shiraz" }]).grams).toBeNull();
   });
   it("mixed block needs every variety configured", () => {
     const rows = [row({}), row({ variety_key: "merlot", variety_name: "Merlot", bunch_weight_grams: 80 })];
-    const v = [{ name: "Shiraz", percent: 50 }, { name: "Merlot", percent: 50 }];
+    const v = [{ key: "shiraz", percent: 50 }, { key: "merlot", percent: 50 }];
     expect(resolveBlockBunchWeight(rows, B1, v).grams).toBe(100);
     expect(resolveBlockBunchWeight([row({})], B1, v).grams).toBeNull();
+  });
+  it("resolves by stored canonical varietyKey even when the display name normalises differently", () => {
+    const ids = blockVarietyIdentities(
+      [{ varietyKey: "shiraz", name: "Estate Syrah Selection", percent: 100 }],
+      buildVarietyMap([]),
+    );
+    expect(ids[0]).toMatchObject({ key: "shiraz", legacyKey: false });
+    const rows = [
+      row({ id: "canon", variety_key: "shiraz", bunch_weight_grams: 130 }),
+      // A row keyed by the normalised display name must NOT be picked up.
+      row({ id: "byname", variety_key: "estate syrah selection", bunch_weight_grams: 999 }),
+    ];
+    expect(resolveBlockBunchWeight(rows, B1, ids)).toEqual({ grams: 130, source: "variety_default" });
+    // Exact key only: no display-name / case normalisation at resolve time.
+    expect(resolveBunchWeight(rows, B1, "Estate Syrah Selection").source).toBe("not_configured");
+  });
+  it("legacy fallback derives a key only when no varietyKey is stored, and flags it", () => {
+    const ids = blockVarietyIdentities([{ name: "Shiraz", percent: 100 }], buildVarietyMap([]));
+    expect(ids[0].legacyKey).toBe(true);
+    const stored = blockVarietyIdentities([{ varietyKey: "custom_key", name: "Shiraz" }], buildVarietyMap([]));
+    expect(stored[0]).toMatchObject({ key: "custom_key", legacyKey: false });
   });
   it("owner/manager/supervisor can edit", () => {
     expect(canEditBunchWeights("supervisor")).toBe(true);
