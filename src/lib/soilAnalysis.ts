@@ -439,7 +439,7 @@ function firstJsonObject(text: string): string | null {
  * details frequently embed pretty-printed JSON whose control characters were
  * never re-escaped when the body was stored.
  */
-function parseJsonTolerant(text: string): unknown | null {
+function parseJsonTolerant(text: string): any | null {
   try {
     return JSON.parse(text);
   } catch {
