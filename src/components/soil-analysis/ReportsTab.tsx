@@ -306,7 +306,10 @@ export function ReportsTab({ onOpenSample }: { onOpenSample: (id: string) => voi
               </div>
 
               {mapQuery.isLoading ? (
-                <div className="h-[520px] rounded-md bg-muted animate-pulse" />
+                <div
+                  className="rounded-md bg-muted animate-pulse"
+                  style={{ height: "min(72vh, 880px)", minHeight: 560 }}
+                />
               ) : mapQuery.error ? (
                 <div className="text-sm text-destructive">
                   {(mapQuery.error as Error).message}
