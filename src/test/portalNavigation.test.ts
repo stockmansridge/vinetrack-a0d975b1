@@ -162,7 +162,7 @@ describe("Portal navigation — System Admin grouping", () => {
       ...SYSTEM_ADMIN_GROUPS.flatMap((group) => group.items),
     ];
     expect(grouped).toHaveLength(32);
-    expect(new Set(grouped.map((item) => item.path)).size).toBe(31);
+    expect(new Set(grouped.map((item) => item.path)).size).toBe(32);
     expect(grouped.map((item) => item.path)).toEqual(SYSTEM_ADMIN_ITEMS.map((item) => item.path));
   });
 
