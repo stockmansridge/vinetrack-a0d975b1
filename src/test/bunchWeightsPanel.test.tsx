@@ -39,7 +39,7 @@ describe("Bunch Weights roll-up", () => {
   it("shows every variety's master and block values as soon as the tab opens", () => {
     mount();
     // Master values and block rows are all present without any interaction.
-    expect(within(shirazRow()).getByText("200 g")).toBeInTheDocument();
+    expect(within(shirazRow()).getByText("200–250 g")).toBeInTheDocument();
     expect(screen.getByText("Block A")).toBeInTheDocument();
     expect(screen.getByText("Block B")).toBeInTheDocument();
     expect(screen.getByText("Block C")).toBeInTheDocument();
@@ -57,7 +57,7 @@ describe("Bunch Weights roll-up", () => {
     expect(screen.queryByText("Block A")).toBeNull();
     expect(screen.queryByText("Block C")).toBeNull();
     // The rolled-up master values stay visible while collapsed.
-    expect(within(shirazRow()).getByText("200 g")).toBeInTheDocument();
+    expect(within(shirazRow()).getByText("200–250 g")).toBeInTheDocument();
 
     fireEvent.click(expandAll);
     expect(expandAll).toHaveTextContent("Collapse all");
@@ -78,5 +78,41 @@ describe("Bunch Weights roll-up", () => {
     fireEvent.click(screen.getByTestId("bunch-weights-expand-all"));
     expect(screen.getByText("Block A")).toBeInTheDocument();
     expect(screen.getByText("Block C")).toBeInTheDocument();
+  });
+});
+
+describe("Bunch Weights variety summary", () => {
+  const r = (id: string, paddock: string | null, key: string, g: number): YieldBunchWeightRow => ({
+    id, vineyard_id: "v1", paddock_id: paddock, variety_key: key, variety_name: key, bunch_weight_grams: g, updated_at: null,
+  });
+  const bl: BunchWeightBlock[] = [
+    { id: "a", name: "A", plantings: [{ key: "cab", name: "Cab", percent: 100, legacyKey: false }] },
+    { id: "b", name: "B", plantings: [{ key: "cab", name: "Cab", percent: 100, legacyKey: false }] },
+    { id: "c", name: "C", plantings: [{ key: "chard", name: "Chard", percent: 100, legacyKey: false }] },
+    { id: "d", name: "D", plantings: [{ key: "chard", name: "Chard", percent: 100, legacyKey: false }] },
+    { id: "e", name: "E", plantings: [{ key: "merlot", name: "Merlot", percent: 100, legacyKey: false }] },
+  ];
+  const rws = [r("1", "a", "cab", 120), r("2", "c", "chard", 80), r("3", "d", "chard", 90)];
+  const show = () => {
+    const qc = new QueryClient();
+    render(<QueryClientProvider client={qc}><BunchWeightsPanel vineyardId="v1" role="viewer" blocks={bl} rows={rws} /></QueryClientProvider>);
+  };
+  it("all overridden: range and Configured per block", () => {
+    show();
+    const row = screen.getByTestId("variety-row-chard");
+    expect(within(row).getByText("80–90 g")).toBeInTheDocument();
+    expect(within(row).getByText("Configured per block")).toBeInTheDocument();
+  });
+  it("partial: used value and Partially configured count", () => {
+    show();
+    const row = screen.getByTestId("variety-row-cab");
+    expect(within(row).getByText("120 g")).toBeInTheDocument();
+    expect(within(row).getByText("Partially configured (1/2)")).toBeInTheDocument();
+  });
+  it("none: dash and Not configured", () => {
+    show();
+    const row = screen.getByTestId("variety-row-merlot");
+    expect(within(row).getByText("—")).toBeInTheDocument();
+    expect(within(row).getByText("Not configured")).toBeInTheDocument();
   });
 });
