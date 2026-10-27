@@ -34,9 +34,6 @@ function depthLabel(s: SoilSample): string {
   return `${s.sample_depth_from_cm ?? s.sample_depth_to_cm} cm`;
 }
 
-function mappingLabel(s: SoilSample, mappings: ReturnType<typeof mappingSummaryLines> extends never ? never : import("@/lib/soilAnalysis").SoilBlockMapping[] | undefined): string {
-  return mappingSummaryLabel(s, mappings);
-}
 
 export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => void }) {
   const { memberships, selectedVineyardId } = useVineyard();
@@ -112,6 +109,15 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
         dateFrom: dateFrom || null,
         dateTo: dateTo || null,
       }),
+  });
+
+  // Block mappings are the display authority for the VineTrack mapping
+  // column; legacy sample fields are only a fallback inside the label helper.
+  const sampleIds = useMemo(() => (samplesQuery.data ?? []).map((s) => s.id), [samplesQuery.data]);
+  const mappingsQuery = useQuery({
+    queryKey: ["soil-analysis", "mappings", sampleIds],
+    enabled: sampleIds.length > 0,
+    queryFn: () => listBlockMappingsForSamples(sampleIds),
   });
 
   const laboratories = useMemo(() => {
