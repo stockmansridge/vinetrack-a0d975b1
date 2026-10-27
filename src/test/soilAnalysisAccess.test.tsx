@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // --- mock the shared backend client ---------------------------------------
 const inserts: Array<{ table: string; payload: any }> = [];
@@ -179,9 +180,11 @@ describe("route gate", () => {
 describe("minimal upload dialog", () => {
   it("asks only for the file and vineyard — no manual metadata fields", () => {
     render(
-      <MemoryRouter>
-        <UploadSampleDialog open onOpenChange={() => {}} onUploaded={() => {}} />
-      </MemoryRouter>,
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <UploadSampleDialog open onOpenChange={() => {}} onUploaded={() => {}} />
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
     expect(screen.getByText("Upload & read report")).toBeTruthy();
     expect(screen.getByLabelText(/Report file/)).toBeTruthy();
