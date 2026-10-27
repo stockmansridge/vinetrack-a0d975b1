@@ -52,6 +52,7 @@ import {
   defaultPathFor,
   resolveLocation,
   systemAdminItemMatchesPath,
+  isSystemAdminItemVisible,
   type NavActivity,
   type NavGroup,
   type SystemAdminGroup,
@@ -224,14 +225,18 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>{renderSystemAdminItem(SYSTEM_ADMIN_DASHBOARD)}</SidebarMenu>
             </SidebarGroupContent>
-            {SYSTEM_ADMIN_GROUPS.map((group) => (
-              <SystemAdminNavGroup
-                key={group.label}
-                group={group}
-                pathname={pathname}
-                renderItem={renderSystemAdminItem}
-              />
-            ))}
+            {SYSTEM_ADMIN_GROUPS.map((group) => {
+              const items = group.items.filter((item) => isSystemAdminItemVisible(item, viewer));
+              if (items.length === 0) return null;
+              return (
+                <SystemAdminNavGroup
+                  key={group.label}
+                  group={{ ...group, items }}
+                  pathname={pathname}
+                  renderItem={renderSystemAdminItem}
+                />
+              );
+            })}
           </SidebarGroup>
         )}
       </SidebarContent>

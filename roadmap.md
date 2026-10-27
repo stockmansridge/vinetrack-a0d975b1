@@ -198,3 +198,9 @@
 - [ ] Signed-in visual check as System Admin (not done)
 - [x] Scout Reports & Vintage Notes Portal frontend (2026-10-19): /observations/scout-reports (+:visitId) and /observations/vintage-notes under Pins & Observations; read-only scouts, add-only notes; honest RLS-restricted states; SQL proposal docs/vineyard-insights-rls-proposal.md AWAITING Jonathan's approval — not executed.
 - [x] Vineyard Costings: Estimated Yield tab — cost/t by block & variety, SQL 221 estimate defaults, in-memory scenario overrides with reset
+
+## Soil Analysis Stage 1 pilot (System Admin preview, Portal only)
+- [x] Nav + routes gated by System Admin AND soil_analysis_admin_preview flag; hidden/blocked otherwise.
+- [x] Landing tabs Overview | Soil Samples | Trends | Compare (+ disabled Reports); upload to private bucket; Review Results preserving source_* provenance.
+- [x] Trend/compare comparability guards (method+unit, Colwell vs Mehlich, DTPA); lab-range-only status language.
+- [x] Focused tests (70/70 across 4 files) + build; no SQL/schema/mobile changes, no publication. Assumed column contract centralised in src/lib/soilAnalysis.ts pending owner confirmation; backend parser endpoint outstanding (records show Awaiting extraction).
