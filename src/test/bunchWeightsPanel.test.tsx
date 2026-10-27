@@ -39,7 +39,7 @@ describe("Bunch Weights roll-up", () => {
   it("shows every variety's master and block values as soon as the tab opens", () => {
     mount();
     // Master values and block rows are all present without any interaction.
-    expect(within(shirazRow()).getByText("200 g")).toBeInTheDocument();
+    expect(within(shirazRow()).getByText("200–250 g")).toBeInTheDocument();
     expect(screen.getByText("Block A")).toBeInTheDocument();
     expect(screen.getByText("Block B")).toBeInTheDocument();
     expect(screen.getByText("Block C")).toBeInTheDocument();
@@ -57,7 +57,7 @@ describe("Bunch Weights roll-up", () => {
     expect(screen.queryByText("Block A")).toBeNull();
     expect(screen.queryByText("Block C")).toBeNull();
     // The rolled-up master values stay visible while collapsed.
-    expect(within(shirazRow()).getByText("200 g")).toBeInTheDocument();
+    expect(within(shirazRow()).getByText("200–250 g")).toBeInTheDocument();
 
     fireEvent.click(expandAll);
     expect(expandAll).toHaveTextContent("Collapse all");
