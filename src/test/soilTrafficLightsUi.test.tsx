@@ -10,7 +10,7 @@ import { TrafficLightsTab } from "@/components/soil-analysis/TrafficLightsTab";
 import SoilAnalysisPage from "@/pages/admin/SoilAnalysisPage";
 const row = (id: string, status: string | null, block = "a", analyte = "ca") => ({ id, sample_id: id, analyte_key: analyte, display_name: analyte === "ca" ? "Calcium" : "pH", matched_paddock_id: block, value_numeric: 12, unit: "ppm", method: "Lab method", lab_status: status, sample: { id, sampled_at: "2026-01-01", extraction_status: "confirmed", lab_sample_id: id, sample_depth_from_cm: 0, sample_depth_to_cm: 15 } });
 function mount(page = false) { return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={["/soil-analysis?tab=traffic-lights"]}>{page ? <SoilAnalysisPage /> : <TrafficLightsTab />}</MemoryRouter></QueryClientProvider>); }
-beforeEach(() => mock.read.mockReset().mockImplementation(async (ids: string[]) => [row("one", "Very Low"), row("two", "Low"), row("sat", "Satisfactory", "b"), row("acid", "Slightly acidic", "a", "ph")].filter((r) => ids.includes(r.matched_paddock_id))));
+beforeEach(() => { mock.read.mockReset().mockImplementation(async (ids: string[]) => [row("one", "Very Low"), row("two", "Low"), row("sat", "Satisfactory", "b"), row("acid", "Slightly acidic", "a", "ph")].filter((r) => ids.includes(r.matched_paddock_id))); });
 describe("Traffic Lights presentation", () => {
   it("is a released tab between Compare and Reports", async () => {
     mount(true); expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Soil Samples", "Trends", "Compare", "Traffic Lights", "Reports"]);
