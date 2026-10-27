@@ -212,6 +212,22 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
                       )}
                     </div>
                   </td>
+                  <td className="px-4 py-2 text-right">
+                    {isSoilSampleDeletable(s.extraction_status) && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget(s);
+                        }}
+                        aria-label={`Delete ${s.lab_paddock_name ?? "sample"} permanently`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
