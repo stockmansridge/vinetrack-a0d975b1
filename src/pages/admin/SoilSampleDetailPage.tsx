@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FileText } from "lucide-react";
+import { FileText, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { BetaAdminBanner } from "@/components/BetaAdminBanner";

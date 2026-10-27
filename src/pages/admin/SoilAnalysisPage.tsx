@@ -64,6 +64,9 @@ function SoilAnalysisInner() {
         <TabsContent value="compare" className="mt-4">
           <CompareTab />
         </TabsContent>
+        <TabsContent value="reports" className="mt-4">
+          <ReportsTab onOpenSample={openSample} />
+        </TabsContent>
       </Tabs>
     </div>
   );
