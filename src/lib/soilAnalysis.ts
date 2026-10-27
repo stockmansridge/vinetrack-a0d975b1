@@ -443,7 +443,7 @@ const RESULT_EDITABLE_FIELDS = [
 export type SoilResultPatch = Partial<Pick<SoilSampleResult, (typeof RESULT_EDITABLE_FIELDS)[number]>>;
 
 /**
- * Builds the result update payload. Only value_*/mapping-style fields are
+ * Builds the result update payload. Only value and mapping-style fields are
  * allowed; source_* provenance keys are stripped even if a caller passes
  * them, and every correction is marked is_user_corrected.
  */
