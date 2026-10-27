@@ -1314,6 +1314,279 @@ export function buildCompareMatrix(
 }
 
 // ---------------------------------------------------------------------------
+// Trend / Compare visual series. areResultsComparable() stays strict; these
+// visual policies add a PROVISIONAL tier only when every point in a group is
+// missing its method (same analyte + same unit). Known and unknown methods,
+// different known methods and different units are never mixed.
+// ---------------------------------------------------------------------------
+
+export const TREND_PROVISIONAL_BADGE = "Method not recorded — visual trend only";
+export const COMPARE_PROVISIONAL_BADGE = "Method not recorded — comparison is provisional";
+
+type SeriesProbe = Pick<SoilSampleResult, "analyte_key" | "method" | "unit">;
+
+/** Visual series key: analyte | normalised unit | normalised method ("" = not recorded). */
+export function visualSeriesKey(r: SeriesProbe): string {
+  return `${r.analyte_key ?? ""}|${normaliseUnit(r.unit) ?? ""}|${normaliseMethod(r.method) ?? ""}`;
+}
+
+export interface TrendSeries {
+  key: string;
+  method: string | null;
+  unit: string | null;
+  /** True when every point lacks a method — visual only. */
+  provisional: boolean;
+  points: TrendPoint[];
+}
+
+const sampleDateOf = (s: Pick<SoilSample, "sampled_at" | "created_at">) =>
+  String(s.sampled_at ?? s.created_at ?? "").slice(0, 10);
+
+export function buildTrendSeries(points: TrendPoint[]): TrendSeries[] {
+  const map = new Map<string, TrendSeries>();
+  for (const p of points) {
+    const key = visualSeriesKey(p.result);
+    const existing = map.get(key);
+    if (existing) existing.points.push(p);
+    else
+      map.set(key, {
+        key,
+        method: p.result.method,
+        unit: p.result.unit,
+        provisional: !normaliseMethod(p.result.method),
+        points: [p],
+      });
+  }
+  const out = [...map.values()];
+  for (const g of out) {
+    g.points.sort((a, b) => sampleDateOf(a.sample).localeCompare(sampleDateOf(b.sample)));
+  }
+  // Most populated series first; strict before provisional on ties.
+  out.sort((a, b) => b.points.length - a.points.length || Number(a.provisional) - Number(b.provisional));
+  return out;
+}
+
+export interface DateAveragePoint {
+  date: string;
+  /** VineTrack-derived arithmetic mean of raw numeric results on this date. */
+  average: number;
+  count: number;
+}
+
+export function buildDateAverages(points: TrendPoint[]): DateAveragePoint[] {
+  const byDate = new Map<string, number[]>();
+  for (const p of points) {
+    const v = p.result.value_numeric;
+    if (typeof v !== "number" || !Number.isFinite(v)) continue;
+    const d = sampleDateOf(p.sample);
+    byDate.set(d, [...(byDate.get(d) ?? []), v]);
+  }
+  return [...byDate.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, vals]) => ({
+      date,
+      average: vals.reduce((x, y) => x + y, 0) / vals.length,
+      count: vals.length,
+    }));
+}
+
+export function percentChange(previous: number, current: number): number | null {
+  if (previous === 0) return null;
+  return ((current - previous) / Math.abs(previous)) * 100;
+}
+
+const rangeSignature = (r: SoilSampleResult) =>
+  r.lab_range_min == null && r.lab_range_max == null && !r.lab_range_text
+    ? null
+    : `${r.lab_range_min ?? ""}|${r.lab_range_max ?? ""}|${(r.lab_range_text ?? "").trim().toLowerCase()}`;
+
+export function labRangeChanged(points: TrendPoint[]): boolean {
+  const sigs = new Set(points.map((p) => rangeSignature(p.result)).filter(Boolean));
+  return sigs.size > 1;
+}
+
+const fmtNum = (n: number) => String(Number(n.toFixed(2)));
+
+export interface TrendSummary {
+  latest: DateAveragePoint | null;
+  previous: DateAveragePoint | null;
+  delta: number | null;
+  percent: number | null;
+  latestStatus: string | null;
+  sampleCount: number;
+  dateCount: number;
+  rangeChanged: boolean;
+  sentences: string[];
+}
+
+/** Measured-language summary; never gives treatment advice. */
+export function summariseTrend(
+  series: TrendSeries,
+  analyteName: string,
+  desiredDirection: SoilDesiredDirection | null | undefined,
+): TrendSummary {
+  const avgs = buildDateAverages(series.points);
+  const latest = avgs[avgs.length - 1] ?? null;
+  const previous = avgs.length > 1 ? avgs[avgs.length - 2] : null;
+  const delta = latest && previous ? latest.average - previous.average : null;
+  const percent = latest && previous ? percentChange(previous.average, latest.average) : null;
+  const latestPoints = latest
+    ? series.points.filter((p) => sampleDateOf(p.sample) === latest.date)
+    : [];
+  const statuses = [...new Set(latestPoints.map((p) => labStatusLabel(p.result.lab_status)))];
+  const latestStatus = statuses.length ? statuses.join(" / ") : null;
+  const unit = series.unit ? ` ${series.unit}` : "";
+  const rangeChanged = labRangeChanged(series.points);
+  const sentences: string[] = [];
+  if (latest) {
+    const latestLabel = latest.count > 1 ? "same-date average" : "value";
+    sentences.push(`Latest ${analyteName} ${latestLabel} is ${fmtNum(latest.average)}${unit}.`);
+    if (previous && delta != null) {
+      const prevLabel = previous.count > 1 ? "same-date average" : "result";
+      const year = previous.date.slice(0, 4);
+      const pct = percent != null ? ` (${percent >= 0 ? "+" : ""}${percent.toFixed(1)}%)` : "";
+      const movement =
+        delta === 0
+          ? "unchanged"
+          : `${fmtNum(Math.abs(delta))}${unit} ${delta > 0 ? "higher" : "lower"}${pct}`;
+      let s = `The ${year} ${prevLabel} was ${fmtNum(previous.average)}${unit}, so the measured value is ${movement}.`;
+      if (desiredDirection === "higher" || desiredDirection === "lower") {
+        const c = classifyChange(previous.average, latest.average, desiredDirection);
+        if (c.direction !== "not_classified") s += ` Catalogue direction: ${c.direction}.`;
+      }
+      sentences.push(s);
+    }
+    if (latestStatus) sentences.push(`The latest laboratory status is ${latestStatus}.`);
+  }
+  if (rangeChanged) sentences.push("Laboratory reference range changed between reports.");
+  if (series.provisional) {
+    sentences.push("Method was not recorded on these reports; treat the visual trend as provisional.");
+  }
+  return {
+    latest,
+    previous,
+    delta,
+    percent,
+    latestStatus,
+    sampleCount: series.points.length,
+    dateCount: avgs.length,
+    rangeChanged,
+    sentences,
+  };
+}
+
+// --- Compare: Values mode --------------------------------------------------
+
+export interface CompareSeriesOption {
+  key: string;
+  method: string | null;
+  unit: string | null;
+  provisional: boolean;
+  count: number;
+}
+
+export function compareSeriesOptions(
+  rows: Array<SoilSampleResult>,
+  analyteKey: string,
+): CompareSeriesOption[] {
+  const map = new Map<string, CompareSeriesOption>();
+  for (const r of rows) {
+    if (r.analyte_key !== analyteKey) continue;
+    const key = visualSeriesKey(r);
+    const e = map.get(key);
+    if (e) e.count++;
+    else
+      map.set(key, {
+        key,
+        method: r.method,
+        unit: r.unit,
+        provisional: !normaliseMethod(r.method),
+        count: 1,
+      });
+  }
+  return [...map.values()].sort((a, b) => b.count - a.count || Number(a.provisional) - Number(b.provisional));
+}
+
+export interface ValueComparisonRow {
+  paddockId: string;
+  result: (SoilSampleResult & { sample: SoilSample }) | null;
+}
+
+/** One row per selected block (no-result blocks retained), latest result in the series. */
+export function buildValueComparison(
+  rows: Array<SoilSampleResult & { sample: SoilSample; matched_paddock_id?: string }>,
+  paddockIds: string[],
+  seriesKey: string,
+): ValueComparisonRow[] {
+  return paddockIds.map((paddockId) => {
+    const candidates = rows
+      .filter((r) => visualSeriesKey(r) === seriesKey)
+      .filter((r) => (r.matched_paddock_id ?? r.sample.paddock_id) === paddockId)
+      .sort((a, b) => sampleDateOf(b.sample).localeCompare(sampleDateOf(a.sample)));
+    return { paddockId, result: candidates[0] ?? null };
+  });
+}
+
+export function sortValueComparison(
+  rows: ValueComparisonRow[],
+  order: "value" | "block",
+  blockName: (id: string) => string,
+): ValueComparisonRow[] {
+  const copy = [...rows];
+  if (order === "block") return copy.sort((a, b) => blockName(a.paddockId).localeCompare(blockName(b.paddockId)));
+  return copy.sort((a, b) => {
+    const va = a.result?.value_numeric;
+    const vb = b.result?.value_numeric;
+    if (va == null && vb == null) return blockName(a.paddockId).localeCompare(blockName(b.paddockId));
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    return vb - va;
+  });
+}
+
+export interface ValueComparisonSummary {
+  withData: number;
+  selected: number;
+  highest: { paddockId: string; value: number } | null;
+  lowest: { paddockId: string; value: number } | null;
+  spread: number | null;
+}
+
+export function summariseValueComparison(rows: ValueComparisonRow[]): ValueComparisonSummary {
+  const numeric = rows.filter(
+    (r) => typeof r.result?.value_numeric === "number" && Number.isFinite(r.result.value_numeric),
+  ) as Array<ValueComparisonRow & { result: SoilSampleResult & { value_numeric: number } }>;
+  let highest: ValueComparisonSummary["highest"] = null;
+  let lowest: ValueComparisonSummary["lowest"] = null;
+  for (const r of numeric) {
+    const v = r.result.value_numeric;
+    if (!highest || v > highest.value) highest = { paddockId: r.paddockId, value: v };
+    if (!lowest || v < lowest.value) lowest = { paddockId: r.paddockId, value: v };
+  }
+  return {
+    withData: rows.filter((r) => r.result).length,
+    selected: rows.length,
+    highest,
+    lowest,
+    spread: highest && lowest ? highest.value - lowest.value : null,
+  };
+}
+
+// --- Compare: Status overview filters --------------------------------------
+
+export function filterCompareMatrix(
+  matrix: CompareCell[][],
+  opts: { category?: string | null; outsideOnly?: boolean; categoryOf?: (key: string) => string | null },
+): CompareCell[][] {
+  return matrix.filter((row) => {
+    const key = row[0]?.analyteKey ?? "";
+    if (opts.category && opts.categoryOf && opts.categoryOf(key) !== opts.category) return false;
+    if (opts.outsideOnly && !row.some((c) => isOutsideLabRange(c.result?.lab_status))) return false;
+    return true;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Hard delete — unapproved samples only. The backend RLS/storage policies are
 // the authority (confirmed samples and their documents/results cannot be
 // deleted); the Portal mirrors that rule and fails closed. This is an
@@ -1533,4 +1806,46 @@ export function labStatusMapColor(status: string | null | undefined): string {
 export function formatMapValue(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "—";
   return String(Number(value.toFixed(2)));
+}
+
+// ---------------------------------------------------------------------------
+// Map labels — MapKit collision/display priority. Short value-only labels in
+// Smart mode so MapKit can hide overlapping low-priority labels; the selected
+// block is always Required with the full label. No clustering.
+// ---------------------------------------------------------------------------
+
+export type SoilMapLabelMode = "smart" | "all" | "off";
+export const DEFAULT_SOIL_MAP_LABEL_MODE: SoilMapLabelMode = "smart";
+
+export interface SoilMapLabelSpec {
+  text: string;
+  priority: "low" | "required";
+  collision: "rectangle";
+  selected: boolean;
+}
+
+export function soilMapLabelSpec(
+  row: Pick<SoilMapReportRow, "paddock_name" | "value_numeric">,
+  opts: { mode: SoilMapLabelMode; selected: boolean; unit: string | null },
+): SoilMapLabelSpec | null {
+  if (opts.mode === "off") return null;
+  const hasValue = typeof row.value_numeric === "number" && Number.isFinite(row.value_numeric);
+  if (opts.selected) {
+    const name = row.paddock_name ?? "Block";
+    return {
+      text: hasValue
+        ? `${name} · ${formatMapValue(row.value_numeric)}${opts.unit ? ` ${opts.unit}` : ""}`
+        : `${name} · No confirmed value`,
+      priority: "required",
+      collision: "rectangle",
+      selected: true,
+    };
+  }
+  if (!hasValue) return null;
+  return {
+    text: formatMapValue(row.value_numeric),
+    priority: opts.mode === "all" ? "required" : "low",
+    collision: "rectangle",
+    selected: false,
+  };
 }
