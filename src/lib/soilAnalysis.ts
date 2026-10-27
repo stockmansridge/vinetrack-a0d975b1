@@ -43,7 +43,13 @@ export type SoilDocumentExtractionStatus =
   | "review_required"
   | "failed";
 
-export type SoilSampleScope = "unmapped" | "whole_block" | "row_range" | "point" | "multi_block";
+export type SoilSampleScope =
+  | "unmapped"
+  | "whole_block"
+  | "row_range"
+  | "row_selection"
+  | "point"
+  | "multi_block";
 
 export type SoilDesiredDirection = "range" | "higher" | "lower" | "context_only";
 
@@ -171,7 +177,7 @@ export interface SoilBlockAlias {
 // forces a multi-block sample into one paddock_id.
 // ---------------------------------------------------------------------------
 
-export type SoilMappingScope = "whole_block" | "row_range";
+export type SoilMappingScope = "whole_block" | "row_range" | "selected_rows";
 
 export interface SoilBlockMapping {
   id: string;
@@ -181,6 +187,9 @@ export interface SoilBlockMapping {
   mapping_scope: SoilMappingScope;
   row_start: number | null;
   row_end: number | null;
+  /** Exact canonical row numbers (selected_rows; backfilled for row_range). */
+  row_numbers: number[] | null;
+  row_ids: string[] | null;
   mapping_confidence: number | null;
   notes: string | null;
   sort_order: number;
@@ -188,122 +197,151 @@ export interface SoilBlockMapping {
   block_name?: string | null;
 }
 
-/** Editable mapping row (review UI) — identity is always the paddock_id. */
+/**
+ * Editable mapping (review UI). Identity is always the paddock_id; the user
+ * ticks real rows from paddocks.rows — no typed row ranges.
+ */
 export interface SoilBlockMappingInput {
   paddock_id: string;
-  mapping_scope: SoilMappingScope;
-  row_start: number | null;
-  row_end: number | null;
+  /** Ticked canonical row numbers. */
+  selected: number[];
 }
 
-export async function listSampleBlockMappings(sampleId: string): Promise<SoilBlockMapping[]> {
-  const { data, error } = await db
-    .from("soil_sample_block_mappings")
-    .select("*, paddocks(name)")
-    .eq("sample_id", sampleId)
-    .order("sort_order")
-    .order("id");
-  if (error) throw error;
-  return (data ?? []).map((row: any) => ({
-    ...row,
-    block_name: row.paddocks?.name ?? null,
-    paddocks: undefined,
-  })) as SoilBlockMapping[];
+/** Known row numbers for a block from the live paddocks.rows array, ascending. */
+export function blockRowNumbers(rows: unknown): number[] {
+  if (!Array.isArray(rows)) return [];
+  const nums = rows
+    .map((r: any) => Number(r?.number))
+    .filter((n) => Number.isInteger(n));
+  return [...new Set(nums)].sort((x, y) => x - y);
 }
 
-/** Mappings for many samples at once, keyed by sample_id (list/overview). */
-export async function listBlockMappingsForSamples(
-  sampleIds: string[],
-): Promise<Map<string, SoilBlockMapping[]>> {
-  const map = new Map<string, SoilBlockMapping[]>();
-  if (sampleIds.length === 0) return map;
-  const { data, error } = await db
-    .from("soil_sample_block_mappings")
-    .select("*, paddocks(name)")
-    .in("sample_id", sampleIds)
-    .order("sort_order")
-    .order("id");
-  if (error) throw error;
-  for (const row of data ?? []) {
-    const mapping = {
-      ...row,
-      block_name: (row as any).paddocks?.name ?? null,
-      paddocks: undefined,
-    } as SoilBlockMapping;
-    map.set(mapping.sample_id, [...(map.get(mapping.sample_id) ?? []), mapping]);
+/** Compact a row list without ever filling gaps: [31,32,33,35,37] => "31–33, 35, 37". */
+export function compactRowList(nums: number[]): string {
+  const sorted = [...new Set(nums)].sort((a, b) => a - b);
+  const parts: string[] = [];
+  let i = 0;
+  while (i < sorted.length) {
+    let j = i;
+    while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j++;
+    parts.push(j > i ? `${sorted[i]}–${sorted[j]}` : `${sorted[i]}`);
+    i = j + 1;
   }
-  return map;
+  return parts.join(", ");
+}
+
+export function rowSelectionSummary(nums: number[]): string {
+  const n = new Set(nums).size;
+  if (n === 0) return "No rows selected";
+  return `${n === 1 ? "Row" : "Rows"} ${compactRowList(nums)}`;
+}
+
+/** Initial ticks for an existing mapping against the block's current rows. */
+export function initialSelection(
+  m: Pick<SoilBlockMapping, "mapping_scope" | "row_numbers" | "row_start" | "row_end">,
+  known: number[],
+): number[] {
+  if (m.mapping_scope === "whole_block") return [...known];
+  if (Array.isArray(m.row_numbers) && m.row_numbers.length > 0) {
+    return [...new Set(m.row_numbers.map(Number))].sort((a, b) => a - b);
+  }
+  if (m.mapping_scope === "row_range" && m.row_start != null && m.row_end != null) {
+    return known.filter((n) => n >= m.row_start! && n <= m.row_end!);
+  }
+  return [];
 }
 
 export const MAPPING_BLOCK_REQUIRED_MESSAGE = "Choose a block for each block-coverage row.";
 export const MAPPING_ROWS_REQUIRED_MESSAGE =
-  "Enter valid row numbers for each row-range row (Row to must be greater than or equal to Row from).";
+  "Select at least one row for each selected block, or choose All rows.";
+export const MAPPING_NO_CONFIGURED_ROWS_MESSAGE =
+  "No configured VineTrack rows for this block. Update Block & Row setup first.";
+export const MAPPING_DUPLICATE_BLOCK_MESSAGE =
+  "Each block can only be added once. Remove the duplicate block.";
+export const MAPPING_UNKNOWN_ROW_MESSAGE =
+  "A selected row is not present in the block's current VineTrack row configuration.";
 export const MAPPING_EMPTY_MESSAGE =
   "Add at least one block-coverage row, or choose Not mapped.";
 
-/**
- * Client-side validation for the repeatable block-coverage list. Fails
- * closed with a human message BEFORE any write, so an invalid state (e.g.
- * the old row_range-with-no-block case) can never reach the database.
- */
-export function validateBlockMappings(rows: SoilBlockMappingInput[]): string | null {
+/** Validates before any write; knownRows maps paddock_id => known row numbers. */
+export function validateBlockMappings(
+  rows: SoilBlockMappingInput[],
+  knownRows: Map<string, number[]>,
+): string | null {
   if (rows.length === 0) return MAPPING_EMPTY_MESSAGE;
+  const seen = new Set<string>();
   for (const row of rows) {
     if (!row.paddock_id) return MAPPING_BLOCK_REQUIRED_MESSAGE;
-    if (row.mapping_scope === "row_range") {
-      const from = row.row_start;
-      const to = row.row_end;
-      if (
-        from == null ||
-        to == null ||
-        !Number.isInteger(from) ||
-        !Number.isInteger(to) ||
-        from < 1 ||
-        to < from
-      ) {
-        return MAPPING_ROWS_REQUIRED_MESSAGE;
-      }
-    }
+    if (seen.has(row.paddock_id)) return MAPPING_DUPLICATE_BLOCK_MESSAGE;
+    seen.add(row.paddock_id);
+    const known = knownRows.get(row.paddock_id) ?? [];
+    if (known.length === 0) return MAPPING_NO_CONFIGURED_ROWS_MESSAGE;
+    if (row.selected.length === 0) return MAPPING_ROWS_REQUIRED_MESSAGE;
+    const knownSet = new Set(known);
+    if (row.selected.some((n) => !knownSet.has(n))) return MAPPING_UNKNOWN_ROW_MESSAGE;
   }
   return null;
 }
 
-/** RPC payload — row bounds are only sent for row-range rows. */
-export function buildMappingPayload(rows: SoilBlockMappingInput[]): Array<Record<string, unknown>> {
-  return rows.map((r) => ({
-    paddock_id: r.paddock_id,
-    mapping_scope: r.mapping_scope,
-    row_start: r.mapping_scope === "row_range" ? r.row_start : null,
-    row_end: r.mapping_scope === "row_range" ? r.row_end : null,
-    mapping_confidence: null,
-    notes: null,
-  }));
+/**
+ * RPC payload. All known rows ticked => whole_block (no row_numbers); a
+ * subset => selected_rows with exact sorted unique row_numbers. The UI never
+ * generates row_range.
+ */
+export function buildMappingPayload(
+  rows: SoilBlockMappingInput[],
+  knownRows: Map<string, number[]>,
+): Array<Record<string, unknown>> {
+  return rows.map((r) => {
+    const known = knownRows.get(r.paddock_id) ?? [];
+    const selected = [...new Set(r.selected)].sort((a, b) => a - b);
+    const all = known.length > 0 && known.every((n) => selected.includes(n));
+    return all
+      ? { paddock_id: r.paddock_id, mapping_scope: "whole_block", mapping_confidence: null, notes: null }
+      : {
+          paddock_id: r.paddock_id,
+          mapping_scope: "selected_rows",
+          row_numbers: selected,
+          mapping_confidence: null,
+          notes: null,
+        };
+  });
 }
 
 /**
  * Atomically REPLACES the sample's block mappings in ONE call. The RPC also
- * synchronises the legacy soil_samples fields (including multi_block), so
- * the Portal never writes sample_scope/paddock_id/row_start/row_end directly
- * for block coverage.
+ * synchronises the legacy soil_samples fields (row_selection / multi_block),
+ * so the Portal never writes sample_scope/paddock_id directly for block
+ * coverage.
  */
 export async function setSoilSampleBlockMappings(
   sampleId: string,
   rows: SoilBlockMappingInput[],
+  knownRows: Map<string, number[]> = new Map(),
 ): Promise<void> {
   const { error } = await db.rpc("soil_analysis_set_block_mappings", {
     p_sample_id: sampleId,
-    p_mappings: buildMappingPayload(rows),
+    p_mappings: buildMappingPayload(rows, knownRows),
   });
   if (error) throw error;
 }
 
+/** "Primitivo · All rows" / "Primitivo · Rows 31–33, 35, 37". */
+export function mappingLine(m: SoilBlockMapping): string {
+  const name = m.block_name ?? "Block";
+  if (m.mapping_scope === "whole_block") return `${name} · All rows`;
+  if (Array.isArray(m.row_numbers) && m.row_numbers.length > 0) {
+    return `${name} · ${rowSelectionSummary(m.row_numbers)}`;
+  }
+  if (m.mapping_scope === "row_range") {
+    return `${name} · Rows ${m.row_start ?? "?"}–${m.row_end ?? "?"}`;
+  }
+  return `${name} · Selected rows`;
+}
+
 /** One line per mapping, for tooltips/popovers on multi-block samples. */
 export function mappingSummaryLines(mappings: SoilBlockMapping[]): string[] {
-  return mappings.map((m) =>
-    m.mapping_scope === "row_range"
-      ? `${m.block_name ?? "Block"} · Rows ${m.row_start ?? "?"}–${m.row_end ?? "?"}`
-      : `${m.block_name ?? "Block"} · Whole block`,
-  );
+  return mappings.map(mappingLine);
 }
 
 /**
@@ -316,23 +354,66 @@ export function mappingSummaryLabel(
   mappings: SoilBlockMapping[] | undefined,
 ): string {
   const rows = mappings ?? [];
-  if (rows.length === 1) {
-    const m = rows[0];
-    return m.mapping_scope === "row_range"
-      ? `${m.block_name ?? "Block"} · Rows ${m.row_start ?? "?"}–${m.row_end ?? "?"}`
-      : (m.block_name ?? "Whole block");
-  }
+  if (rows.length === 1) return mappingLine(rows[0]);
   if (rows.length > 1) return `${rows.length} blocks`;
   // Legacy fallback only — no mapping rows exist for this sample.
   if (sample.sample_scope === "row_range" && sample.paddock_id) {
     return `${sample.block_name ?? "Block"} · Rows ${sample.row_start ?? "?"}–${sample.row_end ?? "?"}`;
   }
   if (sample.sample_scope === "whole_block" && sample.paddock_id) {
-    return sample.block_name ?? "Whole block";
+    return `${sample.block_name ?? "Block"} · All rows`;
   }
+  if (sample.sample_scope === "row_selection") return `${sample.block_name ?? "Block"} · Selected rows`;
   if (sample.sample_scope === "point") return `${sample.block_name ?? "Block"} (point)`;
   if (sample.sample_scope === "multi_block") return "Multiple blocks";
   return SAMPLE_SCOPE_LABEL.unmapped;
+}
+
+// ---------------------------------------------------------------------------
+// "Use rows from report" — review suggestion only, never auto-saved.
+// ---------------------------------------------------------------------------
+
+/**
+ * Parses an unambiguous vineyard-global row range from the preserved lab
+ * paddock text, e.g. "ROWS 30-69 EAST BOT" or "ROW 70-109 WEST PINOT".
+ * Returns null when there is no range, more than one, or it is inverted.
+ */
+export function parseReportRowRange(text: string | null | undefined): { from: number; to: number } | null {
+  if (!text) return null;
+  const re = /\brows?\s*(\d{1,4})\s*(?:-|–|—|to)\s*(\d{1,4})\b/gi;
+  const matches = [...text.matchAll(re)];
+  if (matches.length !== 1) return null;
+  // Any other numeric range in the text makes it ambiguous.
+  const anyRanges = text.match(/\d+\s*(?:-|–|—)\s*\d+/g) ?? [];
+  if (anyRanges.length > 1) return null;
+  const from = Number(matches[0][1]);
+  const to = Number(matches[0][2]);
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to < from) return null;
+  return { from, to };
+}
+
+export interface RowSuggestion {
+  mappings: SoilBlockMappingInput[];
+  missing: number[];
+}
+
+/** One mapping per block whose known rows intersect the range; missing rows are reported, never invented. */
+export function suggestMappingsFromRange(
+  range: { from: number; to: number },
+  blocks: Array<{ id: string; rows: unknown }>,
+): RowSuggestion {
+  const covered = new Set<number>();
+  const mappings: SoilBlockMappingInput[] = [];
+  for (const b of blocks) {
+    const hit = blockRowNumbers(b.rows).filter((n) => n >= range.from && n <= range.to);
+    if (hit.length === 0) continue;
+    hit.forEach((n) => covered.add(n));
+    mappings.push({ paddock_id: b.id, selected: hit });
+  }
+  mappings.sort((a, b) => a.selected[0] - b.selected[0]);
+  const missing: number[] = [];
+  for (let n = range.from; n <= range.to; n++) if (!covered.has(n)) missing.push(n);
+  return { mappings, missing };
 }
 
 // ---------------------------------------------------------------------------
@@ -359,6 +440,7 @@ export const SAMPLE_SCOPE_LABEL: Record<SoilSampleScope, string> = {
   unmapped: "Unmapped",
   whole_block: "Whole block",
   row_range: "Row range",
+  row_selection: "Selected rows",
   point: "Point",
   multi_block: "Multiple blocks",
 };
