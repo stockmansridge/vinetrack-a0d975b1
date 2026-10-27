@@ -85,7 +85,7 @@ export function SoilAnalyteMultiSelect({ options, values, onChange, ariaLabel, c
               Select all visible
             </Button>
             <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => onChange([])}>
-              Clear
+              Clear analytes
             </Button>
           </div>
           <CommandList>

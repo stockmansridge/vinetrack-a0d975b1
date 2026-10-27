@@ -50,7 +50,7 @@ describe("multi-block Trends interactions", () => {
   });
   it("All blocks and Clear work", async () => {
     mount(); await chooseAll(); expect(mock.read).toHaveBeenCalledWith(["a", "b", "c"]);
-    fireEvent.click(screen.getByRole("button", { name: "Clear" })); expect(screen.getByText(/Choose one or more blocks/)).toBeTruthy();
+    fireEvent.click(within(screen.getByRole("group", { name: "Blocks" })).getByRole("button", { name: "Clear" })); expect(screen.getByText(/Choose one or more blocks/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Block A" }).getAttribute("aria-pressed")).toBe("false");
   });
   it("renders one line per block with data, separate date averages and all raw dots", async () => {
