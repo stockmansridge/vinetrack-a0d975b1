@@ -11,10 +11,12 @@ import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
 import {
   listSoilSamples,
+  listBlockMappingsForSamples,
+  mappingSummaryLabel,
+  mappingSummaryLines,
   retrySoilExtraction,
   isSoilSampleDeletable,
   SAMPLE_STATUS_LABEL,
-  SAMPLE_SCOPE_LABEL,
   type SoilSample,
   type SoilSampleStatus,
 } from "@/lib/soilAnalysis";
@@ -32,13 +34,8 @@ function depthLabel(s: SoilSample): string {
   return `${s.sample_depth_from_cm ?? s.sample_depth_to_cm} cm`;
 }
 
-function mappingLabel(s: SoilSample): string {
-  if (s.sample_scope === "row_range" && s.row_start != null) {
-    return `${s.block_name ?? "Block"} rows ${s.row_start}–${s.row_end ?? s.row_start}`;
-  }
-  if (s.sample_scope === "point") return `${s.block_name ?? "Block"} (point)`;
-  if (s.sample_scope === "whole_block") return s.block_name ?? "Whole block";
-  return SAMPLE_SCOPE_LABEL.unmapped;
+function mappingLabel(s: SoilSample, mappings: ReturnType<typeof mappingSummaryLines> extends never ? never : import("@/lib/soilAnalysis").SoilBlockMapping[] | undefined): string {
+  return mappingSummaryLabel(s, mappings);
 }
 
 export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => void }) {
