@@ -1,5 +1,9 @@
 # Roadmap
 
+## Yield Estimate Trips sampled-area correction (Portal only)
+- [x] Add sampledAreaHa for recorded blocks only and switch trip-table density to it; preserve totalAreaHa, route evidence, tonnes, damage and Overview rules.
+- [x] 217/217 tests passed across 22 focused Yields files, including 10 trip-table tests; automatic typecheck/preview build OK. No SQL/mobile/unrelated changes or publication.
+
 ## Yield Estimate Trips table follow-up (Portal only)
 - [x] Show sampled block names with full-name access and add a row-end shortcut to the existing trip drawer, without toggling inline expansion.
 - [x] Seven new safeguards plus the existing drawer-flow test passed: 190/190 tests across 21 focused Yields files; automatic typecheck/preview build OK. No calculation/backend/mobile changes or publication. Inspection found an existing edge case: summary.totalAreaHa also includes selected-but-unsampled blocks, potentially diluting Per ha; left unchanged to preserve the requested calculation path and avoid altering shared summaries.
