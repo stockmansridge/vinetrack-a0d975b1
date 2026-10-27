@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 const CATALOGUE = [
@@ -19,6 +19,10 @@ vi.mock("recharts", () => ({
 import { TrendsTab } from "@/components/soil-analysis/TrendsTab";
 const result = (block: string, id: string, value: number, date = "2026-01-01", method: string | null = null, analyte = "ca") => ({ id, analyte_key: analyte, value_numeric: value, unit: "ppm", method, matched_paddock_id: block, sample: { id, sampled_at: date, created_at: date, laboratory: "Lab", lab_sample_id: id } });
 function mount() { const client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); return { ...render(<QueryClientProvider client={client}><TrendsTab /></QueryClientProvider>), client }; }
+beforeAll(() => {
+  (globalThis as any).ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
+  Element.prototype.scrollIntoView ??= () => {};
+});
 beforeEach(() => {
   mock.vineyard = "v1"; mock.lines = []; mock.scatters = [];
   mock.read.mockReset().mockImplementation(async (ids: string[]) => [
@@ -26,12 +30,11 @@ beforeEach(() => {
     result("a", "m1", 5, "2026-01-01", null, "mg"), result("b", "m2", 8, "2026-01-01", null, "mg"),
   ].filter((r) => ids.includes(r.matched_paddock_id)));
 });
-async function openPicker() { fireEvent.click(await screen.findByRole("combobox", { name: "Trend analytes" })); await screen.findByRole("dialog"); }
-async function tick(name: string) { const dialog = screen.getByRole("dialog"); fireEvent.click(within(dialog).getByText(name)); }
+async function openPicker() { fireEvent.click(await screen.findByRole("combobox", { name: "Trend analytes" })); await screen.findByPlaceholderText("Search analytes…"); }
+const tick = (name: string) => fireEvent.click(screen.getByRole("option", { name }));
 async function chooseAll() {
   fireEvent.click(await screen.findByRole("button", { name: "All blocks" }));
-  await openPicker(); await tick("Calcium");
-  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  await openPicker(); tick("Calcium");
   await screen.findByRole("region", { name: "Block A trend summary" });
 }
 describe("multi-block Trends interactions", () => {
@@ -40,7 +43,7 @@ describe("multi-block Trends interactions", () => {
     const group = await screen.findByRole("group", { name: "Blocks" });
     expect(within(group).getAllByRole("button").slice(0, 3).map((b) => b.textContent)).toEqual(["Block A", "Block B", "Block C"]);
     fireEvent.click(screen.getByRole("button", { name: "Block B" })); fireEvent.click(screen.getByRole("button", { name: "Block A" }));
-    await openPicker(); await tick("Calcium"); fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await openPicker(); tick("Calcium");
     await waitFor(() => expect(mock.read).toHaveBeenLastCalledWith(["a", "b"]));
     expect(screen.getByRole("button", { name: "Block B" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "Block B" })); await waitFor(() => expect(mock.read).toHaveBeenLastCalledWith(["a"]));
@@ -76,7 +79,7 @@ describe("multi-block Trends interactions", () => {
   });
   it("one-block selection retains its useful summary and chart", async () => {
     mount(); fireEvent.click(await screen.findByRole("button", { name: "Block A" }));
-    await openPicker(); await tick("Calcium"); fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await openPicker(); tick("Calcium");
     await screen.findByRole("region", { name: "Block A trend summary" }); expect(screen.getAllByTestId("trend-line")).toHaveLength(1); expect(screen.getByText("2 / 1")).toBeTruthy();
   });
   it("vineyard changes clear old block ids before querying", async () => {
@@ -91,8 +94,7 @@ describe("multi-analyte Trends", () => {
   });
   it("multiple analytes can be ticked and render one section each in catalogue order", async () => {
     mount(); fireEvent.click(await screen.findByRole("button", { name: "All blocks" }));
-    await openPicker(); await tick("Magnesium"); await tick("Calcium");
-    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await openPicker(); tick("Magnesium"); tick("Calcium");
     await screen.findByRole("region", { name: "Calcium trend" });
     const sections = screen.getAllByRole("region").map((r) => r.getAttribute("aria-label")).filter((l) => l?.endsWith(" trend"));
     expect(sections).toEqual(["Calcium trend", "Magnesium trend"]);
@@ -100,40 +102,38 @@ describe("multi-analyte Trends", () => {
   });
   it("search filters options without clearing existing selections", async () => {
     mount(); fireEvent.click(await screen.findByRole("button", { name: "All blocks" }));
-    await openPicker(); await tick("Calcium");
-    fireEvent.change(screen.getByLabelText("Search analytes"), { target: { value: "mag" } });
-    expect(within(screen.getByRole("dialog")).queryByText("Calcium")).toBeNull();
-    await tick("Magnesium");
+    await openPicker(); tick("Calcium");
+    fireEvent.change(screen.getByPlaceholderText("Search analytes…"), { target: { value: "mag" } });
+    expect(screen.queryByRole("option", { name: "Calcium" })).toBeNull();
+    tick("Magnesium");
     expect(screen.getByRole("combobox", { name: "Trend analytes" }).textContent).toContain("2 analytes selected");
   });
   it("Select all visible selects only filtered options; Clear removes all", async () => {
     mount(); fireEvent.click(await screen.findByRole("button", { name: "All blocks" }));
     await openPicker();
-    fireEvent.change(screen.getByLabelText("Search analytes"), { target: { value: "cations" } });
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Select all visible" }));
+    fireEvent.change(screen.getByPlaceholderText("Search analytes…"), { target: { value: "cations" } });
+    fireEvent.click(screen.getByRole("button", { name: "Select all visible" }));
     expect(screen.getByRole("combobox", { name: "Trend analytes" }).textContent).toContain("2 analytes selected");
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Clear" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
     expect(screen.getByRole("combobox", { name: "Trend analytes" }).textContent).toContain("Choose analytes");
   });
   it("toggling analytes never refetches; one read per block selection", async () => {
     mount(); fireEvent.click(await screen.findByRole("button", { name: "All blocks" }));
     await waitFor(() => expect(mock.read).toHaveBeenCalledTimes(1));
-    await openPicker(); await tick("Calcium"); await tick("Magnesium"); await tick("Calcium");
+    await openPicker(); tick("Calcium"); tick("Magnesium"); tick("Calcium");
     await screen.findByRole("region", { name: "Magnesium trend" });
     expect(mock.read).toHaveBeenCalledTimes(1);
   });
   it("selected analyte with no data gets a compact per-analyte no-data state", async () => {
     mount(); fireEvent.click(await screen.findByRole("button", { name: "All blocks" }));
-    await openPicker(); await tick("Calcium"); await tick("pH");
-    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await openPicker(); tick("Calcium"); tick("pH");
     const ph = await screen.findByRole("region", { name: "pH trend" });
     expect(within(ph).getByText("No results for the selected blocks yet.")).toBeTruthy();
     expect(screen.getByRole("region", { name: "Calcium trend" })).toBeTruthy();
   });
   it("multi-block selection applies to every selected analyte", async () => {
     mount(); fireEvent.click(await screen.findByRole("button", { name: "All blocks" }));
-    await openPicker(); await tick("Calcium"); await tick("Magnesium");
-    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await openPicker(); tick("Calcium"); tick("Magnesium");
     await screen.findByRole("region", { name: "Magnesium trend" });
     expect(within(screen.getByRole("region", { name: "Magnesium trend" })).getByRole("region", { name: "Block A trend summary" })).toBeTruthy();
     expect(within(screen.getByRole("region", { name: "Magnesium trend" })).getByRole("region", { name: "Block C trend summary" })).toBeTruthy();
