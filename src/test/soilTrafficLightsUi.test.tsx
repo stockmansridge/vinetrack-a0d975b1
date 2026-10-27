@@ -125,6 +125,7 @@ describe("Traffic Lights presentation", () => {
     expect(screen.getByText("AI indication: High")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "What AI sample context means" })).toBeNull();
   });
+  it("v1 response missing scope fails safely to lab-only display", async () => {
     mock.invoke.mockResolvedValue({ data: { classifications: [{ result_id: "acid", indication: "high", confidence: 0.82, reason: "Old result", basis: "general_viticulture" }] } });
     mount(); await screen.findByRole("region", { name: "Low laboratory statuses" }); fireEvent.click(screen.getByRole("switch"));
     expect(await screen.findByRole("alert")).toHaveTextContent("AI indication is unavailable. Laboratory statuses are still shown.");
