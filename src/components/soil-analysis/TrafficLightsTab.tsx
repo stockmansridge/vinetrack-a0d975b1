@@ -54,7 +54,7 @@ export function TrafficLightsTab() {
   const relevant = snapshots.filter((s) => selected.includes(s.paddockId));
   const resultIds = soilIndicationResultIds(relevant);
   const ai = useQuery({
-    queryKey: ["soil-analysis", "viticulture-indication", "v2", selectedVineyardId, resultIds],
+    queryKey: ["soil-analysis", "viticulture-indication", "v3", selectedVineyardId, resultIds],
     enabled: aiEnabled && !!selectedVineyardId && resultIds.length > 0 && results.isSuccess,
     staleTime: 60 * 60 * 1000, gcTime: 60 * 60 * 1000,
     retry: false, refetchOnWindowFocus: false, refetchOnReconnect: false, refetchOnMount: false,

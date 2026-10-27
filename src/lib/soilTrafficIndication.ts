@@ -7,9 +7,12 @@ export interface SoilIndication {
   confidence: number;
   reason: string;
   basis: "lab_range" | "general_viticulture" | "insufficient_context";
-  scope: "result" | "sample_nitrogen_context";
+  scope: "result" | "sample_nitrogen_context" | "sample_context";
 }
 export type IndicatedSnapshot = SoilTrafficSnapshot & { sourceBucket: SoilTrafficBucket; aiLabel?: string; aiEntries?: SoilIndication[] };
+
+/** Shown wherever an indication was reached from companion measurements in the same sample. */
+export const SOIL_SAMPLE_CONTEXT_HELP = "Uses related measurements from the same soil sample when a single result does not have a defensible standalone viticulture threshold.";
 
 /** Only unclassified entries in currently selected latest snapshots; stable cache identity. */
 export function soilIndicationResultIds(snapshots: SoilTrafficSnapshot[]): string[] {
@@ -35,7 +38,7 @@ export async function requestSoilIndications(vineyardId: string, ids: string[]):
         || !["low", "satisfactory", "high", "unable"].includes(row.indication)
         || typeof row.confidence !== "number" || !Number.isFinite(row.confidence) || row.confidence < 0 || row.confidence > 1
         || typeof row.reason !== "string" || !["lab_range", "general_viticulture", "insufficient_context"].includes(row.basis)
-        || !["result", "sample_nitrogen_context"].includes(row.scope)) {
+        || !["result", "sample_nitrogen_context", "sample_context"].includes(row.scope)) {
         throw new Error("AI indication is unavailable. Laboratory statuses are still shown.");
       }
       seen.add(row.result_id);
@@ -44,6 +47,13 @@ export async function requestSoilIndications(vineyardId: string, ids: string[]):
     if (seen.size !== batch.length) throw new Error("AI indication is unavailable. Laboratory statuses are still shown.");
   }
   return combined;
+}
+
+/** Names the evidence the endpoint actually used, so companion-based readings never look standalone. */
+function indicationPrefix(entries: SoilIndication[]): string {
+  if (entries.some((r) => r.scope === "sample_nitrogen_context")) return "AI nitrogen context";
+  if (entries.some((r) => r.scope === "sample_context")) return "AI sample context";
+  return "AI indication";
 }
 
 /** Overlay only: the original snapshot and every laboratory entry remain untouched. */
@@ -55,14 +65,14 @@ export function indicateSoilSnapshots(snapshots: SoilTrafficSnapshot[], indicati
     const unrated = s.entries.filter((r) => soilTrafficBucket(r.lab_status) === "other");
     if (!unrated.length) return original;
     const aiEntries = unrated.flatMap((r) => byId.get(r.id) ? [byId.get(r.id) as SoilIndication] : []);
-    const nitrogenContext = aiEntries.some((r) => r.scope === "sample_nitrogen_context");
+    const prefix = indicationPrefix(aiEntries);
     if (aiEntries.length !== unrated.length || aiEntries.some((r) => r.indication === "unable")) {
-      return { ...original, aiLabel: nitrogenContext ? "AI nitrogen context: Unable to rate" : "AI: Unable to rate", aiEntries };
+      return { ...original, aiLabel: prefix === "AI indication" ? "AI: Unable to rate" : `${prefix}: Unable to rate`, aiEntries };
     }
     const buckets = new Set(s.entries.map((r) => soilTrafficBucket(r.lab_status) === "other" ? byId.get(r.id)?.indication : soilTrafficBucket(r.lab_status)));
     if (buckets.size !== 1) return { ...original, aiLabel: "AI: Mixed indications", aiEntries };
     const bucket = aiEntries[0]?.indication;
     if (!bucket || bucket === "unable") return original;
-    return { ...original, bucket, aiLabel: `${nitrogenContext ? "AI nitrogen context" : "AI indication"}: ${bucket[0].toUpperCase()}${bucket.slice(1)}`, aiEntries };
+    return { ...original, bucket, aiLabel: `${prefix}: ${bucket[0].toUpperCase()}${bucket.slice(1)}`, aiEntries };
   });
 }
