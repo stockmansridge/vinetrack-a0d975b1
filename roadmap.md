@@ -1,5 +1,10 @@
 # Roadmap
 
+## Released Traffic Lights refinement
+- [ ] Add explicit latest/as-of controls, direct status filtering, clickable counts and collapsed analyte detail.
+- [ ] Add optional cached AI screening through the deployed endpoint only, preserving source statuses and safe errors.
+- [ ] Run Soil Analysis/release regressions, verify desktop/mobile and live endpoint where session permits, then publish the Portal and report revision.
+
 ## Soil Analysis pre-release improvements
 - [x] Verify existing multi-block Trends against requested block-isolation and selection safeguards (17 existing tests); implementation already complete and preserved.
 - [x] Add confirmed, mapping-aware Traffic Lights latest snapshots, source-status groups, filters and eighth help topic (32 new tests).
