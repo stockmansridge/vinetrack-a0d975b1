@@ -1,6 +1,6 @@
 // Soil Analysis — customer-facing landing page (Resources). Access is the
 // normal RequireVineyard + role route matrix; backend RLS is vineyard-scoped.
-// Tabs: Overview | Soil Samples | Trends | Compare | Reports.
+// Tabs: Overview | Soil Samples | Trends | Compare | Traffic Lights | Reports.
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdminPageHeader } from "./_shared";
@@ -10,8 +10,9 @@ import { TrendsTab } from "@/components/soil-analysis/TrendsTab";
 import { CompareTab } from "@/components/soil-analysis/CompareTab";
 import { ReportsTab } from "@/components/soil-analysis/ReportsTab";
 import SoilAnalysisHelpDialog from "@/components/soil-analysis/SoilAnalysisHelpDialog";
+import { TrafficLightsTab } from "@/components/soil-analysis/TrafficLightsTab";
 
-const TABS = ["overview", "samples", "trends", "compare", "reports"] as const;
+const TABS = ["overview", "samples", "trends", "compare", "traffic-lights", "reports"] as const;
 type SoilTab = (typeof TABS)[number];
 
 export default function SoilAnalysisPage() {
@@ -43,6 +44,7 @@ export default function SoilAnalysisPage() {
             <TabsTrigger value="samples">Soil Samples</TabsTrigger>
             <TabsTrigger value="trends">Trends</TabsTrigger>
             <TabsTrigger value="compare">Compare</TabsTrigger>
+            <TabsTrigger value="traffic-lights">Traffic Lights</TabsTrigger>
             <TabsTrigger value="reports">Reports</TabsTrigger>
           </TabsList>
         </div>
@@ -60,6 +62,9 @@ export default function SoilAnalysisPage() {
         </TabsContent>
         <TabsContent value="reports" className="mt-4 w-full max-w-none">
           <ReportsTab onOpenSample={openSample} />
+        </TabsContent>
+        <TabsContent value="traffic-lights" className="mt-4 max-w-6xl">
+          <TrafficLightsTab />
         </TabsContent>
       </Tabs>
     </div>

@@ -30,7 +30,7 @@ describe("Soil Analysis help dialog", () => {
     expect(screen.queryByText("How Soil Analysis Works")).toBeNull();
   });
 
-  it("opens with all seven workflow topics and the closing note, and closes", () => {
+  it("opens with all eight workflow topics and the closing note, and closes", () => {
     render(<SoilAnalysisHelpDialog />);
     fireEvent.click(screen.getByRole("button", { name: "How Soil Analysis works" }));
     const dlg = screen.getByRole("dialog");
@@ -43,6 +43,7 @@ describe("Soil Analysis help dialog", () => {
       "Trends",
       "Compare",
       "Reports",
+      "Traffic Lights",
     ]) {
       expect(within(dlg).getByText(t)).toBeTruthy();
     }
