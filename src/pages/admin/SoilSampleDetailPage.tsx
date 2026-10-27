@@ -82,6 +82,7 @@ function DetailInner() {
   const [saveState, setSaveState] = useState<string | null>(null);
   const [docError, setDocError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   const sample = detailQuery.data?.sample;
   useEffect(() => {
@@ -153,6 +154,30 @@ function DetailInner() {
       setSaveState(e instanceof Error ? e.message : String(e));
     } finally {
       setConfirming(false);
+    }
+  };
+
+  const retry = async () => {
+    const primaryDoc = (detailQuery.data?.documents ?? []).find((d) => d.is_primary)
+      ?? detailQuery.data?.documents?.[0];
+    if (!primaryDoc) {
+      setSaveState("No source document is recorded for this sample, so extraction cannot be retried.");
+      return;
+    }
+    setRetrying(true);
+    setSaveState(null);
+    try {
+      const outcome = await retrySoilExtraction(sample.id, primaryDoc.id);
+      qc.invalidateQueries({ queryKey: ["soil-analysis"] });
+      setSaveState(
+        outcome.ok
+          ? "Extraction finished — review the extracted details below, then confirm."
+          : `Extraction failed again: ${outcome.error}. The uploaded document is preserved.`,
+      );
+    } catch (e) {
+      setSaveState(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRetrying(false);
     }
   };
 
