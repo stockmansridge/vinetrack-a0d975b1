@@ -35,8 +35,8 @@ export function OverviewTab({ onOpenSample }: { onOpenSample: (id: string) => vo
   const results = resultsQuery.data ?? [];
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { pending: 0, review_required: 0, confirmed: 0 };
-    for (const s of samples) c[s.status] = (c[s.status] ?? 0) + 1;
+    const c: Record<string, number> = { pending: 0, processing: 0, review_required: 0, confirmed: 0, failed: 0 };
+    for (const s of samples) c[s.extraction_status] = (c[s.extraction_status] ?? 0) + 1;
     return c;
   }, [samples]);
 
@@ -45,13 +45,13 @@ export function OverviewTab({ onOpenSample }: { onOpenSample: (id: string) => vo
     for (const s of samples) {
       if (!s.paddock_id) continue;
       const existing = map.get(s.paddock_id);
-      const when = s.sample_date ?? s.created_at;
-      if (!existing || when > (existing.sample_date ?? existing.created_at)) {
+      const when = s.sampled_at ?? s.created_at;
+      if (!existing || when > (existing.sampled_at ?? existing.created_at)) {
         map.set(s.paddock_id, s);
       }
     }
     return [...map.values()].sort((a, b) =>
-      String(b.sample_date ?? b.created_at).localeCompare(String(a.sample_date ?? a.created_at)),
+      String(b.sampled_at ?? b.created_at).localeCompare(String(a.sampled_at ?? a.created_at)),
     );
   }, [samples]);
 
@@ -94,21 +94,41 @@ export function OverviewTab({ onOpenSample }: { onOpenSample: (id: string) => vo
     );
   }
 
+  const awaiting = (counts.pending ?? 0) + (counts.processing ?? 0);
+
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-3">
-        {(["confirmed", "review_required", "pending"] as const).map((status) => (
-          <Card key={status}>
-            <CardHeader className="pb-1">
-              <CardTitle className="text-xs font-medium text-muted-foreground">
-                {SAMPLE_STATUS_LABEL[status]}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{counts[status] ?? 0}</div>
-            </CardContent>
-          </Card>
-        ))}
+        <Card>
+          <CardHeader className="pb-1">
+            <CardTitle className="text-xs font-medium text-muted-foreground">
+              {SAMPLE_STATUS_LABEL.confirmed}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-semibold">{counts.confirmed ?? 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-1">
+            <CardTitle className="text-xs font-medium text-muted-foreground">
+              {SAMPLE_STATUS_LABEL.review_required}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-semibold">{counts.review_required ?? 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-1">
+            <CardTitle className="text-xs font-medium text-muted-foreground">
+              Awaiting extraction
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-semibold">{awaiting}</div>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
@@ -138,10 +158,10 @@ export function OverviewTab({ onOpenSample }: { onOpenSample: (id: string) => vo
                     onClick={() => onOpenSample(s.id)}
                   >
                     <td className="px-4 py-2 font-medium">{s.block_name ?? "—"}</td>
-                    <td className="px-4 py-2">{formatDate(s.sample_date)}</td>
+                    <td className="px-4 py-2">{formatDate(s.sampled_at)}</td>
                     <td className="px-4 py-2">{s.laboratory ?? "—"}</td>
                     <td className="px-4 py-2">
-                      <Badge variant="outline">{SAMPLE_STATUS_LABEL[s.status]}</Badge>
+                      <Badge variant="outline">{SAMPLE_STATUS_LABEL[s.extraction_status]}</Badge>
                     </td>
                   </tr>
                 ))}
@@ -179,7 +199,7 @@ export function OverviewTab({ onOpenSample }: { onOpenSample: (id: string) => vo
                     onClick={() => sample && onOpenSample(sample.id)}
                   >
                     <td className="px-4 py-2 font-medium">{sample?.block_name ?? "—"}</td>
-                    <td className="px-4 py-2">{result.source_analyte ?? result.analyte_key ?? "—"}</td>
+                    <td className="px-4 py-2">{result.original_analyte_name ?? result.analyte_key ?? "—"}</td>
                     <td className="px-4 py-2">
                       {result.value_numeric ?? result.value_text ?? "—"} {result.unit ?? ""}
                     </td>
@@ -188,7 +208,7 @@ export function OverviewTab({ onOpenSample }: { onOpenSample: (id: string) => vo
                         {labStatusLabel(result.lab_status)}
                       </Badge>
                     </td>
-                    <td className="px-4 py-2">{formatDate(sample?.sample_date)}</td>
+                    <td className="px-4 py-2">{formatDate(sample?.sampled_at)}</td>
                   </tr>
                 ))}
               </tbody>

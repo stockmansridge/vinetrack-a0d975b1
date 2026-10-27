@@ -1,4 +1,5 @@
 // Soil Samples list — filterable register of uploaded laboratory reports.
+// The sample lifecycle is extraction_status; there is no separate status.
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -11,11 +12,9 @@ import { useVineyard } from "@/context/VineyardContext";
 import {
   listSoilSamples,
   SAMPLE_STATUS_LABEL,
-  EXTRACTION_STATUS_LABEL,
-  MAPPING_TYPE_LABEL,
+  SAMPLE_SCOPE_LABEL,
   type SoilSample,
   type SoilSampleStatus,
-  type SoilExtractionStatus,
 } from "@/lib/soilAnalysis";
 import { formatDate } from "@/pages/admin/_shared";
 import { UploadSampleDialog } from "./UploadSampleDialog";
@@ -23,18 +22,19 @@ import { UploadSampleDialog } from "./UploadSampleDialog";
 const db = supabase as any;
 
 function depthLabel(s: SoilSample): string {
-  if (s.depth_from_cm == null && s.depth_to_cm == null) return "—";
-  if (s.depth_from_cm != null && s.depth_to_cm != null) return `${s.depth_from_cm}–${s.depth_to_cm} cm`;
-  return `${s.depth_from_cm ?? s.depth_to_cm} cm`;
+  if (s.sample_depth_from_cm == null && s.sample_depth_to_cm == null) return "—";
+  if (s.sample_depth_from_cm != null && s.sample_depth_to_cm != null)
+    return `${s.sample_depth_from_cm}–${s.sample_depth_to_cm} cm`;
+  return `${s.sample_depth_from_cm ?? s.sample_depth_to_cm} cm`;
 }
 
 function mappingLabel(s: SoilSample): string {
-  if (s.mapping_type === "row_range" && s.row_from != null) {
-    return `${s.block_name ?? "Block"} rows ${s.row_from}–${s.row_to ?? s.row_from}`;
+  if (s.sample_scope === "row_range" && s.row_start != null) {
+    return `${s.block_name ?? "Block"} rows ${s.row_start}–${s.row_end ?? s.row_start}`;
   }
-  if (s.mapping_type === "point") return `${s.block_name ?? "Block"} (point)`;
-  if (s.mapping_type === "block") return s.block_name ?? "Whole block";
-  return MAPPING_TYPE_LABEL.unmapped;
+  if (s.sample_scope === "point") return `${s.block_name ?? "Block"} (point)`;
+  if (s.sample_scope === "whole_block") return s.block_name ?? "Whole block";
+  return SAMPLE_SCOPE_LABEL.unmapped;
 }
 
 export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => void }) {
@@ -43,7 +43,6 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
   const [paddockId, setPaddockId] = useState("");
   const [laboratory, setLaboratory] = useState("");
   const [status, setStatus] = useState("");
-  const [extraction, setExtraction] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -67,7 +66,7 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
     queryKey: [
       "soil-analysis",
       "samples",
-      { vineyardId, paddockId, laboratory, status, extraction, dateFrom, dateTo },
+      { vineyardId, paddockId, laboratory, status, dateFrom, dateTo },
     ],
     queryFn: () =>
       listSoilSamples({
@@ -75,7 +74,6 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
         paddockId: paddockId || null,
         laboratory: laboratory || null,
         status: (status || null) as SoilSampleStatus | null,
-        extractionStatus: (extraction || null) as SoilExtractionStatus | null,
         dateFrom: dateFrom || null,
         dateTo: dateTo || null,
       }),
@@ -119,12 +117,6 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
             <option key={k} value={k}>{v}</option>
           ))}
         </select>
-        <select className={selectClass} value={extraction} onChange={(e) => setExtraction(e.target.value)} aria-label="Filter by extraction status">
-          <option value="">Any extraction</option>
-          {Object.entries(EXTRACTION_STATUS_LABEL).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
-          ))}
-        </select>
         <Input type="date" className="w-auto" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} aria-label="Samples from" />
         <Input type="date" className="w-auto" value={dateTo} onChange={(e) => setDateTo(e.target.value)} aria-label="Samples to" />
       </div>
@@ -147,7 +139,6 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
                 <th className="px-4 py-2 font-medium">VineTrack mapping</th>
                 <th className="px-4 py-2 font-medium">Depth</th>
                 <th className="px-4 py-2 font-medium">Lab / sample ID</th>
-                <th className="px-4 py-2 font-medium">Extraction</th>
                 <th className="px-4 py-2 font-medium">Status</th>
               </tr>
             </thead>
@@ -158,7 +149,7 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
                   className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
                   onClick={() => onOpenSample(s.id)}
                 >
-                  <td className="px-4 py-2">{formatDate(s.sample_date)}</td>
+                  <td className="px-4 py-2">{formatDate(s.sampled_at)}</td>
                   <td className="px-4 py-2">{s.lab_paddock_name ?? "—"}</td>
                   <td className="px-4 py-2 font-medium">{mappingLabel(s)}</td>
                   <td className="px-4 py-2">{depthLabel(s)}</td>
@@ -167,10 +158,7 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
                     {s.lab_sample_id ? <span className="text-muted-foreground"> · {s.lab_sample_id}</span> : null}
                   </td>
                   <td className="px-4 py-2">
-                    <Badge variant="outline">{EXTRACTION_STATUS_LABEL[s.extraction_status]}</Badge>
-                  </td>
-                  <td className="px-4 py-2">
-                    <Badge variant="outline">{SAMPLE_STATUS_LABEL[s.status]}</Badge>
+                    <Badge variant="outline">{SAMPLE_STATUS_LABEL[s.extraction_status]}</Badge>
                   </td>
                 </tr>
               ))}
