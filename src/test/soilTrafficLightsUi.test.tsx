@@ -2,15 +2,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
-const mock = vi.hoisted(() => ({ read: vi.fn(), blocks: [{ id: "b", name: "Block B" }, { id: "a", name: "Block A" }] }));
+const mock = vi.hoisted(() => ({ invoke: vi.fn(), read: vi.fn(), blocks: [{ id: "b", name: "Block B" }, { id: "a", name: "Block A" }] }));
 vi.mock("@/context/VineyardContext", () => ({ useVineyard: () => ({ selectedVineyardId: "v" }) }));
-vi.mock("@/integrations/ios-supabase/client", () => ({ supabase: { from: () => { const q: any = { then: (r: any) => r({ data: mock.blocks, error: null }) }; for (const k of ["select", "eq", "is", "order"]) q[k] = () => q; return q; } } }));
+vi.mock("@/integrations/ios-supabase/client", () => ({ supabase: { functions: { invoke: (...args: any[]) => mock.invoke(...args) }, from: () => { const q: any = { then: (r: any) => r({ data: mock.blocks, error: null }) }; for (const k of ["select", "eq", "is", "order"]) q[k] = () => q; return q; } } }));
 vi.mock("@/lib/soilAnalysis", async (original) => ({ ...await original<any>(), listSoilTrafficResults: (...args: any[]) => mock.read(...args), listAnalyteCatalogue: async () => [{ key: "ca", display_name: "Calcium", category: "Cations" }, { key: "ph", display_name: "pH", category: "Acidity" }] }));
 import { TrafficLightsTab } from "@/components/soil-analysis/TrafficLightsTab";
 import SoilAnalysisPage from "@/pages/admin/SoilAnalysisPage";
 const row = (id: string, status: string | null, block = "a", analyte = "ca") => ({ id, sample_id: id, analyte_key: analyte, display_name: analyte === "ca" ? "Calcium" : "pH", matched_paddock_id: block, value_numeric: 12, unit: "ppm", method: "Lab method", lab_status: status, sample: { id, sampled_at: "2026-01-01", extraction_status: "confirmed", lab_sample_id: id, sample_depth_from_cm: 0, sample_depth_to_cm: 15 } });
 function mount(page = false) { return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={["/soil-analysis?tab=traffic-lights"]}>{page ? <SoilAnalysisPage /> : <TrafficLightsTab />}</MemoryRouter></QueryClientProvider>); }
-beforeEach(() => { mock.read.mockReset().mockImplementation(async (ids: string[]) => [row("one", "Very Low"), row("two", "Low"), row("sat", "Satisfactory", "b"), row("acid", "Slightly acidic", "a", "ph")].filter((r) => ids.includes(r.matched_paddock_id))); });
+beforeEach(() => { mock.invoke.mockReset().mockResolvedValue({ data: { classifications: [{ result_id: "acid", indication: "high", confidence: 0.82, reason: "General screening", basis: "general_viticulture" }] }, error: null }); mock.read.mockReset().mockImplementation(async (ids: string[]) => [row("one", "Very Low"), row("two", "Low"), row("sat", "Satisfactory", "b"), row("acid", "Slightly acidic", "a", "ph")].filter((r) => ids.includes(r.matched_paddock_id))); });
 describe("Traffic Lights presentation", () => {
   it("is a released tab between Compare and Reports", async () => {
     mount(true); expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Soil Samples", "Trends", "Compare", "Traffic Lights", "Reports"]);
@@ -24,6 +24,7 @@ describe("Traffic Lights presentation", () => {
   });
   it("keeps replicate raw entries and exact lab statuses, date/depth and released sample links", async () => {
     mount(); const low = await screen.findByRole("region", { name: "Low laboratory statuses" });
+    fireEvent.click(within(low).getByRole("button", { name: /Calcium/ }));
     expect(within(low).getByText("Very Low")).toBeTruthy(); expect(within(low).getByText("Low", { exact: true })).toBeTruthy();
     expect(within(low).getAllByRole("link").map((l) => l.getAttribute("href"))).toEqual(["/soil-analysis/samples/one", "/soil-analysis/samples/two"]);
     expect(low.querySelector("time")?.getAttribute("datetime")).toBe("2026-01-01");
@@ -32,19 +33,67 @@ describe("Traffic Lights presentation", () => {
     expect(screen.getByLabelText("Satisfactory count").textContent).toBe("1");
     expect(screen.getByLabelText("Other / Not stated count").textContent).toBe("1");
   });
-  it("Exceptions hides Satisfactory and search filters analytes case-insensitively", async () => {
-    mount(); await screen.findByText("Very Low"); fireEvent.click(screen.getByRole("button", { name: "Exceptions only" }));
-    expect(screen.queryByRole("region", { name: "Satisfactory laboratory statuses" })).toBeNull();
-    fireEvent.change(screen.getByLabelText("Search analytes"), { target: { value: "PH" } });
-    expect(screen.queryByText("Very Low")).toBeNull(); expect(screen.getByText("Slightly acidic")).toBeTruthy();
-  });
-  it("applies optional as-of to the read", async () => {
-    mount(); await screen.findByText("Very Low"); fireEvent.change(screen.getByLabelText("As of date"), { target: { value: "2025-12-31" } });
+  it("defaults to Most recent with no date input and applies/clears the date mode", async () => {
+    mount(); await waitFor(() => expect(mock.read).toHaveBeenCalledWith(["a", "b"], null));
+    expect(screen.getByLabelText("Time").textContent).toBe("Most recent");
+    expect(screen.queryByLabelText("As of date")).toBeNull();
+    fireEvent.click(screen.getByLabelText("Time")); fireEvent.click(screen.getByRole("option", { name: "As of date" }));
+    fireEvent.change(screen.getByLabelText("As of date"), { target: { value: "2025-12-31" } });
     await waitFor(() => expect(mock.read).toHaveBeenLastCalledWith(["a", "b"], "2025-12-31"));
+    fireEvent.click(screen.getByLabelText("Time")); fireEvent.click(screen.getByRole("option", { name: "Most recent" }));
+    expect(screen.queryByLabelText("As of date")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Block B" }));
+    await waitFor(() => expect(mock.read).toHaveBeenLastCalledWith(["a"], null));
+  });
+  it.each(["Low", "Satisfactory", "High", "Other"])("directly filters to %s only", async (label) => {
+    mount(); await screen.findByRole("region", { name: "Low laboratory statuses" });
+    fireEvent.click(within(screen.getByRole("group", { name: "Status visibility" })).getByRole("button", { name: label, exact: true }));
+    expect(screen.getAllByRole("region")).toHaveLength(1);
+    expect(screen.getByRole("region").getAttribute("aria-label")).toBe(`${label === "Other" ? "Other / Not stated" : label} laboratory statuses`);
+  });
+  it("High summary selects High without other sections; All restores four", async () => {
+    mount(); await screen.findByRole("region", { name: "Low laboratory statuses" });
+    fireEvent.click(screen.getByRole("button", { name: "Show High" })); expect(screen.getAllByRole("region")).toHaveLength(1);
+    fireEvent.click(within(screen.getByRole("group", { name: "Status visibility" })).getByRole("button", { name: "All", exact: true }));
+    expect(screen.getAllByRole("region")).toHaveLength(4);
+  });
+  it("groups default collapsed and support expand/collapse all", async () => {
+    mount(); const low = await screen.findByRole("region", { name: "Low laboratory statuses" });
+    expect(screen.queryByText("Very Low")).toBeNull(); expect(screen.queryAllByRole("link")).toHaveLength(0);
+    fireEvent.click(within(low).getByRole("button", { name: "Expand all" })); expect(within(low).getAllByRole("link")).toHaveLength(2);
+    fireEvent.click(within(low).getByRole("button", { name: "Collapse all" })); expect(within(low).queryAllByRole("link")).toHaveLength(0);
+  });
+  it("AI defaults off and never invokes until enabled, then sends only unique unrated ids", async () => {
+    mount(); await screen.findByRole("region", { name: "Low laboratory statuses" });
+    expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe("false"); expect(mock.invoke).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("switch"));
+    await waitFor(() => expect(mock.invoke).toHaveBeenCalledWith("soil-analysis-viticulture-indicate", { body: { vineyard_id: "v", result_ids: ["acid"] } }));
+    await waitFor(() => expect(screen.getByLabelText("High count").textContent).toBe("1"));
+    fireEvent.click(screen.getByRole("button", { name: "Show High" }));
+    fireEvent.click(within(screen.getByRole("region")).getByRole("button", { name: /pH/ }));
+    expect(screen.getByText("AI indication: High")).toBeTruthy(); expect(screen.getByText("Lab: Slightly acidic")).toBeTruthy();
+    expect(screen.getByText("0 lab · 1 AI")).toBeTruthy();
+    fireEvent.click(screen.getByRole("switch")); expect(screen.getByLabelText("High count").textContent).toBe("0");
+    fireEvent.click(screen.getByRole("switch")); await waitFor(() => expect(screen.getByLabelText("High count").textContent).toBe("1")); expect(mock.invoke).toHaveBeenCalledTimes(1);
+  });
+  it("AI failure retains source grouping and safe retry notice", async () => {
+    mock.invoke.mockResolvedValue({ error: new Error("private provider error") }); mount(); await screen.findByRole("region", { name: "Low laboratory statuses" });
+    fireEvent.click(screen.getByRole("switch")); expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.getByLabelText("Other / Not stated count").textContent).toBe("1"); expect(screen.queryByText(/private provider/)).toBeNull(); expect(mock.invoke).toHaveBeenCalledTimes(1);
+  });
+  it("search/category/status do not broaden or repeat AI requests and block selection excludes results", async () => {
+    mount(); await screen.findByRole("region", { name: "Low laboratory statuses" }); fireEvent.click(screen.getByRole("button", { name: "Block A" }));
+    fireEvent.click(screen.getByRole("switch")); await waitFor(() => expect(mock.read).toHaveBeenLastCalledWith(["b"], null)); expect(mock.invoke).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Block A" })); await waitFor(() => expect(mock.invoke).toHaveBeenCalledTimes(1));
+    fireEvent.change(screen.getByLabelText("Search analytes"), { target: { value: "PH" } });
+    expect(screen.getByLabelText("Low count").textContent).toBe("0");
+    fireEvent.click(screen.getByLabelText("Category")); fireEvent.click(screen.getByRole("option", { name: "Cations" }));
+    expect(screen.getByLabelText("High count").textContent).toBe("0"); expect(mock.invoke).toHaveBeenCalledTimes(1);
   });
   it("shows mixed latest statuses neutrally with every raw result", async () => {
     mock.read.mockResolvedValue([row("one", "Low"), row("two", "High")]); mount();
     const other = await screen.findByRole("region", { name: "Other / Not stated laboratory statuses" });
+    fireEvent.click(within(other).getByRole("button", { name: /Calcium/ }));
     expect(within(other).getByText("Mixed latest statuses")).toBeTruthy();
     expect(within(other).getAllByRole("link")).toHaveLength(2);
   });
@@ -52,6 +101,7 @@ describe("Traffic Lights presentation", () => {
     mock.read.mockResolvedValue([row("one", "Low"), { ...row("two", "High", "b"), unit: "%", method: "Other method" }]);
     mount(); await screen.findByRole("region", { name: "Low laboratory statuses" });
     expect(screen.getAllByText(/Mixed methods\/units/)).toHaveLength(2);
+    for (const region of screen.getAllByRole("region")) { const expand = within(region).queryByRole("button", { name: "Expand all" }); if (expand) fireEvent.click(expand); }
     expect(screen.getByText("12 ppm")).toBeTruthy(); expect(screen.getByText("12 %")).toBeTruthy();
   });
 });
