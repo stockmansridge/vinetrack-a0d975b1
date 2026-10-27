@@ -90,9 +90,13 @@ vi.mock("@/lib/yieldBunchWeights", async () => {
   const actual = await vi.importActual<any>("@/lib/yieldBunchWeights");
   return {
     ...actual,
-    fetchYieldBunchWeights: async () => [
-      { id: "bw1", vineyard_id: "v1", paddock_id: null, variety_key: "shiraz", variety_name: "Shiraz", bunch_weight_grams: 200, updated_at: null },
-    ],
+    useYieldBunchWeights: () => ({
+      data: [
+        { id: "bw1", vineyard_id: "v1", paddock_id: null, variety_key: "shiraz", variety_name: "Shiraz", bunch_weight_grams: 200, updated_at: null },
+      ],
+      isLoading: false,
+      error: null,
+    }),
   };
 });
 vi.mock("@/components/YieldDamageAdjustmentPanel", () => ({ default: () => null }));
