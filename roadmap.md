@@ -1,5 +1,11 @@
 # Roadmap
 
+## Traffic Lights AI v3 sample context
+- [x] Accept scope result, sample_nitrogen_context or sample_context and version the AI query key to v3 so cached v1/v2 unable responses are never reused.
+- [x] Label companion-measurement readings "AI sample context" with a tap-to-open explanation, keep nitrogen/result wording, confidence, reason and original Lab status; missing or malformed scope still fails safely to laboratory-only display.
+- [x] 146 focused Soil Analysis tests passed (34 AI screening, 28 Traffic Lights interactions); automatic typecheck and preview build clean. Full suite: 3655 passing, 10 pre-existing chemical/spray failures in files this change never touches.
+- [ ] Publish the tested v3 Portal refinement and report revision.
+
 ## Traffic Lights AI v2 provenance
 - [x] Require valid response scope, label same-sample nitrogen context, and version the AI query key to exclude v1 cache.
 - [x] 345 tests across 22 files passed, including 16 added v2 safeguards; automatic typecheck/build clean. Isolated desktop/mobile nitrogen-context label, Lab wording and cached toggle restoration verified without overflow/runtime errors. Live endpoint remains unverified without an external vineyard session.

@@ -76,14 +76,18 @@ describe("Traffic Lights presentation", () => {
     fireEvent.click(screen.getByRole("switch")); expect(screen.getByLabelText("High count").textContent).toBe("0");
     fireEvent.click(screen.getByRole("switch")); await waitFor(() => expect(screen.getByLabelText("High count").textContent).toBe("1")); expect(mock.invoke).toHaveBeenCalledTimes(1);
   });
-  it("uses the v2 query key and ignores a fresh cached v1 unable response", async () => {
+  it("uses the v3 query key and ignores fresh cached v1/v2 unable responses", async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-    client.setQueryData(["soil-analysis", "viticulture-indication", "v", ["acid"]], [{ result_id: "acid", indication: "unable", confidence: 0, reason: "v1 unable", basis: "insufficient_context" }]);
+    const stale = [{ result_id: "acid", indication: "unable", confidence: 0, reason: "stale unable", basis: "insufficient_context" }];
+    client.setQueryData(["soil-analysis", "viticulture-indication", "v", ["acid"]], stale);
+    client.setQueryData(["soil-analysis", "viticulture-indication", "v1", "v", ["acid"]], stale);
+    client.setQueryData(["soil-analysis", "viticulture-indication", "v2", "v", ["acid"]], stale);
     mount(false, client); await screen.findByRole("region", { name: "Low laboratory statuses" });
     fireEvent.click(screen.getByRole("switch"));
     await waitFor(() => expect(screen.getByLabelText("High count").textContent).toBe("1"));
     expect(mock.invoke).toHaveBeenCalledTimes(1);
-    expect(client.getQueryData(["soil-analysis", "viticulture-indication", "v2", "v", ["acid"]])).toEqual([{ result_id: "acid", indication: "high", confidence: 0.82, reason: "General screening", basis: "general_viticulture", scope: "result" }]);
+    expect(client.getQueryData(["soil-analysis", "viticulture-indication", "v3", "v", ["acid"]])).toEqual([{ result_id: "acid", indication: "high", confidence: 0.82, reason: "General screening", basis: "general_viticulture", scope: "result" }]);
+    expect(client.getQueryData(["soil-analysis", "viticulture-indication", "v2", "v", ["acid"]])).toEqual(stale);
   });
   it.each(["low", "satisfactory", "high"] as const)("renders nitrogen context %s with confidence, companion reason and original Lab wording", async (bucket) => {
     mock.invoke.mockResolvedValue({ data: { classifications: [{ result_id: "acid", indication: bucket, confidence: 0.82, reason: "Companion NO3-N in the same sample", basis: "general_viticulture", scope: "sample_nitrogen_context" }] } });
@@ -97,6 +101,29 @@ describe("Traffic Lights presentation", () => {
     expect(screen.getByText("Lab: Slightly acidic")).toBeTruthy();
     fireEvent.click(screen.getByRole("switch")); expect(screen.getByLabelText("Other / Not stated count").textContent).toBe("1");
     expect(screen.queryByText(`AI nitrogen context: ${label}`)).toBeNull();
+  });
+  it.each(["low", "satisfactory", "high"] as const)("renders sample context %s with confidence, reason, original Lab wording and its explanation", async (bucket) => {
+    mock.invoke.mockResolvedValue({ data: { classifications: [{ result_id: "acid", indication: bucket, confidence: 0.82, reason: "Companion measurements in the same sample", basis: "general_viticulture", scope: "sample_context" }] } });
+    mount(); await screen.findByRole("region", { name: "Low laboratory statuses" }); fireEvent.click(screen.getByRole("switch"));
+    const label = bucket[0].toUpperCase() + bucket.slice(1);
+    await waitFor(() => expect(screen.getByLabelText("Other / Not stated count").textContent).toBe("0"));
+    fireEvent.click(screen.getByRole("button", { name: `Show ${label}` }));
+    fireEvent.click(within(screen.getByRole("region")).getByRole("button", { name: /pH/ }));
+    expect(screen.getByText(`AI sample context: ${label}`)).toBeTruthy();
+    expect(screen.getByText("82% confidence · Companion measurements in the same sample")).toBeTruthy();
+    expect(screen.getByText("Lab: Slightly acidic")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "What AI sample context means" }));
+    expect(await screen.findByText("Uses related measurements from the same soil sample when a single result does not have a defensible standalone viticulture threshold.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("switch")); expect(screen.getByLabelText("Other / Not stated count").textContent).toBe("1");
+    expect(screen.queryByText(`AI sample context: ${label}`)).toBeNull();
+  });
+  it("does not explain sample context for a plain result indication", async () => {
+    mount(); await screen.findByRole("region", { name: "Low laboratory statuses" }); fireEvent.click(screen.getByRole("switch"));
+    await waitFor(() => expect(screen.getByLabelText("High count").textContent).toBe("1"));
+    fireEvent.click(screen.getByRole("button", { name: "Show High" }));
+    fireEvent.click(within(screen.getByRole("region")).getByRole("button", { name: /pH/ }));
+    expect(screen.getByText("AI indication: High")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "What AI sample context means" })).toBeNull();
   });
   it("v1 response missing scope fails safely to lab-only display", async () => {
     mock.invoke.mockResolvedValue({ data: { classifications: [{ result_id: "acid", indication: "high", confidence: 0.82, reason: "Old result", basis: "general_viticulture" }] } });

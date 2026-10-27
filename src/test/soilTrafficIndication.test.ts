@@ -30,12 +30,25 @@ describe("read-only AI screening", () => {
   it("labels unable nitrogen context without moving source grouping", () => {
     expect(indicateSoilSnapshots(buildSoilTrafficSnapshots([row("one", null)]), [{ ...indication("one", "unable"), scope: "sample_nitrogen_context" }])[0]).toMatchObject({ bucket: "other", aiLabel: "AI nitrogen context: Unable to rate" });
   });
-  it.each([undefined, null, "", "sample", 1])("rejects missing/malformed scope %s", async (scope) => {
+  it.each(["low", "satisfactory", "high"] as const)("labels %s as sample context when the endpoint used companion measurements", (bucket) => {
+    const snapshots = buildSoilTrafficSnapshots([row("one", null), row("two", "Acidic")]);
+    const out = indicateSoilSnapshots(snapshots, [{ ...indication("one", bucket), scope: "sample_context" }, { ...indication("two", bucket), scope: "sample_context" }]);
+    expect(out[0]).toMatchObject({ bucket, aiLabel: `AI sample context: ${bucket[0].toUpperCase()}${bucket.slice(1)}` });
+    expect(out[0].aiEntries?.every((r) => r.scope === "sample_context")).toBe(true);
+    expect(indicateSoilSnapshots(snapshots)[0].bucket).toBe("other");
+  });
+  it("labels unable sample context without moving source grouping", () => {
+    expect(indicateSoilSnapshots(buildSoilTrafficSnapshots([row("one", null)]), [{ ...indication("one", "unable"), scope: "sample_context" }])[0]).toMatchObject({ bucket: "other", aiLabel: "AI sample context: Unable to rate" });
+  });
+  it("names nitrogen context ahead of sample context when both companion scopes appear", () => {
+    expect(indicateSoilSnapshots(buildSoilTrafficSnapshots([row("one", null), row("two", "Acidic")]), [{ ...indication("one", "low"), scope: "sample_context" }, { ...indication("two", "low"), scope: "sample_nitrogen_context" }])[0]).toMatchObject({ bucket: "low", aiLabel: "AI nitrogen context: Low" });
+  });
+  it.each([undefined, null, "", "sample", "sample_contexts", "sample-context", 1])("rejects missing/malformed scope %s", async (scope) => {
     mock.invoke.mockResolvedValue({ data: { classifications: [{ ...indication("one", "high"), scope }] } });
     await expect(requestSoilIndications("v", ["one"])).rejects.toThrow("AI indication is unavailable");
     expect(mock.invoke).toHaveBeenCalledTimes(1);
   });
-  it.each(["result", "sample_nitrogen_context"] as const)("accepts required %s scope", async (scope) => {
+  it.each(["result", "sample_nitrogen_context", "sample_context"] as const)("accepts required %s scope", async (scope) => {
     mock.invoke.mockResolvedValue({ data: { classifications: [{ ...indication("one", "high"), scope }] } });
     expect(await requestSoilIndications("v", ["one"])).toEqual([{ ...indication("one", "high"), scope }]);
   });
