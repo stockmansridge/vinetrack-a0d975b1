@@ -9,6 +9,7 @@ import { SamplesTab } from "@/components/soil-analysis/SamplesTab";
 import { TrendsTab } from "@/components/soil-analysis/TrendsTab";
 import { CompareTab } from "@/components/soil-analysis/CompareTab";
 import { ReportsTab } from "@/components/soil-analysis/ReportsTab";
+import SoilAnalysisHelpDialog from "@/components/soil-analysis/SoilAnalysisHelpDialog";
 
 const TABS = ["overview", "samples", "trends", "compare", "reports"] as const;
 type SoilTab = (typeof TABS)[number];
@@ -29,6 +30,7 @@ export default function SoilAnalysisPage() {
         <AdminPageHeader
           title="Soil Analysis"
           subtitle="Laboratory soil reports, block mapping and trends"
+          titleExtra={<SoilAnalysisHelpDialog />}
         />
       </div>
 

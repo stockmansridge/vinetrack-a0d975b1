@@ -19,11 +19,14 @@ export function AdminPageHeader({
   subtitle,
   back = "/admin/dashboard",
   actions,
+  titleExtra,
 }: {
   title: string;
   subtitle?: string;
   back?: string;
   actions?: ReactNode;
+  /** Small inline extras (e.g. a help control) rendered beside the heading itself. */
+  titleExtra?: ReactNode;
 }) {
   const navigate = useNavigate();
   return (
@@ -33,7 +36,10 @@ export function AdminPageHeader({
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
-          <h1 className="text-2xl font-semibold">{title}</h1>
+          <div className="flex items-center gap-1.5">
+            <h1 className="text-2xl font-semibold">{title}</h1>
+            {titleExtra}
+          </div>
           {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
         </div>
       </div>
