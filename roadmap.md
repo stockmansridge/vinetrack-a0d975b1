@@ -1,9 +1,11 @@
 # Roadmap
 
 ## Soil Analysis pre-release improvements
-- [ ] Verify existing multi-block Trends against requested block-isolation and selection safeguards.
-- [ ] Add confirmed, mapping-aware Traffic Lights latest snapshots, source-status groups, filters and eighth help topic.
-- [ ] Run focused and release regressions; verify desktop/mobile presentation and report final revision. No backend/mobile changes or publication.
+- [x] Verify existing multi-block Trends against requested block-isolation and selection safeguards (17 existing tests); implementation already complete and preserved.
+- [x] Add confirmed, mapping-aware Traffic Lights latest snapshots, source-status groups, filters and eighth help topic (32 new tests).
+- [x] Verify desktop/mobile Traffic Lights counts, Exceptions and sample links using isolated fixtures; no horizontal overflow/runtime errors. No backend/mobile changes or publication.
+- [ ] Final regression run and revision reporting.
+- [ ] Authenticated live-vineyard acceptance — blocked: preview session mint reports no auth users; fixtures are not live verification.
 
 ## Soil Analysis multi-block Trends (Portal only)
 - [x] Add analyte-filtered multi-block reads and shared block selection; preserve existing lifecycle semantics.

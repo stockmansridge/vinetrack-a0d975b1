@@ -50,7 +50,7 @@ describe("Traffic Lights presentation", () => {
   });
   it("flags mixed methods/units across different status sections without merging raw values", async () => {
     mock.read.mockResolvedValue([row("one", "Low"), { ...row("two", "High", "b"), unit: "%", method: "Other method" }]);
-    mount(); await screen.findByText("Low", { exact: true });
+    mount(); await screen.findByRole("region", { name: "Low laboratory statuses" });
     expect(screen.getAllByText(/Mixed methods\/units/)).toHaveLength(2);
     expect(screen.getByText("12 ppm")).toBeTruthy(); expect(screen.getByText("12 %")).toBeTruthy();
   });
