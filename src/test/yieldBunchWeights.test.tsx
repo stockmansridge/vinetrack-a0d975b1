@@ -209,3 +209,29 @@ describe("Grape Allocation Block column", () => {
     expect(src).toMatch(/<TableHead>Variety<\/TableHead>\s*<TableHead>Block<\/TableHead>/);
   });
 });
+
+describe("Estimate source colour coding", () => {
+  it("gives Yield Estimate Trips the brighter green badge", async () => {
+    const { EstimateSourceLine } = await import("@/pages/setup/YieldReportsPage");
+    render(
+      <EstimateSourceLine
+        source={{ kind: "yield_estimate_trip", tonnes: 2, unavailableReason: null, tripId: "a" }}
+      />,
+    );
+    const badge = screen.getByText("Yield Estimate Trip");
+    expect(badge.className).toContain("bg-accent");
+    expect(badge.className).not.toContain("bg-primary");
+  });
+
+  it("keeps Pruning Estimate on the deep green tint", async () => {
+    const { EstimateSourceLine } = await import("@/pages/setup/YieldReportsPage");
+    render(
+      <EstimateSourceLine
+        source={{ kind: "pruning_estimate", tonnes: 3, unavailableReason: null, tripId: null }}
+      />,
+    );
+    const badge = screen.getByText("Pruning Estimate");
+    expect(badge.className).toContain("bg-primary/10");
+    expect(badge.className).not.toContain("bg-accent");
+  });
+});

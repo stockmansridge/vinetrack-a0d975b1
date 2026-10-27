@@ -1335,8 +1335,8 @@ export function EstimateSourceLine({
           variant="outline"
           className={
             isTrip
-              ? "border-primary/40 bg-primary/10 text-primary"
-              : "border-accent-foreground/30 bg-accent text-accent-foreground"
+              ? "border-accent-foreground/30 bg-accent text-accent-foreground"
+              : "border-primary/40 bg-primary/10 text-primary"
           }
         >
           {ESTIMATE_SOURCE_LABEL[source.kind]}

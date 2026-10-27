@@ -1,5 +1,11 @@
 # Roadmap
 
+## Estimate source badge colours (Portal only)
+- [x] Swap the two estimate-source badges so Yield Estimate Trips carries the brighter green and Pruning Estimate the deep green tint.
+- [x] 43/43 tests across 3 focused Yields files (two new badge-colour safeguards); preview build OK. No SQL/mobile/unrelated changes or publication.
+
+
+
 ## Yield Estimate Trips sampled-area correction (Portal only)
 - [x] Add sampledAreaHa for recorded blocks only and switch trip-table density to it; preserve totalAreaHa, route evidence, tonnes, damage and Overview rules.
 - [x] 217/217 tests passed across 22 focused Yields files, including 10 trip-table tests; automatic typecheck/preview build OK. No SQL/mobile/unrelated changes or publication.
