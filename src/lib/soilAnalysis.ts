@@ -424,18 +424,12 @@ export async function uploadSoilSample(input: UploadSoilSampleInput): Promise<Up
   if (invalid) throw new Error(invalid);
   if (!input.vineyardId) throw new Error("Choose a vineyard before uploading.");
 
+  // Minimal insert: the parser fills sampled_at and all lab metadata.
   const { data: sample, error: sampleErr } = await db
     .from("soil_samples")
     .insert({
       vineyard_id: input.vineyardId,
       sample_scope: "unmapped",
-      sampled_at: input.sampledAt,
-      laboratory: input.laboratory,
-      lab_paddock_name: input.labPaddockName,
-      lab_sample_id: input.labSampleId,
-      sample_depth_from_cm: input.depthFromCm,
-      sample_depth_to_cm: input.depthToCm,
-      notes: input.notes,
       extraction_status: "pending",
       created_by: input.uploadedBy,
     })
