@@ -193,7 +193,18 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
                 >
                   <td className="px-4 py-2">{formatDate(s.sampled_at)}</td>
                   <td className="px-4 py-2">{s.lab_paddock_name ?? "—"}</td>
-                  <td className="px-4 py-2 font-medium">{mappingLabel(s)}</td>
+                  <td className="px-4 py-2 font-medium">
+                    {(() => {
+                      const rows = mappingsQuery.data?.get(s.id);
+                      const label = mappingSummaryLabel(s, rows);
+                      // Multi-block samples show "N blocks" with the full
+                      // block/coverage list on hover — never one arbitrary block.
+                      if (rows && rows.length > 1) {
+                        return <span title={mappingSummaryLines(rows).join("\n")}>{label}</span>;
+                      }
+                      return label;
+                    })()}
+                  </td>
                   <td className="px-4 py-2">{depthLabel(s)}</td>
                   <td className="px-4 py-2">
                     {s.laboratory ?? "—"}
