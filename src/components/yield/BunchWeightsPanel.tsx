@@ -165,14 +165,29 @@ export default function BunchWeightsPanel({
 
   return (
     <Card>
-      <div className="space-y-1 px-4 pt-4">
-        <div className="text-sm font-medium">Master bunch weights</div>
-        <p className="text-xs text-muted-foreground">
-          Set an average bunch weight (grams) for each variety. Override it for a specific block where
-          needed — a block override always wins over the variety master. Blocks without either show
-          "Not configured" and Yield Estimate Trips cannot calculate tonnes for them.
-          {!canEdit && " Only owners, managers and supervisors can change bunch weights."}
-        </p>
+      <div className="flex items-start justify-between gap-4 px-4 pt-4">
+        <div className="space-y-1">
+          <div className="text-sm font-medium">Master bunch weights</div>
+          <p className="text-xs text-muted-foreground">
+            Set an average bunch weight (grams) for each variety. Override it for a specific block where
+            needed — a block override always wins over the variety master. Blocks without either show
+            "Not configured" and Yield Estimate Trips cannot calculate tonnes for them.
+            {!canEdit && " Only owners, managers and supervisors can change bunch weights."}
+          </p>
+        </div>
+        {varieties.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 shrink-0"
+            data-testid="bunch-weights-expand-all"
+            aria-label={allExpanded ? "Collapse all blocks" : "Expand all blocks"}
+            onClick={() => setAllExpanded(!allExpanded)}
+          >
+            {allExpanded ? "Collapse all" : "Expand all"}
+            <ChevronDown className={`h-4 w-4 transition-transform ${allExpanded ? "" : "-rotate-90"}`} />
+          </Button>
+        )}
       </div>
       {error ? (
         <div className="p-4 text-sm text-destructive">Could not load bunch weights: {error.message}</div>
