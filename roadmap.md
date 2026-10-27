@@ -1,5 +1,9 @@
 # Roadmap
 
+## Traffic Lights AI v4 cache refresh
+- [x] Move the AI query key to v4 so whole-sample v4 responses replace cached v1/v2/v3 readings; scopes, labels, validation and UI unchanged.
+- [x] 87 focused Traffic Lights tests passed and automatic typecheck clean; preview build OK.
+
 ## Traffic Lights AI v3 sample context
 - [x] Accept scope result, sample_nitrogen_context or sample_context and version the AI query key to v3 so cached v1/v2 unable responses are never reused.
 - [x] Label companion-measurement readings "AI sample context" with a tap-to-open explanation, keep nitrogen/result wording, confidence, reason and original Lab status; missing or malformed scope still fails safely to laboratory-only display.

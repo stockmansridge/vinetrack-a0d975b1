@@ -76,18 +76,19 @@ describe("Traffic Lights presentation", () => {
     fireEvent.click(screen.getByRole("switch")); expect(screen.getByLabelText("High count").textContent).toBe("0");
     fireEvent.click(screen.getByRole("switch")); await waitFor(() => expect(screen.getByLabelText("High count").textContent).toBe("1")); expect(mock.invoke).toHaveBeenCalledTimes(1);
   });
-  it("uses the v3 query key and ignores fresh cached v1/v2 unable responses", async () => {
+  it("uses the v4 query key and ignores fresh cached v1/v2/v3 unable responses", async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
     const stale = [{ result_id: "acid", indication: "unable", confidence: 0, reason: "stale unable", basis: "insufficient_context" }];
     client.setQueryData(["soil-analysis", "viticulture-indication", "v", ["acid"]], stale);
     client.setQueryData(["soil-analysis", "viticulture-indication", "v1", "v", ["acid"]], stale);
     client.setQueryData(["soil-analysis", "viticulture-indication", "v2", "v", ["acid"]], stale);
+    client.setQueryData(["soil-analysis", "viticulture-indication", "v3", "v", ["acid"]], stale);
     mount(false, client); await screen.findByRole("region", { name: "Low laboratory statuses" });
     fireEvent.click(screen.getByRole("switch"));
     await waitFor(() => expect(screen.getByLabelText("High count").textContent).toBe("1"));
     expect(mock.invoke).toHaveBeenCalledTimes(1);
-    expect(client.getQueryData(["soil-analysis", "viticulture-indication", "v3", "v", ["acid"]])).toEqual([{ result_id: "acid", indication: "high", confidence: 0.82, reason: "General screening", basis: "general_viticulture", scope: "result" }]);
-    expect(client.getQueryData(["soil-analysis", "viticulture-indication", "v2", "v", ["acid"]])).toEqual(stale);
+    expect(client.getQueryData(["soil-analysis", "viticulture-indication", "v4", "v", ["acid"]])).toEqual([{ result_id: "acid", indication: "high", confidence: 0.82, reason: "General screening", basis: "general_viticulture", scope: "result" }]);
+    expect(client.getQueryData(["soil-analysis", "viticulture-indication", "v3", "v", ["acid"]])).toEqual(stale);
   });
   it.each(["low", "satisfactory", "high"] as const)("renders nitrogen context %s with confidence, companion reason and original Lab wording", async (bucket) => {
     mock.invoke.mockResolvedValue({ data: { classifications: [{ result_id: "acid", indication: bucket, confidence: 0.82, reason: "Companion NO3-N in the same sample", basis: "general_viticulture", scope: "sample_nitrogen_context" }] } });
