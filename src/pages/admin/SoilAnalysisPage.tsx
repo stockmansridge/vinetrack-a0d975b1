@@ -1,0 +1,71 @@
+// Soil Analysis — Stage 1 System Admin preview landing page.
+// Tabs: Overview | Soil Samples | Trends | Compare | Reports (coming soon).
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { BetaAdminBanner } from "@/components/BetaAdminBanner";
+import { AdminPageHeader } from "./_shared";
+import { SoilAnalysisGate } from "@/components/soil-analysis/SoilAnalysisGate";
+import { OverviewTab } from "@/components/soil-analysis/OverviewTab";
+import { SamplesTab } from "@/components/soil-analysis/SamplesTab";
+import { TrendsTab } from "@/components/soil-analysis/TrendsTab";
+import { CompareTab } from "@/components/soil-analysis/CompareTab";
+
+const TABS = ["overview", "samples", "trends", "compare", "reports"] as const;
+type SoilTab = (typeof TABS)[number];
+
+export default function SoilAnalysisPage() {
+  return (
+    <SoilAnalysisGate>
+      <SoilAnalysisInner />
+    </SoilAnalysisGate>
+  );
+}
+
+function SoilAnalysisInner() {
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const raw = params.get("tab") ?? "overview";
+  const tab: SoilTab = (TABS as readonly string[]).includes(raw) ? (raw as SoilTab) : "overview";
+
+  const openSample = (id: string) => navigate(`/admin/soil-analysis/samples/${id}`);
+
+  return (
+    <div className="p-4 md:p-6 max-w-6xl">
+      <AdminPageHeader
+        title="Soil Analysis"
+        subtitle="Laboratory soil reports, block mapping and trends"
+      />
+      <div className="flex items-center gap-2 mb-3">
+        <BetaAdminBanner />
+        <Badge variant="outline" className="border-warning/50 bg-warning/10 text-warning-foreground shrink-0">
+          Preview
+        </Badge>
+      </div>
+
+      <Tabs value={tab} onValueChange={(v) => setParams({ tab: v }, { replace: true })}>
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="samples">Soil Samples</TabsTrigger>
+          <TabsTrigger value="trends">Trends</TabsTrigger>
+          <TabsTrigger value="compare">Compare</TabsTrigger>
+          <TabsTrigger value="reports" disabled title="Reports arrive in a later stage">
+            Reports (soon)
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="overview" className="mt-4">
+          <OverviewTab onOpenSample={openSample} />
+        </TabsContent>
+        <TabsContent value="samples" className="mt-4">
+          <SamplesTab onOpenSample={openSample} />
+        </TabsContent>
+        <TabsContent value="trends" className="mt-4">
+          <TrendsTab />
+        </TabsContent>
+        <TabsContent value="compare" className="mt-4">
+          <CompareTab />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
