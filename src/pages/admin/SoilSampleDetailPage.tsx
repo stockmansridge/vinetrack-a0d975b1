@@ -28,6 +28,7 @@ import {
   updateSoilResult,
   confirmSoilSample,
   retrySoilExtraction,
+  isSoilSampleDeletable,
   listAnalyteCatalogue,
   SAMPLE_STATUS_LABEL,
   SAMPLE_SCOPE_LABEL,
@@ -37,6 +38,7 @@ import {
   type SoilSampleScope,
 } from "@/lib/soilAnalysis";
 import { ExtractionErrorNotice } from "@/components/soil-analysis/ExtractionErrorNotice";
+import { DeleteSampleDialog } from "@/components/soil-analysis/DeleteSampleDialog";
 
 const db = supabase as any;
 
