@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/ios-supabase/client";
 import {
   listSoilSamples,
+  listBlockMappingsForSamples,
+  mappingSummaryLabel,
   SAMPLE_STATUS_LABEL,
   labStatusLabel,
   isOutsideLabRange,
@@ -33,6 +35,23 @@ export function OverviewTab({ onOpenSample }: { onOpenSample: (id: string) => vo
 
   const samples = samplesQuery.data ?? [];
   const results = resultsQuery.data ?? [];
+
+  // Block mappings are the authority for which blocks a sample belongs to;
+  // a multi-block sample appears under EACH mapped block. Legacy
+  // paddock_id is only a fallback when no mapping rows exist.
+  const sampleIds = useMemo(() => samples.map((s) => s.id), [samples]);
+  const mappingsQuery = useQuery({
+    queryKey: ["soil-analysis", "mappings", "overview", sampleIds],
+    enabled: sampleIds.length > 0,
+    queryFn: () => listBlockMappingsForSamples(sampleIds),
+  });
+  const mappings = mappingsQuery.data;
+
+  const blockIdsFor = (s: SoilSample): Array<{ id: string; name: string | null }> => {
+    const rows = mappings?.get(s.id);
+    if (rows && rows.length > 0) return rows.map((m) => ({ id: m.paddock_id, name: m.block_name ?? null }));
+    return s.paddock_id ? [{ id: s.paddock_id, name: s.block_name ?? null }] : [];
+  };
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { pending: 0, processing: 0, review_required: 0, confirmed: 0, failed: 0 };
