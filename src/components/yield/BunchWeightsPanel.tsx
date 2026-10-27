@@ -155,11 +155,13 @@ export default function BunchWeightsPanel({
   const busy = save.isPending || remove.isPending;
 
   const toggle = (k: string) =>
-    setOpen((prev) => {
+    setCollapsed((prev) => {
       const next = new Set(prev);
       next.has(k) ? next.delete(k) : next.add(k);
       return next;
     });
+  const setAllExpanded = (expand: boolean) =>
+    setCollapsed(expand ? new Set() : new Set(varieties.map((v) => v.key)));
 
   return (
     <Card>
