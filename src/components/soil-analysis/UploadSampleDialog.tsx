@@ -21,9 +21,10 @@ import {
 } from "@/lib/soilAnalysis";
 import { ExtractionErrorNotice } from "./ExtractionErrorNotice";
 
-interface FileFailure {
+interface FileResult {
   name: string;
-  message: string;
+  ok: boolean;
+  message: string | null;
 }
 
 export function UploadSampleDialog({
@@ -44,7 +45,7 @@ export function UploadSampleDialog({
   const [files, setFiles] = useState<File[]>([]);
   const [vineyardId, setVineyardId] = useState<string>(selectedVineyardId ?? "");
   const [error, setError] = useState<string | null>(null);
-  const [failures, setFailures] = useState<FileFailure[]>([]);
+  const [results, setResults] = useState<FileResult[]>([]);
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
@@ -55,7 +56,7 @@ export function UploadSampleDialog({
     const next = Array.from(incoming);
     if (next.length === 0) return;
     setError(null);
-    setFailures([]);
+    setResults([]);
     // De-duplicate against already-chosen files by name + size.
     setFiles((prev) => {
       const seen = new Set(prev.map((f) => `${f.name}:${f.size}`));
@@ -74,7 +75,7 @@ export function UploadSampleDialog({
 
   const submit = async () => {
     setError(null);
-    setFailures([]);
+    setResults([]);
     if (files.length === 0) return setError("Choose at least one laboratory report file.");
     for (const file of files) {
       const invalid = validateSoilUpload(file);
@@ -83,8 +84,10 @@ export function UploadSampleDialog({
     if (!effectiveVineyard) return setError("Choose a vineyard before uploading.");
     setBusy(true);
     const succeeded: SoilSample[] = [];
-    const failed: FileFailure[] = [];
+    const outcomes: FileResult[] = [];
     try {
+      // Each file is processed independently: one failure never stops the
+      // remaining files from being uploaded and extracted.
       for (const file of files) {
         try {
           const outcome = await uploadSoilSample({
@@ -93,40 +96,48 @@ export function UploadSampleDialog({
             uploadedBy: user?.id ?? null,
           });
           if (!outcome.extractionStarted) {
-            // Records are preserved; shown via the concise failure notice.
-            failed.push({ name: file.name, message: outcome.extractionError });
+            // Records are preserved; the sample stays retryable from Samples.
+            outcomes.push({ name: file.name, ok: false, message: outcome.extractionError });
           } else {
             succeeded.push(outcome.sample);
+            outcomes.push({ name: file.name, ok: true, message: null });
           }
         } catch (e) {
-          failed.push({ name: file.name, message: e instanceof Error ? e.message : String(e) });
+          outcomes.push({
+            name: file.name,
+            ok: false,
+            message: e instanceof Error ? e.message : String(e),
+          });
         }
       }
       qc.invalidateQueries({ queryKey: ["soil-analysis"] });
 
-      if (succeeded.length === 1 && failed.length === 0) {
-        // Single clean upload: go straight to Review Results as before.
+      const failedCount = outcomes.filter((o) => !o.ok).length;
+      if (failedCount === 0) {
+        if (succeeded.length === 1) {
+          // Single clean upload: go straight to Review Results as before.
+          setFiles([]);
+          onUploaded(succeeded[0]);
+          onOpenChange(false);
+          return;
+        }
+        toast({
+          title: `${succeeded.length} reports ready for review`,
+          description: "Open each one from the Samples list to review and confirm the results.",
+        });
         setFiles([]);
-        onUploaded(succeeded[0]);
         onOpenChange(false);
         return;
       }
+      // Mixed or all-failed batch: report per file, never as a batch failure.
       if (succeeded.length > 0) {
         toast({
-          title: `${succeeded.length} report${succeeded.length === 1 ? "" : "s"} uploaded`,
-          description: "Open each one from the Samples list to review and confirm the results.",
+          title: `${succeeded.length} report${succeeded.length === 1 ? "" : "s"} ready for review · ${failedCount} failed`,
+          description: "Failed reports are preserved and can be retried from the Samples list.",
         });
       }
-      if (failed.length > 0) {
-        setFailures(failed);
-        // Keep the failed files listed so the user can see what happened.
-        setFiles([]);
-        if (succeeded.length === 0) return;
-      }
-      if (failed.length === 0) {
-        setFiles([]);
-        onOpenChange(false);
-      }
+      setResults(outcomes);
+      setFiles([]);
     } finally {
       setBusy(false);
     }
@@ -225,12 +236,25 @@ export function UploadSampleDialog({
           </div>
 
           {error && <div className="text-sm text-destructive">{error}</div>}
-          {failures.map((f) => (
-            <div key={f.name} className="space-y-1">
-              <div className="text-xs font-medium">{f.name}</div>
-              <ExtractionErrorNotice raw={f.message} />
-            </div>
-          ))}
+          {results.length > 0 && (
+            <ul className="space-y-2">
+              {results.map((r) => (
+                <li key={r.name} className="space-y-1">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate font-medium">{r.name}</span>
+                    {r.ok ? (
+                      <span className="shrink-0 text-primary">Extracted — Review required</span>
+                    ) : (
+                      <span className="shrink-0 text-destructive">
+                        Extraction failed — Retry available
+                      </span>
+                    )}
+                  </div>
+                  {!r.ok && <ExtractionErrorNotice raw={r.message} />}
+                </li>
+              ))}
+            </ul>
+          )}
 
           <div className="flex justify-start gap-2 pt-1">
             <Button onClick={submit} disabled={busy}>

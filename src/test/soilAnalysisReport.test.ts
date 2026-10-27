@@ -174,3 +174,27 @@ describe("Reports tab wiring", () => {
     expect(formatMapValue(null)).toBe("—");
   });
 });
+
+describe("Reports full-width layout", () => {
+  it("the Reports tab container uses the full workspace width", () => {
+    expect(page).toContain('value="reports" className="mt-4 w-full max-w-none"');
+    expect(tab).toContain("space-y-4 w-full max-w-none");
+    expect(tab).toContain('Card className="w-full max-w-none"');
+  });
+  it("non-report tabs and the header keep the max-w-6xl column", () => {
+    for (const t of ["overview", "samples", "trends", "compare"]) {
+      expect(page).toContain(`value="${t}" className="mt-4 max-w-6xl"`);
+    }
+    // Header/banner/tab strip wrappers stay bounded.
+    expect(page.match(/max-w-6xl/g)!.length).toBeGreaterThanOrEqual(6);
+  });
+  it("the map has a responsive tall viewport with a sensible floor", () => {
+    expect(map).toContain("min(72vh, 880px)");
+    expect(map).toContain("minHeight: 560");
+  });
+  it("nothing uses a fixed viewport width that could overflow horizontally", () => {
+    for (const src of [page, tab, map]) {
+      expect(src).not.toMatch(/w-screen|100vw|min-w-\[/);
+    }
+  });
+});

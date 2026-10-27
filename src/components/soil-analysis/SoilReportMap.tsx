@@ -28,7 +28,17 @@ interface Props {
   height?: number | string;
 }
 
-export function SoilReportMap({ rows, mode, unit, selectedId, onSelect, height = 520 }: Props) {
+export function SoilReportMap({
+  rows,
+  mode,
+  unit,
+  selectedId,
+  onSelect,
+  // Responsive tall viewport: ~65–72vh on desktop, floored so the map stays
+  // usable on short screens and capped so it never runs away on very tall
+  // displays. Width comes from the full-width Reports container.
+  height = "min(72vh, 880px)",
+}: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const overlaysRef = useRef<any[]>([]);
@@ -223,7 +233,7 @@ export function SoilReportMap({ rows, mode, unit, selectedId, onSelect, height =
     return (
       <div
         className="flex items-center justify-center rounded-md border bg-muted/30 px-6 text-center text-sm text-muted-foreground"
-        style={{ height }}
+        style={{ height, minHeight: 560 }}
       >
         The map is unavailable: {mapError}
       </div>
@@ -232,7 +242,11 @@ export function SoilReportMap({ rows, mode, unit, selectedId, onSelect, height =
 
   return (
     <div className="relative">
-      <div ref={containerRef} className="w-full rounded-md border" style={{ height }} />
+      <div
+        ref={containerRef}
+        className="w-full rounded-md border"
+        style={{ height, minHeight: 560 }}
+      />
       <div className="absolute right-2 top-2">
         <MapSourceBadge source="apple" />
       </div>

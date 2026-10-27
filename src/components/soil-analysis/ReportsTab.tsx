@@ -148,8 +148,8 @@ export function ReportsTab({ onOpenSample }: { onOpenSample: (id: string) => voi
   };
 
   return (
-    <div className="space-y-4">
-      <Card>
+    <div className="space-y-4 w-full max-w-none">
+      <Card className="w-full max-w-none">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Vineyard soil map</CardTitle>
         </CardHeader>
@@ -306,7 +306,10 @@ export function ReportsTab({ onOpenSample }: { onOpenSample: (id: string) => voi
               </div>
 
               {mapQuery.isLoading ? (
-                <div className="h-[520px] rounded-md bg-muted animate-pulse" />
+                <div
+                  className="rounded-md bg-muted animate-pulse"
+                  style={{ height: "min(72vh, 880px)", minHeight: 560 }}
+                />
               ) : mapQuery.error ? (
                 <div className="text-sm text-destructive">
                   {(mapQuery.error as Error).message}
