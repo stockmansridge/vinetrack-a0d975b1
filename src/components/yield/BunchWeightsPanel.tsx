@@ -127,7 +127,10 @@ export default function BunchWeightsPanel({
   const qc = useQueryClient();
   const canEdit = canEditBunchWeights(role) && !!vineyardId;
   const varieties = useMemo(() => bunchWeightVarieties(blocks), [blocks]);
-  const [open, setOpen] = useState<Set<string>>(new Set());
+  // All values start rolled up and visible: a variety's block rows are shown
+  // by default, and individual sections can be collapsed on demand.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const allExpanded = collapsed.size === 0;
 
   const refresh = () => qc.invalidateQueries({ queryKey: [YIELD_BUNCH_WEIGHTS_KEY, vineyardId] });
 
