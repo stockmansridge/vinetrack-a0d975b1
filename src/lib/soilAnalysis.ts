@@ -626,7 +626,35 @@ export async function describeFunctionError(e: unknown): Promise<string> {
     }
   }
   const msg = anyErr?.message;
-  return typeof msg === "string" && msg.trim() ? msg : String(e);
+  return typeof msg === "string" && messageOk(msg) ? msg : String(e);
+}
+
+function messageOk(msg: string): boolean {
+  return !!msg.trim();
+}
+
+/**
+ * Safe one-line formatter for Supabase/PostgREST errors. PostgREST errors
+ * are plain objects (NOT Error instances), so String(e) renders the useless
+ * "[object Object]" — this formatter prefers error.message, then
+ * error.details, then a safe JSON.stringify, and finally a generic message.
+ * It never renders a raw object in JSX.
+ */
+export function formatDataError(e: unknown): string {
+  if (e == null) return "Something went wrong. Please try again.";
+  if (typeof e === "string") return e.trim() || "Something went wrong. Please try again.";
+  const anyErr = e as any;
+  const message = anyErr?.message;
+  if (typeof message === "string" && message.trim()) return message.trim();
+  const details = anyErr?.details;
+  if (typeof details === "string" && details.trim()) return details.trim();
+  try {
+    const json = JSON.stringify(e);
+    if (json && json !== "{}") return json;
+  } catch {
+    // not serialisable — fall through to the generic message
+  }
+  return "Something went wrong. Please try again.";
 }
 
 /**
@@ -1118,7 +1146,7 @@ export interface CompareCell {
 }
 
 export function buildCompareMatrix(
-  rows: Array<SoilSampleResult & { sample: SoilSample }>,
+  rows: Array<SoilSampleResult & { sample: SoilSample; matched_paddock_id?: string }>,
   paddockIds: string[],
   analyteKeys: string[],
 ): CompareCell[][] {
@@ -1130,7 +1158,9 @@ export function buildCompareMatrix(
     const mixedMethods = signatures.size > 1;
     return paddockIds.map((paddockId) => {
       const candidates = forAnalyte
-        .filter((r) => r.sample.paddock_id === paddockId)
+        // matched_paddock_id (from block mappings) is the authority; the
+        // legacy sample.paddock_id link is only a fallback.
+        .filter((r) => (r.matched_paddock_id ?? r.sample.paddock_id) === paddockId)
         .sort((a, b) =>
           String(b.sample.sampled_at ?? b.sample.created_at).localeCompare(
             String(a.sample.sampled_at ?? a.sample.created_at),
