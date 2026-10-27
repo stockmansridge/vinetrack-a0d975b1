@@ -2,7 +2,7 @@
 
 ## Yield Estimate Trips table follow-up (Portal only)
 - [x] Show sampled block names with full-name access and add a row-end shortcut to the existing trip drawer, without toggling inline expansion.
-- [ ] Protect master-weight tonnes, sampled-area density and missing-weight dashes; run focused Yields regressions and check automatic preview compilation. No calculation/backend/mobile changes or publication.
+- [x] Seven new safeguards plus the existing drawer-flow test passed: 190/190 tests across 21 focused Yields files; automatic typecheck/preview build OK. No calculation/backend/mobile changes or publication. Inspection found an existing edge case: summary.totalAreaHa also includes selected-but-unsampled blocks, potentially diluting Per ha; left unchanged to preserve the requested calculation path and avoid altering shared summaries.
 
 ## Yields bunch weights (Portal only)
 - [x] Bunch Weights tab (after Yield Estimate Trips) with variety master + block overrides via live RPCs
