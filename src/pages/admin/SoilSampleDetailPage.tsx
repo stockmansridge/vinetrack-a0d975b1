@@ -175,9 +175,23 @@ function DetailInner() {
   const setResult = (rid: string, key: keyof SoilSampleResult, value: unknown) =>
     setResultDrafts((d) => ({ ...d, [rid]: { ...d[rid], [key]: value } }));
 
-  const save = async () => {
+  // Returns true when everything saved; false when validation failed or a
+  // write errored (the human-readable message is already in saveState).
+  const save = async (): Promise<boolean> => {
     setSaveState(null);
+    // Validate block coverage BEFORE any write so an invalid state (e.g. a
+    // row range with no block) can never reach the database.
+    if (coverageMode === "block") {
+      const invalid = validateBlockMappings(mappingRows);
+      if (invalid) {
+        setSaveState(invalid);
+        return false;
+      }
+    }
     try {
+      // 1. Metadata only. sample_scope / paddock_id / row_start / row_end
+      //    are owned by the atomic mappings RPC for block coverage and are
+      //    NEVER written directly here.
       await updateSoilSample(sample.id, {
         sampled_at: (draft.sampled_at as string) ?? null,
         received_at: (draft.received_at as string) ?? null,
@@ -193,21 +207,39 @@ function DetailInner() {
         sample_depth_from_cm: (draft.sample_depth_from_cm as number) ?? null,
         sample_depth_to_cm: (draft.sample_depth_to_cm as number) ?? null,
         notes: (draft.notes as string) ?? null,
-        sample_scope: (draft.sample_scope as SoilSampleScope) ?? "unmapped",
-        paddock_id: (draft.paddock_id as string) ?? null,
-        row_start: (draft.row_start as number) ?? null,
-        row_end: (draft.row_end as number) ?? null,
-        latitude: (draft.latitude as number) ?? null,
-        longitude: (draft.longitude as number) ?? null,
       });
+      // 2. Block mappings — ONE atomic RPC call, never N separate inserts.
+      //    The RPC also synchronises the legacy sample fields (including
+      //    multi_block when more than one block is mapped).
+      if (coverageMode === "block") {
+        await setSoilSampleBlockMappings(sample.id, mappingRows);
+      } else {
+        // Not mapped and Sampling point both clear block mappings.
+        await setSoilSampleBlockMappings(sample.id, []);
+        if (coverageMode === "point") {
+          // A sampling point is a sample-level location, not a block mapping.
+          await updateSoilSample(sample.id, {
+            sample_scope: "point",
+            paddock_id: null,
+            row_start: null,
+            row_end: null,
+            latitude: (draft.latitude as number) ?? null,
+            longitude: (draft.longitude as number) ?? null,
+          });
+        }
+      }
+      // 3. Result corrections (provenance-safe patches only).
       for (const [rid, patch] of Object.entries(resultDrafts)) {
         if (Object.keys(patch).length > 0) await updateSoilResult(rid, patch);
       }
       setResultDrafts({});
+      // Refetch: the RPC may have changed sample_scope (e.g. multi_block).
       qc.invalidateQueries({ queryKey: ["soil-analysis"] });
       setSaveState("Saved. Original extraction values are preserved; the sample stays in review until you confirm it.");
+      return true;
     } catch (e) {
-      setSaveState(e instanceof Error ? e.message : String(e));
+      setSaveState(formatDataError(e));
+      return false;
     }
   };
 
@@ -216,12 +248,13 @@ function DetailInner() {
     setConfirming(true);
     setSaveState(null);
     try {
-      await save();
+      const saved = await save();
+      if (!saved) return; // validation message already shown
       await confirmSoilSample(sample.id, user.id);
       qc.invalidateQueries({ queryKey: ["soil-analysis"] });
       setSaveState("Confirmed. The reviewed values are now the confirmed record.");
     } catch (e) {
-      setSaveState(e instanceof Error ? e.message : String(e));
+      setSaveState(formatDataError(e));
     } finally {
       setConfirming(false);
     }
