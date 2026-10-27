@@ -151,7 +151,11 @@ describe("Reports tab wiring", () => {
   });
   it("renders no-data blocks in neutral grey and never interpolates", () => {
     expect(map).toContain("SOIL_MAP_NO_DATA_COLOR");
-    expect(map).not.toMatch(/interpolat|heatmap/i);
+    const code = map
+      .split("\n")
+      .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+      .join("\n");
+    expect(code).not.toMatch(/interpolat|heatmap/i);
   });
   it("block detail and table expose date, depth, status, previous value and the sample link", () => {
     for (const needle of [

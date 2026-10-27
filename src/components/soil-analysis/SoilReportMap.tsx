@@ -234,7 +234,7 @@ export function SoilReportMap({ rows, mode, unit, selectedId, onSelect, height =
     <div className="relative">
       <div ref={containerRef} className="w-full rounded-md border" style={{ height }} />
       <div className="absolute right-2 top-2">
-        <MapSourceBadge />
+        <MapSourceBadge source="apple" />
       </div>
     </div>
   );
