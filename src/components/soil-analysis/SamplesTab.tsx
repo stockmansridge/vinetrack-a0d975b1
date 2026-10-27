@@ -57,7 +57,7 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
   // file is never re-uploaded and no duplicate rows are created.
   const retry = async (e: React.MouseEvent, s: SoilSample) => {
     e.stopPropagation();
-    setRetryError(null);
+    setRetryFailure(null);
     setRetryingId(s.id);
     try {
       const { data: doc, error: docErr } = await db
@@ -68,14 +68,14 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
         .maybeSingle();
       if (docErr) throw docErr;
       if (!doc) {
-        setRetryError("No source document is recorded for that sample, so extraction cannot be retried.");
+        setRetryFailure({ raw: null, plain: "No source document is recorded for that sample, so extraction cannot be retried." });
         return;
       }
       const outcome = await retrySoilExtraction(s.id, doc.id);
       qc.invalidateQueries({ queryKey: ["soil-analysis"] });
-      if (!outcome.ok) setRetryError(`Extraction failed again: ${outcome.error}`);
+      if (!outcome.ok) setRetryFailure({ raw: outcome.error });
     } catch (err) {
-      setRetryError(err instanceof Error ? err.message : String(err));
+      setRetryFailure({ raw: null, plain: err instanceof Error ? err.message : String(err) });
     } finally {
       setRetryingId(null);
     }
