@@ -17,6 +17,7 @@ import {
   DollarSign,
   Droplet,
   FileBarChart,
+  FlaskConical,
   FolderOpen,
   Fuel,
   Globe2,
@@ -40,6 +41,7 @@ import {
 } from "lucide-react";
 import { canAccessRoute } from "@/lib/rolePermissions";
 import { isAustralianVineyard } from "@/lib/wineGrapeLevyAccess";
+import { SOIL_ANALYSIS_FLAG } from "@/lib/soilAnalysis";
 
 export type NavGroup = "Overview" | "Vineyard" | "Work" | "Resources" | "Settings";
 
@@ -55,6 +57,8 @@ export interface NavViewer {
   hasAccountBilling: boolean;
   /** Selected vineyard profile country (vineyards.country), unresolved = null. */
   vineyardCountry?: string | null;
+  /** Enabled system feature-flag keys (for flag-gated admin surfaces). */
+  featureFlags?: string[];
   /** True while access information is still loading. */
   loading?: boolean;
 }
@@ -587,6 +591,8 @@ export interface SystemAdminItem {
   label: string;
   path: string;
   icon: any;
+  /** When set, the item is hidden unless this system feature flag is enabled. */
+  featureFlag?: string;
 }
 
 export interface SystemAdminGroup {
@@ -608,6 +614,7 @@ const SYSTEM_ADMIN_ITEM_LIST: SystemAdminItem[] = [
   { label: "Invitations", path: "/admin/invitations", icon: UserCog },
   { label: "Integrations", path: "/admin/integrations", icon: Plug },
   { label: "Chemical Catalogue Review", path: "/admin/chemical-v3", icon: Beaker },
+  { label: "Soil Analysis (Preview)", path: "/admin/soil-analysis", icon: FlaskConical, featureFlag: SOIL_ANALYSIS_FLAG },
   { label: "Block Troubleshooter", path: "/admin/block-troubleshooter", icon: ShieldCheck },
   { label: "Support Requests", path: "/admin/support-requests", icon: AlertTriangle },
   { label: "Email List", path: "/admin/email-list", icon: Mail },
@@ -660,6 +667,7 @@ export const SYSTEM_ADMIN_GROUPS: SystemAdminGroup[] = [
       systemAdminItem("Work Tasks"),
       systemAdminItem("Trips"),
       systemAdminItem("Chemical Catalogue Review"),
+      systemAdminItem("Soil Analysis (Preview)"),
     ],
   },
   {
@@ -707,6 +715,12 @@ export const SYSTEM_ADMIN_ITEMS: SystemAdminItem[] = [
 
 export function systemAdminItemMatchesPath(item: SystemAdminItem, pathname: string): boolean {
   return pathname === item.path || pathname.startsWith(`${item.path}/`);
+}
+
+/** Flag-gated admin surfaces stay hidden until their feature flag is enabled. */
+export function isSystemAdminItemVisible(item: SystemAdminItem, viewer: NavViewer): boolean {
+  if (!item.featureFlag) return true;
+  return (viewer.featureFlags ?? []).includes(item.featureFlag);
 }
 
 /** Unused icon references kept for tree-shaking clarity. */
@@ -795,6 +809,7 @@ export function searchDestinations(viewer: NavViewer): SearchDestination[] {
   }
   if (viewer.isSystemAdmin) {
     for (const item of SYSTEM_ADMIN_ITEMS) {
+      if (!isSystemAdminItemVisible(item, viewer)) continue;
       out.push({
         title: item.label,
         path: item.path,
