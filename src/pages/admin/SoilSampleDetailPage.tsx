@@ -27,6 +27,7 @@ import {
   updateSoilSample,
   updateSoilResult,
   confirmSoilSample,
+  retrySoilExtraction,
   listAnalyteCatalogue,
   SAMPLE_STATUS_LABEL,
   SAMPLE_SCOPE_LABEL,
