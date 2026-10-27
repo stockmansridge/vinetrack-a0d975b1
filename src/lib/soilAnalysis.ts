@@ -468,7 +468,7 @@ export async function uploadSoilSample(input: UploadSoilSampleInput): Promise<Up
     if (fnErr) throw fnErr;
     return { sample: sample as SoilSample, document: document as SoilSampleDocument, extractionStarted: true, extractionError: null };
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
+    const message = await describeFunctionError(e);
     await db
       .from("soil_samples")
       .update({ extraction_status: "failed" })
@@ -483,6 +483,53 @@ export async function uploadSoilSample(input: UploadSoilSampleInput): Promise<Up
       extractionStarted: false,
       extractionError: message,
     };
+  }
+}
+
+export interface RetryExtractionOutcome {
+  ok: boolean;
+  error: string | null;
+}
+
+/**
+ * Retries extraction for a failed sample using the EXISTING sample and
+ * primary document ids — the evidence file is never re-uploaded and no
+ * duplicate rows are created. Resets both records to pending, clears the
+ * document error, then re-invokes the parser. On failure the records are
+ * marked failed with the surfaced detail and everything is preserved.
+ */
+export async function retrySoilExtraction(
+  sampleId: string,
+  documentId: string,
+): Promise<RetryExtractionOutcome> {
+  const { error: sampleErr } = await db
+    .from("soil_samples")
+    .update({ extraction_status: "pending" })
+    .eq("id", sampleId);
+  if (sampleErr) throw sampleErr;
+  const { error: docErr } = await db
+    .from("soil_sample_documents")
+    .update({ extraction_status: "pending", extraction_error: null })
+    .eq("id", documentId);
+  if (docErr) throw docErr;
+
+  try {
+    const { error: fnErr } = await supabase.functions.invoke(SOIL_EXTRACT_FUNCTION, {
+      body: { sample_id: sampleId, document_id: documentId },
+    });
+    if (fnErr) throw fnErr;
+    return { ok: true, error: null };
+  } catch (e) {
+    const message = await describeFunctionError(e);
+    await db
+      .from("soil_samples")
+      .update({ extraction_status: "failed" })
+      .eq("id", sampleId);
+    await db
+      .from("soil_sample_documents")
+      .update({ extraction_status: "failed", extraction_error: message })
+      .eq("id", documentId);
+    return { ok: false, error: message };
   }
 }
 
