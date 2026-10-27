@@ -397,45 +397,118 @@ function DetailInner() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">VineTrack block mapping</CardTitle>
+            <CardTitle className="text-sm">VineTrack block coverage</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3 text-sm">
+          <CardContent className="space-y-3 text-sm">
+            <p className="text-xs text-muted-foreground">
+              Link this laboratory sample to the VineTrack blocks it represents. The
+              laboratory paddock name is preserved separately.
+            </p>
             <div className="space-y-1">
-              <Label>Mapping</Label>
-              <select className={selectClass} value={sampleScope} onChange={(e) => set("sample_scope", e.target.value)}>
-                {Object.entries(SAMPLE_SCOPE_LABEL).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label>Block</Label>
+              <Label>Coverage</Label>
               <select
                 className={selectClass}
-                value={(draft.paddock_id as string) ?? ""}
-                onChange={(e) => set("paddock_id", e.target.value || null)}
-                disabled={sampleScope === "unmapped"}
+                value={coverageMode}
+                onChange={(e) => setCoverageMode(e.target.value as CoverageMode)}
+                aria-label="Coverage mode"
               >
-                <option value="">Not mapped</option>
-                {blocks.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
+                <option value="not_mapped">Not mapped</option>
+                <option value="block">Block coverage</option>
+                <option value="point">Sampling point</option>
               </select>
             </div>
-            {sampleScope === "row_range" && (
-              <>
-                <div className="space-y-1">
-                  <Label>Row from</Label>
-                  <Input type="number" value={(draft.row_start as any) ?? ""} onChange={(e) => set("row_start", e.target.value ? Number(e.target.value) : null)} />
-                </div>
-                <div className="space-y-1">
-                  <Label>Row to</Label>
-                  <Input type="number" value={(draft.row_end as any) ?? ""} onChange={(e) => set("row_end", e.target.value ? Number(e.target.value) : null)} />
-                </div>
-              </>
+
+            {coverageMode === "block" && (
+              <div className="space-y-2">
+                {mappingRows.map((row, idx) => (
+                  <div key={idx} className="rounded-md border border-border p-2 space-y-2">
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1 space-y-1">
+                        <Label>Block</Label>
+                        <select
+                          className={selectClass}
+                          value={row.paddock_id}
+                          onChange={(e) => updateMappingRow(idx, { paddock_id: e.target.value })}
+                          aria-label={`Mapping block ${idx + 1}`}
+                        >
+                          <option value="">Choose a block…</option>
+                          {blocks.map((b) => {
+                            const varieties = varietyContext(b.variety_allocations);
+                            return (
+                              <option key={b.id} value={b.id}>
+                                {varieties ? `${b.name} — ${varieties}` : b.name}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => removeMappingRow(idx)}
+                        aria-label={`Remove mapping ${idx + 1}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap items-end gap-2">
+                      <div className="space-y-1">
+                        <Label>Coverage</Label>
+                        <select
+                          className={selectClass}
+                          value={row.mapping_scope}
+                          onChange={(e) =>
+                            updateMappingRow(idx, {
+                              mapping_scope: e.target.value as SoilBlockMappingInput["mapping_scope"],
+                            })
+                          }
+                          aria-label={`Mapping coverage ${idx + 1}`}
+                        >
+                          <option value="whole_block">Whole block</option>
+                          <option value="row_range">Row range</option>
+                        </select>
+                      </div>
+                      {row.mapping_scope === "row_range" && (
+                        <>
+                          <div className="space-y-1">
+                            <Label>Row from</Label>
+                            <Input
+                              type="number"
+                              className="w-24"
+                              value={row.row_start ?? ""}
+                              onChange={(e) =>
+                                updateMappingRow(idx, {
+                                  row_start: e.target.value ? Number(e.target.value) : null,
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Row to</Label>
+                            <Input
+                              type="number"
+                              className="w-24"
+                              value={row.row_end ?? ""}
+                              onChange={(e) =>
+                                updateMappingRow(idx, {
+                                  row_end: e.target.value ? Number(e.target.value) : null,
+                                })
+                              }
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <Button size="sm" variant="outline" onClick={addMappingRow}>
+                  + Add another block
+                </Button>
+              </div>
             )}
-            {sampleScope === "point" && (
-              <>
+
+            {coverageMode === "point" && (
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label>Latitude</Label>
                   <Input type="number" step="any" value={(draft.latitude as any) ?? ""} onChange={(e) => set("latitude", e.target.value ? Number(e.target.value) : null)} />
@@ -444,12 +517,8 @@ function DetailInner() {
                   <Label>Longitude</Label>
                   <Input type="number" step="any" value={(draft.longitude as any) ?? ""} onChange={(e) => set("longitude", e.target.value ? Number(e.target.value) : null)} />
                 </div>
-              </>
+              </div>
             )}
-            <div className="col-span-2 text-xs text-muted-foreground">
-              The laboratory's paddock name stays stored separately; this mapping only links the
-              sample to VineTrack blocks.
-            </div>
           </CardContent>
         </Card>
       </div>
