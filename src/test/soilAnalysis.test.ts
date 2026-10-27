@@ -10,6 +10,8 @@ import {
   buildCompareMatrix,
   isOutsideLabRange,
   labStatusLabel,
+  EXTRACTION_FAILED_MESSAGE,
+  cleanExtractionDetail,
   type SoilSample,
   type SoilSampleResult,
 } from "@/lib/soilAnalysis";

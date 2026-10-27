@@ -470,20 +470,24 @@ function unwrapHumanDetail(value: string): string | null {
 export function cleanExtractionDetail(raw: string | null | undefined): string | null {
   if (!raw || typeof raw !== "string" || !raw.trim()) return null;
   const text = raw.trim();
+  let human: string | null = null;
   const obj = firstJsonObject(text);
   if (obj) {
     try {
       const body = JSON.parse(obj);
       const detail = body?.detail ?? body?.error ?? body?.message;
       if (typeof detail === "string" && detail.trim()) {
-        const human = unwrapHumanDetail(detail);
-        if (human) return human;
+        human = unwrapHumanDetail(detail);
       }
     } catch {
       // fall through to plain-text handling
     }
   }
-  return unwrapHumanDetail(text);
+  if (!human) human = unwrapHumanDetail(text);
+  if (!human) return null;
+  // Always a single, clean line.
+  const line = human.replace(/\s+/g, " ").trim();
+  return line && !line.startsWith("{") ? line : null;
 }
 
 export interface UploadSoilSampleOutcome {
