@@ -660,6 +660,91 @@ export async function listBlockAnalyteResults(
 
 export type BlockAnalyteResult = SoilSampleResult & { sample: SoilSample; matched_paddock_id: string };
 
+export type SoilTrafficBucket = "low" | "satisfactory" | "high" | "other";
+
+/** Source laboratory wording only; numeric values and desired direction are irrelevant. */
+export function soilTrafficBucket(labStatus: string | null | undefined): SoilTrafficBucket {
+  const status = (labStatus ?? "").trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+  if (status === "low" || status === "very low") return "low";
+  if (status === "high" || status === "very high") return "high";
+  if (["satisfactory", "within range", "within lab range", "within laboratory range"].includes(status)) return "satisfactory";
+  return "other";
+}
+
+/** All analytes, confirmed evidence only; mapped measurements remain once per matched block. */
+export async function listSoilTrafficResults(paddockIds: string[], asOf: string | null = null): Promise<BlockAnalyteResult[]> {
+  const ids = [...new Set(paddockIds)];
+  if (!ids.length) return [];
+  const byBlock = await sampleIdsForBlocks(ids);
+  const sampleIds = [...new Set([...byBlock.values()].flat())];
+  if (!sampleIds.length) return [];
+  let query = db.from("soil_sample_results")
+    .select("*, soil_samples!inner(*, paddocks(name))")
+    .in("sample_id", sampleIds)
+    .eq("soil_samples.extraction_status", "confirmed")
+    .is("soil_samples.deleted_at", null);
+  if (asOf) query = query.lte("soil_samples.sampled_at", asOf);
+  const { data, error } = await query;
+  if (error) throw error;
+  const out: BlockAnalyteResult[] = [];
+  const seen = new Set<string>();
+  for (const row of data ?? []) {
+    const { soil_samples: s, ...result } = row;
+    // Fail closed on malformed/unconfirmed/undated evidence as well as filtering on the server.
+    if (!s || s.extraction_status !== "confirmed" || s.deleted_at || !s.sampled_at || (asOf && s.sampled_at.slice(0, 10) > asOf)) continue;
+    const sample = { ...s, block_name: s.paddocks?.name ?? null, paddocks: undefined } as SoilSample;
+    for (const id of ids) {
+      const key = `${id}:${result.id}`;
+      if (!(byBlock.get(id) ?? []).includes(sample.id) || seen.has(key)) continue;
+      seen.add(key);
+      out.push({ ...result, sample, matched_paddock_id: id });
+    }
+  }
+  return out;
+}
+
+export interface SoilTrafficSnapshot {
+  paddockId: string;
+  analyteKey: string;
+  date: string;
+  bucket: SoilTrafficBucket;
+  statusLabel: string;
+  entries: BlockAnalyteResult[];
+}
+
+/** Latest date per block/analyte, never an average or a method/unit merge. */
+export function buildSoilTrafficSnapshots(rows: BlockAnalyteResult[]): SoilTrafficSnapshot[] {
+  const groups = new Map<string, BlockAnalyteResult[]>();
+  const seen = new Set<string>();
+  for (const r of rows) {
+    if (!r.analyte_key || !r.sample.sampled_at || r.sample.extraction_status !== "confirmed" || r.sample.deleted_at) continue;
+    const identity = `${r.matched_paddock_id}:${r.id}`;
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    const key = JSON.stringify([r.matched_paddock_id, r.analyte_key]);
+    groups.set(key, [...(groups.get(key) ?? []), r]);
+  }
+  return [...groups.values()].map((group) => {
+    const date = group.map((r) => r.sample.sampled_at?.slice(0, 10) ?? "").sort().at(-1) ?? "";
+    const entries = group.filter((r) => r.sample.sampled_at?.slice(0, 10) === date)
+      .sort((a, b) => a.sample.id.localeCompare(b.sample.id) || a.id.localeCompare(b.id));
+    const buckets = new Set(entries.map((r) => soilTrafficBucket(r.lab_status)));
+    const mixed = buckets.size > 1;
+    return {
+      paddockId: group[0].matched_paddock_id, analyteKey: group[0].analyte_key ?? "", date,
+      bucket: mixed ? "other" as const : soilTrafficBucket(entries[0]?.lab_status),
+      statusLabel: mixed ? "Mixed latest statuses" : [...new Set(entries.map((r) => r.lab_status?.trim() || "Not stated"))].join(" / "),
+      entries,
+    };
+  }).sort((a, b) => a.analyteKey.localeCompare(b.analyteKey) || a.paddockId.localeCompare(b.paddockId));
+}
+
+export function soilTrafficCounts(snapshots: SoilTrafficSnapshot[]): Record<SoilTrafficBucket, number> {
+  const counts = { low: 0, satisfactory: 0, high: 0, other: 0 };
+  for (const s of snapshots) counts[s.bucket]++;
+  return counts;
+}
+
 /** Mapping-aware Trends read; filter the analyte on the server, not after a broad read.
  * Preserve the single-block read's sample visibility / deletion semantics.
  */
