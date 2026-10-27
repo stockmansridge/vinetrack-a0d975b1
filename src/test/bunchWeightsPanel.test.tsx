@@ -116,3 +116,17 @@ describe("Bunch Weights variety summary", () => {
     expect(within(row).getByText("Not configured")).toBeInTheDocument();
   });
 });
+
+describe("Source badge outlines", () => {
+  it("draws the Variety master badge with a visible outline like the other source badges", () => {
+    mount();
+    const masters = screen.getAllByText("Variety master");
+    expect(masters.length).toBeGreaterThan(0);
+    for (const badge of masters) {
+      expect(badge.className).toContain("border-muted-foreground/40");
+      // The near-white card border made this badge look borderless.
+      expect(badge.className).not.toContain("border-border");
+    }
+    expect(screen.getByText("Block override").className).toContain("border-primary/40");
+  });
+});
