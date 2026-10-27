@@ -13,12 +13,12 @@ const blocks = [
   { id: "c", name: "Unsampled Merlot", areaHa: 4, vineCount: 2000 },
 ];
 
-function setup({ weight = 200, multiple = false, applyDamage = false }:
-  { weight?: number | null; multiple?: boolean; applyDamage?: boolean } = {}) {
+function setup({ weight = 200, multiple = false, unsampled = false, applyDamage = false }:
+  { weight?: number | null; multiple?: boolean; unsampled?: boolean; applyDamage?: boolean } = {}) {
   const trips = buildBunchCountTrips([{
     id: "trip", is_completed: true, completed_at: "2026-10-01T00:00:00Z",
     payload: {
-      selectedPaddockIds: multiple ? ["a", "b", "c"] : ["a"],
+      selectedPaddockIds: multiple ? ["a", "b", ...(unsampled ? ["c"] : [])] : ["a"],
       applyDamage,
       // Historical evidence must not fill a missing current master weight.
       blockBunchWeightsKg: { a: 0.15, b: 0.15 },
@@ -30,7 +30,7 @@ function setup({ weight = 200, multiple = false, applyDamage = false }:
     },
   }], {
     blocks, vintageOf: () => 2027, damageFactor: () => 0.8,
-    bunchWeightFor: () => ({ grams: weight, source: weight == null ? "not_configured" : "variety", missingVarieties: [] }),
+    bunchWeightFor: () => ({ grams: weight, source: weight == null ? "not_configured" : "variety_default" }),
   });
   const trip = trips[0];
   if (!trip) throw new Error("Trip fixture missing");
@@ -68,7 +68,7 @@ describe("Yield Estimate Trips table", () => {
   });
 
   it("shows multiple sampled names, excluding selected but unsampled blocks", () => {
-    const { cells } = setup({ multiple: true });
+    const { cells } = setup({ multiple: true, unsampled: true });
     expect(cells[4]).toHaveTextContent(/^North Shiraz, South Chardonnay$/);
   });
 
@@ -76,13 +76,13 @@ describe("Yield Estimate Trips table", () => {
     const { row, onOpenTrip } = setup();
     fireEvent.click(within(row).getByRole("button", { name: "View full trip details" }));
     expect(onOpenTrip).toHaveBeenCalledExactlyOnceWith("trip");
-    expect(screen.queryByRole("button", { name: "View full trip detail", exact: true })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^View full trip detail$/ })).toBeNull();
     fireEvent.click(row);
-    fireEvent.click(screen.getByRole("button", { name: "View full trip detail", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: /^View full trip detail$/ }));
     expect(onOpenTrip).toHaveBeenNthCalledWith(2, "trip");
     fireEvent.click(within(row).getByRole("button", { name: "View full trip details" }));
     expect(onOpenTrip).toHaveBeenNthCalledWith(3, "trip");
-    expect(screen.getByRole("button", { name: "View full trip detail", exact: true })).toBeVisible();
+    expect(screen.getByRole("button", { name: /^View full trip detail$/ })).toBeVisible();
   });
 
   it("applies live damage only when the trip opts in", () => {
