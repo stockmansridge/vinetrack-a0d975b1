@@ -480,16 +480,47 @@ export async function listBlockAliases(vineyardId: string): Promise<SoilBlockAli
   return (data ?? []) as SoilBlockAlias[];
 }
 
+/**
+ * Sample ids linked to each requested block. soil_sample_block_mappings is
+ * the authority; the legacy soil_samples.paddock_id link is unioned in as a
+ * fallback for rows that predate the backfill. A sample mapped to several
+ * blocks therefore appears in EACH block's history, and the same sample can
+ * never be listed twice within the SAME block.
+ */
+async function sampleIdsForBlocks(paddockIds: string[]): Promise<Map<string, string[]>> {
+  const byBlock = new Map<string, Set<string>>();
+  const add = (blockId: string, sampleId: string) => {
+    if (!byBlock.has(blockId)) byBlock.set(blockId, new Set());
+    byBlock.get(blockId)!.add(sampleId);
+  };
+  const [{ data: maps, error: mapErr }, { data: legacy, error: legErr }] = await Promise.all([
+    db.from("soil_sample_block_mappings").select("sample_id, paddock_id").in("paddock_id", paddockIds),
+    db
+      .from("soil_samples")
+      .select("id, paddock_id")
+      .in("paddock_id", paddockIds)
+      .is("deleted_at", null),
+  ]);
+  if (mapErr) throw mapErr;
+  if (legErr) throw legErr;
+  for (const m of maps ?? []) add(m.paddock_id, m.sample_id);
+  for (const s of legacy ?? []) add(s.paddock_id, s.id);
+  return new Map([...byBlock].map(([k, v]) => [k, [...v]]));
+}
+
 /** Results for one block + analyte across time, oldest first, with sample context. */
 export async function listBlockAnalyteResults(
   paddockId: string,
   analyteKey: string,
 ): Promise<Array<SoilSampleResult & { sample: SoilSample }>> {
+  const byBlock = await sampleIdsForBlocks([paddockId]);
+  const sampleIds = byBlock.get(paddockId) ?? [];
+  if (sampleIds.length === 0) return [];
   const { data, error } = await db
     .from("soil_sample_results")
     .select("*, soil_samples!inner(*, paddocks(name))")
     .eq("analyte_key", analyteKey)
-    .eq("soil_samples.paddock_id", paddockId)
+    .in("sample_id", sampleIds)
     .is("soil_samples.deleted_at", null);
   if (error) throw error;
   const rows = (data ?? []).map((row: any) => {
@@ -507,29 +538,45 @@ export async function listBlockAnalyteResults(
   return rows;
 }
 
-/** Results for a set of blocks within a sampled-at period (Compare tab). */
+/**
+ * Results for a set of blocks within a sampled-at period (Compare tab).
+ * Each row carries matched_paddock_id — the block THIS row belongs to — so
+ * a multi-block sample appears once per relevant block without ever
+ * duplicating the measurement within the same block.
+ */
 export async function listBlockPeriodResults(
   paddockIds: string[],
   dateFrom: string | null,
   dateTo: string | null,
-): Promise<Array<SoilSampleResult & { sample: SoilSample }>> {
+): Promise<Array<SoilSampleResult & { sample: SoilSample; matched_paddock_id: string }>> {
   if (paddockIds.length === 0) return [];
+  const byBlock = await sampleIdsForBlocks(paddockIds);
+  const allSampleIds = [...new Set([...byBlock.values()].flat())];
+  if (allSampleIds.length === 0) return [];
   let q = db
     .from("soil_sample_results")
     .select("*, soil_samples!inner(*, paddocks(name))")
-    .in("soil_samples.paddock_id", paddockIds)
+    .in("sample_id", allSampleIds)
     .is("soil_samples.deleted_at", null);
   if (dateFrom) q = q.gte("soil_samples.sampled_at", dateFrom);
   if (dateTo) q = q.lte("soil_samples.sampled_at", dateTo);
   const { data, error } = await q;
   if (error) throw error;
-  return (data ?? []).map((row: any) => {
-    const { soil_samples: s, ...result } = row;
-    return {
-      ...result,
-      sample: { ...s, block_name: s?.paddocks?.name ?? null, paddocks: undefined } as SoilSample,
-    };
-  });
+  const out: Array<SoilSampleResult & { sample: SoilSample; matched_paddock_id: string }> = [];
+  for (const row of data ?? []) {
+    const { soil_samples: s, ...result } = row as any;
+    const sample = {
+      ...s,
+      block_name: s?.paddocks?.name ?? null,
+      paddocks: undefined,
+    } as SoilSample;
+    for (const pid of paddockIds) {
+      if ((byBlock.get(pid) ?? []).includes(s.id)) {
+        out.push({ ...(result as SoilSampleResult), sample, matched_paddock_id: pid });
+      }
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
