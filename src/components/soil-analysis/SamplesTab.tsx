@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
 import {
   listSoilSamples,
+  retrySoilExtraction,
   SAMPLE_STATUS_LABEL,
   SAMPLE_SCOPE_LABEL,
   type SoilSample,
@@ -46,6 +47,37 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [retryError, setRetryError] = useState<string | null>(null);
+  const qc = useQueryClient();
+
+  // Retry reuses the existing sample + primary document ids; the evidence
+  // file is never re-uploaded and no duplicate rows are created.
+  const retry = async (e: React.MouseEvent, s: SoilSample) => {
+    e.stopPropagation();
+    setRetryError(null);
+    setRetryingId(s.id);
+    try {
+      const { data: doc, error: docErr } = await db
+        .from("soil_sample_documents")
+        .select("id")
+        .eq("sample_id", s.id)
+        .eq("is_primary", true)
+        .maybeSingle();
+      if (docErr) throw docErr;
+      if (!doc) {
+        setRetryError("No source document is recorded for that sample, so extraction cannot be retried.");
+        return;
+      }
+      const outcome = await retrySoilExtraction(s.id, doc.id);
+      qc.invalidateQueries({ queryKey: ["soil-analysis"] });
+      if (!outcome.ok) setRetryError(`Extraction failed again: ${outcome.error}`);
+    } catch (err) {
+      setRetryError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRetryingId(null);
+    }
+  };
 
   const blocksQuery = useQuery({
     queryKey: ["soil-analysis", "blocks", vineyardId],
