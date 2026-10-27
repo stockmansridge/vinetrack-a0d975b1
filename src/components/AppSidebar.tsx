@@ -52,6 +52,7 @@ import {
   defaultPathFor,
   resolveLocation,
   systemAdminItemMatchesPath,
+  isSystemAdminItemVisible,
   type NavActivity,
   type NavGroup,
   type SystemAdminGroup,

@@ -144,6 +144,8 @@ import AdminIntegrationDetailPage from "./pages/admin/AdminIntegrationDetailPage
 import BillingPage from "./pages/BillingPage";
 import AdminBillingPreviewPage from "./pages/admin/AdminBillingPreviewPage";
 import ChemicalV3LabPage from "./pages/admin/ChemicalV3LabPage";
+import SoilAnalysisPage from "./pages/admin/SoilAnalysisPage";
+import SoilSampleDetailPage from "./pages/admin/SoilSampleDetailPage";
 import AccountBillingPage from "./pages/account/BillingPage";
 
 // Central read-only guard: every useMutation is checked before it runs, and a
@@ -318,6 +320,8 @@ const App = () => (
                     <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
                     <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
                     <Route path="/admin/chemical-v3" element={<ChemicalV3LabPage />} />
+                    <Route path="/admin/soil-analysis" element={<SoilAnalysisPage />} />
+                    <Route path="/admin/soil-analysis/samples/:id" element={<SoilSampleDetailPage />} />
                     <Route path="/admin/users" element={<AdminUsersPage />} />
                     <Route path="/admin/users/:id" element={<AdminUserDetailPage />} />
                     <Route path="/admin/vineyards" element={<AdminVineyardsPage />} />
