@@ -12,8 +12,9 @@ import { buildSoilTrafficSnapshots, listAnalyteCatalogue, listSoilTrafficResults
 import { formatDate } from "@/pages/admin/_shared";
 import { Switch } from "@/components/ui/switch";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
-import { soilIndicationResultIds, requestSoilIndications, indicateSoilSnapshots } from "@/lib/soilTrafficIndication";
+import { soilIndicationResultIds, requestSoilIndications, indicateSoilSnapshots, SOIL_SAMPLE_CONTEXT_HELP } from "@/lib/soilTrafficIndication";
 import { SoilBlockSelector } from "./SoilBlockSelector";
+import { HelpHint } from "@/components/ui/HelpHint";
 
 const sections: Array<{ bucket: SoilTrafficBucket; title: string; accent: string; surface: string }> = [
   { bucket: "low", title: "Low", accent: "text-destructive", surface: "border-destructive/30 bg-destructive/5" },
@@ -140,6 +141,7 @@ export function TrafficLightsTab() {
                       {items.sort((a, b) => blockName(a.paddockId).localeCompare(blockName(b.paddockId))).map((s) => <div key={s.paddockId} className="min-w-0 px-3 py-2">
                         <div className="flex flex-wrap justify-between gap-x-3 text-sm"><span className="font-semibold">{blockName(s.paddockId)}</span><time dateTime={s.date}>{formatDate(s.date)}</time></div>
                         {s.aiLabel && <div className="mt-2 rounded-md border border-dashed border-current p-2 text-xs"><span className="inline-flex items-center gap-1 font-semibold"><Sparkles className="h-3 w-3" aria-hidden />{s.aiLabel}</span>
+                          {s.aiEntries?.some((r) => r.scope === "sample_context") && <HelpHint className="ml-1" label="What AI sample context means">{SOIL_SAMPLE_CONTEXT_HELP}</HelpHint>}
                           {s.aiEntries?.map((r) => <p key={r.result_id} className="mt-1 break-words text-muted-foreground">{Math.round(r.confidence * 100)}% confidence · {r.reason}</p>)}</div>}
                         {s.statusLabel === "Mixed latest statuses" && <p className="mt-1 text-xs font-semibold text-muted-foreground">Mixed latest statuses</p>}
                         {s.entries.map((r) => <div key={r.id} className="mt-2 min-w-0 space-y-1 text-sm">
