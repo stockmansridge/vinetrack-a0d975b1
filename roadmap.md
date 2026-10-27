@@ -2,7 +2,7 @@
 
 ## Yield Estimate Trips sampled-area correction (Portal only)
 - [x] Add sampledAreaHa for recorded blocks only and switch trip-table density to it; preserve totalAreaHa, route evidence, tonnes, damage and Overview rules.
-- [ ] Run focused Yields tests and automatic typecheck/preview checks. No SQL/mobile/unrelated changes or publication.
+- [x] 217/217 tests passed across 22 focused Yields files, including 10 trip-table tests; automatic typecheck/preview build OK. No SQL/mobile/unrelated changes or publication.
 
 ## Yield Estimate Trips table follow-up (Portal only)
 - [x] Show sampled block names with full-name access and add a row-end shortcut to the existing trip drawer, without toggling inline expansion.
