@@ -47,7 +47,7 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [retryingId, setRetryingId] = useState<string | null>(null);
+  RETRY_PLACEHOLDER
   // Extraction failures render through the shared concise notice; only
   // non-extraction problems (e.g. a missing document) use plain text.
   const [retryFailure, setRetryFailure] = useState<{ raw: string | null; plain?: string } | null>(null);
@@ -213,7 +213,12 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
           </table>
         )}
       </Card>
-      {retryError && <div className="text-sm text-destructive">{retryError}</div>}
+      {retryFailure &&
+        (retryFailure.raw ? (
+          <ExtractionErrorNotice raw={retryFailure.raw} />
+        ) : (
+          <div className="text-sm text-destructive">{retryFailure.plain}</div>
+        ))}
 
       <UploadSampleDialog
         open={uploadOpen}
