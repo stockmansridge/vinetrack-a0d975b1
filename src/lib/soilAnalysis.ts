@@ -626,11 +626,7 @@ export async function describeFunctionError(e: unknown): Promise<string> {
     }
   }
   const msg = anyErr?.message;
-  return typeof msg === "string" && messageOk(msg) ? msg : String(e);
-}
-
-function messageOk(msg: string): boolean {
-  return !!msg.trim();
+  return typeof msg === "string" && msg.trim() ? msg : String(e);
 }
 
 /**
