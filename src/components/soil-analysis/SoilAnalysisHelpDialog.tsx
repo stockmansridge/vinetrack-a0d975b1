@@ -48,7 +48,7 @@ const STEPS = [
   },
   {
     title: "Traffic Lights",
-    body: "See the latest laboratory status grouped into Low, Satisfactory and High across your selected blocks. VineTrack preserves the laboratory's exact status wording; results without one of those statuses remain under Other / Not stated rather than being reinterpreted.",
+    body: "Use Most recent or an as-of date, filter directly to Low, Satisfactory, High or Other, and optionally turn on AI viticulture indication for results the laboratory has not rated into those traffic-light groups. AI indications are clearly labelled and never replace the laboratory status.",
   },
 ] as const;
 
@@ -114,6 +114,7 @@ export default function SoilAnalysisHelpDialog() {
                 VineTrack reports and visualises the laboratory data you upload. Laboratory ranges
                 can differ by provider and method, and VineTrack does not replace agronomic advice
                 or the laboratory&rsquo;s original report.
+                {" "}AI indications are general screening guidance only and do not replace the laboratory report or agronomic advice.
               </p>
             </section>
           </div>
