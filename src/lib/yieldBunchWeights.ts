@@ -11,6 +11,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { varietyKeyOf } from "@/lib/grapeAllocationModel";
+import { resolvePaddockAllocations, type GrapeVarietyMap } from "@/lib/varietyResolver";
 
 export const YIELD_BUNCH_WEIGHTS_KEY = "yield_bunch_weights";
 
@@ -92,17 +93,54 @@ export async function softDeleteYieldBunchWeight(id: string): Promise<void> {
   if (error) throw error;
 }
 
+/** One planting's bunch-weight identity, taken from paddocks.variety_allocations. */
+export interface BlockVarietyIdentity {
+  /** Stored canonical varietyKey (authority). */
+  key: string;
+  name: string;
+  percent: number | null;
+  /**
+   * True ONLY when the allocation has no stored varietyKey (genuinely legacy
+   * data). The key is then derived from the display name as an explicit,
+   * flagged compatibility fallback. A stored key is never replaced.
+   */
+  legacyKey: boolean;
+}
+
+export function blockVarietyIdentities(
+  varietyAllocations: unknown,
+  varietyMap: GrapeVarietyMap,
+): BlockVarietyIdentity[] {
+  const out: BlockVarietyIdentity[] = [];
+  for (const a of resolvePaddockAllocations(varietyAllocations, varietyMap)) {
+    const raw = (a.raw ?? {}) as any;
+    const stored = String(raw.varietyKey ?? raw.variety_key ?? "").trim();
+    const name = a.name ?? raw.name ?? raw.varietyName ?? raw.variety ?? null;
+    if (stored) {
+      out.push({ key: stored, name: name ?? stored, percent: a.percent ?? null, legacyKey: false });
+    } else if (name) {
+      out.push({ key: varietyKeyOf(name), name, percent: a.percent ?? null, legacyKey: true });
+    }
+  }
+  return out;
+}
+
 const valid = (g: unknown): g is number => typeof g === "number" && Number.isFinite(g) && g > 0;
 
-/** Block + variety override, then variety master, else not configured. */
+/**
+ * Block + variety override, then variety master, else not configured.
+ * Matching is by EXACT canonical variety_key — never by display name.
+ */
 export function resolveBunchWeight(
   rows: YieldBunchWeightRow[],
   blockId: string | null,
-  variety: string | null | undefined,
+  varietyKey: string | null | undefined,
 ): ResolvedBunchWeight {
-  const vk = varietyKeyOf(variety);
+  const vk = (varietyKey ?? "").trim();
   const bk = blockId ? blockId.toLowerCase() : null;
-  const sameVariety = rows.filter((r) => varietyKeyOf(r.variety_key) === vk && valid(r.bunch_weight_grams));
+  const sameVariety = vk
+    ? rows.filter((r) => (r.variety_key ?? "").trim() === vk && valid(r.bunch_weight_grams))
+    : [];
   const override = bk ? sameVariety.find((r) => r.paddock_id?.toLowerCase() === bk) : undefined;
   if (override) return { grams: override.bunch_weight_grams, source: "block_override", recordId: override.id };
   const master = sameVariety.find((r) => r.paddock_id == null);
@@ -119,11 +157,11 @@ export function resolveBunchWeight(
 export function resolveBlockBunchWeight(
   rows: YieldBunchWeightRow[],
   blockId: string,
-  varieties: { name: string | null; percent?: number | null }[],
+  varieties: { key: string; percent?: number | null }[],
 ): ResolvedBlockBunchWeight {
-  const named = varieties.filter((v) => v.name);
-  if (!named.length) return { grams: null, source: "not_configured" };
-  const resolved = named.map((v) => ({ ...resolveBunchWeight(rows, blockId, v.name), percent: v.percent }));
+  const keyed = varieties.filter((v) => v.key);
+  if (!keyed.length) return { grams: null, source: "not_configured" };
+  const resolved = keyed.map((v) => ({ ...resolveBunchWeight(rows, blockId, v.key), percent: v.percent }));
   if (resolved.some((r) => r.grams == null)) return { grams: null, source: "not_configured" };
   const sources = new Set(resolved.map((r) => r.source));
   const source: BlockBunchWeightSource = sources.size === 1 ? resolved[0].source : "mixed";

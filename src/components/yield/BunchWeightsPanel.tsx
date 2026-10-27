@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
-import { varietyKeyOf } from "@/lib/grapeAllocationModel";
 import {
   BUNCH_WEIGHT_SOURCE_LABEL,
   YIELD_BUNCH_WEIGHTS_KEY,
@@ -19,6 +18,7 @@ import {
   resolveBunchWeight,
   softDeleteYieldBunchWeight,
   upsertYieldBunchWeight,
+  type BlockVarietyIdentity,
   type BunchWeightSource,
   type YieldBunchWeightRow,
 } from "@/lib/yieldBunchWeights";
@@ -27,17 +27,20 @@ export interface BunchWeightVariety {
   key: string;
   name: string;
   blocks: { id: string; name: string }[];
+  /** No stored varietyKey on any planting — key derived from the name. */
+  legacyKey: boolean;
 }
 
-/** Vineyard varieties (union across blocks) with the blocks they are planted in. */
-export function bunchWeightVarieties(
-  blocks: { id: string; name: string; varieties?: string[] }[],
-): BunchWeightVariety[] {
+export type BunchWeightBlock = { id: string; name: string; plantings: BlockVarietyIdentity[] };
+
+/** Vineyard varieties grouped by stored canonical varietyKey, with the blocks they are planted in. */
+export function bunchWeightVarieties(blocks: BunchWeightBlock[]): BunchWeightVariety[] {
   const map = new Map<string, BunchWeightVariety>();
   for (const b of blocks) {
-    for (const v of b.varieties ?? []) {
-      const key = varietyKeyOf(v);
-      const row = map.get(key) ?? { key, name: v, blocks: [] };
+    for (const p of b.plantings) {
+      const key = p.key;
+      const row = map.get(key) ?? { key, name: p.name, blocks: [], legacyKey: p.legacyKey };
+      if (!p.legacyKey) row.legacyKey = false;
       if (!row.blocks.some((x) => x.id === b.id)) row.blocks.push({ id: b.id, name: b.name });
       map.set(key, row);
     }
@@ -116,7 +119,7 @@ export default function BunchWeightsPanel({
 }: {
   vineyardId: string | null;
   role: string | null;
-  blocks: { id: string; name: string; varieties?: string[] }[];
+  blocks: BunchWeightBlock[];
   rows: YieldBunchWeightRow[];
   loading?: boolean;
   error?: Error | null;
@@ -195,7 +198,7 @@ export default function BunchWeightsPanel({
             )}
             {!loading &&
               varieties.map((v) => {
-                const master = resolveBunchWeight(rows, null, v.name);
+                const master = resolveBunchWeight(rows, null, v.key);
                 const isOpen = open.has(v.key);
                 return (
                   <Fragment key={v.key}>
@@ -216,6 +219,11 @@ export default function BunchWeightsPanel({
                         <span className="ml-1 text-xs font-normal text-muted-foreground">
                           ({v.blocks.length} block{v.blocks.length === 1 ? "" : "s"})
                         </span>
+                        {v.legacyKey && (
+                          <div className="text-[10px] font-normal text-muted-foreground">
+                            Legacy planting without a stored variety key
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{fmtG(master.grams)}</TableCell>
                       <TableCell>
@@ -254,7 +262,7 @@ export default function BunchWeightsPanel({
                     </TableRow>
                     {isOpen &&
                       v.blocks.map((b) => {
-                        const eff = resolveBunchWeight(rows, b.id, v.name);
+                        const eff = resolveBunchWeight(rows, b.id, v.key);
                         return (
                           <TableRow key={`${v.key}-${b.id}`} className="bg-muted/30">
                             <TableCell />

@@ -99,8 +99,10 @@ import { buildVarietyMap, resolvePaddockAllocations, useGrapeVarieties } from "@
 import { summariseYieldSession, type SessionBlockInfo, type SummariseOptions } from "@/lib/yieldSessionSummary";
 import {
   BUNCH_WEIGHT_SOURCE_LABEL,
+  blockVarietyIdentities,
   resolveBlockBunchWeight,
   useYieldBunchWeights,
+  type BlockVarietyIdentity,
 } from "@/lib/yieldBunchWeights";
 import {
   ESTIMATE_SOURCE_LABEL,
@@ -377,22 +379,22 @@ export default function YieldReportsPage() {
 
   // Master bunch weights (block override → variety master; no 150 g fallback).
   // Refetching after a save recalculates every current trip estimate.
+  // Identity = stored canonical varietyKey from paddocks.variety_allocations.
   const bunchWeightsQ = useYieldBunchWeights(selectedVineyardId);
+  const bunchWeightBlocks = useMemo(
+    () =>
+      (blocksQ.data ?? []).map((b) => ({
+        id: b.id,
+        name: b.name ?? "Unnamed block",
+        plantings: blockVarietyIdentities(b.varietyAllocations, varietyMap) as BlockVarietyIdentity[],
+      })),
+    [blocksQ.data, varietyMap],
+  );
   const bunchWeightFor = useMemo<NonNullable<SummariseOptions["bunchWeightFor"]>>(() => {
     const rows = bunchWeightsQ.data ?? [];
-    const varietiesByBlock = new Map<string, { name: string | null; percent: number | null }[]>();
-    for (const b of blocksQ.data ?? []) {
-      varietiesByBlock.set(
-        b.id.toLowerCase(),
-        resolvePaddockAllocations(b.varietyAllocations, varietyMap).map((a) => ({
-          name: a.name ?? null,
-          percent: a.percent ?? null,
-        })),
-      );
-    }
-    return (blockId: string) =>
-      resolveBlockBunchWeight(rows, blockId, varietiesByBlock.get(blockId.toLowerCase()) ?? []);
-  }, [bunchWeightsQ.data, blocksQ.data, varietyMap]);
+    const byBlock = new Map(bunchWeightBlocks.map((b) => [b.id.toLowerCase(), b.plantings]));
+    return (blockId: string) => resolveBlockBunchWeight(rows, blockId, byBlock.get(blockId.toLowerCase()) ?? []);
+  }, [bunchWeightsQ.data, bunchWeightBlocks]);
 
   // Session totals come from the same parser the detail sheet uses — one calculation only.
   const sessionSummaries = useMemo(() => {
@@ -883,7 +885,7 @@ export default function YieldReportsPage() {
           <BunchWeightsPanel
             vineyardId={selectedVineyardId}
             role={currentRole}
-            blocks={allocationBlocks}
+            blocks={bunchWeightBlocks}
             rows={bunchWeightsQ.data ?? []}
             loading={bunchWeightsQ.isLoading}
             error={bunchWeightsQ.error as Error | null}
