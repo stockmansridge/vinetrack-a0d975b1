@@ -197,6 +197,18 @@ export default function VintageOverviewSection() {
           to="/work-tasks"
         />
         <MetricCard
+          label="Yield estimate"
+          icon={Wheat}
+          tone="primary"
+          value={yieldQ.isLoading ? "…" : yieldQ.error || !y ? "—" : fmtT(y.tonnes)}
+          hint={
+            y && y.blocksEstimated < y.blocksTotal
+              ? `${y.blocksEstimated} of ${y.blocksTotal} blocks estimated`
+              : undefined
+          }
+          to="/yield?tab=overview"
+        />
+        <MetricCard
           label="Grape allocation"
           icon={Grape}
           tone="primary"
@@ -227,18 +239,6 @@ export default function VintageOverviewSection() {
                 )
           }
           to="/yield?tab=allocation"
-        />
-        <MetricCard
-          label="Yield estimate"
-          icon={Wheat}
-          tone="primary"
-          value={yieldQ.isLoading ? "…" : yieldQ.error || !y ? "—" : fmtT(y.tonnes)}
-          hint={
-            y && y.blocksEstimated < y.blocksTotal
-              ? `${y.blocksEstimated} of ${y.blocksTotal} blocks estimated`
-              : undefined
-          }
-          to="/yield?tab=overview"
         />
       </div>
     </section>
