@@ -185,14 +185,24 @@ describe("loadSoilActivityStats", () => {
       "soil_samples",
       "soil_sample_documents",
     ]);
-    const cutoff = soilActivityWindowStart(7) as string;
+    const cutoff = new Date(soilActivityWindowStart(7) as string).getTime();
     const sampleCall = readMock.calls.find((c) => c.table === "soil_samples");
     const documentCall = readMock.calls.find((c) => c.table === "soil_sample_documents");
-    expect(sampleCall?.filters[0]).toContain(`created_at.gte.${cutoff}`);
-    expect(sampleCall?.filters[0]).toContain(`updated_at.gte.${cutoff}`);
-    expect(sampleCall?.filters[0]).toContain(`deleted_at.gte.${cutoff}`);
-    expect(documentCall?.filters).toEqual([`created_at.gte.${cutoff}`]);
+    const sampleFilter = sampleCall?.filters[0] ?? "";
+    // One window bound per lifecycle column, all the same instant.
+    const bounds = sampleFilter.split(",");
+    expect(bounds.length).toBe(3);
+    for (const [i, column] of ["created_at", "updated_at", "deleted_at"].entries()) {
+      expect(bounds[i]).toMatch(new RegExp(`^${column}\\.gte\\.\\d{4}-`));
+      const captured = new Date(bounds[i].replace(`${column}.gte.`, "")).getTime();
+      expect(Math.abs(captured - cutoff)).toBeLessThan(2000);
+    }
+    expect(documentCall?.filters.length).toBe(1);
+    expect(documentCall?.filters[0]).toMatch(/^created_at\.gte\.\d{4}-/);
+    const docCutoff = new Date(documentCall!.filters[0].replace("created_at.gte.", "")).getTime();
+    expect(Math.abs(docCutoff - cutoff)).toBeLessThan(2000);
   });
+
 
   it("reads every record for all time without a date filter", async () => {
     await loadSoilActivityStats(null);

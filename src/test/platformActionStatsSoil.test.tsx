@@ -105,8 +105,9 @@ describe("What people are doing — soil activity", () => {
     expect(screen.getByText("Trips")).toBeTruthy();
     // Soil Analysis rows carry the shared category label.
     expect(screen.getAllByText("Soil Analysis").length).toBe(2);
-    // 3 trips + 3 soil actions = 6 actions in total.
-    expect(screen.getByText(/6 actions in total/)).toBeTruthy();
+    // 3 trips + 3 soil sample actions + 2 document uploads = 8 actions.
+    expect(screen.getByText(/8 actions in total/)).toBeTruthy();
+
   });
 
   it("shows soil added/edited counts and a dash for untracked document edits", async () => {
