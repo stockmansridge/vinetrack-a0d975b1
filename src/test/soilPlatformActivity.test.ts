@@ -72,14 +72,18 @@ vi.mock("@/integrations/ios-supabase/client", () => {
 
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
+// Shared instants: a sample is "unchanged" only when its two stamps are the
+// exact same string, so computed twice they must come from one constant.
+const T_2H = hoursAgo(2);
+const T_1H = hoursAgo(1);
 
 const SAMPLES: SoilActivitySampleRow[] = [
   {
     id: "a",
     vineyard_id: "v1",
     created_by: "u1",
-    created_at: hoursAgo(2),
-    updated_at: hoursAgo(2),
+    created_at: T_2H,
+    updated_at: T_2H,
     deleted_at: null,
   },
   {
@@ -87,16 +91,16 @@ const SAMPLES: SoilActivitySampleRow[] = [
     vineyard_id: "v1",
     created_by: "u1",
     created_at: hoursAgo(240),
-    updated_at: hoursAgo(2),
+    updated_at: T_2H,
     deleted_at: null,
   },
   {
     id: "c",
     vineyard_id: "v2",
     created_by: "u2",
-    created_at: hoursAgo(2),
-    updated_at: hoursAgo(1),
-    deleted_at: hoursAgo(1),
+    created_at: T_2H,
+    updated_at: T_1H,
+    deleted_at: T_1H,
   },
   {
     id: "d",
@@ -107,6 +111,7 @@ const SAMPLES: SoilActivitySampleRow[] = [
     deleted_at: null,
   },
 ];
+
 
 const DOCUMENTS: SoilActivityDocumentRow[] = [
   { id: "d1", vineyard_id: "v1", uploaded_by: "u1", created_at: hoursAgo(2) },
