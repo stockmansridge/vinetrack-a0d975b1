@@ -1,5 +1,10 @@
 # Roadmap
 
+## Soil Analysis released workspace width
+- [x] Make the landing shell, all six tabs and sample review fluid; preserve internal control/dialog constraints and local wide-table scrolling.
+- [ ] Run focused Soil Analysis regressions and verify desktop workspace widths; check automatic compilation.
+- [ ] Deploy the approved Portal layout update, verify published response and report revision.
+
 ## Admin dashboard soil activity (Portal only)
 - [x] Move Soil Analysis into "What people are doing": soil sample and lab document rows join the SQL 257 activity table, added/edited/deleted/vineyards/users follow the same period control.
 - [x] Remove the three soil dashboard tiles; soil counts stay totals only (no participant drilldown), untracked document edits/deletions show a dash, and a refused read says so instead of showing a zero.
