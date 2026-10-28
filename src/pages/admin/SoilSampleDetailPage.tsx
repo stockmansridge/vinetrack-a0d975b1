@@ -83,7 +83,10 @@ function DetailInner() {
     queryFn: listAnalyteCatalogue,
   });
   const blocksQuery = useQuery({
-    queryKey: ["soil-analysis", "blocks", detailQuery.data?.sample.vineyard_id],
+    // Distinct key: the tabs cache narrow {id, name} rows under
+    // ["soil-analysis", "blocks", vineyardId]; sharing that key would let this
+    // page initialise row selection from cached data with no `rows` field.
+    queryKey: ["soil-analysis", "blocks-detail", detailQuery.data?.sample.vineyard_id],
     enabled: !!detailQuery.data?.sample.vineyard_id,
     queryFn: async (): Promise<
       Array<{ id: string; name: string; rows: unknown; variety_allocations: unknown }>
