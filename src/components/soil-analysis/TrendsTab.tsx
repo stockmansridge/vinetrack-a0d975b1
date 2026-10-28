@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { ComposedChart, Line, Scatter, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ResponsiveContainer } from "recharts";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
-import { listBlocksTrendResults, listAnalyteCatalogue, buildTrendSeries, splitTrendByBlocks, buildDateAverages, summariseTrend, labStatusLabel, formatMapValue, TREND_PROVISIONAL_BADGE, type BlockAnalyteResult, type SoilAnalyte } from "@/lib/soilAnalysis";
+import { listBlocksTrendResults, listAnalyteCatalogue, buildTrendSeries, splitTrendByBlocks, buildDateAverages, summariseTrend, labStatusLabel, formatMapValue, soilTimePresetCutoff, TREND_PROVISIONAL_BADGE, type BlockAnalyteResult, type SoilAnalyte } from "@/lib/soilAnalysis";
 import { SoilAnalyteMultiSelect } from "./SoilAnalyteMultiSelect";
+import { SoilTimePeriodSelect } from "./SoilTimePeriodSelect";
 import { SoilBlockSelector } from "./SoilBlockSelector";
 import { formatDate } from "@/pages/admin/_shared";
 
@@ -36,6 +37,7 @@ export function TrendsTab() {
   const { selectedVineyardId } = useVineyard();
   const [selection, setSelection] = useState<{ vineyardId: string | null; ids: string[] }>({ vineyardId: selectedVineyardId, ids: [] });
   const [analyteKeys, setAnalyteKeys] = useState<string[]>([]);
+  const [timeKey, setTimeKey] = useState("all");
   const blocksQuery = useQuery({
     queryKey: ["soil-analysis", "blocks", selectedVineyardId], enabled: !!selectedVineyardId,
     queryFn: async (): Promise<Array<{ id: string; name: string }>> => {
@@ -60,14 +62,21 @@ export function TrendsTab() {
   });
   const analytes = analytesQuery.data ?? [];
   const rows = resultsQuery.data ?? [];
+  const cutoff = useMemo(() => soilTimePresetCutoff(timeKey), [timeKey]);
+  // The time window is a client-side filter on the sampled date; the read stays all-time.
+  const visibleRows = useMemo(() => {
+    if (!cutoff) return rows;
+    const dateOf = (r: BlockAnalyteResult) => String(r.sample?.sampled_at ?? r.sample?.created_at ?? "").slice(0, 10);
+    return rows.filter((r) => dateOf(r) >= cutoff);
+  }, [rows, cutoff]);
   const rowsByAnalyte = useMemo(() => {
     const map = new Map<string, BlockAnalyteResult[]>();
-    for (const r of rows) {
+    for (const r of visibleRows) {
       const key = r.analyte_key ?? "";
       map.set(key, [...(map.get(key) ?? []), r]);
     }
     return map;
-  }, [rows]);
+  }, [visibleRows]);
   // Stable order: canonical catalogue order first, unknown keys last by name.
   const orderedKeys = useMemo(() => {
     const catalogueIndex = new Map(analytes.map((a, i) => [a.key, i]));
@@ -83,6 +92,8 @@ export function TrendsTab() {
     <SoilBlockSelector blocks={blocks} selected={selectedBlocks} onChange={(ids) => setSelection({ vineyardId: selectedVineyardId, ids })} />
     <div className="flex flex-wrap items-center gap-2">
       <SoilAnalyteMultiSelect ariaLabel="Trend analytes" values={analyteKeys} options={analytes.map((a) => ({ key: a.key, name: a.display_name, category: a.category ?? "Other" }))} onChange={setAnalyteKeys} />
+      <span className="text-xs font-medium text-muted-foreground">Time period:</span>
+      <SoilTimePeriodSelect ariaLabel="Trend time period" value={timeKey} onChange={setTimeKey} />
     </div>
     {!selectedBlocks.length ? <div className="text-sm text-muted-foreground py-6">Choose one or more blocks and an analyte to plot results over time.</div>
       : !analyteKeys.length ? <div className="text-sm text-muted-foreground py-6">Select one or more analytes to view trends.</div>
