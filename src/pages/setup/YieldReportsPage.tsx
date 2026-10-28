@@ -176,6 +176,7 @@ export default function YieldReportsPage() {
   // `null` means "not chosen yet" and resolves to the vineyard's current vintage.
   const [vintageFilter, setVintageFilter] = useState<string | null>(null);
   const [completion, setCompletion] = useState<string>(ANY);
+  const [overviewView, setOverviewView] = useState<"block" | "variety">("block");
   // Deep links (e.g. the Dashboard "Grape allocation" card) open a specific tab
   // through ?tab=...; anything unrecognised still lands on Overview.
   const [searchParams] = useSearchParams();
@@ -834,6 +835,18 @@ export default function YieldReportsPage() {
               </SelectContent>
             </Select>
           </div>
+          {tab === "overview" && (
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">View by</div>
+              <Select value={overviewView} onValueChange={(v) => setOverviewView(v as "block" | "variety")}>
+                <SelectTrigger className="w-40" aria-label="View by"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="block">Block</SelectItem>
+                  <SelectItem value="variety">Variety</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {tab === "historical" && (
             <>
               <div className="space-y-1">
@@ -905,14 +918,21 @@ export default function YieldReportsPage() {
             onApplyDamage={setApplyDamage}
             vintage={activeVintage === ANY ? null : activeVintage}
           />
-          <YieldOverviewGrid
-            cards={overviewCards}
-            vintage={activeVintage === ANY ? null : activeVintage}
-            estimateInfo={seasonEstimates.infoByBlock}
-            bunchCountBlocks={currentEstimates}
-            sourceByBlock={seasonEstimates.sourceByBlock}
-            bunchWeightFor={bunchWeightFor}
-          />
+          {overviewView === "variety" ? (
+            <YieldVarietyOverview
+              cards={overviewCards}
+              vintage={activeVintage === ANY ? null : activeVintage}
+            />
+          ) : (
+            <YieldOverviewGrid
+              cards={overviewCards}
+              vintage={activeVintage === ANY ? null : activeVintage}
+              estimateInfo={seasonEstimates.infoByBlock}
+              bunchCountBlocks={currentEstimates}
+              sourceByBlock={seasonEstimates.sourceByBlock}
+              bunchWeightFor={bunchWeightFor}
+            />
+          )}
 
         </TabsContent>
 
