@@ -151,7 +151,7 @@ describe("Trends time period", () => {
     await screen.findByRole("region", { name: "Calcium trend" });
     expect(screen.getByRole("combobox", { name: "Trend time period" }).value).toBe("all");
     expect(mock.scatters.filter((p) => p.name === "Block A · Laboratory result").at(-1).data).toHaveLength(2);
-    expect(within(screen.getByRole("region", { name: "Block A trend summary" })).getByText("50 ppm")).toBeTruthy();
+    expect(within(screen.getByRole("table")).getAllByRole("row").length).toBe(3);
 
     fireEvent.change(screen.getByRole("combobox", { name: "Trend time period" }), { target: { value: "1y" } });
     expect(mock.scatters.filter((p) => p.name === "Block A · Laboratory result").at(-1).data).toHaveLength(1);
