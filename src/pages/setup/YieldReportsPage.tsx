@@ -54,6 +54,7 @@ import {
   type HistoricalYieldRecord,
 } from "@/lib/yieldReportsQuery";
 import { buildYieldOverview, type OverviewBlockCard } from "@/lib/yieldOverview";
+import { varietyTonnesPerHa, yieldTonnesPerHa } from "@/lib/yieldVarietyDensity";
 import {
   buildSeasonYieldEstimates,
   splitBlockEstimateToGroups,
@@ -1345,7 +1346,7 @@ function YieldOverviewGrid({
 /** Overview grouped by variety: per-variety total plus the amount per block.
  *  Uses the same per-planting figures as the block cards — no new maths. */
 function YieldVarietyOverview({ cards, vintage }: { cards: OverviewBlockCard[]; vintage: string | null }) {
-  type Line = { blockId: string; blockName: string; detail: string | null; tonnes: number | null; actual: boolean };
+  type Line = { blockId: string; blockName: string; detail: string | null; tonnes: number | null; areaHa: number | null; actual: boolean };
   const groups = new Map<string, { name: string; lines: Line[] }>();
   for (const c of cards) {
     c.varieties.forEach((v) => {
@@ -1358,6 +1359,7 @@ function YieldVarietyOverview({ cards, vintage }: { cards: OverviewBlockCard[]; 
         blockName: c.blockName,
         detail: plantingLabel(v) || null,
         tonnes: h?.tonnes ?? null,
+        areaHa: v.areaHa,
         actual: !!h?.actual,
       });
       groups.set(k, g);
@@ -1379,12 +1381,14 @@ function YieldVarietyOverview({ cards, vintage }: { cards: OverviewBlockCard[]; 
           const known = g.lines.filter((l) => l.tonnes != null);
           const total = known.length ? known.reduce((a, l) => a + (l.tonnes as number), 0) : null;
           const incomplete = known.length < g.lines.length;
+          const density = varietyTonnesPerHa(g.lines);
           return (
             <Card key={g.name} className="p-4 space-y-2.5">
               <div className="font-medium leading-tight">{g.name}</div>
               <div>
-                <div className="text-[26px] font-bold leading-none tabular-nums">
-                  {total == null ? "—" : `${fmtNum(total)} t`}
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 tabular-nums">
+                  <span className="text-[26px] font-bold leading-none">{total == null ? "—" : `${fmtNum(total)} t`}</span>
+                  <span className="text-sm font-medium text-muted-foreground">{density == null ? "—" : fmtNum(density)} t/ha</span>
                 </div>
                 <div className="text-xs text-muted-foreground">
                   Total across {g.lines.length} {g.lines.length === 1 ? "block" : "blocks"}
@@ -1393,13 +1397,16 @@ function YieldVarietyOverview({ cards, vintage }: { cards: OverviewBlockCard[]; 
               </div>
               <div className="space-y-1.5">
                 {g.lines.map((l, i) => (
-                  <div key={`${l.blockId}-${i}`} className="flex items-baseline justify-between gap-2 rounded-md border border-border/60 px-2 py-1.5 text-sm">
+                  <div key={`${l.blockId}-${i}`} className="flex flex-wrap items-baseline justify-between gap-2 rounded-md border border-border/60 px-2 py-1.5 text-sm">
                     <div className="min-w-0">
                       <div className="truncate">{l.blockName}</div>
                       {l.detail && <div className="truncate text-xs text-muted-foreground">{l.detail}</div>}
                     </div>
                     <div className="shrink-0 text-right">
-                      <div className="font-semibold tabular-nums">{l.tonnes == null ? "—" : `${fmtNum(l.tonnes)} t`}</div>
+                      <div className="flex flex-wrap justify-end gap-x-2 font-semibold tabular-nums">
+                        <span>{l.tonnes == null ? "—" : `${fmtNum(l.tonnes)} t`}</span>
+                        <span className="font-normal text-muted-foreground">{yieldTonnesPerHa(l.tonnes, l.areaHa) == null ? "—" : fmtNum(yieldTonnesPerHa(l.tonnes, l.areaHa) ?? 0)} t/ha</span>
+                      </div>
                       {l.tonnes != null && (
                         <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{l.actual ? "Actual" : "Estimate"}</div>
                       )}

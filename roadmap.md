@@ -1,5 +1,8 @@
 # Roadmap
 
+## Yields variety density
+- [x] Add t/ha beside variety totals and each block/planting tonnage using existing allocated hectares; variety density = sum yield / sum area, unavailable for missing yield or invalid area. 16 focused tests passed; preview build OK. No backend changes or publication; authenticated live-vineyard visual acceptance remains unavailable.
+
 ## Meta trial conversion tracking
 - [x] Audit complete: no Meta install found in Portal source or inspected published marketing/Portal assets; no Portal ad consent or campaign retention found. Signup, profile and vineyard creation are separate; trial-creation implementation is owned by shared backend and unavailable here.
 - [ ] Confirm regional advertising consent route and shared marketing-site Pixel ID — awaiting owner choices/ID.
