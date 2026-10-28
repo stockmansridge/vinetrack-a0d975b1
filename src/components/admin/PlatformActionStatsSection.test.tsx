@@ -5,7 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { PlatformActionStatsSection } from "./PlatformActionStatsSection";
 vi.mock("@/integrations/ios-supabase/client", () => ({ iosSupabase: { rpc: vi.fn(async () => ({ data: [{ action_key: "trips", label: "Trips", category: "Operations", created_count: 3, edited_count: 0, deleted_count: 0, vineyard_count: 1, user_count: 1 }], error: null })) } }));
 // Soil activity has its own read helper; this file covers SQL 257 attribution only.
-vi.mock("@/lib/soilPlatformActivity", () => ({ loadSoilActivityStats: vi.fn(async () => []) }));
+vi.mock("@/lib/soilPlatformActivity", () => ({ loadSoilActivityStats: vi.fn(async () => []), loadSoilActivityParticipants: vi.fn(async () => []) }));
 
 vi.mock("@/lib/adminActionParticipants", () => ({ fetchActionParticipants: vi.fn(async (_a, kind) => [{ id: kind === "users" ? "u" : "v", records: 3 }]) }));
 vi.mock("@/lib/adminApi", () => ({
