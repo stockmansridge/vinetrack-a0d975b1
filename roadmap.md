@@ -1,5 +1,11 @@
 # Roadmap
 
+## Meta trial conversion tracking
+- [x] Audit complete: no Meta install found in Portal source or inspected published marketing/Portal assets; no Portal ad consent or campaign retention found. Signup, profile and vineyard creation are separate; trial-creation implementation is owned by shared backend and unavailable here.
+- [ ] Confirm regional advertising consent route and shared marketing-site Pixel ID — awaiting owner choices/ID.
+- [ ] Implement only verified browser tracking boundaries with durable conversion idempotency; focused tests — blocked on authoritative new-trial success evidence, consent choice and shared Pixel ID. UI success and active_trial access are not new-registration proof.
+- [x] Assess server reporting: feasible only after shared backend verifies/persists eligible new-trial confirmation and stable opaque event identity; CAPI deferred, no available Meta connection, no server credentials requested yet. No runtime code changed, publication or production trials.
+
 ## Soil Analysis released workspace width
 - [x] Make the landing shell, all six tabs and sample review fluid; preserve internal control/dialog constraints and local wide-table scrolling.
 - [x] 339 Soil Analysis tests across 21 files passed (17 new layout checks); automatic preview compilation build OK. All six tabs and review verified with isolated fixtures at 1024/1440/1920, no page overflow or runtime errors; live signed-in data verification unavailable (session mint reports no auth users).
