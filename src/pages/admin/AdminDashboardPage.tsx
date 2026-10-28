@@ -329,6 +329,24 @@ export default function AdminDashboardPage() {
         <Tile to="/admin/pins" label="Pins" value={s?.total_pins ?? "—"} />
         <Tile to="/admin/spray-records" label="Spray Records" value={s?.total_spray_records ?? "—"} />
         <Tile to="/admin/work-tasks" label="Work Tasks" value={s?.total_work_tasks ?? "—"} />
+        <Tile
+          to="/soil-analysis?tab=samples"
+          label="Soil Samples"
+          value={soil.loading ? "…" : soil.unavailable ? "—" : soil.samples}
+          hint={soil.unavailable ? "Unavailable" : `${soil.confirmed} confirmed`}
+        />
+        <Tile
+          to="/soil-analysis?tab=samples"
+          label="Soil Uploads"
+          value={soil.loading ? "…" : soil.unavailable ? "—" : soil.uploads}
+          hint={soil.unavailable ? "Unavailable" : `${soil.awaiting} awaiting review`}
+        />
+        <Tile
+          to="/soil-analysis?tab=samples"
+          label="Soil Review"
+          value={soil.loading ? "…" : soil.unavailable ? "—" : soil.awaiting}
+          hint={soil.unavailable ? "—" : `${soil.failed} failed extraction`}
+        />
         <Tile to="/admin/email-diagnostics" label="Email Test" value="Send" hint="Verify Resend delivery" />
       </div>
       <p className="text-xs text-muted-foreground">
