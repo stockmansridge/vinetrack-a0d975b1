@@ -81,6 +81,48 @@ function useBlocksTotal(vineyardIds: string[]) {
   return { total, loading };
 }
 
+/**
+ * Platform-wide Soil Analysis counts for the admin dashboard.
+ * Reads the live soil tables directly (System Admin support select covers
+ * both tables via their vineyard_id columns); soft-deleted samples are
+ * excluded, matching the "active records" semantics of every other tile.
+ */
+function useSoilAnalysisCounts() {
+  const queries = useQueries({
+    queries: [
+      ["samples", "soil_samples", (q: any) => q] as const,
+      ["confirmed", "soil_samples", (q: any) => q.eq("extraction_status", "confirmed")] as const,
+      [
+        "awaiting",
+        "soil_samples",
+        (q: any) =>
+          q.in("extraction_status", ["pending", "processing", "review_required"]),
+      ] as const,
+      ["failed", "soil_samples", (q: any) => q.eq("extraction_status", "failed")] as const,
+      ["uploads", "soil_sample_documents", (q: any) => q] as const,
+    ].map(([key, table, build]) => ({
+      queryKey: ["admin", "soil-counts", key],
+      staleTime: 60_000,
+      queryFn: async () => {
+        const base = (iosSupabase as any).from(table).is("deleted_at", null);
+        const filtered = table === "soil_sample_documents" ? (iosSupabase as any).from(table) : base;
+        const { count, error } = await build(filtered).select("id", {
+          count: "exact",
+          head: true,
+        });
+        if (error) throw new Error(error.message);
+        return count ?? 0;
+      },
+    })),
+  });
+  const loading = queries.some((q) => q.isLoading);
+  const unavailable = queries.some((q) => q.isError);
+  const [samples, confirmed, awaiting, failed, uploads] = queries.map(
+    (q) => (q.data as number) ?? 0,
+  );
+  return { samples, confirmed, awaiting, failed, uploads, loading, unavailable };
+}
+
 function formatHectares(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "0.0 ha";
   if (v >= 1000) {
@@ -197,6 +239,7 @@ export default function AdminDashboardPage() {
   );
   const blocks = useBlocksTotal(activeVineyardIds);
   const platformScale = usePlatformScale();
+  const soil = useSoilAnalysisCounts();
   const activityCounts = useAdminVineyardActivityCounts();
 
   // Vineyard-level Platform Scale metrics only count vineyards that have
@@ -287,6 +330,24 @@ export default function AdminDashboardPage() {
         <Tile to="/admin/pins" label="Pins" value={s?.total_pins ?? "—"} />
         <Tile to="/admin/spray-records" label="Spray Records" value={s?.total_spray_records ?? "—"} />
         <Tile to="/admin/work-tasks" label="Work Tasks" value={s?.total_work_tasks ?? "—"} />
+        <Tile
+          to="/soil-analysis?tab=samples"
+          label="Soil Samples"
+          value={soil.loading ? "…" : soil.unavailable ? "—" : soil.samples}
+          hint={soil.loading ? "…" : soil.unavailable ? "Unavailable" : `${soil.confirmed} confirmed`}
+        />
+        <Tile
+          to="/soil-analysis?tab=samples"
+          label="Soil Uploads"
+          value={soil.loading ? "…" : soil.unavailable ? "—" : soil.uploads}
+          hint={soil.loading ? "…" : soil.unavailable ? "Unavailable" : `${soil.awaiting} awaiting review`}
+        />
+        <Tile
+          to="/soil-analysis?tab=samples"
+          label="Soil Review"
+          value={soil.loading ? "…" : soil.unavailable ? "—" : soil.awaiting}
+          hint={soil.loading ? "…" : soil.unavailable ? "—" : `${soil.failed} failed extraction`}
+        />
         <Tile to="/admin/email-diagnostics" label="Email Test" value="Send" hint="Verify Resend delivery" />
       </div>
       <p className="text-xs text-muted-foreground">
