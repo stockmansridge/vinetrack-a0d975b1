@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({ from: vi.fn(), calls: [] as any[], maps: [] as any[], legacy: [] as any[], results: [] as any[] }));
 vi.mock("@/integrations/ios-supabase/client", () => ({ supabase: { from: mock.from } }));
-import { listBlocksAnalyteResults, buildTrendSeries, splitTrendByBlocks, buildDateAverages, summariseTrend } from "@/lib/soilAnalysis";
+import { listBlocksAnalyteResults, buildTrendSeries, splitTrendByBlocks, buildDateAverages, summariseTrend, soilTimePresetCutoff, SOIL_TIME_PRESETS } from "@/lib/soilAnalysis";
 const row = (id: string, sampleId: string, value: number, date: string, method: string | null = null, unit = "ppm") => ({
   id, sample_id: sampleId, analyte_key: "calcium", value_numeric: value, method, unit,
   soil_samples: { id: sampleId, sampled_at: date, created_at: date, extraction_status: "confirmed", paddocks: { name: "Legacy" } },
