@@ -334,19 +334,19 @@ export default function AdminDashboardPage() {
           to="/soil-analysis?tab=samples"
           label="Soil Samples"
           value={soil.loading ? "…" : soil.unavailable ? "—" : soil.samples}
-          hint={soil.unavailable ? "Unavailable" : `${soil.confirmed} confirmed`}
+          hint={soil.loading ? "…" : soil.unavailable ? "Unavailable" : `${soil.confirmed} confirmed`}
         />
         <Tile
           to="/soil-analysis?tab=samples"
           label="Soil Uploads"
           value={soil.loading ? "…" : soil.unavailable ? "—" : soil.uploads}
-          hint={soil.unavailable ? "Unavailable" : `${soil.awaiting} awaiting review`}
+          hint={soil.loading ? "…" : soil.unavailable ? "Unavailable" : `${soil.awaiting} awaiting review`}
         />
         <Tile
           to="/soil-analysis?tab=samples"
           label="Soil Review"
           value={soil.loading ? "…" : soil.unavailable ? "—" : soil.awaiting}
-          hint={soil.unavailable ? "—" : `${soil.failed} failed extraction`}
+          hint={soil.loading ? "…" : soil.unavailable ? "—" : `${soil.failed} failed extraction`}
         />
         <Tile to="/admin/email-diagnostics" label="Email Test" value="Send" hint="Verify Resend delivery" />
       </div>

@@ -107,7 +107,8 @@ describe("AdminDashboardPage soil analysis tiles", () => {
     soilMock.count = 12;
     render(<AdminDashboardPage />, { wrapper });
 
-    await screen.findByText("Soil Samples");
+    // Wait for the head-count queries to resolve.
+    await screen.findByText("12 confirmed");
 
     const soilTiles = screen
       .getAllByRole("link")
