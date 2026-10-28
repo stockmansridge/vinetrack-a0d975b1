@@ -14,13 +14,30 @@
 // mistaken for "no soil activity".
 
 import { supabase } from "@/integrations/ios-supabase/client";
-import type { PlatformActionStat } from "@/components/admin/PlatformActionStatsSection";
 
 const db = supabase as any;
 
 export const SOIL_ACTIVITY_CATEGORY = "Soil Analysis";
 export const SOIL_SAMPLE_ACTIVITY_KEY = "soil_samples";
 export const SOIL_DOCUMENT_ACTIVITY_KEY = "soil_sample_documents";
+
+/**
+ * Shape matches the admin_platform_action_stats rows the dashboard already
+ * renders, so soil activity joins the same ranked table. Declared locally to
+ * keep this module independent of the dashboard component.
+ */
+export interface SoilActivityStat {
+  action_key: string;
+  label: string;
+  category: string;
+  created_count: number | null;
+  edited_count: number | null;
+  deleted_count: number | null;
+  vineyard_count: number | null;
+  user_count: number | null;
+  /** False when the records behind a count can't be listed (soil rows). */
+  drilldown?: boolean;
+}
 
 /** Minimal soil_samples columns the activity ledger needs. */
 export interface SoilActivitySampleRow {
@@ -83,7 +100,7 @@ export function buildSoilActivityStats(
   samples: SoilActivitySampleRow[],
   documents: SoilActivityDocumentRow[],
   days: number | null,
-): PlatformActionStat[] {
+): SoilActivityStat[] {
   const since = soilActivityWindowStart(days);
 
   const addedSamples = samples.filter((r) => within(r.created_at, since));
@@ -132,7 +149,10 @@ async function fetchAll<T>(
   const rows: T[] = [];
   for (let page = 0; page < MAX_PAGES; page++) {
     const { data, error } = await build(
-      db.from(table).select(columns).range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1),
+      db
+        .from(table)
+        .select(columns)
+        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1),
     );
     if (error) throw new Error(error.message);
     const batch = (data ?? []) as T[];
@@ -148,7 +168,7 @@ async function fetchAll<T>(
  */
 export async function loadSoilActivityStats(
   days: number | null,
-): Promise<PlatformActionStat[]> {
+): Promise<SoilActivityStat[]> {
   const since = soilActivityWindowStart(days);
 
   const samples = await fetchAll<SoilActivitySampleRow>(

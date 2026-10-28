@@ -1,10 +1,13 @@
 // System Admin → Dashboard: what people are doing across Portal, iOS and
-// Android. Reads the read-only admin_platform_action_stats RPC (SQL 257).
+// Android. Reads the read-only admin_platform_action_stats RPC (SQL 257) and
+// merges in Soil Analysis activity, which that RPC doesn't cover, from the
+// live soil records (src/lib/soilPlatformActivity.ts).
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { iosSupabase } from "@/integrations/ios-supabase/client";
+import { loadSoilActivityStats } from "@/lib/soilPlatformActivity";
 import { ActionParticipantsDialog, type ParticipantSelection } from "./ActionParticipantsDialog";
 
 export interface PlatformActionStat {
@@ -16,6 +19,8 @@ export interface PlatformActionStat {
   deleted_count: number | null;
   vineyard_count: number | null;
   user_count: number | null;
+  /** False when the records behind a count can't be listed (soil rows). */
+  drilldown?: boolean;
 }
 
 export const ACTION_RANGES = [
@@ -51,7 +56,19 @@ export function PlatformActionStatsSection() {
       return (data ?? []) as PlatformActionStat[];
     },
   });
-  const rows = useMemo(() => rankActions(q.data ?? []), [q.data]);
+  // Soil Analysis isn't in SQL 257, so its rows come from the live soil
+  // records and follow the same period control.
+  const soil = useQuery({
+    queryKey: ["admin", "soil-platform-activity", days],
+    staleTime: 60_000,
+    retry: false,
+    queryFn: () => loadSoilActivityStats(days),
+  });
+  const rows = useMemo(
+    () => rankActions([...(q.data ?? []), ...(soil.data ?? [])]),
+    [q.data, soil.data],
+  );
+  const loading = q.isLoading || soil.isLoading;
   const max = Math.max(1, ...rows.map(actionTotal));
   const grand = rows.reduce((s, r) => s + actionTotal(r), 0);
 
@@ -79,13 +96,13 @@ export function PlatformActionStatsSection() {
         </div>
       </div>
 
-      {q.isLoading && <div className="text-sm text-muted-foreground">Loading activity…</div>}
+      {loading && <div className="text-sm text-muted-foreground">Loading activity…</div>}
       {q.error && (
         <div className="rounded-md border border-border/60 bg-muted/40 p-3 text-sm text-muted-foreground">
           Activity stats aren't available yet — waiting for the backend update (SQL 257).
         </div>
       )}
-      {!q.isLoading && !q.error && rows.length === 0 && (
+      {!loading && !q.error && rows.length === 0 && (
         <div className="text-sm text-muted-foreground">No activity in this period.</div>
       )}
 
@@ -127,8 +144,10 @@ export function PlatformActionStatsSection() {
                       <td className="py-1.5 pr-3 text-right tabular-nums">{fmt(r.deleted_count)}</td>
                       {(["vineyards", "users"] as const).map((kind) => {
                         const count = kind === "vineyards" ? r.vineyard_count : r.user_count;
+                        // Soil rows have no participant feed behind them, so
+                        // their counts stay plain text instead of a list.
                         return <td key={kind} className={`py-1.5 text-right tabular-nums ${kind === "vineyards" ? "pr-3" : ""}`}>
-                          {count == null ? "—" : <Button variant="link" className="h-auto min-w-8 p-0 tabular-nums" aria-label={`${r.label}: ${fmt(count)} ${kind}`} onClick={() => setSelection({ action: r.action_key, label: r.label, kind, expected: Number(count), days, period: selectedRange.label })}>{fmt(count)}</Button>}
+                          {count == null ? "—" : r.drilldown === false ? fmt(count) : <Button variant="link" className="h-auto min-w-8 p-0 tabular-nums" aria-label={`${r.label}: ${fmt(count)} ${kind}`} onClick={() => setSelection({ action: r.action_key, label: r.label, kind, expected: Number(count), days, period: selectedRange.label })}>{fmt(count)}</Button>}
                         </td>;
                       })}
                     </tr>
@@ -141,6 +160,11 @@ export function PlatformActionStatsSection() {
             "—" means that record type doesn't track this. Edited counts records changed after they were added.
           </p>
         </>
+      )}
+      {!soil.isLoading && soil.error && (
+        <p className="text-xs text-muted-foreground mt-2">
+          Soil Analysis activity isn't available with your current access, so no soil figures are shown.
+        </p>
       )}
       {selection && <ActionParticipantsDialog selection={selection} onClose={() => setSelection(null)} />}
     </Card>
