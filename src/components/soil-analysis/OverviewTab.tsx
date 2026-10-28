@@ -130,7 +130,7 @@ export function OverviewTab({ onOpenSample }: { onOpenSample: (id: string) => vo
   const awaiting = (counts.pending ?? 0) + (counts.processing ?? 0);
 
   return (
-    <div className="space-y-4">
+    <div className="w-full max-w-none min-w-0 space-y-4">
       <div className="grid gap-3 sm:grid-cols-3">
         <Card>
           <CardHeader className="pb-1">
@@ -168,7 +168,7 @@ export function OverviewTab({ onOpenSample }: { onOpenSample: (id: string) => vo
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Latest sample by block</CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           {latestByBlock.length === 0 ? (
             <div className="text-sm text-muted-foreground px-4 pb-4">
               No mapped samples yet. Upload a laboratory report to begin.
@@ -208,7 +208,7 @@ export function OverviewTab({ onOpenSample }: { onOpenSample: (id: string) => vo
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Current issues (laboratory range only)</CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           {issues.length === 0 ? (
             <div className="text-sm text-muted-foreground px-4 pb-4">
               No results outside the laboratory's stated range.

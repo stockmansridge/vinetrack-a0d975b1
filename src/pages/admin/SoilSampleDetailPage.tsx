@@ -365,15 +365,15 @@ function DetailInner() {
           : "No results recorded for this sample.";
 
   return (
-    <div className="p-4 md:p-6 max-w-6xl">
+    <div className="p-4 md:p-6 w-full max-w-none min-w-0">
       <AdminPageHeader
         title="Review soil sample"
         subtitle={`${sample.vineyard_name ?? "Vineyard"} · ${formatDate(sample.sampled_at)}`}
         back="/soil-analysis"
       />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
+      <div className="grid w-full min-w-0 gap-4 lg:grid-cols-2">
+        <Card className="min-w-0">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Extracted from report</CardTitle>
           </CardHeader>
@@ -465,7 +465,7 @@ function DetailInner() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">VineTrack block coverage</CardTitle>
           </CardHeader>
@@ -526,7 +526,7 @@ function DetailInner() {
                   return (
                     <div key={idx} className="rounded-md border border-border p-2 space-y-2">
                       <div className="flex items-end gap-2">
-                        <div className="flex-1 space-y-1">
+                        <div className="min-w-0 flex-1 space-y-1">
                           <Label>Block</Label>
                           <select
                             className={selectClass}
@@ -626,7 +626,7 @@ function DetailInner() {
         </Card>
       </div>
 
-      <Card className="mt-4">
+      <Card className="mt-4 w-full min-w-0">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Source documents</CardTitle>
         </CardHeader>
@@ -638,7 +638,7 @@ function DetailInner() {
               <div key={doc.id} className="space-y-1">
                 <div className="flex items-center gap-2">
                   <FileText className="h-4 w-4 text-muted-foreground" />
-                  <span className="flex-1 truncate">{doc.original_filename}</span>
+                  <span className="min-w-0 flex-1 truncate">{doc.original_filename}</span>
                   <Button size="sm" variant="outline" onClick={() => openDocument(doc.storage_path)}>
                     View source document
                   </Button>
@@ -653,7 +653,7 @@ function DetailInner() {
         </CardContent>
       </Card>
 
-      <Card className="mt-4">
+      <Card className="mt-4 w-full min-w-0">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Measurements</CardTitle>
         </CardHeader>
@@ -748,7 +748,7 @@ function DetailInner() {
         </CardContent>
       </Card>
 
-      <div className="flex items-center gap-3 mt-4">
+      <div className="flex flex-wrap items-center gap-3 mt-4">
         <Button onClick={save}>Save review</Button>
         {sample.extraction_status === "failed" && (
           <Button variant="outline" onClick={retry} disabled={retrying}>

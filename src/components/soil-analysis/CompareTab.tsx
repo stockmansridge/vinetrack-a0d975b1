@@ -141,7 +141,7 @@ export function CompareTab() {
     s.sample_depth_from_cm != null ? `${s.sample_depth_from_cm}–${s.sample_depth_to_cm ?? "?"} cm` : "—";
 
   return (
-    <div className="space-y-3">
+    <div className="w-full max-w-none min-w-0 space-y-3">
       <Card>
         <CardContent className="pt-4 space-y-3">
           <div className="flex gap-1" role="group" aria-label="Compare mode">

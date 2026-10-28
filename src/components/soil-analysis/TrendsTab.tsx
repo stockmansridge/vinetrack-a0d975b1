@@ -88,7 +88,7 @@ export function TrendsTab() {
     });
   }, [analyteKeys, analytes]);
 
-  return <div className="space-y-3 min-w-0">
+  return <div className="w-full max-w-none space-y-3 min-w-0">
     <SoilBlockSelector blocks={blocks} selected={selectedBlocks} onChange={(ids) => setSelection({ vineyardId: selectedVineyardId, ids })} />
     <div className="flex flex-wrap items-center gap-2">
       <SoilAnalyteMultiSelect ariaLabel="Trend analytes" values={analyteKeys} options={analytes.map((a) => ({ key: a.key, name: a.display_name, category: a.category ?? "Other" }))} onChange={setAnalyteKeys} />
@@ -156,7 +156,7 @@ function AnalyteTrendSection({ analyte, analyteKey, rows, blocks, selectedBlocks
       })}
     </div>;
   };
-  return <section aria-label={`${name} trend`} className="space-y-3 rounded-md border bg-card p-3">
+  return <section aria-label={`${name} trend`} className="w-full max-w-none min-w-0 space-y-3 rounded-md border bg-card p-3">
     <div className="flex flex-wrap items-center gap-2 text-sm">
       <h2 className="text-base font-semibold">{name}</h2>
       {active && <Badge variant="outline">{active.method ?? "Method not recorded"}</Badge>}
@@ -190,7 +190,7 @@ function AnalyteTrendSection({ analyte, analyteKey, rows, blocks, selectedBlocks
             </>}
           </section>)}
         </div>
-        {active && <div className="h-96 min-w-0" aria-label={`${name} block trends chart`}>
+        {active && <div className="h-96 w-full min-w-0" aria-label={`${name} block trends chart`}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart margin={{ top: 16, right: 16, bottom: 8, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />

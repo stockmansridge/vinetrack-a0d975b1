@@ -24,10 +24,8 @@ export default function SoilAnalysisPage() {
   const openSample = (id: string) => navigate(`/soil-analysis/samples/${id}`);
 
   return (
-    // Reports uses the full Portal workspace width; the header, banner, tab
-    // strip and the other tabs keep the comfortable max-w-6xl column.
-    <div className="p-4 md:p-6 w-full max-w-none">
-      <div className="max-w-6xl">
+    <div className="p-4 md:p-6 w-full max-w-none min-w-0">
+      <div className="w-full max-w-none">
         <AdminPageHeader
           title="Soil Analysis"
           subtitle="Laboratory soil reports, block mapping and trends"
@@ -37,9 +35,9 @@ export default function SoilAnalysisPage() {
 
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setParams({ tab: v }, { replace: true })}>
-        <div className="max-w-6xl">
-          <TabsList>
+      <Tabs className="w-full max-w-none min-w-0" value={tab} onValueChange={(v) => setParams({ tab: v }, { replace: true })}>
+        <div className="w-full max-w-none">
+          <TabsList className="max-w-full flex-wrap justify-start">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="samples">Soil Samples</TabsTrigger>
             <TabsTrigger value="trends">Trends</TabsTrigger>
@@ -48,22 +46,22 @@ export default function SoilAnalysisPage() {
             <TabsTrigger value="reports">Reports</TabsTrigger>
           </TabsList>
         </div>
-        <TabsContent value="overview" className="mt-4 max-w-6xl">
+        <TabsContent value="overview" className="mt-4 w-full max-w-none min-w-0">
           <OverviewTab onOpenSample={openSample} />
         </TabsContent>
-        <TabsContent value="samples" className="mt-4 max-w-6xl">
+        <TabsContent value="samples" className="mt-4 w-full max-w-none min-w-0">
           <SamplesTab onOpenSample={openSample} />
         </TabsContent>
-        <TabsContent value="trends" className="mt-4 max-w-6xl">
+        <TabsContent value="trends" className="mt-4 w-full max-w-none min-w-0">
           <TrendsTab />
         </TabsContent>
-        <TabsContent value="compare" className="mt-4 max-w-6xl">
+        <TabsContent value="compare" className="mt-4 w-full max-w-none min-w-0">
           <CompareTab />
         </TabsContent>
-        <TabsContent value="reports" className="mt-4 w-full max-w-none">
+        <TabsContent value="reports" className="mt-4 w-full max-w-none min-w-0">
           <ReportsTab onOpenSample={openSample} />
         </TabsContent>
-        <TabsContent value="traffic-lights" className="mt-4 max-w-6xl">
+        <TabsContent value="traffic-lights" className="mt-4 w-full max-w-none min-w-0">
           <TrafficLightsTab />
         </TabsContent>
       </Tabs>

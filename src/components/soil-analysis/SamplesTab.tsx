@@ -126,10 +126,10 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
     return [...set].sort();
   }, [samplesQuery.data]);
 
-  const selectClass = "rounded-md border border-input bg-background px-2 py-1.5 text-sm";
+  const selectClass = "min-w-0 max-w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm";
 
   return (
-    <div className="space-y-3">
+    <div className="w-full max-w-none min-w-0 space-y-3">
       <div className="flex flex-wrap items-end gap-2">
         <Button className="mr-auto" onClick={() => setUploadOpen(true)}>
           <Upload className="h-4 w-4 mr-1.5" /> Upload report
@@ -162,7 +162,7 @@ export function SamplesTab({ onOpenSample }: { onOpenSample: (id: string) => voi
         <Input type="date" className="w-auto" value={dateTo} onChange={(e) => setDateTo(e.target.value)} aria-label="Samples to" />
       </div>
 
-      <Card className="overflow-hidden">
+      <Card className="w-full min-w-0 overflow-x-auto">
         {samplesQuery.isLoading ? (
           <div className="text-sm text-muted-foreground p-6">Loading samples…</div>
         ) : samplesQuery.error ? (

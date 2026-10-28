@@ -73,7 +73,7 @@ export function TrafficLightsTab() {
   });
   // Summary stays independent of the direct status filter.
   const counts = soilTrafficCounts(filtered);
-  return <div className="min-w-0 space-y-4">
+  return <div className="w-full max-w-none min-w-0 space-y-4">
     <div>
       <h2 className="text-lg font-semibold">Latest laboratory statuses</h2>
       <p className="text-sm text-muted-foreground">Laboratory statuses remain the source of truth. Optional AI indications are labelled separately.</p>
