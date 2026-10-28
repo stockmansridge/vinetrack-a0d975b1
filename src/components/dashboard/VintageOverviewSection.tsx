@@ -143,19 +143,6 @@ export default function VintageOverviewSection() {
       </div>
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <MetricCard
-          label="Sprays complete"
-          icon={Droplet}
-          tone="teal"
-          value={
-            sprayCountQ.isLoading
-              ? "…"
-              : sprayCountQ.error
-                ? "—"
-                : fmt(sprayCountQ.data ?? 0)
-          }
-          to="/spray-records"
-        />
-        <MetricCard
           label="Pruning complete"
           icon={Scissors}
           tone="amber"
@@ -168,6 +155,19 @@ export default function VintageOverviewSection() {
           }
           hint={`Season ${pruningSeasonYear}`}
           to="/tools/pruning-tracker"
+        />
+        <MetricCard
+          label="Sprays complete"
+          icon={Droplet}
+          tone="teal"
+          value={
+            sprayCountQ.isLoading
+              ? "…"
+              : sprayCountQ.error
+                ? "—"
+                : fmt(sprayCountQ.data ?? 0)
+          }
+          to="/spray-records"
         />
         <MetricCard
           label="Maintenance trips"
