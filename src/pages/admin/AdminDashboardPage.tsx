@@ -81,6 +81,48 @@ function useBlocksTotal(vineyardIds: string[]) {
   return { total, loading };
 }
 
+/**
+ * Platform-wide Soil Analysis counts for the admin dashboard.
+ * Reads the live soil tables directly (System Admin support select covers
+ * both tables via their vineyard_id columns); soft-deleted samples are
+ * excluded, matching the "active records" semantics of every other tile.
+ */
+function useSoilAnalysisCounts() {
+  const queries = useQueries({
+    queries: [
+      ["samples", "soil_samples", (q: any) => q] as const,
+      ["confirmed", "soil_samples", (q: any) => q.eq("extraction_status", "confirmed")] as const,
+      [
+        "awaiting",
+        "soil_samples",
+        (q: any) =>
+          q.in("extraction_status", ["pending", "processing", "review_required"]),
+      ] as const,
+      ["failed", "soil_samples", (q: any) => q.eq("extraction_status", "failed")] as const,
+      ["uploads", "soil_sample_documents", (q: any) => q] as const,
+    ].map(([key, table, build]) => ({
+      queryKey: ["admin", "soil-counts", key],
+      staleTime: 60_000,
+      queryFn: async () => {
+        const base = (iosSupabase as any).from(table).is("deleted_at", null);
+        const filtered = table === "soil_sample_documents" ? (iosSupabase as any).from(table) : base;
+        const { count, error } = await build(filtered).select("id", {
+          count: "exact",
+          head: true,
+        });
+        if (error) throw new Error(error.message);
+        return count ?? 0;
+      },
+    })),
+  });
+  const loading = queries.some((q) => q.isLoading);
+  const unavailable = queries.some((q) => q.isError);
+  const [samples, confirmed, awaiting, failed, uploads] = queries.map(
+    (q) => (q.data as number) ?? 0,
+  );
+  return { samples, confirmed, awaiting, failed, uploads, loading, unavailable };
+}
+
 function formatHectares(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "0.0 ha";
   if (v >= 1000) {
