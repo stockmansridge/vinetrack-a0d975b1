@@ -176,6 +176,7 @@ export default function YieldReportsPage() {
   // `null` means "not chosen yet" and resolves to the vineyard's current vintage.
   const [vintageFilter, setVintageFilter] = useState<string | null>(null);
   const [completion, setCompletion] = useState<string>(ANY);
+  const [overviewView, setOverviewView] = useState<"block" | "variety">("block");
   // Deep links (e.g. the Dashboard "Grape allocation" card) open a specific tab
   // through ?tab=...; anything unrecognised still lands on Overview.
   const [searchParams] = useSearchParams();
@@ -570,6 +571,10 @@ export default function YieldReportsPage() {
         })),
       };
     });
+    // Natural order so "Block 2A" precedes "Block 10" (database sorts as text).
+    blocks.sort((a, b) =>
+      (a.name ?? "").localeCompare(b.name ?? "", undefined, { numeric: true, sensitivity: "base" }),
+    );
     return { unitsByBlock, blocks };
   }, [blocksQ.data, varietyMap]);
 
@@ -830,6 +835,18 @@ export default function YieldReportsPage() {
               </SelectContent>
             </Select>
           </div>
+          {tab === "overview" && (
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">View by</div>
+              <Select value={overviewView} onValueChange={(v) => setOverviewView(v as "block" | "variety")}>
+                <SelectTrigger className="w-40" aria-label="View by"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="block">Block</SelectItem>
+                  <SelectItem value="variety">Variety</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {tab === "historical" && (
             <>
               <div className="space-y-1">
@@ -901,14 +918,21 @@ export default function YieldReportsPage() {
             onApplyDamage={setApplyDamage}
             vintage={activeVintage === ANY ? null : activeVintage}
           />
-          <YieldOverviewGrid
-            cards={overviewCards}
-            vintage={activeVintage === ANY ? null : activeVintage}
-            estimateInfo={seasonEstimates.infoByBlock}
-            bunchCountBlocks={currentEstimates}
-            sourceByBlock={seasonEstimates.sourceByBlock}
-            bunchWeightFor={bunchWeightFor}
-          />
+          {overviewView === "variety" ? (
+            <YieldVarietyOverview
+              cards={overviewCards}
+              vintage={activeVintage === ANY ? null : activeVintage}
+            />
+          ) : (
+            <YieldOverviewGrid
+              cards={overviewCards}
+              vintage={activeVintage === ANY ? null : activeVintage}
+              estimateInfo={seasonEstimates.infoByBlock}
+              bunchCountBlocks={currentEstimates}
+              sourceByBlock={seasonEstimates.sourceByBlock}
+              bunchWeightFor={bunchWeightFor}
+            />
+          )}
 
         </TabsContent>
 
@@ -1306,6 +1330,79 @@ function YieldOverviewGrid({
                     <div className="text-xs text-muted-foreground">
                       These picks are not linked to a specific planting allocation yet. Open the pick
                       and assign the planting to include it at allocation level.
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Overview grouped by variety: per-variety total plus the amount per block.
+ *  Uses the same per-planting figures as the block cards — no new maths. */
+function YieldVarietyOverview({ cards, vintage }: { cards: OverviewBlockCard[]; vintage: string | null }) {
+  type Line = { blockId: string; blockName: string; detail: string | null; tonnes: number | null; actual: boolean };
+  const groups = new Map<string, { name: string; lines: Line[] }>();
+  for (const c of cards) {
+    c.varieties.forEach((v) => {
+      const name = v.variety ?? "No variety configured";
+      const k = name.trim().toLowerCase();
+      const h = headline(v.estimatedTonnes, v.actualTonnes);
+      const g = groups.get(k) ?? { name, lines: [] };
+      g.lines.push({
+        blockId: c.blockId,
+        blockName: c.blockName,
+        detail: plantingLabel(v) || null,
+        tonnes: h?.tonnes ?? null,
+        actual: !!h?.actual,
+      });
+      groups.set(k, g);
+    });
+  }
+  const list = Array.from(groups.values()).sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }),
+  );
+  if (!list.length) {
+    return <Card className="p-6 text-center text-sm text-muted-foreground">No varieties configured for this vineyard yet.</Card>;
+  }
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        {vintage ? `Vintage ${vintage}` : "All vintages"} — total tonnes per variety and the amount from each block.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {list.map((g) => {
+          const known = g.lines.filter((l) => l.tonnes != null);
+          const total = known.length ? known.reduce((a, l) => a + (l.tonnes as number), 0) : null;
+          const incomplete = known.length < g.lines.length;
+          return (
+            <Card key={g.name} className="p-4 space-y-2.5">
+              <div className="font-medium leading-tight">{g.name}</div>
+              <div>
+                <div className="text-[26px] font-bold leading-none tabular-nums">
+                  {total == null ? "—" : `${fmtNum(total)} t`}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Total across {g.lines.length} {g.lines.length === 1 ? "block" : "blocks"}
+                  {incomplete && total != null ? " · some blocks have no figure yet" : ""}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                {g.lines.map((l, i) => (
+                  <div key={`${l.blockId}-${i}`} className="flex items-baseline justify-between gap-2 rounded-md border border-border/60 px-2 py-1.5 text-sm">
+                    <div className="min-w-0">
+                      <div className="truncate">{l.blockName}</div>
+                      {l.detail && <div className="truncate text-xs text-muted-foreground">{l.detail}</div>}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="font-semibold tabular-nums">{l.tonnes == null ? "—" : `${fmtNum(l.tonnes)} t`}</div>
+                      {l.tonnes != null && (
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{l.actual ? "Actual" : "Estimate"}</div>
+                      )}
                     </div>
                   </div>
                 ))}
