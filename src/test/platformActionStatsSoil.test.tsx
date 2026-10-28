@@ -4,13 +4,20 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { PlatformActionStatsSection } from "@/components/admin/PlatformActionStatsSection";
 
-// SQL 257 returns the operational tables only; soil rows arrive from the
-// dedicated read-only helper below.
+// SQL 257 returns the operational tables only; soil rows and their participant
+// lists arrive from the dedicated read-only helper below.
 const soilMock = vi.hoisted(() => ({
   rows: null as null | Array<Record<string, unknown>>,
   error: false,
   days: [] as Array<number | null>,
+  participants: [] as Array<[string, string, number | null]>,
 }));
+
+const participantMock = vi.hoisted(() =>
+  vi.fn(async (_action: string, kind: string) => [
+    { id: kind === "users" ? "u" : "v", records: 3 },
+  ]),
+);
 
 vi.mock("@/lib/soilPlatformActivity", () => ({
   loadSoilActivityStats: vi.fn(async (days: number | null) => {
@@ -18,6 +25,14 @@ vi.mock("@/lib/soilPlatformActivity", () => ({
     if (soilMock.error) throw new Error("permission denied");
     return soilMock.rows ?? [];
   }),
+  loadSoilActivityParticipants: vi.fn(
+    async (actionKey: string, kind: string, days: number | null) => {
+      soilMock.participants.push([actionKey, kind, days]);
+      return kind === "vineyards"
+        ? [{ id: "v", records: 2 }]
+        : [{ id: "u", records: 2 }];
+    },
+  ),
 }));
 
 vi.mock("@/integrations/ios-supabase/client", () => ({
@@ -41,9 +56,7 @@ vi.mock("@/integrations/ios-supabase/client", () => ({
 }));
 
 vi.mock("@/lib/adminActionParticipants", () => ({
-  fetchActionParticipants: vi.fn(async (_a, kind) => [
-    { id: kind === "users" ? "u" : "v", records: 3 },
-  ]),
+  fetchActionParticipants: participantMock,
 }));
 
 vi.mock("@/lib/adminApi", () => ({
@@ -63,7 +76,7 @@ const SOIL_ROWS = [
     deleted_count: 0,
     vineyard_count: 2,
     user_count: 1,
-    drilldown: false,
+    participant_source: "soil",
   },
   {
     action_key: "soil_sample_documents",
@@ -74,7 +87,7 @@ const SOIL_ROWS = [
     deleted_count: null,
     vineyard_count: 2,
     user_count: 1,
-    drilldown: false,
+    participant_source: "soil",
   },
 ];
 
@@ -93,6 +106,8 @@ beforeEach(() => {
   soilMock.rows = SOIL_ROWS as never;
   soilMock.error = false;
   soilMock.days = [];
+  soilMock.participants = [];
+  participantMock.mockClear();
 });
 
 afterEach(cleanup);
@@ -107,7 +122,6 @@ describe("What people are doing — soil activity", () => {
     expect(screen.getAllByText("Soil Analysis").length).toBe(2);
     // 3 trips + 3 soil sample actions + 2 document uploads = 8 actions.
     expect(screen.getByText(/8 actions in total/)).toBeTruthy();
-
   });
 
   it("shows soil added/edited counts and a dash for untracked document edits", async () => {
@@ -118,16 +132,42 @@ describe("What people are doing — soil activity", () => {
     expect(documentRow.textContent).toContain("—");
   });
 
-  it("keeps soil counts as totals while operational counts still open their list", async () => {
+  it("opens the soil vineyard list from the vineyard count", async () => {
     renderSection();
     await screen.findByText("Soil Sample");
-    // Trips attribution stays clickable.
+    fireEvent.click(screen.getByRole("button", { name: "Soil Sample: 2 vineyards" }));
+    expect(await screen.findByRole("link", { name: "Fixture Vineyard" })).toBeTruthy();
+    expect(screen.getByText("2 added")).toBeTruthy();
+    // The list is read from the soil records, not the SQL 257 participant RPC.
+    expect(soilMock.participants).toEqual([["soil_samples", "vineyards", 1]]);
+    expect(participantMock).not.toHaveBeenCalled();
+  });
+
+  it("opens the soil user list from the user count", async () => {
+    renderSection();
+    await screen.findByText("Soil Sample");
+    fireEvent.click(screen.getByRole("button", { name: "Soil Sample: 1 users" }));
+    expect(await screen.findByRole("link", { name: "Fixture User" })).toBeTruthy();
+    expect(screen.getByText("fixture@example.invalid")).toBeTruthy();
+    expect(soilMock.participants).toEqual([["soil_samples", "users", 1]]);
+    expect(participantMock).not.toHaveBeenCalled();
+  });
+
+  it("opens the lab document uploader list", async () => {
+    renderSection();
+    await screen.findByText("Soil Lab Document");
+    fireEvent.click(screen.getByRole("button", { name: "Soil Lab Document: 1 users" }));
+    expect(await screen.findByRole("link", { name: "Fixture User" })).toBeTruthy();
+    expect(soilMock.participants).toEqual([["soil_sample_documents", "users", 1]]);
+  });
+
+  it("still opens SQL 257 participant lists for operational rows", async () => {
+    renderSection();
+    await screen.findByText("Soil Sample");
     fireEvent.click(screen.getByRole("button", { name: "Trips: 1 vineyards" }));
     expect(await screen.findByRole("link", { name: "Fixture Vineyard" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    // Soil attribution has no participant feed, so it must not be clickable.
-    expect(screen.queryByRole("button", { name: "Soil Sample: 2 vineyards" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Soil Lab Document: 1 users" })).toBeNull();
+    expect(participantMock).toHaveBeenCalled();
+    expect(soilMock.participants).toEqual([]);
   });
 
   it("follows the selected period", async () => {
