@@ -14,4 +14,12 @@ describe("Vintage metric card order", () => {
     expect(sprays).toBeGreaterThan(-1);
     expect(pruning).toBeLessThan(sprays);
   });
+
+  it("shows Yield estimate before Grape allocation", () => {
+    const yieldCard = dashboard.indexOf('label="Yield estimate"');
+    const allocation = dashboard.indexOf('label="Grape allocation"');
+    expect(yieldCard).toBeGreaterThan(-1);
+    expect(allocation).toBeGreaterThan(-1);
+    expect(yieldCard).toBeLessThan(allocation);
+  });
 });
