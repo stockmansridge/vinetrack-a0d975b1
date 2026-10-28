@@ -149,7 +149,7 @@ describe("Trends time period", () => {
     mount(); fireEvent.click(await screen.findByRole("button", { name: "All blocks" }));
     await openPicker(); tick("Calcium");
     await screen.findByRole("region", { name: "Calcium trend" });
-    expect(screen.getByRole("combobox", { name: "Trend time period" }).value).toBe("all");
+    expect((screen.getByRole("combobox", { name: "Trend time period" }) as HTMLSelectElement).value).toBe("all");
     expect(mock.scatters.filter((p) => p.name === "Block A · Laboratory result").at(-1).data).toHaveLength(2);
     expect(within(screen.getByRole("table")).getAllByRole("row").length).toBe(4);
 
