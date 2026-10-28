@@ -177,16 +177,16 @@ describe("Reports tab wiring", () => {
 
 describe("Reports full-width layout", () => {
   it("the Reports tab container uses the full workspace width", () => {
-    expect(page).toContain('value="reports" className="mt-4 w-full max-w-none"');
+    expect(page).toContain('value="reports" className="mt-4 w-full max-w-none min-w-0"');
     expect(tab).toContain("space-y-4 w-full max-w-none");
     expect(tab).toContain('Card className="w-full max-w-none"');
   });
-  it("non-report tabs and the header keep the max-w-6xl column", () => {
-    for (const t of ["overview", "samples", "trends", "compare"]) {
-      expect(page).toContain(`value="${t}" className="mt-4 max-w-6xl"`);
+  it("non-report tabs and the header expand with the workspace", () => {
+    for (const t of ["overview", "samples", "trends", "compare", "traffic-lights"]) {
+      expect(page).toContain(`value="${t}" className="mt-4 w-full max-w-none min-w-0"`);
     }
-    // Header/banner/tab strip wrappers stay bounded.
-    expect(page.match(/max-w-6xl/g)!.length).toBeGreaterThanOrEqual(6);
+    expect(page).not.toContain("max-w-6xl");
+    expect(page.match(/<div className="w-full max-w-none">/g)).toHaveLength(2);
   });
   it("the map has a responsive tall viewport with a sensible floor", () => {
     expect(map).toContain("min(72vh, 880px)");
