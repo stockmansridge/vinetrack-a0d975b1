@@ -3,7 +3,7 @@
 ## Soil Analysis released workspace width
 - [x] Make the landing shell, all six tabs and sample review fluid; preserve internal control/dialog constraints and local wide-table scrolling.
 - [x] 339 Soil Analysis tests across 21 files passed (17 new layout checks); automatic preview compilation build OK. All six tabs and review verified with isolated fixtures at 1024/1440/1920, no page overflow or runtime errors; live signed-in data verification unavailable (session mint reports no auth users).
-- [ ] Deploy the approved Portal layout update, verify published response and report revision.
+- [ ] Deployment requested for tested revision 691850f19161b82035d51306f361caad0d79b071; published Portal returns HTTP 200, but served app asset still lacks the new layout markers, so release completion remains unconfirmed.
 
 ## Admin dashboard soil activity (Portal only)
 - [x] Move Soil Analysis into "What people are doing": soil sample and lab document rows join the SQL 257 activity table, added/edited/deleted/vineyards/users follow the same period control.
