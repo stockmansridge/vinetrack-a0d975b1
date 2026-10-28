@@ -1,5 +1,11 @@
 # Roadmap
 
+## Meta trial conversion tracking
+- [ ] Audit tracking, privacy, attribution and authoritative account + trial success; report findings before implementation.
+- [ ] Confirm regional advertising consent route and shared marketing-site Pixel ID.
+- [ ] Implement only verified browser tracking boundaries with durable conversion idempotency; focused tests.
+- [ ] Assess minimal verified server reporting and document credentials/contract blockers; no unrelated deployment or production test trials.
+
 ## Soil Analysis released workspace width
 - [x] Make the landing shell, all six tabs and sample review fluid; preserve internal control/dialog constraints and local wide-table scrolling.
 - [x] 339 Soil Analysis tests across 21 files passed (17 new layout checks); automatic preview compilation build OK. All six tabs and review verified with isolated fixtures at 1024/1440/1920, no page overflow or runtime errors; live signed-in data verification unavailable (session mint reports no auth users).
