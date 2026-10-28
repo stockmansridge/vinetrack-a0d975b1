@@ -148,12 +148,12 @@ describe("Trends time period", () => {
     ].filter((r) => ids.includes(r.matched_paddock_id)));
     mount(); fireEvent.click(await screen.findByRole("button", { name: "All blocks" }));
     await openPicker(); tick("Calcium");
-    const region = await screen.findByRole("region", { name: "Calcium trend" });
-    expect(within(region).getByRole("combobox", { name: "Trend time period" }).value).toBe("all");
+    await screen.findByRole("region", { name: "Calcium trend" });
+    expect(screen.getByRole("combobox", { name: "Trend time period" }).value).toBe("all");
     expect(mock.scatters.filter((p) => p.name === "Block A · Laboratory result").at(-1).data).toHaveLength(2);
     expect(within(screen.getByRole("region", { name: "Block A trend summary" })).getByText("50 ppm")).toBeTruthy();
 
-    fireEvent.change(within(region).getByRole("combobox", { name: "Trend time period" }), { target: { value: "1y" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Trend time period" }), { target: { value: "1y" } });
     expect(mock.scatters.filter((p) => p.name === "Block A · Laboratory result").at(-1).data).toHaveLength(1);
     expect(within(screen.getByRole("region", { name: "Block A trend summary" })).getByText("10 ppm")).toBeTruthy();
     const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);
