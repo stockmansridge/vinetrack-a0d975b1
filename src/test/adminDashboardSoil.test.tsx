@@ -5,6 +5,11 @@ import { MemoryRouter } from "react-router-dom";
 import AdminDashboardPage from "@/pages/admin/AdminDashboardPage";
 import * as adminApi from "@/lib/adminApi";
 
+const soilMock = vi.hoisted(() => ({
+  count: null as number | null,
+  error: null as { message: string } | null,
+}));
+
 vi.mock("@/lib/adminApi", async (importOriginal) => {
   const mod = await importOriginal<typeof adminApi>();
   return { ...mod };
@@ -22,34 +27,28 @@ vi.mock("@/components/admin/PlatformActionStatsSection", () => ({
   PlatformActionStatsSection: () => null,
 }));
 
-interface FakeDoc {
-  count: number | null;
-  error: { message: string } | null;
-}
-
 /**
  * ios-supabase client mock: `from(table)` returns a chainable builder whose
- * `select(...)` resolves to a head-count result driven by the mock table map.
+ * `select(...)` resolves to a head-count result driven by soilMock.
  */
-function makeClient(doc: FakeDoc) {
+vi.mock("@/integrations/ios-supabase/client", () => {
   const makeBuilder = () => {
     const b: any = {};
     for (const m of ["is", "eq", "in", "neq", "order", "limit"]) {
       b[m] = () => b;
     }
-    b.select = () => Promise.resolve({ count: doc.count, error: doc.error });
+    b.select = () =>
+      Promise.resolve({ count: soilMock.count, error: soilMock.error });
     b.rpc = () => Promise.resolve({ data: [], error: null });
     return b;
   };
   return {
-    from: (_t: string) => makeBuilder(),
-    rpc: () => Promise.resolve({ data: [], error: null }),
+    iosSupabase: {
+      from: (_t: string) => makeBuilder(),
+      rpc: () => Promise.resolve({ data: [], error: null }),
+    },
   };
-}
-
-vi.mock("@/integrations/ios-supabase/client", () => ({
-  iosSupabase: makeClient({ count: null, error: null }),
-}));
+});
 
 function wrapper({ children }: { children: React.ReactNode }) {
   const client = new QueryClient({
@@ -99,39 +98,33 @@ function mockAdminFeeds() {
 describe("AdminDashboardPage soil analysis tiles", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    soilMock.count = null;
+    soilMock.error = null;
     mockAdminFeeds();
   });
 
-  it("renders soil samples, uploads and review tiles with live counts", async () => {
-    const ios = await import("@/integrations/ios-supabase/client");
-    (ios as any).iosSupabase = makeClient({ count: 12, error: null });
-    vi.doMock("@/integrations/ios-supabase/client", () => ({
-      iosSupabase: makeClient({ count: 12, error: null }),
-    }));
-
+  it("renders soil samples, uploads and review tiles linking to /soil-analysis", async () => {
+    soilMock.count = 12;
     render(<AdminDashboardPage />, { wrapper });
 
-    const samples = await screen.findByText("Soil Samples");
-    expect(samples).toBeTruthy();
+    await screen.findByText("Soil Samples");
 
-    const tiles = screen.getAllByRole("link");
-    const soilTiles = tiles.filter((a) => a.getAttribute("href") === "/soil-analysis?tab=samples");
+    const soilTiles = screen
+      .getAllByRole("link")
+      .filter((a) => a.getAttribute("href") === "/soil-analysis?tab=samples");
     expect(soilTiles.length).toBe(3);
 
-    const soilTexts = soilTiles.map((t) => t.textContent);
-    // With every count resolving to 12, all three tiles show 12.
-    for (const text of soilTexts) {
-      expect(text).toMatch(/12/);
-    }
-    expect(soilTexts.join(" ")).toContain("confirmed");
-    expect(soilTexts.join(" ")).toContain("awaiting review");
+    const labels = soilTiles.map((t) => t.textContent);
+    expect(labels.join(" ")).toContain("Soil Samples");
+    expect(labels.join(" ")).toContain("Soil Uploads");
+    expect(labels.join(" ")).toContain("Soil Review");
+    // Every count resolves to 12 in the mock, and each tile surfaces its hint.
+    expect(labels.join(" ")).toContain("12 confirmed");
+    expect(labels.join(" ")).toContain("12 awaiting review");
   });
 
   it("shows an unavailable hint when the soil counts fail", async () => {
-    vi.doMock("@/integrations/ios-supabase/client", () => ({
-      iosSupabase: makeClient({ count: null, error: { message: "permission denied" } }),
-    }));
-
+    soilMock.error = { message: "permission denied" };
     render(<AdminDashboardPage />, { wrapper });
 
     const unavailable = await screen.findAllByText("Unavailable");
