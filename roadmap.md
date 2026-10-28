@@ -1,6 +1,13 @@
 # Roadmap
 
+## Admin dashboard soil activity (Portal only)
+- [x] Move Soil Analysis into "What people are doing": soil sample and lab document rows join the SQL 257 activity table, added/edited/deleted/vineyards/users follow the same period control.
+- [x] Remove the three soil dashboard tiles; soil counts stay totals only (no participant drilldown), untracked document edits/deletions show a dash, and a refused read says so instead of showing a zero.
+- [x] 15 tests across 3 files passed (9 new soil activity tests); automatic preview compilation build OK. No SQL/backend/mobile changes or publication.
+- [ ] Authenticated live dashboard acceptance — blocked: portal sign-in runs against the shared iOS backend, which the preview session mint cannot authenticate, so real soil figures are unverified.
+
 ## Traffic Lights AI v4 cache refresh
+
 - [x] Move the AI query key to v4 so whole-sample v4 responses replace cached v1/v2/v3 readings; scopes, labels, validation and UI unchanged.
 - [x] 87 focused Traffic Lights tests passed and automatic typecheck clean; preview build OK.
 
