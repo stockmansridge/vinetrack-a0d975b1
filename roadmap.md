@@ -1,5 +1,8 @@
 # Roadmap
 
+## Yields variety density
+- [ ] Add Tonnes/Ha beside variety totals and each block tonnage, using yield divided by authoritative allocated area; verify focused calculation tests. Portal-only, no publication.
+
 ## Meta trial conversion tracking
 - [x] Audit complete: no Meta install found in Portal source or inspected published marketing/Portal assets; no Portal ad consent or campaign retention found. Signup, profile and vineyard creation are separate; trial-creation implementation is owned by shared backend and unavailable here.
 - [ ] Confirm regional advertising consent route and shared marketing-site Pixel ID — awaiting owner choices/ID.
