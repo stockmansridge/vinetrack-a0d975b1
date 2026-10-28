@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { iosSupabase } from "@/integrations/ios-supabase/client";
-import { loadSoilActivityStats } from "@/lib/soilPlatformActivity";
+import { loadSoilActivityParticipants, loadSoilActivityStats } from "@/lib/soilPlatformActivity";
 import { ActionParticipantsDialog, type ParticipantSelection } from "./ActionParticipantsDialog";
 
 export interface PlatformActionStat {
@@ -19,8 +19,9 @@ export interface PlatformActionStat {
   deleted_count: number | null;
   vineyard_count: number | null;
   user_count: number | null;
-  /** False when the records behind a count can't be listed (soil rows). */
-  drilldown?: boolean;
+  /** Which read can list the records behind these counts. */
+  participant_source?: "rpc" | "soil";
+
 }
 
 export const ACTION_RANGES = [
@@ -64,6 +65,23 @@ export function PlatformActionStatsSection() {
     retry: false,
     queryFn: () => loadSoilActivityStats(days),
   });
+  // Soil counts list from the soil read, not SQL 257; fetched only while one
+  // of their lists is actually open.
+  const soilSelection = selection?.source === "soil" ? selection : null;
+  const soilParticipants = useQuery({
+    queryKey: ["admin", "soil-activity-participants", soilSelection?.action, soilSelection?.kind, soilSelection?.days ?? days],
+    enabled: !!soilSelection,
+    staleTime: 60_000,
+    retry: false,
+    queryFn: ({ signal }) =>
+      loadSoilActivityParticipants(
+        soilSelection!.action,
+        soilSelection!.kind,
+        soilSelection!.days,
+        signal,
+      ),
+  });
+
   const rows = useMemo(
     () => rankActions([...(q.data ?? []), ...(soil.data ?? [])]),
     [q.data, soil.data],
@@ -144,12 +162,13 @@ export function PlatformActionStatsSection() {
                       <td className="py-1.5 pr-3 text-right tabular-nums">{fmt(r.deleted_count)}</td>
                       {(["vineyards", "users"] as const).map((kind) => {
                         const count = kind === "vineyards" ? r.vineyard_count : r.user_count;
-                        // Soil rows have no participant feed behind them, so
-                        // their counts stay plain text instead of a list.
+                        // Soil lists come from the soil read, everything else from SQL 257.
+                        const source = r.participant_source === "soil" ? ("soil" as const) : ("rpc" as const);
                         return <td key={kind} className={`py-1.5 text-right tabular-nums ${kind === "vineyards" ? "pr-3" : ""}`}>
-                          {count == null ? "—" : r.drilldown === false ? fmt(count) : <Button variant="link" className="h-auto min-w-8 p-0 tabular-nums" aria-label={`${r.label}: ${fmt(count)} ${kind}`} onClick={() => setSelection({ action: r.action_key, label: r.label, kind, expected: Number(count), days, period: selectedRange.label })}>{fmt(count)}</Button>}
+                          {count == null ? "—" : <Button variant="link" className="h-auto min-w-8 p-0 tabular-nums" aria-label={`${r.label}: ${fmt(count)} ${kind}`} onClick={() => setSelection({ action: r.action_key, label: r.label, kind, expected: Number(count), days, period: selectedRange.label, source })}>{fmt(count)}</Button>}
                         </td>;
                       })}
+
                     </tr>
                   );
                 })}
@@ -166,7 +185,7 @@ export function PlatformActionStatsSection() {
           Soil Analysis activity isn't available with your current access, so no soil figures are shown.
         </p>
       )}
-      {selection && <ActionParticipantsDialog selection={selection} onClose={() => setSelection(null)} />}
+      {selection && <ActionParticipantsDialog selection={selection} onClose={() => setSelection(null)} soil={selection.source === "soil" ? { data: soilParticipants.data, isLoading: soilParticipants.isLoading || soilParticipants.isFetching, error: soilParticipants.error, refetch: () => void soilParticipants.refetch() } : undefined} />}
     </Card>
   );
 }
