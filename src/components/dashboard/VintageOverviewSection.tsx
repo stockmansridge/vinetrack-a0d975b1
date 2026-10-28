@@ -10,6 +10,8 @@ import { applyVintageScope, vintageScope } from "@/lib/vintageScope";
 import { usePruningVineyardSummary } from "@/lib/pruningSummaryQuery";
 import { fetchGrapeAllocations } from "@/lib/grapeAllocationsQuery";
 import { MetricCard } from "@/components/ui/metric-card";
+import { useVintageYieldEstimateTotal } from "@/lib/vintageYieldEstimateTotal";
+import { Wheat } from "lucide-react";
 
 const fmt = (n: number) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—";
@@ -114,6 +116,9 @@ export default function VintageOverviewSection() {
     staleTime: 60_000,
   });
 
+  const yieldQ = useVintageYieldEstimateTotal(selectedVineyardId, vintage, seasonStartMonth, seasonStartDay);
+  const y = yieldQ.data;
+
   const rangeHint = `${startISO} → ${endISO}`;
   const hemLabel = hemisphereLabel(hemisphere);
 
@@ -136,7 +141,7 @@ export default function VintageOverviewSection() {
           {rangeHint}
         </span>
       </div>
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <MetricCard
           label="Sprays complete"
           icon={Droplet}
@@ -222,6 +227,18 @@ export default function VintageOverviewSection() {
                 )
           }
           to="/yield?tab=allocation"
+        />
+        <MetricCard
+          label="Yield estimate"
+          icon={Wheat}
+          tone="primary"
+          value={yieldQ.isLoading ? "…" : yieldQ.error || !y ? "—" : fmtT(y.tonnes)}
+          hint={
+            y && y.blocksEstimated < y.blocksTotal
+              ? `${y.blocksEstimated} of ${y.blocksTotal} blocks estimated`
+              : undefined
+          }
+          to="/yield?tab=overview"
         />
       </div>
     </section>
