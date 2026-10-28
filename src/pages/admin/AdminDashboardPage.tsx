@@ -239,6 +239,7 @@ export default function AdminDashboardPage() {
   );
   const blocks = useBlocksTotal(activeVineyardIds);
   const platformScale = usePlatformScale();
+  const soil = useSoilAnalysisCounts();
   const activityCounts = useAdminVineyardActivityCounts();
 
   // Vineyard-level Platform Scale metrics only count vineyards that have
