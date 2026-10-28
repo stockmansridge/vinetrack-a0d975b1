@@ -22,10 +22,14 @@ vi.mock("@/integrations/ios-supabase/client", () => {
     const filters: string[] = [];
     const b: any = { __filters: filters };
     const record = (name: string, args: unknown[]) => {
-      if (name === "gte" || name === "or") filters.push(String(args[0]));
+      // Normalise both filter styles to "column.gte.<iso>" so the loader's
+      // window bound is inspectable whichever way it was applied.
+      if (name === "or") filters.push(String(args[0]));
+      if (name === "gte") filters.push(`${args[0]}.gte.${args[1]}`);
       if (name === "range") readMock.calls.push({ table, filters, range: args });
       return b;
     };
+
     for (const m of ["select", "eq", "gte", "is", "in", "or", "order", "limit", "range"]) {
       b[m] = (...args: unknown[]) => record(m, args);
     }
