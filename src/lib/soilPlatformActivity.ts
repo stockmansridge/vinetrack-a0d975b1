@@ -35,8 +35,9 @@ export interface SoilActivityStat {
   deleted_count: number | null;
   vineyard_count: number | null;
   user_count: number | null;
-  /** False when the records behind a count can't be listed (soil rows). */
-  drilldown?: boolean;
+  /** Which read can list the records behind these counts. */
+  participant_source?: "rpc" | "soil";
+
 }
 
 /** Minimal soil_samples columns the activity ledger needs. */
@@ -121,10 +122,11 @@ export function buildSoilActivityStats(
       deleted_count: deletedSamples.length,
       vineyard_count: distinctIds(addedSamples.map((r) => r.vineyard_id)),
       user_count: distinctIds(addedSamples.map((r) => r.created_by)),
-      // The SQL 257 participant RPC doesn't cover the soil tables, so these
-      // counts are totals only and must not open a participant list.
-      drilldown: false,
+      // SQL 257's participant RPC doesn't cover the soil tables, so the list
+      // behind these counts comes from this module's own read.
+      participant_source: "soil",
     },
+
     {
       action_key: SOIL_DOCUMENT_ACTIVITY_KEY,
       label: "Soil Lab Document",
@@ -136,7 +138,8 @@ export function buildSoilActivityStats(
       deleted_count: null,
       vineyard_count: distinctIds(addedDocuments.map((r) => r.vineyard_id)),
       user_count: distinctIds(addedDocuments.map((r) => r.uploaded_by)),
-      drilldown: false,
+      participant_source: "soil",
+
     },
   ];
 }
@@ -190,3 +193,60 @@ export async function loadSoilActivityStats(
 
   return buildSoilActivityStats(samples, documents, days);
 }
+
+/** One vineyard or user with how many records they added in the period. */
+export interface SoilActivityParticipant {
+  id: string;
+  records: number;
+}
+
+function groupParticipants(
+  rows: Array<Record<string, unknown>>,
+  column: string,
+): SoilActivityParticipant[] {
+  const totals = new Map<string, number>();
+  for (const row of rows) {
+    const id = row[column];
+    if (typeof id === "string" && id) totals.set(id, (totals.get(id) ?? 0) + 1);
+  }
+  return [...totals]
+    .map(([id, records]) => ({ id, records }))
+    .sort((a, b) => b.records - a.records || a.id.localeCompare(b.id));
+}
+
+/**
+ * Lists the vineyards or users behind a soil activity count: the records ADDED
+ * in the period, grouped by their recorded creator or vineyard — the same
+ * attribution the count itself uses, so the list always matches the number.
+ * Throws when a read fails instead of returning a short list.
+ */
+export async function loadSoilActivityParticipants(
+  actionKey: string,
+  kind: "vineyards" | "users",
+  days: number | null,
+  signal?: AbortSignal,
+): Promise<SoilActivityParticipant[]> {
+  const since = soilActivityWindowStart(days);
+  const isSamples = actionKey === SOIL_SAMPLE_ACTIVITY_KEY;
+  const column = kind === "vineyards" ? "vineyard_id" : isSamples ? "created_by" : "uploaded_by";
+
+  const rows = await fetchAll<Record<string, unknown>>(
+    isSamples ? "soil_samples" : "soil_sample_documents",
+    `id, vineyard_id, ${column}, created_at`,
+    (q) => {
+      const withWindow = since ? q.gte("created_at", since) : q;
+      return signal ? withWindow.abortSignal(signal) : withWindow;
+    },
+  );
+
+  const participants = groupParticipants(rows, column);
+  if (since) {
+    // The window bound was applied server-side; guard against a partial list.
+    const inWindow = rows.filter((r) => within(r.created_at as string, since)).length;
+    if (inWindow !== rows.length) {
+      throw new Error("The soil participant list is incomplete. Choose a shorter period or try again.");
+    }
+  }
+  return participants;
+}
+
