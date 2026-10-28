@@ -21,12 +21,18 @@ const readMock = vi.hoisted(() => ({
 vi.mock("@/integrations/ios-supabase/client", () => {
   const makeBuilder = (table: string) => {
     const filters: string[] = [];
+    // A created_at lower bound behaves like the real server: rows outside it
+    // never come back, so the loader's completeness guard is exercised.
+    let bound: string | null = null;
     const b: any = { __filters: filters };
     const record = (name: string, args: unknown[]) => {
       // Normalise both filter styles to "column.gte.<iso>" so the loader's
       // window bound is inspectable whichever way it was applied.
       if (name === "or") filters.push(String(args[0]));
-      if (name === "gte") filters.push(`${args[0]}.gte.${args[1]}`);
+      if (name === "gte") {
+        filters.push(`${args[0]}.gte.${args[1]}`);
+        if (args[0] === "created_at") bound = String(args[1]);
+      }
       if (name === "range") readMock.calls.push({ table, filters, range: args });
       return b;
     };
@@ -44,16 +50,18 @@ vi.mock("@/integrations/ios-supabase/client", () => {
     ]) {
       b[m] = (...args: unknown[]) => record(m, args);
     }
-    b.then = (resolve: (value: unknown) => void) =>
-      resolve({
-        data:
-          table === "soil_samples"
-            ? readMock.samples
-            : table === "soil_sample_documents"
-              ? readMock.documents
-              : [],
-        error: readMock.error,
-      });
+    b.then = (resolve: (value: unknown) => void) => {
+      const all =
+        table === "soil_samples"
+          ? readMock.samples
+          : table === "soil_sample_documents"
+            ? readMock.documents
+            : [];
+      const data = bound
+        ? all.filter((r) => new Date(String(r.created_at)).getTime() >= new Date(bound!).getTime())
+        : all;
+      resolve({ data, error: readMock.error });
+    };
     return b;
   };
   return {
@@ -61,6 +69,7 @@ vi.mock("@/integrations/ios-supabase/client", () => {
     iosSupabase: { from: (table: string) => makeBuilder(table) },
   };
 });
+
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
 
