@@ -1,0 +1,209 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { cleanup } from "@testing-library/react";
+import {
+  buildSoilActivityStats,
+  loadSoilActivityStats,
+  soilActivityWindowStart,
+  type SoilActivitySampleRow,
+  type SoilActivityDocumentRow,
+} from "@/lib/soilPlatformActivity";
+
+// Read-only client mock: captures every filter the loader applies and replays
+// the fixture rows, so the metric definitions are checked without a backend.
+const readMock = vi.hoisted(() => ({
+  samples: [] as Record<string, unknown>[],
+  documents: [] as Record<string, unknown>[],
+  error: null as { message: string } | null,
+  calls: [] as Array<{ table: string; filters: string[]; range: unknown }>,
+}));
+
+vi.mock("@/integrations/ios-supabase/client", () => {
+  const makeBuilder = (table: string) => {
+    const filters: string[] = [];
+    const b: any = { __filters: filters };
+    const record = (name: string, args: unknown[]) => {
+      if (name === "gte" || name === "or") filters.push(String(args[0]));
+      if (name === "range") readMock.calls.push({ table, filters, range: args });
+      return b;
+    };
+    for (const m of ["select", "eq", "gte", "is", "in", "or", "order", "limit", "range"]) {
+      b[m] = (...args: unknown[]) => record(m, args);
+    }
+    b.then = (resolve: (value: unknown) => void) =>
+      resolve({
+        data:
+          table === "soil_samples"
+            ? readMock.samples
+            : table === "soil_sample_documents"
+              ? readMock.documents
+              : [],
+        error: readMock.error,
+      });
+    return b;
+  };
+  return {
+    supabase: { from: (table: string) => makeBuilder(table) },
+    iosSupabase: { from: (table: string) => makeBuilder(table) },
+  };
+});
+
+const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
+
+const SAMPLES: SoilActivitySampleRow[] = [
+  {
+    id: "a",
+    vineyard_id: "v1",
+    created_by: "u1",
+    created_at: hoursAgo(2),
+    updated_at: hoursAgo(2),
+    deleted_at: null,
+  },
+  {
+    id: "b",
+    vineyard_id: "v1",
+    created_by: "u1",
+    created_at: hoursAgo(240),
+    updated_at: hoursAgo(2),
+    deleted_at: null,
+  },
+  {
+    id: "c",
+    vineyard_id: "v2",
+    created_by: "u2",
+    created_at: hoursAgo(2),
+    updated_at: hoursAgo(1),
+    deleted_at: hoursAgo(1),
+  },
+  {
+    id: "d",
+    vineyard_id: "v3",
+    created_by: "u3",
+    created_at: hoursAgo(9600),
+    updated_at: hoursAgo(7200),
+    deleted_at: null,
+  },
+];
+
+const DOCUMENTS: SoilActivityDocumentRow[] = [
+  { id: "d1", vineyard_id: "v1", uploaded_by: "u1", created_at: hoursAgo(2) },
+  { id: "d2", vineyard_id: "v2", uploaded_by: "u2", created_at: hoursAgo(240) },
+  { id: "d3", vineyard_id: "v3", uploaded_by: "u3", created_at: hoursAgo(9600) },
+];
+
+function row(stats: ReturnType<typeof buildSoilActivityStats>, key: string) {
+  const r = stats.find((s) => s.action_key === key);
+  if (!r) throw new Error(`missing activity row ${key}`);
+  return r;
+}
+
+describe("soilActivityWindowStart", () => {
+  it("is null for all time and N days back for a period", () => {
+    expect(soilActivityWindowStart(null)).toBeNull();
+    const seven = soilActivityWindowStart(7);
+    expect(seven).not.toBeNull();
+    const diffDays = (Date.now() - new Date(seven as string).getTime()) / 86_400_000;
+    expect(diffDays).toBeGreaterThan(6.9);
+    expect(diffDays).toBeLessThan(7.1);
+  });
+});
+
+describe("buildSoilActivityStats", () => {
+  it("counts added, edited and deleted soil samples inside a 1-day period", () => {
+    const r = row(buildSoilActivityStats(SAMPLES, DOCUMENTS, 1), "soil_samples");
+    expect(r.label).toBe("Soil Sample");
+    expect(r.category).toBe("Soil Analysis");
+    // a created 2h ago, c created 2h ago (and deleted 1h ago).
+    expect(r.created_count).toBe(2);
+    // b edited 2h ago, c edited 1h ago; a is unchanged since creation.
+    expect(r.edited_count).toBe(2);
+    expect(r.deleted_count).toBe(1);
+    // Attribution follows records ADDED in the period only (a=v1/u1, c=v2/u2).
+    expect(r.vineyard_count).toBe(2);
+    expect(r.user_count).toBe(2);
+    expect(r.drilldown).toBe(false);
+  });
+
+  it("excludes records outside a 90-day period but keeps older edits out of it", () => {
+    const r = row(buildSoilActivityStats(SAMPLES, DOCUMENTS, 90), "soil_samples");
+    expect(r.created_count).toBe(3); // a, b, c — d is 400 days old
+    expect(r.edited_count).toBe(2); // b, c — d's edit is 300 days old
+    expect(r.deleted_count).toBe(1);
+    expect(r.vineyard_count).toBe(2); // v1, v2
+    expect(r.user_count).toBe(2); // u1, u2
+  });
+
+  it("includes every record for all time", () => {
+    const r = row(buildSoilActivityStats(SAMPLES, DOCUMENTS, null), "soil_samples");
+    expect(r.created_count).toBe(4);
+    expect(r.edited_count).toBe(3); // b, c and d
+    expect(r.deleted_count).toBe(1);
+    expect(r.vineyard_count).toBe(3);
+    expect(r.user_count).toBe(3);
+  });
+
+  it("reports lab documents as added-only evidence with no edited or deleted figures", () => {
+    const r = row(buildSoilActivityStats(SAMPLES, DOCUMENTS, 1), "soil_sample_documents");
+    expect(r.label).toBe("Soil Lab Document");
+    expect(r.created_count).toBe(1);
+    expect(r.edited_count).toBeNull();
+    expect(r.deleted_count).toBeNull();
+    expect(r.vineyard_count).toBe(1);
+    expect(r.user_count).toBe(1);
+    expect(r.drilldown).toBe(false);
+
+    const all = row(buildSoilActivityStats(SAMPLES, DOCUMENTS, null), "soil_sample_documents");
+    expect(all.created_count).toBe(3);
+    expect(all.vineyard_count).toBe(3);
+    expect(all.user_count).toBe(3);
+  });
+
+  it("shows zero counts, not blanks, when nothing happened in the period", () => {
+    const r = row(buildSoilActivityStats(SAMPLES, DOCUMENTS, null), "soil_samples");
+    const empty = row(buildSoilActivityStats([], [], null), "soil_samples");
+    expect(r.created_count).toBe(4);
+    expect(empty.created_count).toBe(0);
+    expect(empty.edited_count).toBe(0);
+    expect(empty.deleted_count).toBe(0);
+    expect(empty.vineyard_count).toBe(0);
+    expect(empty.user_count).toBe(0);
+  });
+});
+
+describe("loadSoilActivityStats", () => {
+  beforeEach(() => {
+    readMock.samples = SAMPLES as unknown as Record<string, unknown>[];
+    readMock.documents = DOCUMENTS as unknown as Record<string, unknown>[];
+    readMock.error = null;
+    readMock.calls = [];
+  });
+
+  afterEach(cleanup);
+
+  it("applies the selected period to both soil reads", async () => {
+    const stats = await loadSoilActivityStats(7);
+    expect(stats.map((s) => s.action_key)).toEqual([
+      "soil_samples",
+      "soil_sample_documents",
+    ]);
+    const cutoff = soilActivityWindowStart(7) as string;
+    const sampleCall = readMock.calls.find((c) => c.table === "soil_samples");
+    const documentCall = readMock.calls.find((c) => c.table === "soil_sample_documents");
+    expect(sampleCall?.filters[0]).toContain(`created_at.gte.${cutoff}`);
+    expect(sampleCall?.filters[0]).toContain(`updated_at.gte.${cutoff}`);
+    expect(sampleCall?.filters[0]).toContain(`deleted_at.gte.${cutoff}`);
+    expect(documentCall?.filters).toEqual([`created_at.gte.${cutoff}`]);
+  });
+
+  it("reads every record for all time without a date filter", async () => {
+    await loadSoilActivityStats(null);
+    const sampleCall = readMock.calls.find((c) => c.table === "soil_samples");
+    const documentCall = readMock.calls.find((c) => c.table === "soil_sample_documents");
+    expect(sampleCall?.filters).toEqual([]);
+    expect(documentCall?.filters).toEqual([]);
+  });
+
+  it("fails closed instead of reporting a zero when the read is refused", async () => {
+    readMock.error = { message: "permission denied" };
+    await expect(loadSoilActivityStats(30)).rejects.toThrow(/permission denied/);
+  });
+});
