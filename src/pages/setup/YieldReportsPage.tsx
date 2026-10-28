@@ -1134,28 +1134,13 @@ function SeasonEstimateHeader({
               ? "—"
               : `${fmtNum(model.totalTonnes)} t`}
           </div>
-          <div className="text-xs text-muted-foreground">
-            {error
-              ? "Estimate unavailable"
-              : model.totalTonnes == null
-              ? `${model.blocksMissing} of ${model.blocksTotal} block${
-                  model.blocksTotal === 1 ? "" : "s"
-                } missing an estimate — ${fmtNum(model.knownTonnes)} t known so far`
-              : `${model.blocksAvailable} block${model.blocksAvailable === 1 ? "" : "s"} estimated`}
-          </div>
+          {error && <div className="text-xs text-muted-foreground">Estimate unavailable</div>}
         </div>
         <label className="flex items-center gap-2 text-sm">
           <Switch checked={applyDamage} onCheckedChange={onApplyDamage} />
           <span>Apply damage</span>
         </label>
       </div>
-      {model.warnings.length > 0 && (
-        <ul className="space-y-1 text-xs text-muted-foreground">
-          {model.warnings.slice(0, 4).map((w) => (
-            <li key={w}>• {setupWarningLabel(w)}</li>
-          ))}
-        </ul>
-      )}
     </Card>
   );
 }
