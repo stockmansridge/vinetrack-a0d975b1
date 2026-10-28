@@ -43,7 +43,7 @@ export default function SoilAnalysisPage() {
             <TabsTrigger value="trends">Trends</TabsTrigger>
             <TabsTrigger value="compare">Compare</TabsTrigger>
             <TabsTrigger value="traffic-lights">Traffic Lights</TabsTrigger>
-            <TabsTrigger value="reports">Reports</TabsTrigger>
+            <TabsTrigger value="reports">Map</TabsTrigger>
           </TabsList>
         </div>
         <TabsContent value="overview" className="mt-4 w-full max-w-none min-w-0">

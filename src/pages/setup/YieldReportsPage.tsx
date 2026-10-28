@@ -570,6 +570,10 @@ export default function YieldReportsPage() {
         })),
       };
     });
+    // Natural order so "Block 2A" precedes "Block 10" (database sorts as text).
+    blocks.sort((a, b) =>
+      (a.name ?? "").localeCompare(b.name ?? "", undefined, { numeric: true, sensitivity: "base" }),
+    );
     return { unitsByBlock, blocks };
   }, [blocksQ.data, varietyMap]);
 
