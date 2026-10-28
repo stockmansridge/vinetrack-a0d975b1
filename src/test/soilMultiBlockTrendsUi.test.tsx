@@ -139,3 +139,24 @@ describe("multi-analyte Trends", () => {
     expect(within(screen.getByRole("region", { name: "Magnesium trend" })).getByRole("region", { name: "Block C trend summary" })).toBeTruthy();
   });
 });
+describe("Trends time period", () => {
+  it("defaults to All time and filtering by Past year hides older samples in chart and table", async () => {
+    mock.read.mockImplementation(async (ids: string[]) => [
+      result("a", "recent", 10, "2026-01-01"),
+      result("a", "old", 90, "2020-01-01"),
+      result("b", "b1", 100, "2026-01-01"),
+    ].filter((r) => ids.includes(r.matched_paddock_id)));
+    mount(); fireEvent.click(await screen.findByRole("button", { name: "All blocks" }));
+    await openPicker(); tick("Calcium");
+    await screen.findByRole("region", { name: "Calcium trend" });
+    expect((screen.getByRole("combobox", { name: "Trend time period" }) as HTMLSelectElement).value).toBe("all");
+    expect(mock.scatters.filter((p) => p.name === "Block A · Laboratory result").at(-1).data).toHaveLength(2);
+    expect(within(screen.getByRole("table")).getAllByRole("row").length).toBe(4);
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Trend time period" }), { target: { value: "1y" } });
+    expect(mock.scatters.filter((p) => p.name === "Block A · Laboratory result").at(-1).data).toHaveLength(1);
+    expect(within(screen.getByRole("region", { name: "Block A trend summary" })).getByText("10 ppm")).toBeTruthy();
+    expect(within(screen.getByRole("table")).getAllByRole("row").length).toBe(3);
+    expect(within(screen.getByRole("region", { name: "Block B trend summary" })).getByText("100 ppm")).toBeTruthy();
+  });
+});

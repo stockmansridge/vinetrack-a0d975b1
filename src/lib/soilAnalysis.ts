@@ -1991,3 +1991,32 @@ export function soilMapLabelSpec(
     selected: false,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Time period presets (Trends chart window / Compare sample period)
+// ---------------------------------------------------------------------------
+
+export interface SoilTimePreset {
+  key: string;
+  label: string;
+  /** Whole years back from today; null means no window (All time). */
+  years: number | null;
+}
+
+export const SOIL_TIME_PRESETS: readonly SoilTimePreset[] = [
+  { key: "1y", label: "Past year", years: 1 },
+  { key: "2y", label: "Past 2 years", years: 2 },
+  { key: "3y", label: "Past 3 years", years: 3 },
+  { key: "4y", label: "Past 4 years", years: 4 },
+  { key: "5y", label: "Past 5 years", years: 5 },
+  { key: "all", label: "All time", years: null },
+];
+
+/** Inclusive YYYY-MM-DD cutoff for a preset; null for All time or unknown keys. */
+export function soilTimePresetCutoff(key: string, today: Date = new Date()): string | null {
+  const preset = SOIL_TIME_PRESETS.find((p) => p.key === key);
+  if (!preset || preset.years == null) return null;
+  const d = new Date(today.getTime());
+  d.setFullYear(d.getFullYear() - preset.years);
+  return d.toISOString().slice(0, 10);
+}

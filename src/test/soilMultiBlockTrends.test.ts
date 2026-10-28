@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({ from: vi.fn(), calls: [] as any[], maps: [] as any[], legacy: [] as any[], results: [] as any[] }));
 vi.mock("@/integrations/ios-supabase/client", () => ({ supabase: { from: mock.from } }));
-import { listBlocksAnalyteResults, buildTrendSeries, splitTrendByBlocks, buildDateAverages, summariseTrend } from "@/lib/soilAnalysis";
+import { listBlocksAnalyteResults, buildTrendSeries, splitTrendByBlocks, buildDateAverages, summariseTrend, soilTimePresetCutoff, SOIL_TIME_PRESETS } from "@/lib/soilAnalysis";
 const row = (id: string, sampleId: string, value: number, date: string, method: string | null = null, unit = "ppm") => ({
   id, sample_id: sampleId, analyte_key: "calcium", value_numeric: value, method, unit,
   soil_samples: { id: sampleId, sampled_at: date, created_at: date, extraction_status: "confirmed", paddocks: { name: "Legacy" } },
@@ -68,5 +68,17 @@ describe("block-isolated trend arithmetic", () => {
     const series = splitTrendByBlocks(active, rows, ["a"])[0].series;
     if (!series) throw new Error("Expected one-block series");
     expect(summariseTrend(series, "Calcium", "range")).toMatchObject({ delta: 15, percent: 100, sampleCount: 3, dateCount: 2 });
+  });
+});
+
+describe("time period presets", () => {
+  it("computes whole-year cutoffs and never cuts All time", () => {
+    const today = new Date("2026-10-28T12:00:00Z");
+    expect(soilTimePresetCutoff("1y", today)).toBe("2025-10-28");
+    expect(soilTimePresetCutoff("2y", today)).toBe("2024-10-28");
+    expect(soilTimePresetCutoff("5y", today)).toBe("2021-10-28");
+    expect(soilTimePresetCutoff("all", today)).toBeNull();
+    expect(soilTimePresetCutoff("custom", today)).toBeNull();
+    expect(SOIL_TIME_PRESETS.map((p) => p.label)).toEqual(["Past year", "Past 2 years", "Past 3 years", "Past 4 years", "Past 5 years", "All time"]);
   });
 });

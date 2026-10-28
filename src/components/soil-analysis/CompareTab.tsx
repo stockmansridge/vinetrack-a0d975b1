@@ -25,9 +25,11 @@ import {
   summariseValueComparison,
   labStatusLabel,
   formatMapValue,
+  soilTimePresetCutoff,
   COMPARE_PROVISIONAL_BADGE,
 } from "@/lib/soilAnalysis";
 import { SoilAnalyteCombobox } from "./SoilAnalyteCombobox";
+import { SoilTimePeriodSelect } from "./SoilTimePeriodSelect";
 import { SoilBlockSelector } from "./SoilBlockSelector";
 import { formatDate } from "@/pages/admin/_shared";
 
@@ -54,6 +56,7 @@ export function CompareTab() {
   const [selectedBlocks, setSelectedBlocks] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [timeKey, setTimeKey] = useState("all");
   const [analyteKey, setAnalyteKey] = useState("");
   const [seriesKey, setSeriesKey] = useState("");
   const [order, setOrder] = useState<"value" | "block">("value");
@@ -152,9 +155,15 @@ export function CompareTab() {
           <SoilBlockSelector blocks={blocks} selected={selectedBlocks} onChange={setSelectedBlocks} />
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium text-muted-foreground">Sample period:</span>
-            <Input type="date" className="w-auto" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} aria-label="Period from" />
+            <SoilTimePeriodSelect ariaLabel="Compare period preset" showCustom value={timeKey} onChange={(key) => {
+              setTimeKey(key);
+              const cutoff = soilTimePresetCutoff(key);
+              if (cutoff) setDateFrom(cutoff);
+              else { setDateFrom(""); setDateTo(""); }
+            }} />
+            <Input type="date" className="w-auto" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setTimeKey(""); }} aria-label="Period from" />
             <span className="text-xs text-muted-foreground">to</span>
-            <Input type="date" className="w-auto" value={dateTo} onChange={(e) => setDateTo(e.target.value)} aria-label="Period to" />
+            <Input type="date" className="w-auto" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setTimeKey(""); }} aria-label="Period to" />
           </div>
           {mode === "values" && presentAnalytes.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
