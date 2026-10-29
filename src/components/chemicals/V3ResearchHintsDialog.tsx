@@ -9,14 +9,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { fetchV3Job, pick, startV3Discovery, V3_REUSED_MESSAGE } from "@/lib/chemicalV3";
 import {
-  EMPTY_HINTS, HINTS_EXPLAINER, HINT_LIMITS, ResearchHintsDraft, hintIdentityWarning, isJobBusy,
+  EMPTY_HINTS, HINTS_EXPLAINER, HINT_LIMITS, ResearchHintsDraft, hintExactRegistrationConflict, hintIdentityWarning, isJobBusy,
   readResearchHints, saveResearchHints, validateResearchHints,
 } from "@/lib/chemicalV3ResearchHints";
 
 type Row = Record<string, any>;
 
-export function V3ResearchHintsDialog({ open, onOpenChange, jobId, revision, onSaveAndRetry }: {
-  open: boolean; onOpenChange: (o: boolean) => void; jobId: string; revision: Row | null | undefined;
+export function V3ResearchHintsDialog({ open, onOpenChange, jobId, revision, onSaveAndRetry, forceDistinct = false }: {
+  open: boolean; forceDistinct?: boolean; onOpenChange: (o: boolean) => void; jobId: string; revision: Row | null | undefined;
   /** Called only after the hints RPC succeeded. */
   onSaveAndRetry: () => void;
 }) {
@@ -39,6 +39,8 @@ export function V3ResearchHintsDialog({ open, onOpenChange, jobId, revision, onS
   const status = String(pick(job.data, "status") ?? "");
   const running = isJobBusy(status);
   const warning = hintIdentityWarning(revision, draft);
+  const exactConflict = hintExactRegistrationConflict(revision, draft);
+  const showDistinct = !!warning || forceDistinct;
   const set = (k: keyof ResearchHintsDraft) => (e: { target: { value: string } }) => { setDraft((d) => ({ ...d, [k]: e.target.value })); setSaved(null); };
 
   const save = async (retry: boolean) => {
@@ -46,7 +48,7 @@ export function V3ResearchHintsDialog({ open, onOpenChange, jobId, revision, onS
     setBusy(true); setErr(null);
     try {
       await saveResearchHints(jobId, draft);
-      void qc.invalidateQueries({ queryKey: ["chemical-v3-job-hints", jobId] });
+      await qc.invalidateQueries({ queryKey: ["chemical-v3-job-hints", jobId] });
       if (retry) { onOpenChange(false); onSaveAndRetry(); }
       else setSaved("Research instructions saved.");
     } catch (e: any) {
@@ -116,11 +118,11 @@ export function V3ResearchHintsDialog({ open, onOpenChange, jobId, revision, onS
             {errors.notes && <p className="text-xs text-destructive">{errors.notes}</p>}
           </div>
         </div>
-        {warning && (
+        {showDistinct && (
           <div className="space-y-2 rounded border border-destructive/50 bg-destructive/10 p-2 text-sm" data-testid="v3-hints-identity-warning">
-            <div className="flex gap-2"><AlertTriangle className="h-4 w-4 shrink-0 text-destructive" /><span>{warning}</span></div>
+            <div className="flex gap-2"><AlertTriangle className="h-4 w-4 shrink-0 text-destructive" /><span>{warning ?? "The server found a different registered product. Enter its name and start a separate discovery."}</span></div>
             <p className="text-xs">Re-searching this job will not merge products. If this is a different product, start a separate discovery instead.</p>
-            <Button size="sm" variant="outline" disabled={busy || !draft.productName.trim()} onClick={startDistinct}>
+            <Button size="sm" variant={exactConflict || forceDistinct ? "default" : "outline"} disabled={busy || !draft.productName.trim()} onClick={startDistinct}>
               Start separate discovery{draft.productName.trim() ? ` for "${draft.productName.trim()}"` : ""}
             </Button>
             {distinct && <p className="text-xs">{distinct}</p>}
@@ -131,7 +133,9 @@ export function V3ResearchHintsDialog({ open, onOpenChange, jobId, revision, onS
         <DialogFooter className="gap-2">
           <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button variant="outline" disabled={busy || invalid || running || job.isLoading} onClick={() => save(false)}>Save research instructions</Button>
-          <Button disabled={busy || invalid || running || job.isLoading} onClick={() => save(true)}>Save &amp; re-search</Button>
+          {exactConflict || forceDistinct
+            ? <p className="text-xs text-muted-foreground" data-testid="v3-hints-no-retry">Re-searching this product with a different registration is not allowed.</p>
+            : <Button disabled={busy || invalid || running || job.isLoading} onClick={() => save(true)}>Save &amp; re-search</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

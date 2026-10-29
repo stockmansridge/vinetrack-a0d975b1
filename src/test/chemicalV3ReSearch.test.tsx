@@ -41,7 +41,7 @@ describe("V3 re-search missing data", () => {
     expect(screen.getByText("This runs a new AI-assisted manufacturer search.")).toBeTruthy();
     job.current = { status: "running", stage: "label" };
     fireEvent.click(screen.getByText("Re-search product"));
-    await screen.findByText("Re-searching product information…");
+    await screen.findByText(/Working…/);
     expect(screen.getByText("Current review record")).toBeTruthy();
     job.current = { status: "pending_review" };
     await waitFor(() => expect(rpc).toHaveBeenCalledWith("chemical_v3_admin_review_queue"), { timeout: 6000 });

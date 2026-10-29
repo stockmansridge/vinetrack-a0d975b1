@@ -109,6 +109,16 @@ export function hintIdentityWarning(revision: Row | null | undefined, d: Researc
   return null;
 }
 
+/** True when a hint source maps to a known registration different from the revision's. */
+export function hintExactRegistrationConflict(revision: Row | null | undefined, d: ResearchHintsDraft): boolean {
+  const reg = normReg(revision?.registration_number) ?? knownRegistrationFor(revision?.product_name);
+  if (!reg) return false;
+  return [d.productName, d.productUrl, d.labelUrl].some((src) => {
+    const implied = src.trim() ? knownRegistrationFor(src) : null;
+    return !!implied && implied !== reg;
+  });
+}
+
 /** Catalogue-match registration check. "mismatch" disables the match action. */
 export function catalogueRegistrationCheck(
   revision: { registration?: unknown; name?: unknown },
