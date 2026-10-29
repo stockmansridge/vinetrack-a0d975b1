@@ -9,7 +9,7 @@ vi.mock("@/integrations/ios-supabase/client", () => ({ supabase: {
   from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: job.current, error: null }) }) }) }),
 } }));
 import {
-  buildResearchHintsArgs, catalogueRegistrationCheck, hintIdentityWarning, validateResearchHints, EMPTY_HINTS,
+  buildResearchHintsArgs, catalogueRegistrationCheck, hintIdentityWarning, validateResearchHints, EMPTY_HINTS, isJobBusy, readResearchHints,
 } from "@/lib/chemicalV3ResearchHints";
 import { V3ReSearchButton } from "@/components/chemicals/V3ReSearchButton";
 
@@ -45,7 +45,7 @@ describe("Chemical V3 research hints", () => {
   });
 
   it("prefills from stored hints and save-only calls RPC without retrying", async () => {
-    job.current = { id: "job-1", status: "pending_review", research_hints: { product_name: "Spotlight Herbicide", research_notes: "Use FMC AU" } };
+    job.current = { id: "job-1", status: "pending_review", research_hints: { product_name: "Spotlight Herbicide", notes: "Use FMC AU" } };
     rpc.mockResolvedValue({ data: { research_hints: {}, changed: true }, error: null });
     mount();
     await screen.findByText("Edit research hints");
@@ -65,8 +65,14 @@ describe("Chemical V3 research hints", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
+  it("treats real in-progress DB states as busy and reads legacy research_notes as fallback", () => {
+    for (const st of ["queued", "searching", "fetching", "verifying", "extracting"]) expect(isJobBusy(st)).toBe(true);
+    expect(isJobBusy("pending_review")).toBe(false);
+    expect(readResearchHints({ research_hints: { research_notes: "old" } }).notes).toBe("old");
+    expect(readResearchHints({ research_hints: { notes: "new", research_notes: "old" } }).notes).toBe("new");
+  });
   it("blocks saving while the job is running", async () => {
-    job.current = { id: "job-1", status: "running" };
+    job.current = { id: "job-1", status: "verifying" };
     mount(); await open();
     await screen.findByTestId("v3-hints-busy");
     expect((screen.getByText("Save & re-search") as HTMLButtonElement).disabled).toBe(true);
