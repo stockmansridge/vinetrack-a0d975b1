@@ -398,7 +398,7 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
                 const jid = queueJobId ?? pick(r, "job_id", "discovery_job_id");
                 return revisionId && canReSearch(isAdmin, status, jid) ? (
                   <V3ReSearchButton jobId={String(jid)} revisionId={revisionId} prominent={needsReSearch(r)}
-                    onNewRevision={(id) => onOpenRevision?.(id)} />
+                    revision={r} showRefine onNewRevision={(id) => onOpenRevision?.(id)} />
                 ) : null;
               })()}
               {isAdmin && revisionId && isV3Addable(status) && (
@@ -417,7 +417,8 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
                 </Sheet>
               )}
             </SheetHeader>
-            {revisionId && <V3CatalogueMatch revisionId={revisionId} isAdmin={isAdmin} onMatched={onClose} />}
+            {revisionId && <V3CatalogueMatch revisionId={revisionId} isAdmin={isAdmin} onMatched={onClose}
+              registrationNumber={pick(r, "registration_number") ?? null} productName={pick(r, "product_name") ?? null} />}
             <div className="flex flex-col gap-4 md:flex-row">
               {pick(r, "front_label_image_path") ? <Thumb path={pick(r, "front_label_image_path")} className="h-72 w-full md:w-72" /> : (
                 <div className={cn("flex h-40 w-full items-center justify-center rounded border text-sm md:w-72", STATUS_CLASS.missing)}>Front label image missing</div>
