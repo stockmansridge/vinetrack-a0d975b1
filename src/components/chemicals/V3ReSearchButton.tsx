@@ -70,7 +70,7 @@ export function V3ReSearchButton({ jobId, revisionId, prominent, onNewRevision, 
   });
   const st = String(pick(job.data, "status") ?? "").toLowerCase();
   useEffect(() => {
-    if (phase !== "running" || !job.data || job.isFetching && job.isStale === false && false) return;
+    if (phase !== "running" || !job.data) return;
     const b = baseline.current;
     if (isJobBusy(st)) { b.sawActive = true; return; }
     if (!V3_TERMINAL_STATUSES.includes(st)) return;
