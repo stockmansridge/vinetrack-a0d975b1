@@ -84,7 +84,7 @@ describe("Chemical V3 research hints", () => {
       order.push(name);
       return name === "chemical_v3_set_research_hints" ? { data: { changed: true }, error: null } : { data: [{ revision_id: "rev-new", job_id: "job-1" }], error: null };
     });
-    invoke.mockImplementation(async () => { order.push("retry"); job.current = { id: "job-1", status: "pending_review" }; return { error: null }; });
+    invoke.mockImplementation(async () => { order.push("retry"); job.current = { id: "job-1", status: "pending_review", revision_id: "rev-new" }; return { error: null }; });
     const onNew = mount(); await open();
     fireEvent.change(screen.getByLabelText("Additional research instructions"), { target: { value: "Check FMC AU label" } });
     fireEvent.click(screen.getByText("Save & re-search"));
@@ -94,6 +94,19 @@ describe("Chemical V3 research hints", () => {
     expect(rpc).not.toHaveBeenCalledWith("start_chemical_v3_discovery_v2", expect.anything());
   }, 10000);
 
+  it("exact distinct registration hides Save & re-search and makes separate discovery primary", async () => {
+    mount(); await open();
+    fireEvent.change(screen.getByLabelText("Manufacturer product page URL"), { target: { value: "https://ag.fmc.com/au/en/products/herbicides/spotlight-plus-herbicide" } });
+    await screen.findByTestId("v3-hints-no-retry");
+    expect(screen.queryByText("Save & re-search")).toBeNull();
+    expect(screen.getByText("Save research instructions")).toBeTruthy();
+    expect(screen.getByText(/Start separate discovery/)).toBeTruthy();
+  });
+  it("minor spelling correction to the same product can still re-search", async () => {
+    mount(); await open();
+    fireEvent.change(screen.getByLabelText("Corrected search / product name"), { target: { value: "Spotlight Herbicde" } });
+    expect(screen.getByText("Save & re-search")).toBeTruthy();
+  });
   it("shows the cross-product identity warning in the dialog", async () => {
     mount(); await open();
     fireEvent.change(screen.getByLabelText("Manufacturer product page URL"), { target: { value: "https://ag.fmc.com/au/en/products/herbicides/spotlight-plus-herbicide" } });
