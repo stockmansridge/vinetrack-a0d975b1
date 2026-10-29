@@ -10,7 +10,7 @@ export const V3_SET_HINTS_RPC = "chemical_v3_set_research_hints";
 export const HINT_LIMITS = { name: 180, notes: 1200, url: 2048 } as const;
 export const HINTS_EXPLAINER =
   "These details guide a new AI search. VineTrack verifies the registration and formulation before applying results. Research notes do not change the chemical's approved identity.";
-export const HINT_BUSY_STATUSES = ["queued", "running", "processing", "in_progress", "started"];
+export const HINT_BUSY_STATUSES = ["queued", "searching", "fetching", "verifying", "extracting", "running", "processing", "in_progress", "started"];
 
 export interface ResearchHintsDraft { productName: string; productUrl: string; labelUrl: string; notes: string }
 export const EMPTY_HINTS: ResearchHintsDraft = { productName: "", productUrl: "", labelUrl: "", notes: "" };
@@ -22,7 +22,7 @@ export function readResearchHints(job: Row | null | undefined): ResearchHintsDra
     productName: str(h.product_name),
     productUrl: str(h.manufacturer_product_url),
     labelUrl: str(h.manufacturer_label_url),
-    notes: str(h.research_notes),
+    notes: str(h.notes) || str(h.research_notes),
   };
 }
 export const hasResearchHints = (job: Row | null | undefined) =>
