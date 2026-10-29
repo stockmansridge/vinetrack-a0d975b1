@@ -1,7 +1,9 @@
 // System Admin only: re-run the existing discovery job for a pending revision.
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Sparkles } from "lucide-react";
+import { Sparkles, SlidersHorizontal } from "lucide-react";
+import { V3ResearchHintsDialog } from "@/components/chemicals/V3ResearchHintsDialog";
+import { hasResearchHints } from "@/lib/chemicalV3ResearchHints";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -10,11 +12,16 @@ import {
 } from "@/lib/chemicalV3";
 import { customerStage, discoveryRevisionId } from "@/lib/chemicalSearchPublic";
 
-export function V3ReSearchButton({ jobId, revisionId, prominent, onNewRevision, label = "Re-search missing data" }: {
+export function V3ReSearchButton({ jobId, revisionId, prominent, onNewRevision, label = "Re-search missing data", revision, showRefine = false }: {
   jobId: string; revisionId: string; prominent: boolean; onNewRevision: (id: string) => void; label?: string;
+  /** Current revision row, used as context by the Refine AI Research dialog. */
+  revision?: Record<string, any> | null; showRefine?: boolean;
 }) {
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState(false);
+  const [refine, setRefine] = useState(false);
+  const hintsQ = useQuery({ queryKey: ["chemical-v3-job-hints", jobId], queryFn: () => fetchV3Job(jobId), enabled: showRefine });
+  const hinted = showRefine && hasResearchHints(hintsQ.data);
   const [phase, setPhase] = useState<"idle" | "running" | "failed" | "done">("idle");
   useEffect(() => { setPhase((p) => (p === "done" ? p : "idle")); }, [revisionId]);
 
@@ -52,9 +59,16 @@ export function V3ReSearchButton({ jobId, revisionId, prominent, onNewRevision, 
       <Button size="sm" variant={prominent ? "default" : "outline"} disabled={phase === "running"} onClick={() => setConfirm(true)}>
         <Sparkles className="mr-1 h-4 w-4" />{label}
       </Button>
+      {showRefine && (
+        <Button size="sm" variant="outline" className="ml-2" disabled={phase === "running"} onClick={() => setRefine(true)}>
+          <SlidersHorizontal className="mr-1 h-4 w-4" />{hinted ? "Edit research hints" : "Refine AI Research"}
+        </Button>
+      )}
+      {hinted && <p className="text-xs text-muted-foreground" data-testid="v3-hints-active">Hint-assisted research: saved research instructions will guide the next search (unverified until checked).</p>}
       {phase === "running" && (
         <div className="space-y-1 rounded border bg-card p-2 text-sm" data-testid="v3-research-progress">
           <div className="font-medium">Re-searching product information…</div>
+          {hinted && <div className="text-xs text-muted-foreground">Using your saved research instructions.</div>}
           <div className="text-muted-foreground">{pick(job.data, "user_message") ?? customerStage(pick(job.data, "stage"), st)}</div>
           <Progress value={Number.isFinite(pct) ? pct : 0} />
         </div>
@@ -65,6 +79,10 @@ export function V3ReSearchButton({ jobId, revisionId, prominent, onNewRevision, 
         </div>
       )}
       {phase === "done" && <p className="text-sm text-success">{RESEARCH_DONE}</p>}
+      {showRefine && (
+        <V3ResearchHintsDialog open={refine} onOpenChange={setRefine} jobId={jobId} revision={revision}
+          onSaveAndRetry={() => void start()} />
+      )}
       <Dialog open={confirm} onOpenChange={setConfirm}>
         <DialogContent>
           <DialogHeader>

@@ -9,12 +9,13 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { pick, v3ReviewQueue } from "@/lib/chemicalV3";
+import { catalogueRegistrationCheck } from "@/lib/chemicalV3ResearchHints";
 import {
   MATCH_CONFIRM_TEXT, MATCH_TOAST, catalogueMatchOf, matchRevisionToCatalogue,
 } from "@/lib/chemicalV3Review";
 
-export function V3CatalogueMatch({ revisionId, isAdmin, onMatched }: {
-  revisionId: string; isAdmin: boolean; onMatched: () => void;
+export function V3CatalogueMatch({ revisionId, isAdmin, onMatched, registrationNumber = null, productName = null }: {
+  revisionId: string; isAdmin: boolean; onMatched: () => void; registrationNumber?: string | null; productName?: string | null;
 }) {
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState(false);
@@ -38,6 +39,12 @@ export function V3CatalogueMatch({ revisionId, isAdmin, onMatched }: {
   });
   if (!isAdmin || !match || dismissed) return null;
   const high = match.confidence === "high";
+  // The match RPC does not yet verify registrations server-side; block known mismatches here.
+  const regCheck = catalogueRegistrationCheck(
+    { registration: registrationNumber, name: productName },
+    { registration: pick(row, "catalogue_match_registration_number", "catalogue_match_registration"), name: match.name },
+  );
+  const blocked = regCheck === "mismatch";
   return (
     <section data-testid="v3-catalogue-match" data-confidence={match.confidence}
       className={high ? "space-y-2 rounded border border-primary/50 bg-primary/10 p-3 text-sm" : "space-y-2 rounded border border-warning/50 bg-warning/10 p-3 text-sm"}>
@@ -50,9 +57,14 @@ export function V3CatalogueMatch({ revisionId, isAdmin, onMatched }: {
         <div className="font-medium">{match.name ?? "—"}</div>
         <div className="text-muted-foreground">{match.manufacturer ?? "—"}</div>
       </div>
+      <p className="text-xs text-destructive" data-testid="v3-match-unsafe">
+        Caution: matching does not yet check registrations on the server. Only match products with the exact same registration number — never on shared active ingredients or similar names.
+      </p>
+      {blocked && <p className="text-sm font-medium text-destructive" data-testid="v3-match-blocked">
+        Registration mismatch — this revision and the catalogue product are different registered products. Matching is disabled.</p>}
       {mut.error && <p className="text-destructive">{(mut.error as Error).message}</p>}
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" disabled={mut.isPending} onClick={() => setConfirm(true)}>
+        <Button size="sm" disabled={mut.isPending || blocked} onClick={() => setConfirm(true)}>
           {high ? "Use existing catalogue product" : "Match to this catalogue product"}
         </Button>
         {high && <Button size="sm" variant="outline" onClick={() => setDismissed(true)}>Review this new revision instead</Button>}
@@ -65,7 +77,7 @@ export function V3CatalogueMatch({ revisionId, isAdmin, onMatched }: {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={mut.isPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction disabled={mut.isPending} onClick={(e) => { e.preventDefault(); mut.mutate(); }}>
+            <AlertDialogAction disabled={mut.isPending} onClick={(e) => { e.preventDefault(); if (!blocked) mut.mutate(); }}>
               Use existing catalogue product
             </AlertDialogAction>
           </AlertDialogFooter>
