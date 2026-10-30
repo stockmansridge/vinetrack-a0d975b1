@@ -22,8 +22,8 @@ function StationSelect({ label, value, onChange, devices }: { label: string; val
     <div className="space-y-1">
       <Label htmlFor={id} className="text-xs">{label}</Label>
       <select id={id} aria-label={label} className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value={NONE}>Not selected</option>
-        {devices.map((d) => <option key={d.code} value={d.code}>{d.name}{d.kind ? ` (${d.kind})` : ""}</option>)}
+        <option value={NONE}>No test device</option>
+        {devices.map((d) => <option key={d.key} value={d.code}>{d.name}{d.kind ? ` (${d.kind})` : ""}{d.projectCode ? ` · ${d.projectCode}` : ""}</option>)}
       </select>
     </div>
   );
@@ -78,7 +78,7 @@ function AxisStreamAdminCard({ vineyardId }: { vineyardId: string }) {
         <h3 className="text-sm font-semibold">AxisStream Exchange</h3>
         <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning">Testing only · Not active</Badge>
         <Badge variant="outline" className="text-[10px]">System Admin</Badge>
-        <Badge variant="outline" className="text-[10px]">{c?.hasToken ? `Configured · ${c.mode}` : "Not configured"}</Badge>
+        <Badge variant="outline" className="text-[10px]">{c?.configured ? `Configured · ${c.mode}` : "Not configured"}</Badge>
       </div>
       <Alert><Info className="h-4 w-4" /><AlertDescription className="text-xs">
         Create a token at <a className="underline" href={AXISSTREAM_TOKEN_SOURCE_URL} target="_blank" rel="noreferrer">{AXISSTREAM_TOKEN_SOURCE_URL}</a>. The server polls AxisStream at most every {AXISSTREAM_POLL_MINUTES} minutes; Test Connection is limited and only stages readings — it does not refresh live weather, rainfall, trips or reports, and AxisStream is not selectable as a weather source.
@@ -89,21 +89,23 @@ function AxisStreamAdminCard({ vineyardId }: { vineyardId: string }) {
         <div><span className="text-muted-foreground">Status: </span>{c?.lastStatus ?? "—"}</div>
         <div><span className="text-muted-foreground">Summary: </span>{c?.summary ?? "—"}</div>
       </div>
-      <div className="text-xs"><span className="text-muted-foreground">Discovered devices: </span>{devices.length ? devices.map((d) => d.name).join(" · ") : "None yet"}</div>
+      <div className="text-xs"><span className="text-muted-foreground">Staged readings: </span>{c?.stagedReadingCount ?? "—"}</div>
+      <p className="text-[11px] text-muted-foreground">Test device choices only label staged readings for review. They do not change your vineyard's weather or rainfall source. Choosing "No test device" keeps the previous choice.</p>
+      <div className="text-xs"><span className="text-muted-foreground">Discovered devices ({devices.length}): </span>{devices.length ? devices.map((d) => d.name).join(" · ") : "None yet"}</div>
       <div className="grid gap-3 sm:grid-cols-4">
         <div className="space-y-1">
           <Label htmlFor="axis-token" className="text-xs">{c?.hasToken ? "Replace token" : "Exchange token"}</Label>
           <Input id="axis-token" type="password" autoComplete="off" spellCheck={false} placeholder={c?.hasToken ? "•••••••• (stored securely)" : "Paste token"} value={token} onChange={(e) => setToken(e.target.value)} />
         </div>
-        <StationSelect label="Weather station" value={weather} onChange={set(setWeather)} devices={devices} />
-        <StationSelect label="Rain gauge" value={rain} onChange={set(setRain)} devices={devices} />
-        <StationSelect label="Leaf wetness" value={leaf} onChange={set(setLeaf)} devices={devices} />
+        <StationSelect label="Weather test device" value={weather} onChange={set(setWeather)} devices={devices} />
+        <StationSelect label="Rain gauge test device" value={rain} onChange={set(setRain)} devices={devices} />
+        <StationSelect label="Leaf wetness test device" value={leaf} onChange={set(setLeaf)} devices={devices} />
       </div>
       {err && <p role="alert" className="text-xs text-destructive">{err}</p>}
       {result && <p role="status" className={`text-xs ${result.ok ? "text-success" : "text-destructive"}`}>{result.message}</p>}
       <div className="flex flex-wrap gap-2">
         <Button size="sm" disabled={busy || (!token.trim() && !dirty)} onClick={() => save.mutate()}>Save</Button>
-        <Button size="sm" variant="outline" disabled={busy || !c?.hasToken || c.mode !== "testing"} onClick={() => test.mutate()}>{test.isPending ? "Testing…" : "Test Connection"}</Button>
+        <Button size="sm" variant="outline" disabled={busy || !c?.configured || c.mode !== "testing"} onClick={() => test.mutate()}>{test.isPending ? "Testing…" : "Test Connection"}</Button>
         <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>Refresh Status</Button>
         <Button size="sm" variant="outline" className="text-destructive" disabled={busy || !c?.configured} onClick={() => { if (window.confirm("Disable and remove the AxisStream test connection?")) remove.mutate(); }}>Disable/Remove</Button>
       </div>
