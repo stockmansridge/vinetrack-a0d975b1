@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 
 const invoke = vi.fn();
 const from = vi.fn(() => {
@@ -67,7 +68,7 @@ const existing = {
 function renderEditor(initial: SavedChemical | null) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <QueryClientProvider client={client}>
+    <MemoryRouter><QueryClientProvider client={client}>
       <ChemicalEditor
         open
         onOpenChange={() => {}}
@@ -77,7 +78,7 @@ function renderEditor(initial: SavedChemical | null) {
         canSeeCosts
         onSaved={() => {}}
       />
-    </QueryClientProvider>,
+    </QueryClientProvider></MemoryRouter>,
   );
 }
 
