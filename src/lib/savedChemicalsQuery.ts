@@ -58,6 +58,10 @@ export interface SavedChemical {
   label_reference?: string | null;
   label_version?: string | null;
   verification_status?: string | null;
+  // Shared VineTrack catalogue linkage (read-only in the Portal editor).
+  chemical_v3_product_id?: string | null;
+  chemical_v3_revision_id?: string | null;
+  chemical_v3_review_status_snapshot?: string | null;
   verification_sources?: any;
   verification_conflicts?: any;
   verification_unresolved_fields?: any;
