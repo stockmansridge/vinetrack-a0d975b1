@@ -791,6 +791,15 @@ export default function ChemicalV3LabPage() {
         <Button variant="outline" asChild><Link to="/setup/chemicals"><FlaskConical className="mr-1 h-4 w-4" />Chemicals</Link></Button>
         <Button variant="outline" onClick={() => setSearchOpen(true)}><Search className="mr-1 h-4 w-4" />Open Chemical Search</Button>
       </div>
+      <div className="relative max-w-md">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input value={tableFilter} onChange={(e) => setTableFilter(e.target.value)}
+          placeholder="Filter chemicals by name, manufacturer, country…"
+          className="pl-8 pr-20" aria-label="Filter catalogue tables" data-testid="v3-filter-input" />
+        {tableFilter && (
+          <Button size="sm" variant="ghost" className="absolute right-1 top-1/2 h-7 -translate-y-1/2 px-2" onClick={() => setTableFilter("")}>Clear</Button>
+        )}
+      </div>
       <ChemicalSearchDialog open={searchOpen} onOpenChange={setSearchOpen} vineyardId={selectedVineyardId}
         vineyardName={memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null}
         country={currentCountry} canEdit={currentRole === "owner" || currentRole === "manager" || isAdmin} />
