@@ -18,6 +18,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PortalNotice } from "@/components/ui/PortalNotice";
 import { AlertTriangle } from "lucide-react";
 import { MaitWeatherCard, useMait } from "@/components/mait/MaitWeatherCard";
+import { AxisStreamCard } from "@/components/weather/AxisStreamCard";
 import { fetchLocalObservationProvider, observationProviderLabel, refreshObservationProvider, providerFromObservationSource, type LocalObservationProvider } from "@/lib/localObservationProvider";
 import { effectiveForecastSource, providerUsedFor, PROVIDER_PROVIDES, type EffectiveForecastSource } from "@/lib/weatherSourceSummary";
 
@@ -272,6 +273,7 @@ export default function WeatherStatusPage() {
                 {selectedVineyardId && <MaitWeatherCard key={selectedVineyardId} vineyardId={selectedVineyardId} usedFor={usedFor.mait} />}
 
             </div>
+            {selectedVineyardId && <AxisStreamCard vineyardId={selectedVineyardId} />}
           </section>
 
           <p className="text-xs text-muted-foreground">
