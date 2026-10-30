@@ -137,8 +137,7 @@ describe("read status", () => {
   it("unavailable weights surface as unavailable, not not_configured", () => {
     const B1 = "b1b1b1b1-0000-0000-0000-000000000001";
     const payload = {
-      selectedPaddockIds: [B1],
-      bunchWeightsPerPaddock: { [B1]: 0.2 },
+      blockBunchWeightsKg: { [B1]: 0.2 },
       sampleSites: [{ paddockId: B1, latitude: -34.1, longitude: 138.2, siteIndex: 1, bunchCountEntry: { bunchesPerVine: 20 } }],
     };
     const s = summariseYieldSession(payload, {
