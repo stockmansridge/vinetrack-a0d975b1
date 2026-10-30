@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 
 const invoke = vi.fn();
 const from = vi.fn(() => {
@@ -29,7 +30,7 @@ vi.mock("@/lib/masterChemicals", async (orig) => ({
   fetchMasterChemical: vi.fn(async () => null),
 }));
 vi.mock("@/context/VineyardContext", () => ({
-  useVineyard: () => ({ currentCountry: "AU", currentVineyardId: "v1" }),
+  useVineyard: () => ({ currentCountry: "AU", currentVineyardId: "v1", memberships: [{ vineyard_id: "v1", role: "owner", vineyard_name: "Stockman" }] }),
 }));
 vi.mock("@/lib/permissions", () => ({ useCanSeeCosts: () => true }));
 
@@ -67,7 +68,7 @@ const existing = {
 function renderEditor(initial: SavedChemical | null) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <QueryClientProvider client={client}>
+    <MemoryRouter><QueryClientProvider client={client}>
       <ChemicalEditor
         open
         onOpenChange={() => {}}
@@ -77,7 +78,7 @@ function renderEditor(initial: SavedChemical | null) {
         canSeeCosts
         onSaved={() => {}}
       />
-    </QueryClientProvider>,
+    </QueryClientProvider></MemoryRouter>,
   );
 }
 

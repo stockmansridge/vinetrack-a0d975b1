@@ -67,7 +67,7 @@ import {
 
 import { DefaultRatesCard } from "@/components/chemicals/DefaultRatesCard";
 import { CatalogueIdentityBadge, CatalogueReferenceSection } from "@/components/chemicals/CatalogueReference";
-import { catalogueLinkOf, useCatalogueReference } from "@/lib/chemicalCatalogueReference";
+import { catalogueLinkOf, useCatalogueReference, intelligenceDraftUnchanged } from "@/lib/chemicalCatalogueReference";
 import {
   PREFERRED_RATE_HELPER,
   PREFERRED_RATE_UNITS,
@@ -490,7 +490,15 @@ export function ChemicalEditor({
       const withManual = manualUse
         ? { ...reconciled, registeredUses: [...reconciled.registeredUses, manualUse] }
         : reconciled;
-      const encoded = encodeChemicalIntelligenceForWrite(grapevineOnlyDraft(withManual));
+      // Existing V3-linked chemicals: an untouched FULL intelligence draft (and no
+      // manual-use recovery) is OMITTED, so a notes/preferred-only save never
+      // re-encodes raw V3 uses/verification fields (e.g. crop "Grapes").
+      const omitIntelligence =
+        !!initial && !!catalogueLinkOf(initial) && !manualUse &&
+        intelligenceDraftUnchanged(intelBase, intel);
+      const encoded = omitIntelligence
+        ? undefined
+        : encodeChemicalIntelligenceForWrite(grapevineOnlyDraft(withManual));
       // Category: the RAW shared key is the stored authority; `use` carries the
       // display label as a compatibility projection only.
       const categoryKey = matchProductCategoryKey(form.product_category);
@@ -507,7 +515,7 @@ export function ChemicalEditor({
         rate_per_ha: undefined,
         product_category: categoryKey,
         use: categoryKey ? productCategoryLabel(categoryKey) : (form.use ?? ""),
-        intelligence: encoded,
+        ...(encoded === undefined ? {} : { intelligence: encoded }),
         // Manual records carry NO master link: typing a registration number
         // never matches a Master product.
         master_chemical_id: manualMode ? null : masterLink?.id ?? null,
@@ -600,8 +608,16 @@ export function ChemicalEditor({
    * a replacement (or clear the slot) before the chemical can be saved — the
    * portal never silently re-points a default at a different rate.
    */
+  // Narrow V3 safeguard: an untouched saved default on an existing V3-linked
+  // chemical whose intelligence is also untouched is omitted from the save, so
+  // the local grapevine-crop filter (e.g. raw crop "Grapes") must not flag it
+  // stale or block an unrelated save.
+  const untouchedV3Defaults =
+    !!initial && !!catalogueLinkOf(initial as any) && !rateLife.dirty &&
+    intelligenceDraftUnchanged(intelBase, intel);
   const staleDefaultRate =
-    structuredUses && !defaultRateStillSupported(defaultRates, intel.registeredUses);
+    structuredUses && !untouchedV3Defaults &&
+    !defaultRateStillSupported(defaultRates, intel.registeredUses);
 
   // Release contract §4 — a NEW chemical selected through registered/master
   // lookup may only be saved with a registered grapevine use AND an explicitly
