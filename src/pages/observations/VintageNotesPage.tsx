@@ -35,7 +35,7 @@ import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 import { formatDate, formatDateTime } from "@/lib/dateFormat";
 import { localToday } from "@/lib/workTaskDefaultOrder";
 import { fetchVineyard } from "@/lib/vineyardSettingsQuery";
-import { checkInsightsAccess } from "@/lib/scoutReports";
+import { checkInsightsAccess, checkVintageNoteAddAccess } from "@/lib/scoutReports";
 import { useToast } from "@/hooks/use-toast";
 import { FIELD_ROLES } from "@/lib/rolePermissions";
 import {
@@ -112,7 +112,13 @@ export default function VintageNotesPage() {
   });
   const [clientId, setClientId] = useState<string | null>(null);
 
-  const canAdd = !!currentRole && (FIELD_ROLES as string[]).includes(currentRole);
+  const addAccessQuery = useQuery({
+    queryKey: ["vintage-note-add-access", selectedVineyardId, currentRole, access],
+    enabled: !!selectedVineyardId && access === "allowed",
+    queryFn: () => checkVintageNoteAddAccess(selectedVineyardId!, currentRole, access),
+  });
+  const canAdd =
+    !!currentRole && (FIELD_ROLES as string[]).includes(currentRole) && addAccessQuery.data === true;
   const permissionDenied =
     access === "denied" ||
     (notesQuery.error && isPermissionError(notesQuery.error)) ||
