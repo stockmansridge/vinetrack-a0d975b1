@@ -62,7 +62,9 @@ describe("AxisStream Exchange (test-only)", () => {
     rpc.mockResolvedValue(cfg());
     invoke.mockResolvedValue({ data: { ok: true, summary: "2 devices staged" }, error: null });
     wrap(<AxisStreamCard vineyardId="v1" />);
-    fireEvent.click(await screen.findByText("Test Connection"));
+    const btn = (await screen.findByText("Test Connection")).closest("button")!;
+    await waitFor(() => expect(btn.disabled).toBe(false));
+    fireEvent.click(btn);
     expect(await screen.findByText("2 devices staged")).toBeTruthy();
     expect(invoke).toHaveBeenCalledWith("axisstream-exchange-preview", { body: { vineyard_id: "v1", action: "test" } });
   });
