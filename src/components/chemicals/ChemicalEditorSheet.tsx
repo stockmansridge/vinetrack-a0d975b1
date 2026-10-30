@@ -66,7 +66,7 @@ import {
 } from "@/lib/chemicalVineyardScope";
 
 import { DefaultRatesCard } from "@/components/chemicals/DefaultRatesCard";
-import { CatalogueIdentityBadge, CatalogueReferenceSection } from "@/components/chemicals/CatalogueReference";
+import { CatalogueIdentityBadge, CatalogueReferenceSection, CatalogueChemistrySection } from "@/components/chemicals/CatalogueReference";
 import { catalogueLinkOf, useCatalogueReference, intelligenceDraftUnchanged } from "@/lib/chemicalCatalogueReference";
 import {
   PREFERRED_RATE_HELPER,
@@ -104,7 +104,6 @@ import {
   OPEN_MANUFACTURER_LABEL,
   OPEN_PRODUCT_PAGE,
   OPEN_REGISTRATION_SOURCE,
-  OPEN_REGULATOR_LABEL,
   resolveChemicalLabelLinks,
 } from "@/lib/chemicalLabelLinks";
 import {
@@ -900,7 +899,7 @@ export function ChemicalEditor({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="p-0 gap-0 flex flex-col w-[92vw] max-w-[1200px] sm:max-w-[1200px] max-h-[89vh] overflow-hidden"
+        className="p-0 gap-0 flex flex-col w-[96vw] max-w-[1320px] sm:max-w-[1320px] max-h-[89vh] overflow-hidden"
       >
         <DialogHeader className="shrink-0 border-b px-5 py-3 text-left">
           <DialogTitle className="flex flex-wrap items-center gap-2">
@@ -1015,7 +1014,9 @@ export function ChemicalEditor({
               </Section>
 
               <Section title="Active ingredients & resistance">
-                {showIntelEditor ? (
+                {catalogueLinked ? (
+                  <CatalogueChemistrySection query={catalogueQ} />
+                ) : showIntelEditor ? (
                   <ChemicalIntelligenceEditor
                     draft={intel}
                     onChange={handleIntelChange}
@@ -1074,7 +1075,7 @@ export function ChemicalEditor({
                   {labelLinks.regulatorLabelUrl && (
                     <Button asChild size="sm" variant="outline" className="gap-1">
                       <a href={labelLinks.regulatorLabelUrl} target="_blank" rel="noopener noreferrer">
-                        <FileText className="h-3.5 w-3.5" /> {OPEN_REGULATOR_LABEL}
+                        <FileText className="h-3.5 w-3.5" /> Open Label
                       </a>
                     </Button>
                   )}
@@ -1357,9 +1358,9 @@ export function ChemicalEditor({
           {editorUnlocked && (
           <Collapsible>
             <div className="overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm">
-              <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 border-b border-primary/15 bg-primary/[0.06] px-3 py-2 text-sm font-semibold tracking-wide text-primary">
+              <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 border-b border-primary bg-primary px-3 py-2 text-sm font-semibold tracking-wide text-primary-foreground">
                 <span>Advanced / verification details</span>
-                <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                <Info className="h-3.5 w-3.5 text-primary-foreground/80" />
               </CollapsibleTrigger>
               <CollapsibleContent className="space-y-4 px-3 pb-3">
                 <p className="text-[11px] text-muted-foreground">
@@ -1426,8 +1427,8 @@ export function ChemicalEditor({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm">
-      <div className="border-b border-primary/15 bg-primary/[0.06] px-3 py-1.5">
-        <h4 className="text-sm font-semibold tracking-wide text-primary">{title}</h4>
+      <div className="border-b border-primary bg-primary px-3 py-1.5">
+        <h4 className="text-sm font-semibold tracking-wide text-primary-foreground">{title}</h4>
       </div>
       <div className="p-3 space-y-3">
       {children}
