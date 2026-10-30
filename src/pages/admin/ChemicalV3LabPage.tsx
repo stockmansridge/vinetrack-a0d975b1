@@ -46,7 +46,7 @@ import {
 import { fetchProductCategories, isV3Addable, setV3ProductCategory, v3CategoryLabel, type CategoryOption } from "@/lib/chemicalInventory";
 import { V3AddToVineyardButton } from "@/components/chemicals/V3AddToVineyardDialog";
 import { V3ResistanceBadge, V3ResistanceField } from "@/components/chemicals/V3ResistanceField";
-import { isV3ResistanceEditable, setV3ResistanceGroups, type V3ResistanceDraft } from "@/lib/chemicalV3Resistance";
+import { isV3ResistanceEditable, setV3ResistanceGroups, readV3Resistance, formatV3Resistance, type V3ResistanceDraft } from "@/lib/chemicalV3Resistance";
 
 function useCategories() {
   return useQuery({ queryKey: ["chemical-product-categories"], staleTime: 10 * 60_000, queryFn: fetchProductCategories });
@@ -60,6 +60,92 @@ function usePilotVineyard() {
 type Row = Record<string, any>;
 const JOB_KEY = "vt.chemical-v3.current-job";
 const NO_COUNTRY = "__none";
+
+// ---- Table filter + column sort helpers (shared by Pending Review and Approved) ----
+type SortState = { key: string; dir: "asc" | "desc" } | null;
+type SortValue = string | number | null;
+
+function toggleSortState(current: SortState, key: string): SortState {
+  if (current?.key !== key) return { key, dir: "asc" };
+  if (current.dir === "asc") return { key, dir: "desc" };
+  return null; // third click clears the sort
+}
+
+function dateSortValue(v: unknown): SortValue {
+  if (!v) return null;
+  const t = new Date(String(v)).getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
+function SortTh({ label, col, sort, onSort }: { label: string; col: string; sort: SortState; onSort: (key: string) => void }) {
+  const active = sort?.key === col;
+  return (
+    <th className="p-2" aria-sort={active ? (sort!.dir === "asc" ? "ascending" : "descending") : "none"}>
+      <button type="button"
+        className={cn("inline-flex items-center gap-0.5 rounded text-xs hover:text-foreground", active ? "font-semibold text-foreground" : "text-muted-foreground")}
+        onClick={() => onSort(col)}
+        title={`Sort by ${label}`}>
+        {label}
+        <span aria-hidden className="w-2 text-[10px]">{active ? (sort!.dir === "asc" ? "▲" : "▼") : ""}</span>
+      </button>
+    </th>
+  );
+}
+
+function sortedBy<T>(rows: T[], sort: SortState, getVal: (r: T) => SortValue): T[] {
+  if (!sort) return rows;
+  const dir = sort.dir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const va = getVal(a), vb = getVal(b);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1; // empty values always sink to the bottom
+    if (vb == null) return -1;
+    if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+    return String(va).localeCompare(String(vb), undefined, { sensitivity: "base", numeric: true }) * dir;
+  });
+}
+
+function rowSearchText(r: Row, cats?: CategoryOption[] | null): string {
+  return [
+    pick(r, "product_name"),
+    pick(r, "manufacturer", "registrant"),
+    pick(r, "country_code", "country"),
+    v3CategoryLabel(r, cats) ?? pick(r, "product_category"),
+    pick(r, "requested_by_name", "requester_name", "created_by_name", "user_name", "requested_by_email", "requester_email", "created_by_email", "user_email"),
+    pick(r, "vineyard_name", "requested_vineyard_name", "source_vineyard_name"),
+  ].filter((v) => v != null && String(v).trim() !== "").join(" ").toLowerCase();
+}
+
+const REVIEW_COLUMNS = ["Product", "Manufacturer", "Country", "Category", "Core complete", "Vineyard rates", "Manufacturer label", "Front label", "Warnings", "Unresolved", "Age", "Added by"] as const;
+const REVIEW_SORT_GETTERS: Record<string, (r: Row, cats: CategoryOption[] | undefined) => SortValue> = {
+  Product: (r) => pick(r, "product_name") ?? null,
+  Manufacturer: (r) => pick(r, "manufacturer") ?? null,
+  Country: (r) => pick(r, "country_code", "country") ?? null,
+  Category: (r, cats) => v3CategoryLabel(r, cats) ?? pick(r, "product_category") ?? null,
+  "Core complete": (r) => (r.core_fields_complete ? "Yes" : "No"),
+  "Vineyard rates": (r) => humaniseStage(pick(r, "vineyard_rate_status")) || null,
+  "Manufacturer label": (r) => humaniseStage(pick(r, "manufacturer_label_status")) || (pick(r, "manufacturer_label_url") ? "Present" : null),
+  "Front label": (r) => humaniseStage(pick(r, "front_label_status")) || (pick(r, "front_label_image_path") ? "Present" : null),
+  Warnings: (r) => asList(pick(r, "warnings")).length || Number(pick(r, "warning_count")) || 0,
+  Unresolved: (r) => asList(pick(r, "unresolved_fields")).length || Number(pick(r, "unresolved_count")) || 0,
+  Age: (r) => dateSortValue(pick(r, "created_at")),
+  "Added by": (r) => pick(r, "requested_by_name", "requester_name", "created_by_name", "user_name", "requested_by_email", "requester_email", "created_by_email", "user_email") ?? null,
+};
+
+const APPROVED_COLUMNS = ["Product", "Manufacturer", "Country", "Category", "Resistance group", "Approved date", "Last verified", "Warnings", "Front label"] as const;
+const APPROVED_SORT_GETTERS: Record<string, (r: Row, cats: CategoryOption[] | undefined) => SortValue> = {
+  Product: (r) => pick(r, "product_name") ?? null,
+  Manufacturer: (r) => pick(r, "manufacturer", "registrant") ?? null,
+  Country: (r) => pick(r, "country_code", "country") ?? null,
+  Category: (r, cats) => v3CategoryLabel(r, cats) ?? pick(r, "product_category") ?? null,
+  "Resistance group": (r) => {
+    const res = readV3Resistance(r);
+    return res.state === "not_applicable" ? null : res.state === "classified" ? formatV3Resistance(res) : "Group unresolved";
+  },
+  "Approved date": (r) => dateSortValue(pick(r, "approved_at")),
+  "Last verified": (r) => dateSortValue(pick(r, "last_verified_at")),
+  Warnings: (r) => asList(pick(r, "warnings")).length || Number(pick(r, "warning_count")) || 0,
+};
 
 const STATUS_CLASS = {
   ok: "border-success/40 bg-success/10",
@@ -512,9 +598,10 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
   );
 }
 
-export function ReviewQueue({ onOpen }: { onOpen: (id: string, jobId?: string | null) => void }) {
+export function ReviewQueue({ onOpen, filter = "" }: { onOpen: (id: string, jobId?: string | null) => void; filter?: string }) {
   const cats = useCategories();
   const { isAdmin } = useIsSystemAdmin();
+  const [sort, setSort] = useState<SortState>(null);
   const q = useQuery({ queryKey: ["chemical-v3-queue"], queryFn: v3ReviewQueue, refetchOnMount: "always", refetchOnWindowFocus: "always" });
   const refresh = (
     <div className="mb-2 flex justify-end">
@@ -529,15 +616,20 @@ export function ReviewQueue({ onOpen }: { onOpen: (id: string, jobId?: string | 
     if (seen.has(id)) return false;
     seen.add(id); return true;
   });
+  const needle = filter.trim().toLowerCase();
+  const visible0 = needle ? rows.filter((r) => rowSearchText(r, cats.data).includes(needle)) : rows;
+  const sortGetter = sort ? REVIEW_SORT_GETTERS[sort.key] : undefined;
+  const visible = sortGetter ? sortedBy(visible0, sort, (r) => sortGetter(r, cats.data)) : visible0;
   if (!rows.length) return <div>{refresh}<p className="rounded border bg-card p-3 text-sm text-muted-foreground">Nothing waiting for review.</p></div>;
+  if (!visible.length) return <div>{refresh}<p className="rounded border bg-card p-3 text-sm text-muted-foreground">No chemicals match “{filter}”.</p></div>;
   return (
     <div>{refresh}
     <div className="overflow-x-auto rounded border bg-card">
       <table className="w-full text-sm">
         <thead className="bg-card text-left text-xs text-muted-foreground"><tr>
-          {["Product", "Manufacturer", "Country", "Category", "Core complete", "Vineyard rates", "Manufacturer label", "Front label", "Warnings", "Unresolved", "Age", "Added by"].map((h) => <th key={h} className="p-2">{h}</th>)}
+          {REVIEW_COLUMNS.map((h) => <SortTh key={h} label={h} col={h} sort={sort} onSort={(k) => setSort((s) => toggleSortState(s, k))} />)}
         </tr></thead>
-        <tbody>{rows.map((r) => {
+        <tbody>{visible.map((r) => {
           const id = String(pick(r, "revision_id", "id"));
           const created = pick(r, "created_at");
           const age = created ? `${Math.max(0, Math.round((Date.now() - new Date(created).getTime()) / 86_400_000))} d` : "—";
@@ -584,21 +676,27 @@ export function ReviewQueue({ onOpen }: { onOpen: (id: string, jobId?: string | 
 
 const SOLID_ROW = "cursor-pointer border-t bg-card hover:bg-muted";
 
-function ApprovedList({ onOpen }: { onOpen: (id: string) => void }) {
+export function ApprovedList({ onOpen, filter = "" }: { onOpen: (id: string) => void; filter?: string }) {
   const cats = useCategories();
+  const [sort, setSort] = useState<SortState>(null);
   const q = useQuery({ queryKey: ["chemical-v3-approved"], queryFn: fetchApprovedCatalogue });
   if (q.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (q.error) return <p className="text-sm text-destructive">{(q.error as Error).message}</p>;
   const rows = q.data ?? [];
+  const needle = filter.trim().toLowerCase();
+  const visible0 = needle ? rows.filter((r) => rowSearchText(r, cats.data).includes(needle)) : rows;
+  const sortGetter = sort ? APPROVED_SORT_GETTERS[sort.key] : undefined;
+  const visible = sortGetter ? sortedBy(visible0, sort, (r) => sortGetter(r, cats.data)) : visible0;
   if (!rows.length) return <p className="rounded border bg-card p-3 text-sm text-muted-foreground">No approved catalogue products yet.</p>;
+  if (!visible.length) return <p className="rounded border bg-card p-3 text-sm text-muted-foreground">No approved products match “{filter}”.</p>;
   const date = (v: any) => (v ? new Date(v).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }) : "—");
   return (
     <div className="overflow-x-auto rounded border bg-card">
       <table className="w-full text-sm" data-testid="v3-approved-table">
         <thead className="bg-card text-left text-xs text-muted-foreground"><tr>
-          {["Product", "Manufacturer", "Country", "Category", "Resistance group", "Approved date", "Last verified", "Warnings", "Front label"].map((h) => <th key={h} className="p-2">{h}</th>)}
+          {APPROVED_COLUMNS.map((h) => <SortTh key={h} label={h} col={h} sort={sort} onSort={(k) => setSort((s) => toggleSortState(s, k))} />)}
         </tr></thead>
-        <tbody>{rows.map((r, i) => {
+        <tbody>{visible.map((r, i) => {
           const id = approvedRevisionId(r);
           return (
             <tr key={id ?? i} className={SOLID_ROW} data-testid="v3-approved-row" onClick={() => id && onOpen(id)}>
@@ -641,6 +739,7 @@ export default function ChemicalV3LabPage() {
   const { user } = useAuth();
   const { isAdmin } = useIsSystemAdmin();
   const [tab, setTab] = useState("review");
+  const [tableFilter, setTableFilter] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const { selectedVineyardId, memberships, currentRole } = useVineyard();
   const { currentCountry } = useVineyard();
@@ -692,6 +791,15 @@ export default function ChemicalV3LabPage() {
         <Button variant="outline" asChild><Link to="/setup/chemicals"><FlaskConical className="mr-1 h-4 w-4" />Chemicals</Link></Button>
         <Button variant="outline" onClick={() => setSearchOpen(true)}><Search className="mr-1 h-4 w-4" />Open Chemical Search</Button>
       </div>
+      <div className="relative max-w-md">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input value={tableFilter} onChange={(e) => setTableFilter(e.target.value)}
+          placeholder="Filter chemicals by name, manufacturer, country…"
+          className="pl-8 pr-20" aria-label="Filter catalogue tables" data-testid="v3-filter-input" />
+        {tableFilter && (
+          <Button size="sm" variant="ghost" className="absolute right-1 top-1/2 h-7 -translate-y-1/2 px-2" onClick={() => setTableFilter("")}>Clear</Button>
+        )}
+      </div>
       <ChemicalSearchDialog open={searchOpen} onOpenChange={setSearchOpen} vineyardId={selectedVineyardId}
         vineyardName={memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null}
         country={currentCountry} canEdit={currentRole === "owner" || currentRole === "manager" || isAdmin} />
@@ -701,8 +809,8 @@ export default function ChemicalV3LabPage() {
           <TabsTrigger value="approved">Approved</TabsTrigger>
           {isAdmin && <TabsTrigger value="inventory">Inventory &amp; Purchases</TabsTrigger>}
         </TabsList>
-        <TabsContent value="review"><ReviewQueue onOpen={(id, j) => { setOpenRevision(id); setOpenJob(j ?? null); }} /></TabsContent>
-        <TabsContent value="approved"><ApprovedList onOpen={setOpenRevision} /></TabsContent>
+        <TabsContent value="review"><ReviewQueue onOpen={(id, j) => { setOpenRevision(id); setOpenJob(j ?? null); }} filter={tableFilter} /></TabsContent>
+        <TabsContent value="approved"><ApprovedList onOpen={setOpenRevision} filter={tableFilter} /></TabsContent>
         {isAdmin && <TabsContent value="inventory"><InventoryTab /></TabsContent>}
       </Tabs>
       {notice && <div className="flex items-center gap-2 rounded border border-warning/50 bg-warning/10 p-3 text-sm"><AlertTriangle className="h-4 w-4" />{notice}</div>}
