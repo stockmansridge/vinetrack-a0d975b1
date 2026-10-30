@@ -241,7 +241,9 @@ export default function WeatherStatusPage() {
               icon={<Plug className="h-5 w-5" />}
               tone="bg-primary/10 text-primary border-primary/30"
             />
-            <div className="grid auto-rows-fr items-stretch gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+            <div className={isSystemAdmin
+              ? "grid auto-rows-fr items-stretch gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6"
+              : "grid auto-rows-fr items-stretch gap-3 sm:grid-cols-2 xl:grid-cols-5"}>
                 <OpenMeteoCard usedFor={usedFor.open_meteo} />
 
                 <DavisCard
