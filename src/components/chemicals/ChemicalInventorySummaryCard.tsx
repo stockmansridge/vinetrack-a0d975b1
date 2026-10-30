@@ -16,9 +16,9 @@ type Role = Parameters<typeof canRecordChemicalPurchase>[0];
 export function ChemicalInventorySummaryCard({ savedChemicalId, role }: { savedChemicalId: string | null; role: Role }) {
   if (!savedChemicalId) {
     return (
-      <div className="rounded-md border border-border/60 p-3" data-testid="inventory-summary-new">
-        <div className="text-sm font-semibold">Inventory &amp; purchase</div>
-        <p className="mt-1 text-xs text-muted-foreground">Save the chemical first, then record purchases through Chemical Purchase.</p>
+      <div className="overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm" data-testid="inventory-summary-new">
+        <div className="border-b border-primary bg-primary px-3 py-1.5"><h4 className="text-sm font-semibold tracking-wide text-primary-foreground">Inventory &amp; purchase</h4></div>
+        <p className="p-3 text-xs text-muted-foreground">Save the chemical first, then record purchases through Chemical Purchase.</p>
       </div>
     );
   }
@@ -45,8 +45,9 @@ function Loaded({ id, role }: { id: string; role: Role }) {
     ["Expiry", p?.expiry ? formatDate(p.expiry) : null],
   ];
   return (
-    <div className="space-y-2 rounded-md border border-border/60 p-3" data-testid="inventory-summary">
-      <div className="text-sm font-semibold">Inventory &amp; purchase</div>
+    <div className="overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm" data-testid="inventory-summary">
+      <div className="border-b border-primary bg-primary px-3 py-1.5"><h4 className="text-sm font-semibold tracking-wide text-primary-foreground">Inventory &amp; purchase</h4></div>
+      <div className="space-y-2 p-3">
       {summary.isLoading ? <p className="text-xs text-muted-foreground">Loading…</p> : summary.isError ? (
         <p className="text-xs text-muted-foreground">Inventory details are unavailable right now.</p>
       ) : (
@@ -59,6 +60,7 @@ function Loaded({ id, role }: { id: string; role: Role }) {
       <div className="flex flex-wrap gap-2 pt-1">
         <Button asChild size="sm" variant="outline"><Link to="/setup/chemicals/inventory">View Inventory</Link></Button>
         {canBuy && <Button asChild size="sm"><Link to={`/setup/chemicals/purchases?chemical=${encodeURIComponent(id)}`}>Record Purchase</Link></Button>}
+      </div>
       </div>
     </div>
   );

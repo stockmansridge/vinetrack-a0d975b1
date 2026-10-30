@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { VineTrackCatalogueBadge } from "@/components/chemicals/VineTrackCatalogueBadge";
 import { VineyardProductBadge } from "@/components/chemicals/VineyardProductBadge";
 import { RateColumn, VineyardUsesSection } from "@/components/chemicals/V3ReviewData";
-import { splitRates, asList, pick } from "@/lib/chemicalV3";
+import { splitRates, asList, pick, labelOf } from "@/lib/chemicalV3";
+import { readV3Resistance, formatV3Resistance, formatV3ResistanceSource, V3_RESISTANCE_STATE_LABEL } from "@/lib/chemicalV3Resistance";
 import { catalogueLinkOf, useCatalogueReference, type CatalogueReference } from "@/lib/chemicalCatalogueReference";
 
 type Row = Record<string, any>;
@@ -67,6 +68,50 @@ export function CatalogueReferenceSection({ query }: { query: Q }) {
         </div>
       )}
       {uses.length > 0 && <VineyardUsesSection uses={uses} />}
+    </div>
+  );
+}
+
+/**
+ * Read-only catalogue chemistry (active ingredients + canonical revision-level
+ * resistance) from the APPROVED revision only. No edit/add/remove controls.
+ */
+export function CatalogueChemistrySection({ query }: { query: Q }) {
+  const d = query.data as CatalogueReference | undefined;
+  const note = <p className="text-[11px] text-muted-foreground">From the VineTrack catalogue.</p>;
+  if (query.isError)
+    return (
+      <div className="flex items-center gap-2 text-xs" role="alert" data-testid="catalogue-chemistry-error">
+        <span>Catalogue chemistry could not be loaded.</span>
+        <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => query.refetch()}>Retry</Button>
+      </div>
+    );
+  if (query.isLoading || query.isFetching || !d)
+    return <p className="text-xs text-muted-foreground" data-testid="catalogue-chemistry-loading">Loading catalogue chemistry…</p>;
+  if (d.state !== "approved")
+    return <p className="text-xs text-muted-foreground" data-testid="catalogue-chemistry-unavailable">Approved catalogue chemistry is not available for this product.</p>;
+  const actives = asList(pick(d.revision, "active_ingredients")).map(labelOf).filter(Boolean);
+  const r = readV3Resistance(d.revision);
+  const source = formatV3ResistanceSource(r.source);
+  return (
+    <div className="space-y-2 text-sm" data-testid="catalogue-chemistry">
+      {note}
+      <div>
+        <div className="text-xs text-muted-foreground">Active ingredients</div>
+        {actives.length ? (
+          <ul className="space-y-0.5" data-testid="catalogue-actives">
+            {actives.map((a, i) => <li key={i} className="font-medium">{a}</li>)}
+          </ul>
+        ) : (
+          <p className="text-xs text-muted-foreground">The approved catalogue record lists no active ingredients.</p>
+        )}
+      </div>
+      <div data-status={r.state}>
+        <div className="text-xs text-muted-foreground">Resistance group</div>
+        <div className="font-medium" data-testid="catalogue-resistance">{formatV3Resistance(r)}</div>
+        <div className="text-xs text-muted-foreground">Status: {V3_RESISTANCE_STATE_LABEL[r.state]}</div>
+        {source && <div className="text-xs text-muted-foreground">Source: {source}</div>}
+      </div>
     </div>
   );
 }
