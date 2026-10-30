@@ -217,6 +217,7 @@ export function DefaultRatesCard({
   onSelectDose,
   onClear,
   className,
+  emptyMessage,
 }: {
   /** Backend canonical options, or null when none were fetched this session. */
   options: CanonicalDefaultRateOptions | null;

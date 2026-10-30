@@ -7,6 +7,8 @@
 //
 // Safety rules are enforced by `chemicalSafetyDisplay` — a missing period is
 // never rendered as zero and a missing restriction is never "No restrictions".
+import { CatalogueIdentityBadge, CatalogueReferenceSection } from "@/components/chemicals/CatalogueReference";
+import { catalogueLinkOf, useCatalogueReference } from "@/lib/chemicalCatalogueReference";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -351,13 +353,23 @@ export function ChemicalIntelligenceDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const chem = row ? toChemicalIntelligence(row) : null;
+  const catalogueQ = useCatalogueReference(row, open);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{chem?.name ?? "Chemical"}</DialogTitle>
+          <DialogTitle className="flex flex-wrap items-center gap-2">
+            {chem?.name ?? "Chemical"}
+            {row && <CatalogueIdentityBadge row={row} query={catalogueQ} />}
+          </DialogTitle>
           <DialogDescription>Chemical intelligence (read-only)</DialogDescription>
         </DialogHeader>
+        {catalogueLinkOf(row) && (
+          <section className="space-y-2 rounded border p-3" data-testid="catalogue-reference-detail">
+            <h3 className="text-sm font-semibold">Catalogue rates</h3>
+            <CatalogueReferenceSection query={catalogueQ} />
+          </section>
+        )}
         {chem && <ChemicalIntelligenceDetail chem={chem} />}
       </DialogContent>
     </Dialog>
