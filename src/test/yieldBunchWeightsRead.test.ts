@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const pages: { data: any[]; count: number | null; error?: any }[] = [];
 const calls: { range: [number, number]; order: string; count?: string }[] = [];
+const rpcResults: { data: any; error: any }[] = [];
+const rpcCalls: { fn: string; args: any }[] = [];
 vi.mock("@/integrations/ios-supabase/client", () => {
   const builder = () => {
     const st: any = {};
@@ -18,7 +20,15 @@ vi.mock("@/integrations/ios-supabase/client", () => {
     };
     return b;
   };
-  return { supabase: { from: () => builder() } };
+  return {
+    supabase: {
+      from: () => builder(),
+      rpc: (fn: string, args: any) => {
+        rpcCalls.push({ fn, args });
+        return Promise.resolve(rpcResults.shift() ?? { data: null, error: { message: "no rpc stub" } });
+      },
+    },
+  };
 });
 
 import {
@@ -30,6 +40,7 @@ import {
   type YieldBunchWeightRow,
 } from "@/lib/yieldBunchWeights";
 import { summariseYieldSession } from "@/lib/yieldSessionSummary";
+import { gateTotalOnWeightRead } from "@/lib/vintageYieldEstimateTotal";
 
 const V = "AAAAAAAA-0000-0000-0000-000000000001";
 const r = (id: string, o: any = {}) => ({
@@ -37,7 +48,7 @@ const r = (id: string, o: any = {}) => ({
   variety_name: "Shiraz", bunch_weight_grams: "120", updated_at: null, ...o,
 });
 
-beforeEach(() => { pages.length = 0; calls.length = 0; });
+beforeEach(() => { pages.length = 0; calls.length = 0; rpcResults.length = 0; rpcCalls.length = 0; });
 
 describe("fetchYieldBunchWeights", () => {
   it("pages with stable id order + exact count until the count is reached", async () => {
@@ -72,9 +83,40 @@ describe("fetchYieldBunchWeights", () => {
     pages.push({ data: [], count: null, error: { message: "boom" } });
     await expect(fetchYieldBunchWeights(V)).rejects.toMatchObject({ message: "boom" });
   });
-  it("empty vineyard (count 0) is a confirmed empty read", async () => {
+  it("empty vineyard (count 0) is confirmed empty only after the membership preflight", async () => {
     pages.push({ data: [], count: 0 });
+    rpcResults.push({ data: true, error: null });
     expect(await fetchYieldBunchWeights(V)).toEqual([]);
+    expect(rpcCalls).toEqual([{ fn: "is_vineyard_member", args: { p_vineyard_id: V } }]);
+  });
+  it("inaccessible vineyard empty read is NOT 'Not configured' (throws)", async () => {
+    pages.push({ data: [], count: 0 });
+    rpcResults.push({ data: false, error: null });
+    await expect(fetchYieldBunchWeights(V)).rejects.toThrow(/don't have access/);
+    pages.push({ data: [], count: 0 });
+    rpcResults.push({ data: null, error: { message: "network" } });
+    await expect(fetchYieldBunchWeights(V)).rejects.toThrow(/confirm access/);
+  });
+  it("non-empty reads need no preflight", async () => {
+    pages.push({ data: [r("a")], count: 1 });
+    await fetchYieldBunchWeights(V);
+    expect(rpcCalls).toEqual([]);
+  });
+  it("rejects invalid page sizes and counts", async () => {
+    for (const ps of [0, -1, 1.5, NaN, 1001]) await expect(fetchYieldBunchWeights(V, ps)).rejects.toThrow(/page size/);
+    expect(calls).toEqual([]);
+    for (const c of [-1, 1.5, NaN, "2" as any]) {
+      pages.push({ data: [], count: c });
+      await expect(fetchYieldBunchWeights(V)).rejects.toThrow(/exact count/);
+    }
+  });
+  it("rejects non-finite, zero, negative and >5000 g weights", async () => {
+    for (const g of ["abc", null, 0, -5, 5000.01, Infinity]) {
+      pages.push({ data: [r("a", { bunch_weight_grams: g })], count: 1 });
+      await expect(fetchYieldBunchWeights(V)).rejects.toThrow(/invalid weight/);
+    }
+    pages.push({ data: [r("a", { bunch_weight_grams: 5000 })], count: 1 });
+    expect((await fetchYieldBunchWeights(V))[0].bunch_weight_grams).toBe(5000);
   });
 });
 
@@ -93,15 +135,28 @@ describe("read status", () => {
     expect(usableBunchWeightRows("stale", rows)).toBe(rows);
   });
   it("unavailable weights surface as unavailable, not not_configured", () => {
-    const s = summariseYieldSession(
-      { id: "s", payload: { blockIds: ["b1"], sites: [{ blockId: "b1", bunchesPerVine: 10 }] } } as any,
-      { blocks: [{ id: "b1", name: "B1" }] as any, bunchWeightFor: () => ({ grams: null, source: "unavailable" }) },
-    ) as any;
-    const blk = s.blocks?.[0];
-    if (blk) {
-      expect(blk.bunchWeightSource).toBe("unavailable");
-      expect(blk.bunchWeightKg).toBeNull();
-    }
+    const B1 = "b1b1b1b1-0000-0000-0000-000000000001";
+    const payload = {
+      blockBunchWeightsKg: { [B1]: 0.2 },
+      sampleSites: [{ paddockId: B1, latitude: -34.1, longitude: 138.2, siteIndex: 1, bunchCountEntry: { bunchesPerVine: 20 } }],
+    };
+    const s = summariseYieldSession(payload, {
+      blocks: [{ id: B1, name: "Block A", areaHa: 1, vineCount: 1000 }] as any,
+      bunchWeightFor: () => ({ grams: null, source: "unavailable" }),
+    });
+    expect(s.blocks.length).toBeGreaterThan(0);
+    const blk = s.blocks[0];
+    expect(blk.bunchWeightSource).toBe("unavailable");
+    expect(blk.bunchWeightKg).toBeNull();
+    expect(blk.estimatedYieldTonnes).toBeNull();
+    expect(blk.recordedBunchWeightKg).toBe(0.2); // historical evidence kept, not used
+  });
+  it("Dashboard total is withheld when a refetch fails over cached rows", () => {
+    const rows = [r("a")];
+    expect(gateTotalOnWeightRead({ data: rows }, 12)).toBe(12);
+    expect(gateTotalOnWeightRead({ data: rows, isError: true }, 12)).toBeNull();
+    expect(gateTotalOnWeightRead({ isError: true }, 12)).toBeNull();
+    expect(gateTotalOnWeightRead({ isLoading: true }, 12)).toBeNull();
   });
 });
 

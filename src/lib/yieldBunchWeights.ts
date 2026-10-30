@@ -71,10 +71,29 @@ export class BunchWeightReadError extends Error {
  * an id repeats, a row belongs to another vineyard, or a stored key isn't in
  * canonical lower+trim form.
  */
+export const MAX_BUNCH_WEIGHT_GRAMS = 5000;
+export const MAX_BUNCH_WEIGHT_PAGE_SIZE = 1000;
+
+const isBoundedInt = (n: unknown, min: number, max: number) =>
+  typeof n === "number" && Number.isInteger(n) && n >= min && n <= max;
+
+/**
+ * RLS silently filters rows, so an EMPTY read is only a confirmed "Not
+ * configured" after the existing is_vineyard_member preflight agrees. Denied or
+ * failed checks throw (unavailable) — never a failure-to-empty fallback.
+ */
+async function confirmEmptyReadIsAuthoritative(vineyardId: string) {
+  const { data, error } = await (supabase as any).rpc("is_vineyard_member", { p_vineyard_id: vineyardId });
+  if (error) throw new BunchWeightReadError("Couldn't confirm access to this vineyard's bunch weights.");
+  if (data !== true) throw new BunchWeightReadError("You don't have access to this vineyard's bunch weights.");
+}
+
 export async function fetchYieldBunchWeights(
   vineyardId: string,
   pageSize = BUNCH_WEIGHT_PAGE_SIZE,
 ): Promise<YieldBunchWeightRow[]> {
+  if (!isBoundedInt(pageSize, 1, MAX_BUNCH_WEIGHT_PAGE_SIZE))
+    throw new BunchWeightReadError("Invalid bunch weight page size.");
   const want = vineyardId.toLowerCase();
   const out: YieldBunchWeightRow[] = [];
   const seen = new Set<string>();
@@ -90,8 +109,9 @@ export async function fetchYieldBunchWeights(
       .order("id", { ascending: true })
       .range(from, from + pageSize - 1);
     if (error) throw error;
-    if (typeof count !== "number") throw new BunchWeightReadError("Bunch weight read returned no exact count.");
-    if (expected == null) expected = count;
+    if (!isBoundedInt(count, 0, Number.MAX_SAFE_INTEGER))
+      throw new BunchWeightReadError("Bunch weight read returned no exact count.");
+    if (expected == null) expected = count as number;
     else if (count !== expected) throw new BunchWeightReadError("Bunch weights changed while loading; refresh to retry.");
     const page = (data ?? []) as any[];
     for (const r of page) {
@@ -102,11 +122,17 @@ export async function fetchYieldBunchWeights(
       const key = String(r.variety_key ?? "");
       if (!key || canonicalVarietyKey(key) !== key)
         throw new BunchWeightReadError("Bunch weight read returned a non-canonical variety key.");
+      const grams = Number(r.bunch_weight_grams);
+      if (!Number.isFinite(grams) || grams <= 0 || grams > MAX_BUNCH_WEIGHT_GRAMS)
+        throw new BunchWeightReadError("Bunch weight read returned an invalid weight.");
       seen.add(id);
-      out.push({ ...r, bunch_weight_grams: Number(r.bunch_weight_grams) });
+      out.push({ ...r, bunch_weight_grams: grams });
     }
     if (out.length > expected) throw new BunchWeightReadError("Bunch weight read returned more rows than counted.");
-    if (out.length === expected) return out;
+    if (out.length === expected) {
+      if (expected === 0) await confirmEmptyReadIsAuthoritative(vineyardId);
+      return out;
+    }
     if (page.length < pageSize) throw new BunchWeightReadError("Bunch weight read was incomplete; refresh to retry.");
   }
 }
