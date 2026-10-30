@@ -217,6 +217,7 @@ export function DefaultRatesCard({
   onSelectDose,
   onClear,
   className,
+  emptyMessage,
 }: {
   /** Backend canonical options, or null when none were fetched this session. */
   options: CanonicalDefaultRateOptions | null;
@@ -230,6 +231,7 @@ export function DefaultRatesCard({
   ) => void;
   onClear: (basis: CanonicalRateBasis) => void;
   className?: string;
+  emptyMessage?: string;
 }) {
   const noOptions =
     !options || (options.per_hectare.length === 0 && options.per_100_litres.length === 0);
@@ -239,8 +241,7 @@ export function DefaultRatesCard({
     <div className={className}>
       {noOptions && noSaved ? (
         <p className="text-xs text-muted-foreground">
-          No registered grapevine default rate option was resolved from the label —
-          run a chemical lookup to load the current label options.
+          {emptyMessage ?? "No registered grapevine default rate option was resolved from the label — run a chemical lookup to load the current label options."}
         </p>
       ) : (
         <div className="space-y-3">

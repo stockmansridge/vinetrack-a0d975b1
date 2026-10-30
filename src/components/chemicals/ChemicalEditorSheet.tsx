@@ -66,6 +66,8 @@ import {
 } from "@/lib/chemicalVineyardScope";
 
 import { DefaultRatesCard } from "@/components/chemicals/DefaultRatesCard";
+import { CatalogueIdentityBadge, CatalogueReferenceSection } from "@/components/chemicals/CatalogueReference";
+import { catalogueLinkOf, useCatalogueReference } from "@/lib/chemicalCatalogueReference";
 import {
   PREFERRED_RATE_HELPER,
   PREFERRED_RATE_UNITS,
@@ -584,6 +586,9 @@ export function ChemicalEditor({
 
 
   const structuredUses = intel.registeredUses.length > 0;
+  // Read-only catalogue reference (exact ids only); separate from form/intel/rateLife.
+  const catalogueLinked = !!catalogueLinkOf(initial as any);
+  const catalogueQ = useCatalogueReference(initial as any, open && !!initial, vineyardId);
   // Per-basis match state of the persisted selection against the canonical set.
   const defaultRateSlots = useMemo(
     () => matchDefaultRateSlots(defaultRates, canonicalRateOptions),
@@ -882,7 +887,10 @@ export function ChemicalEditor({
         className="p-0 gap-0 flex flex-col w-[92vw] max-w-[1200px] sm:max-w-[1200px] max-h-[89vh] overflow-hidden"
       >
         <DialogHeader className="shrink-0 border-b px-5 py-3 text-left">
-          <DialogTitle>{initial ? "Edit chemical" : "New chemical"}</DialogTitle>
+          <DialogTitle className="flex flex-wrap items-center gap-2">
+            {initial ? "Edit chemical" : "New chemical"}
+            {initial && <CatalogueIdentityBadge row={initial as any} query={catalogueQ} />}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4 text-sm">
@@ -1164,6 +1172,7 @@ export function ChemicalEditor({
                     onSelect={handleSelectDefaultRate}
                     onSelectDose={handleSelectVineyardDose}
                     onClear={handleClearDefaultRate}
+                    emptyMessage={catalogueLinked ? "No vineyard default rate is saved. See the catalogue rates for label reference rates." : undefined}
                   />
                 </Section>
               )}
@@ -1231,7 +1240,12 @@ export function ChemicalEditor({
                   structured Grapevine uses & rates: the section is hidden unless
                   real label information already populated it (Master Catalogue,
                   product label, Chemical Search, label extraction). */}
-              {(!manualMode || intel.registeredUses.length > 0) && (
+              {catalogueLinked && (
+                <Section title="Catalogue rates">
+                  <CatalogueReferenceSection query={catalogueQ} />
+                </Section>
+              )}
+              {!catalogueLinked && (!manualMode || intel.registeredUses.length > 0) && (
               <Section title={manualMode ? "Grapevine uses & rates (optional)" : "Grapevine uses & rates"}>
                 {/* Vineyard-first: other crops on the label are not part of the
                     normal add flow and are never shown here. */}
