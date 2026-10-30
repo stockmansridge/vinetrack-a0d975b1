@@ -13,14 +13,19 @@ const STATUS_LABEL: Record<string, string> = {
   pending_review: "Catalogue: pending review",
   needs_attention: "Catalogue: pending review",
   rejected: "Catalogue: rejected",
+  pending: "Catalogue: pending review",
+  draft: "Catalogue: pending review",
 };
 
 /** Identity badge for a saved chemical, decided only by exact catalogue ids. */
 export function CatalogueIdentityBadge({ row, query }: { row: Row | null | undefined; query: Q }) {
   if (!catalogueLinkOf(row)) return <VineyardProductBadge size="xs" />;
   const d = query.data as CatalogueReference | undefined;
+  // Error / in-flight checks win over cached data: never claim approval unless
+  // the latest check succeeded.
+  if (query.isError) return <Badge variant="outline" className="text-[10px]" data-testid="catalogue-status">Catalogue check failed</Badge>;
+  if (query.isFetching || query.isLoading) return <Badge variant="outline" className="text-[10px]">Checking catalogue…</Badge>;
   if (d?.state === "approved") return <VineTrackCatalogueBadge />;
-  if (query.isLoading) return <Badge variant="outline" className="text-[10px]">Checking catalogue…</Badge>;
   if (d?.state === "not_approved")
     return <Badge variant="outline" className="text-[10px]" data-testid="catalogue-status">{STATUS_LABEL[d.status ?? ""] ?? "Catalogue: not approved"}</Badge>;
   return <Badge variant="outline" className="text-[10px]" data-testid="catalogue-status">Catalogue unavailable</Badge>;
@@ -29,7 +34,14 @@ export function CatalogueIdentityBadge({ row, query }: { row: Row | null | undef
 /** Read-only catalogue rates: Per hectare / Per 100 litres, no edit/select callbacks. */
 export function CatalogueReferenceSection({ query }: { query: Q }) {
   const d = query.data as CatalogueReference | undefined;
-  if (query.isLoading) return <p className="text-xs text-muted-foreground" data-testid="catalogue-loading">Loading catalogue rates…</p>;
+  if (query.isError)
+    return (
+      <div className="flex items-center gap-2 text-xs" role="alert" data-testid="catalogue-error">
+        <span>Catalogue rates could not be loaded.</span>
+        <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => query.refetch()}>Retry</Button>
+      </div>
+    );
+  if (query.isLoading || query.isFetching) return <p className="text-xs text-muted-foreground" data-testid="catalogue-loading">Loading catalogue rates…</p>;
   if (query.isError)
     return (
       <div className="flex items-center gap-2 text-xs" role="alert" data-testid="catalogue-error">

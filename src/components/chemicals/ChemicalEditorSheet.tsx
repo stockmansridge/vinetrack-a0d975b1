@@ -67,7 +67,7 @@ import {
 
 import { DefaultRatesCard } from "@/components/chemicals/DefaultRatesCard";
 import { CatalogueIdentityBadge, CatalogueReferenceSection } from "@/components/chemicals/CatalogueReference";
-import { catalogueLinkOf, useCatalogueReference } from "@/lib/chemicalCatalogueReference";
+import { catalogueLinkOf, useCatalogueReference, intelligenceDraftUnchanged } from "@/lib/chemicalCatalogueReference";
 import {
   PREFERRED_RATE_HELPER,
   PREFERRED_RATE_UNITS,

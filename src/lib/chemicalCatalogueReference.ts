@@ -32,7 +32,18 @@ async function one(table: string, cols: string, id: string): Promise<Row | null>
   return (data as Row) ?? null;
 }
 
-const statusOf = (r: Row | null) => (r && typeof r.review_status === "string" ? r.review_status.toLowerCase() : null);
+const statusOf = (r: Row | null) => (r && typeof r.review_status === "string" ? r.review_status.trim().toLowerCase() : null);
+const productStatusOf = (r: Row | null) => (r && typeof r.status === "string" && r.status.trim() ? r.status.trim().toLowerCase() : null);
+
+/** Full structural equality of two intelligence drafts (key order independent). */
+export function intelligenceDraftUnchanged(a: unknown, b: unknown): boolean {
+  const norm = (v: unknown): unknown =>
+    Array.isArray(v) ? v.map(norm)
+    : v && typeof v === "object"
+      ? Object.fromEntries(Object.keys(v as Row).filter((k) => (v as Row)[k] !== undefined).sort().map((k) => [k, norm((v as Row)[k])]))
+      : v;
+  return JSON.stringify(norm(a)) === JSON.stringify(norm(b));
+}
 
 export async function fetchCatalogueReference(link: { productId: string | null; revisionId: string | null }): Promise<CatalogueReference> {
   let productId = link.productId;
@@ -43,8 +54,12 @@ export async function fetchCatalogueReference(link: { productId: string | null; 
     productId = str(linked.product_id);
     if (!productId) return { state: "not_approved", status: statusOf(linked) };
   }
-  const product = await one("chemical_v3_products", "id, approved_revision_id", productId!);
+  const product = await one("chemical_v3_products", "id, status, approved_revision_id", productId!);
   if (!product) return { state: "unavailable", reason: "product_missing" };
+  // The PRODUCT must be explicitly approved; a missing status is never approval,
+  // and an old approved pointer on a pending/rejected product does not count.
+  const pStatus = productStatusOf(product);
+  if (pStatus !== "approved") return { state: "not_approved", status: pStatus };
   const approvedId = str(product.approved_revision_id);
   if (!approvedId) {
     if (!linked && link.revisionId) linked = await one("chemical_v3_product_revisions", "id, review_status", link.revisionId);
