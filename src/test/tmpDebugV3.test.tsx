@@ -1,7 +1,18 @@
 import { describe, it, expect, vi } from "vitest";
-import React from "react";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import * as jsxrt from "react/jsx-runtime";
+
+const origJsx = jsxrt.jsx;
+const origJsxs = jsxrt.jsxs;
+(jsxrt as any).jsx = (type: any, props: any, key: any) => {
+  if (type === undefined) console.log("UNDEFINED jsx with props keys:", Object.keys(props ?? {}), JSON.stringify(props ?? {}).slice(0, 300));
+  return origJsx(type, props, key);
+};
+(jsxrt as any).jsxs = (type: any, props: any, key: any) => {
+  if (type === undefined) console.log("UNDEFINED jsxs with props keys:", Object.keys(props ?? {}), JSON.stringify(props ?? {}).slice(0, 300));
+  return origJsxs(type, props, key);
+};
 
 const rpc = vi.fn();
 vi.mock("@/integrations/ios-supabase/client", () => ({ supabase: {
@@ -17,20 +28,11 @@ vi.mock("@/lib/chemicalInventory", async (orig) => ({ ...(await orig() as any), 
 
 import { ApprovedList } from "@/pages/admin/ChemicalV3LabPage";
 
-class Boundary extends React.Component<{ children: React.ReactNode }, { err: Error | null }> {
-  state = { err: null as Error | null };
-  componentDidCatch(err: Error, info: React.ErrorInfo) {
-    console.log("CAUGHT:", err.message, "\nCOMPONENT STACK:", info.componentStack);
-  }
-  static getDerivedStateFromError(err: Error) { return { err }; }
-  render() { return this.state.err ? null : this.props.children; }
-}
-
 describe("debug approved", () => {
-  it("mounts with boundary", async () => {
+  it("mounts with jsx spy", async () => {
     rpc.mockImplementation(async (name: string) =>
       name === "chemical_v3_admin_approved_catalogue" ? { data: [{ revision_id: "a1", product_name: "Zeus", approved_at: "2026-01-02" }], error: null } : { data: [], error: null });
-    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><Boundary><ApprovedList onOpen={vi.fn()} filter="" /></Boundary></QueryClientProvider>);
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><ApprovedList onOpen={vi.fn()} filter="" /></QueryClientProvider>);
     expect(await screen.findByText("Zeus").catch(() => null) ?? "not rendered").toBeTruthy();
   });
 });
