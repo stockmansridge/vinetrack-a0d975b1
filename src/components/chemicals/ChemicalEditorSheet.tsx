@@ -490,7 +490,15 @@ export function ChemicalEditor({
       const withManual = manualUse
         ? { ...reconciled, registeredUses: [...reconciled.registeredUses, manualUse] }
         : reconciled;
-      const encoded = encodeChemicalIntelligenceForWrite(grapevineOnlyDraft(withManual));
+      // Existing V3-linked chemicals: an untouched FULL intelligence draft (and no
+      // manual-use recovery) is OMITTED, so a notes/preferred-only save never
+      // re-encodes raw V3 uses/verification fields (e.g. crop "Grapes").
+      const omitIntelligence =
+        !!initial && !!catalogueLinkOf(initial) && !manualMode && !manualUse &&
+        intelligenceDraftUnchanged(intelBase, intel);
+      const encoded = omitIntelligence
+        ? undefined
+        : encodeChemicalIntelligenceForWrite(grapevineOnlyDraft(withManual));
       // Category: the RAW shared key is the stored authority; `use` carries the
       // display label as a compatibility projection only.
       const categoryKey = matchProductCategoryKey(form.product_category);
@@ -507,7 +515,7 @@ export function ChemicalEditor({
         rate_per_ha: undefined,
         product_category: categoryKey,
         use: categoryKey ? productCategoryLabel(categoryKey) : (form.use ?? ""),
-        intelligence: encoded,
+        ...(encoded === undefined ? {} : { intelligence: encoded }),
         // Manual records carry NO master link: typing a registration number
         // never matches a Master product.
         master_chemical_id: manualMode ? null : masterLink?.id ?? null,
