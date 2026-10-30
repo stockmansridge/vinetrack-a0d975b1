@@ -6,7 +6,7 @@ import { readFileSync } from "fs";
 const rpc = vi.fn();
 const invoke = vi.fn();
 let admin = true;
-vi.mock("@/integrations/supabase/client", () => ({ supabase: { rpc: (...a: any[]) => rpc(...a), functions: { invoke: (...a: any[]) => invoke(...a) } } }));
+vi.mock("@/integrations/ios-supabase/client", () => ({ supabase: { rpc: (...a: any[]) => rpc(...a), functions: { invoke: (...a: any[]) => invoke(...a) } } }));
 vi.mock("@/lib/systemAdmin", () => ({ useIsSystemAdmin: () => ({ isAdmin: admin, loading: false }) }));
 
 import { AxisStreamCard } from "@/components/weather/AxisStreamCard";
@@ -15,6 +15,7 @@ import { PROVIDER_PROVIDES } from "@/lib/weatherSourceSummary";
 
 const cfg = (over: any = {}) => ({ data: { vineyard_id: "v1", connection: { configured: true, mode: "testing", live_publish_enabled: false, selected_weather_code: "W1", selected_rain_code: null, selected_leaf_code: null, last_tested_at: null, last_test_status: "success", last_test_summary: { counts: { weather: 1, rain_gauge: 2, leaf_wetness: 0 }, devices: 3, staged_readings: 9 }, ...over }, devices: [{ project_code: "P1", dataset: "weather", code: "W1", name: "Station A" }, { project_code: "P2", dataset: "weather", code: "W1", name: "Station B" }, { project_code: "P1", dataset: "rain_gauge", code: "R1", name: "Gauge" }], staged_reading_count: 9, scope: "testing" }, error: null });
 const wrap = (ui: any) => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{ui}</QueryClientProvider>);
+const openDialog = async () => { fireEvent.click(await screen.findByRole("button", { name: /(Configure|Connect) AxisStream Exchange/ })); await screen.findByTestId("axisstream-dialog"); };
 
 beforeEach(() => { rpc.mockReset(); invoke.mockReset(); admin = true; localStorage.clear(); });
 
@@ -22,7 +23,7 @@ describe("AxisStream Exchange (test-only)", () => {
   it("hides entirely for non-admins and never queries", () => {
     admin = false;
     wrap(<AxisStreamCard vineyardId="v1" />);
-    expect(screen.queryByTestId("axisstream-card")).toBeNull();
+    expect(screen.queryByText("AxisStream Exchange")).toBeNull();
     expect(rpc).not.toHaveBeenCalled();
   });
 
@@ -30,6 +31,8 @@ describe("AxisStream Exchange (test-only)", () => {
     rpc.mockResolvedValue(cfg({ token: "SECRET" }));
     wrap(<AxisStreamCard vineyardId="v1" />);
     expect(await screen.findByText("Testing only · Not active")).toBeTruthy();
+    expect(screen.queryByLabelText(/token/i)).toBeNull();
+    await openDialog();
     expect(normaliseAxisConfig(cfg({ token: "SECRET" }).data)).not.toHaveProperty("token");
     expect(document.body.innerHTML).not.toContain("SECRET");
   });
@@ -37,6 +40,7 @@ describe("AxisStream Exchange (test-only)", () => {
   it("saving a token sends testing mode, clears input, no localStorage", async () => {
     rpc.mockResolvedValue(cfg());
     wrap(<AxisStreamCard vineyardId="v1" />);
+    await openDialog();
     await screen.findByText("Configured · testing");
     const input = (await screen.findByLabelText("Replace token")) as HTMLInputElement;
     fireEvent.change(input, { target: { value: " tok123 " } });
@@ -74,6 +78,7 @@ describe("AxisStream Exchange (test-only)", () => {
   it("test disabled unless configured and testing", async () => {
     rpc.mockResolvedValue(cfg({ mode: "disabled" }));
     wrap(<AxisStreamCard vineyardId="v1" />);
+    await openDialog();
     await screen.findByText("Configured · disabled");
     expect((screen.getByText("Test Connection").closest("button") as HTMLButtonElement).disabled).toBe(true);
   });
@@ -82,6 +87,7 @@ describe("AxisStream Exchange (test-only)", () => {
     rpc.mockResolvedValue(cfg());
     invoke.mockResolvedValue({ data: { ok: true, status: "success", counts: { weather: 1, rain_gauge: 1, leaf_wetness: 0 }, devices: 2, staged_readings: 4 }, error: null });
     wrap(<AxisStreamCard vineyardId="v1" />);
+    await openDialog();
     const btn = (await screen.findByText("Test Connection")).closest("button")!;
     await waitFor(() => expect(btn.disabled).toBe(false));
     fireEvent.click(btn);
@@ -92,7 +98,7 @@ describe("AxisStream Exchange (test-only)", () => {
   it("vineyard switch reloads config for the new vineyard", async () => {
     rpc.mockResolvedValue(cfg());
     const r = wrap(<AxisStreamCard vineyardId="v1" />);
-    await screen.findByText("Testing only · Not active");
+    await screen.findAllByText("Testing only · Not active");
     r.rerender(<QueryClientProvider client={new QueryClient()}><AxisStreamCard vineyardId="v2" /></QueryClientProvider>);
     await waitFor(() => expect(rpc).toHaveBeenCalledWith("get_axisstream_exchange_configuration", { p_vineyard_id: "v2" }));
   });
@@ -100,5 +106,13 @@ describe("AxisStream Exchange (test-only)", () => {
   it("is never a selectable weather/rainfall source", () => {
     expect(Object.keys(PROVIDER_PROVIDES).join(",")).not.toMatch(/axis/i);
     for (const f of ["src/lib/localObservationProvider.ts", "src/lib/weatherSourceSummary.ts"]) expect(readFileSync(f, "utf8")).not.toMatch(/axis/i);
+  });
+
+  it("uses the shared vineyard backend client, never Lovable Cloud", () => {
+    const src = readFileSync("src/lib/axisstreamExchange.ts", "utf8");
+    expect(src).toContain('from "@/integrations/ios-supabase/client"');
+    expect(src).not.toMatch(/@\/integrations\/supabase\/client/);
+    const card = readFileSync("src/components/weather/AxisStreamCard.tsx", "utf8");
+    expect(card).not.toMatch(/integrations\/supabase\/client/);
   });
 });

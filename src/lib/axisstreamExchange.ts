@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/ios-supabase/client";
 
 /**
  * AxisStream Exchange — TEST-ONLY integration. Writes only staging tables via
