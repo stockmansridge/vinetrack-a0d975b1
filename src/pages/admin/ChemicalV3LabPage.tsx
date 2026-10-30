@@ -691,14 +691,7 @@ function ApprovedList({ onOpen, filter = "" }: { onOpen: (id: string) => void; f
   if (!visible.length) return <p className="rounded border bg-card p-3 text-sm text-muted-foreground">No approved products match “{filter}”.</p>;
   const date = (v: any) => (v ? new Date(v).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }) : "—");
   return (
-    <div className="overflow-x-auto rounded border bg-card">
-      <table className="w-full text-sm" data-testid="v3-approved-table">
-        <thead className="bg-card text-left text-xs text-muted-foreground"><tr>
-          {APPROVED_COLUMNS.map((h) => <SortTh key={h} label={h} col={h} sort={sort} onSort={(k) => setSort((s) => toggleSortState(s, k))} />)}
-        </tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
+    <div data-testid="v3-approved-bisect">hello</div>
   );
 }
 
