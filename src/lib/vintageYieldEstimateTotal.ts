@@ -89,7 +89,7 @@ export function useVintageYieldEstimateTotal(
   return {
     // Only a CURRENT (successful latest) weight read yields a total; cached
     // rows after a failed refetch are not presented as a current total.
-    data: bunchWeightReadStatus(weightsQ) === "current" ? data : null,
+    data: gateTotalOnWeightRead(weightsQ, data),
     isLoading: blocksQ.isLoading || reportsQ.isLoading || seasonQ.isLoading || weightsQ.isLoading,
     error: blocksQ.error ?? reportsQ.error ?? weightsQ.error ?? null,
   };
