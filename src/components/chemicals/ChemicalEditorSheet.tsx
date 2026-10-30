@@ -909,7 +909,7 @@ export function ChemicalEditor({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4 text-sm">
+        <div className="flex-1 min-h-0 overflow-y-auto bg-muted/50 px-5 py-4 space-y-4 text-sm">
           {lookupBlock}
 
           {!editorUnlocked && (
@@ -1356,8 +1356,8 @@ export function ChemicalEditor({
           {/* --------------------------------- advanced / verification */}
           {editorUnlocked && (
           <Collapsible>
-            <div className="rounded-md border border-border/60">
-              <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 text-sm font-semibold">
+            <div className="overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm">
+              <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 border-b border-primary/15 bg-primary/[0.06] px-3 py-2 text-sm font-semibold tracking-wide text-primary">
                 <span>Advanced / verification details</span>
                 <Info className="h-3.5 w-3.5 text-muted-foreground" />
               </CollapsibleTrigger>
@@ -1425,9 +1425,13 @@ export function ChemicalEditor({
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-md border border-border/60 p-3 space-y-3">
-      <h4 className="text-sm font-semibold">{title}</h4>
+    <div className="overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm">
+      <div className="border-b border-primary/15 bg-primary/[0.06] px-3 py-1.5">
+        <h4 className="text-sm font-semibold tracking-wide text-primary">{title}</h4>
+      </div>
+      <div className="p-3 space-y-3">
       {children}
+      </div>
     </div>
   );
 }
