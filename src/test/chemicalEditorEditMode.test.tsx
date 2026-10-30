@@ -29,7 +29,7 @@ vi.mock("@/lib/masterChemicals", async (orig) => ({
   fetchMasterChemical: vi.fn(async () => null),
 }));
 vi.mock("@/context/VineyardContext", () => ({
-  useVineyard: () => ({ currentCountry: "AU", currentVineyardId: "v1" }),
+  useVineyard: () => ({ currentCountry: "AU", currentVineyardId: "v1", memberships: [{ vineyard_id: "v1", role: "owner", vineyard_name: "Stockman" }] }),
 }));
 vi.mock("@/lib/permissions", () => ({ useCanSeeCosts: () => true }));
 
