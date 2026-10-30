@@ -10,7 +10,7 @@ export const AXISSTREAM_POLL_MINUTES = 15;
 export const AXISSTREAM_ALLOWED_MODES = ["disabled", "testing"] as const;
 export type AxisMode = (typeof AXISSTREAM_ALLOWED_MODES)[number];
 
-export interface AxisDevice { code: string; name: string; kind: string | null }
+export interface AxisDevice { key: string; projectCode: string; dataset: string | null; code: string; name: string; kind: string | null; lastSeenAt: string | null }
 export interface AxisConfig {
   configured: boolean;
   hasToken: boolean;
@@ -22,29 +22,58 @@ export interface AxisConfig {
   rainCode: string | null;
   leafCode: string | null;
   devices: AxisDevice[];
+  stagedReadingCount: number | null;
 }
 
 const str = (v: unknown) => (typeof v === "string" && v.trim() ? v : null);
+const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
-/** Normalise the RPC envelope defensively; any token-like field is dropped. */
+/** Render an object summary as readable text; never "[object Object]". */
+export function formatAxisSummary(v: unknown): string | null {
+  if (v == null) return null;
+  if (typeof v === "string") return v.trim() || null;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (typeof v !== "object") return null;
+  const o = v as Record<string, any>;
+  const parts: string[] = [];
+  const counts = o.counts && typeof o.counts === "object" ? o.counts : null;
+  if (counts) {
+    const c = [["weather", "weather"], ["rain_gauge", "rain gauge"], ["leaf_wetness", "leaf wetness"]]
+      .filter(([k]) => num(counts[k]) != null).map(([k, l]) => `${counts[k]} ${l}`);
+    if (c.length) parts.push(c.join(", "));
+  }
+  if (num(o.devices) != null) parts.push(`${o.devices} devices`);
+  if (num(o.staged_readings) != null) parts.push(`${o.staged_readings} staged readings`);
+  if (str(o.error)) parts.push(`error: ${o.error}`);
+  if (str(o.message)) parts.push(o.message);
+  if (parts.length) return parts.join(" · ");
+  const flat = Object.entries(o).filter(([, x]) => ["string", "number", "boolean"].includes(typeof x)).map(([k, x]) => `${k}: ${x}`);
+  return flat.length ? flat.join(" · ") : null;
+}
+
+/** Normalise the deployed get_axisstream_exchange_configuration envelope. */
 export function normaliseAxisConfig(raw: unknown): AxisConfig {
-  const r = (Array.isArray(raw) ? raw[0] : raw) as Record<string, any> | null;
-  const c = (r?.connection ?? r ?? {}) as Record<string, any>;
-  const devicesRaw = (r?.devices ?? c.devices ?? []) as any[];
-  const mode = c.mode === "testing" ? "testing" : "disabled";
+  const r = (raw ?? {}) as Record<string, any>;
+  const c = (r.connection ?? {}) as Record<string, any>;
+  const devicesRaw = Array.isArray(r.devices) ? r.devices : [];
+  const configured = c.configured === true;
   return {
-    configured: Boolean(r?.configured ?? c.id ?? c.has_token),
-    hasToken: Boolean(c.has_token ?? r?.has_token ?? c.token_configured),
-    mode,
-    lastTestedAt: str(c.last_tested_at ?? c.last_test_at),
-    lastStatus: str(c.last_test_status ?? c.last_status ?? c.status),
-    summary: str(c.last_test_summary ?? c.summary ?? c.last_error),
-    weatherCode: str(c.weather_code ?? c.weather_station_code),
-    rainCode: str(c.rain_code ?? c.rain_gauge_code),
-    leafCode: str(c.leaf_code ?? c.leaf_wetness_code),
-    devices: Array.isArray(devicesRaw)
-      ? devicesRaw.map((d) => ({ code: String(d.device_code ?? d.code ?? d.id ?? ""), name: String(d.name ?? d.device_name ?? d.device_code ?? d.code ?? ""), kind: str(d.kind ?? d.device_type ?? d.type) })).filter((d) => d.code)
-      : [],
+    configured,
+    hasToken: configured,
+    mode: c.mode === "testing" ? "testing" : "disabled",
+    lastTestedAt: str(c.last_tested_at),
+    lastStatus: str(c.last_test_status),
+    summary: formatAxisSummary(c.last_test_summary),
+    weatherCode: str(c.selected_weather_code),
+    rainCode: str(c.selected_rain_code),
+    leafCode: str(c.selected_leaf_code),
+    devices: devicesRaw.map((d: any) => {
+      const projectCode = String(d?.project_code ?? "");
+      const dataset = str(d?.dataset);
+      const code = String(d?.code ?? "");
+      return { key: `${projectCode}|${dataset ?? ""}|${code}`, projectCode, dataset, code, name: str(d?.name) ?? code, kind: dataset, lastSeenAt: str(d?.last_seen_at) };
+    }).filter((d: AxisDevice) => d.code),
+    stagedReadingCount: num(r.staged_reading_count),
   };
 }
 
@@ -80,18 +109,18 @@ export async function removeAxisConfig(vineyardId: string) {
   if (error) throw new Error(error.message || "Could not remove AxisStream connection");
 }
 
-/** Map preview-function failures to clear admin text. */
+/** Map preview-function failures to safe admin text (no token detail). */
 export function describeAxisTestError(status: number | undefined, body: any): string {
-  const code = String(body?.error_code ?? body?.error ?? "").toLowerCase();
-  const msg = str(body?.message) ?? str(body?.user_message);
-  if (code.includes("throttl") || code.includes("rate") || status === 429 || (status === 409 && /15|throttl|recent/i.test(msg ?? code)))
-    return `Tested recently — AxisStream is polled at most every ${AXISSTREAM_POLL_MINUTES} minutes. ${msg ?? ""}`.trim();
-  if (code.includes("expired")) return "AxisStream token has expired. Create a new token and replace it.";
-  if (code.includes("invalid") || code.includes("unauthor") || code.includes("401")) return "AxisStream rejected the token. Check it and replace it.";
-  if (status === 409) return msg ?? "Connection is not ready for testing (save a token and set Testing mode).";
-  if (status === 502) return msg ?? "AxisStream could not be reached or returned an error.";
+  const code = String(body?.error ?? body?.error_code ?? "");
+  const msg = str(body?.message);
+  if (code === "minimum_15_minute_interval" || (status === 409 && /15/.test(code))) {
+    const s = num(body?.retry_after_seconds);
+    return `Tested recently — AxisStream can be polled at most every ${AXISSTREAM_POLL_MINUTES} minutes.${s != null ? ` Try again in about ${Math.max(1, Math.ceil(s / 60))} min.` : ""}`;
+  }
+  if (status === 502) return msg ?? "AxisStream returned a non-success status; verify Exchange token";
+  if (status === 409) return msg ?? "Connection is not ready for testing (save a token and keep Testing mode).";
   if (status === 401 || status === 403) return "Not authorised — System Admin and vineyard membership required.";
-  return msg ?? "Test failed.";
+  return msg ?? (code ? `Test failed (${code}).` : "Test failed.");
 }
 
 export interface AxisTestResult { ok: boolean; message: string; details?: any }
@@ -109,5 +138,5 @@ export async function testAxisConnection(vineyardId: string): Promise<AxisTestRe
     return { ok: false, message: describeAxisTestError(status, body) };
   }
   if (data && (data.ok === false || data.error)) return { ok: false, message: describeAxisTestError(data.status, data), details: data };
-  return { ok: true, message: str(data?.summary) ?? str(data?.message) ?? "Test completed — readings staged only.", details: data };
+  return { ok: true, message: `Test succeeded (staging only): ${formatAxisSummary(data) ?? "no counts returned"}`, details: data };
 }
