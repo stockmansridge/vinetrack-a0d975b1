@@ -20,7 +20,7 @@ const from = vi.fn((table: string) => {
 vi.mock("@/integrations/ios-supabase/client", () => ({ supabase: { from: (t: string) => from(t), functions: { invoke: vi.fn() } } }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: { from: () => { throw new Error("Lovable Cloud used"); } } }));
 vi.mock("@/lib/masterChemicals", async (orig) => ({ ...(await orig<Record<string, unknown>>()), fetchMasterChemical: vi.fn(async () => null) }));
-vi.mock("@/context/VineyardContext", () => ({ useVineyard: () => ({ currentCountry: "AU", currentVineyardId: "v1" }) }));
+vi.mock("@/context/VineyardContext", () => ({ useVineyard: () => ({ currentCountry: "AU", currentVineyardId: "v1", memberships: [{ vineyard_id: "v1", role: "owner", vineyard_name: "Stockman" }] }) }));
 vi.mock("@/lib/permissions", () => ({ useCanSeeCosts: () => true }));
 const updateSavedChemical = vi.fn(async (id: string, input: unknown) => ({ id, ...(input as object) }));
 vi.mock("@/lib/savedChemicalsQuery", async (orig) => ({
