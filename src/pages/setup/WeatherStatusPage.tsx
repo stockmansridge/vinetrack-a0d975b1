@@ -3,7 +3,7 @@ import { getVineyardCoords } from "@/lib/rainForecastQuery";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useVineyard } from "@/context/VineyardContext";
-import { useDiagnosticPanel } from "@/lib/systemAdmin";
+import { useDiagnosticPanel, useIsSystemAdmin } from "@/lib/systemAdmin";
 import { Card } from "@/components/ui/card";
 import { ProviderConnectionCard } from "@/components/weather/ProviderConnectionCard";
 import davisLogo from "@/assets/providers/davis-instruments.png.asset.json";
@@ -116,6 +116,7 @@ const fmtDate = (v?: string | null) => {
 export default function WeatherStatusPage() {
   const { selectedVineyardId, currentRole } = useVineyard();
   const showWeatherDiagnostics = useDiagnosticPanel("show_weather_diagnostics");
+  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
   const qc = useQueryClient();
   const observationSource = useQuery({
     queryKey: ["local-observation-provider", selectedVineyardId],
@@ -240,7 +241,9 @@ export default function WeatherStatusPage() {
               icon={<Plug className="h-5 w-5" />}
               tone="bg-primary/10 text-primary border-primary/30"
             />
-            <div className="grid auto-rows-fr items-stretch gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+            <div className={isSystemAdmin
+              ? "grid auto-rows-fr items-stretch gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6"
+              : "grid auto-rows-fr items-stretch gap-3 sm:grid-cols-2 xl:grid-cols-5"}>
                 <OpenMeteoCard usedFor={usedFor.open_meteo} />
 
                 <DavisCard
