@@ -16,10 +16,10 @@
 // The Portal NEVER writes to these tables. Scouting capture, completion and
 // deletion stay mobile-only.
 //
-// Backend gate: table policies use public.can_use_vineyard_insights(), which
-// currently requires System Admin + membership. Until the approved RLS change
-// lands, ordinary members get a permission error — surfaced honestly as
-// "access restricted", never as an empty list.
+// Backend gate: legacy policies use public.can_use_vineyard_insights()
+// (System Admin + membership). Customer access arrives with the proposed
+// member helpers in docs/vineyard-insights-rls-proposal.md; the Portal checks
+// those first and falls back to the legacy gate, never widening on its own.
 import { supabase } from "@/integrations/ios-supabase/client";
 import type { VintageScope } from "@/lib/vintageScope";
 import { isWithinVintage } from "@/lib/vintageScope";
@@ -209,15 +209,58 @@ export function stopWeather(a: ScoutAssessment): Record<string, unknown> | null 
  */
 export type InsightsAccess = "allowed" | "denied" | "unknown";
 
+/** PostgREST/Postgres "function does not exist" (helper not deployed yet). */
+export function isMissingFunctionError(error: any): boolean {
+  const code = String(error?.code ?? "");
+  return code === "PGRST202" || code === "42883";
+}
+
+/**
+ * Customer read access for Scout Reports / Vintage Notes.
+ * Prefers the proposed member helper can_view_vineyard_insights (membership
+ * of THIS vineyard, owner_id included). Until that helper is deployed it falls
+ * back to the legacy can_use_vineyard_insights gate (System Admin + member),
+ * so deploy order can never widen access from the Portal side.
+ */
 export async function checkInsightsAccess(vineyardId: string): Promise<InsightsAccess> {
+  const call = async (fn: string) =>
+    (supabase.rpc(fn as any, { p_vineyard_id: vineyardId } as any) as any) as Promise<{
+      data: unknown;
+      error: any;
+    }>;
   try {
-    const { data, error } = await supabase.rpc("can_use_vineyard_insights" as any, {
-      p_vineyard_id: vineyardId,
-    } as any);
+    let { data, error } = await call("can_view_vineyard_insights");
+    if (error && isMissingFunctionError(error)) ({ data, error } = await call("can_use_vineyard_insights"));
     if (error) return "unknown";
     return data === true ? "allowed" : "denied";
   } catch {
     return "unknown";
+  }
+}
+
+/** Roles that may add Vintage Notes on Portal (Operators are read-only). */
+export const VINTAGE_NOTE_ADD_ROLES = ["owner", "manager", "supervisor"] as const;
+
+/**
+ * Whether the caller may ADD a Vintage Note. The role must be owner/manager/
+ * supervisor AND the backend must agree via can_add_vintage_notes; while that
+ * helper is not deployed, read access (the legacy gate) is required instead.
+ * Any failure denies the Add control (fail closed).
+ */
+export async function checkVintageNoteAddAccess(
+  vineyardId: string,
+  role: string | null | undefined,
+  readAccess: InsightsAccess | undefined,
+): Promise<boolean> {
+  if (!(VINTAGE_NOTE_ADD_ROLES as readonly string[]).includes(String(role ?? "").toLowerCase())) return false;
+  try {
+    const { data, error } = await (supabase.rpc("can_add_vintage_notes" as any, {
+      p_vineyard_id: vineyardId,
+    } as any) as any);
+    if (error) return isMissingFunctionError(error) ? readAccess === "allowed" : false;
+    return data === true;
+  } catch {
+    return false;
   }
 }
 
