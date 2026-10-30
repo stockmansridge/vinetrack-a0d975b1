@@ -598,9 +598,10 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
   );
 }
 
-export function ReviewQueue({ onOpen }: { onOpen: (id: string, jobId?: string | null) => void }) {
+export function ReviewQueue({ onOpen, filter = "" }: { onOpen: (id: string, jobId?: string | null) => void; filter?: string }) {
   const cats = useCategories();
   const { isAdmin } = useIsSystemAdmin();
+  const [sort, setSort] = useState<SortState>(null);
   const q = useQuery({ queryKey: ["chemical-v3-queue"], queryFn: v3ReviewQueue, refetchOnMount: "always", refetchOnWindowFocus: "always" });
   const refresh = (
     <div className="mb-2 flex justify-end">
@@ -615,15 +616,20 @@ export function ReviewQueue({ onOpen }: { onOpen: (id: string, jobId?: string | 
     if (seen.has(id)) return false;
     seen.add(id); return true;
   });
+  const needle = filter.trim().toLowerCase();
+  const visible0 = needle ? rows.filter((r) => rowSearchText(r, cats.data).includes(needle)) : rows;
+  const sortGetter = sort ? REVIEW_SORT_GETTERS[sort.key] : undefined;
+  const visible = sortGetter ? sortedBy(visible0, sort, (r) => sortGetter(r, cats.data)) : visible0;
   if (!rows.length) return <div>{refresh}<p className="rounded border bg-card p-3 text-sm text-muted-foreground">Nothing waiting for review.</p></div>;
+  if (!visible.length) return <div>{refresh}<p className="rounded border bg-card p-3 text-sm text-muted-foreground">No chemicals match “{filter}”.</p></div>;
   return (
     <div>{refresh}
     <div className="overflow-x-auto rounded border bg-card">
       <table className="w-full text-sm">
         <thead className="bg-card text-left text-xs text-muted-foreground"><tr>
-          {["Product", "Manufacturer", "Country", "Category", "Core complete", "Vineyard rates", "Manufacturer label", "Front label", "Warnings", "Unresolved", "Age", "Added by"].map((h) => <th key={h} className="p-2">{h}</th>)}
+          {REVIEW_COLUMNS.map((h) => <SortTh key={h} label={h} col={h} sort={sort} onSort={(k) => setSort((s) => toggleSortState(s, k))} />)}
         </tr></thead>
-        <tbody>{rows.map((r) => {
+        <tbody>{visible.map((r) => {
           const id = String(pick(r, "revision_id", "id"));
           const created = pick(r, "created_at");
           const age = created ? `${Math.max(0, Math.round((Date.now() - new Date(created).getTime()) / 86_400_000))} d` : "—";
