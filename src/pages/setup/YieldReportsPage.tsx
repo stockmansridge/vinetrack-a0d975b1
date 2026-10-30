@@ -103,6 +103,9 @@ import {
   blockVarietyIdentities,
   resolveBlockBunchWeight,
   useYieldBunchWeights,
+  bunchWeightReadStatus,
+  usableBunchWeightRows,
+  UNAVAILABLE_BLOCK_WEIGHT,
   type BlockVarietyIdentity,
 } from "@/lib/yieldBunchWeights";
 import {
@@ -383,6 +386,7 @@ export default function YieldReportsPage() {
   // Refetching after a save recalculates every current trip estimate.
   // Identity = stored canonical varietyKey from paddocks.variety_allocations.
   const bunchWeightsQ = useYieldBunchWeights(selectedVineyardId);
+  const bunchWeightStatus = bunchWeightReadStatus(bunchWeightsQ);
   const bunchWeightBlocks = useMemo(
     () =>
       (blocksQ.data ?? []).map((b) => ({
@@ -393,10 +397,12 @@ export default function YieldReportsPage() {
     [blocksQ.data, varietyMap],
   );
   const bunchWeightFor = useMemo<NonNullable<SummariseOptions["bunchWeightFor"]>>(() => {
-    const rows = bunchWeightsQ.data ?? [];
+    const rows = usableBunchWeightRows(bunchWeightStatus, bunchWeightsQ.data);
+    // Unloaded/failed reads are UNAVAILABLE, never "Not configured".
+    if (!rows) return (_blockId: string) => UNAVAILABLE_BLOCK_WEIGHT;
     const byBlock = new Map(bunchWeightBlocks.map((b) => [b.id.toLowerCase(), b.plantings]));
     return (blockId: string) => resolveBlockBunchWeight(rows, blockId, byBlock.get(blockId.toLowerCase()) ?? []);
-  }, [bunchWeightsQ.data, bunchWeightBlocks]);
+  }, [bunchWeightsQ.data, bunchWeightBlocks, bunchWeightStatus]);
 
   // Session totals come from the same parser the detail sheet uses — one calculation only.
   const sessionSummaries = useMemo(() => {
@@ -787,9 +793,14 @@ export default function YieldReportsPage() {
 
 
 
-      {bunchWeightsQ.isError && (
-        <div role="alert" className="mb-3 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+      {bunchWeightStatus === "unavailable" && (
+        <div role="alert" data-testid="bunch-weight-read-alert" className="mb-3 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
           Bunch weights couldn't be loaded, so current trip tonnes are unavailable — they are not "Not configured". Refresh to try again.
+        </div>
+      )}
+      {bunchWeightStatus === "stale" && (
+        <div role="alert" data-testid="bunch-weight-read-alert" className="mb-3 rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-sm text-warning-foreground">
+          Bunch weights couldn't be refreshed. Trip tonnes use the last loaded weights and may be out of date. Refresh to try again.
         </div>
       )}
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
@@ -1444,7 +1455,9 @@ export function EstimateSourceLine({
               {fmtNum(weight.grams, 1)} g
             </span>
           ) : (
-            <span className="font-medium text-destructive">Bunch weight not set</span>
+            <span className="font-medium text-destructive">
+              {weight.source === "unavailable" ? "Bunch weight unavailable" : "Bunch weight not set"}
+            </span>
           )}
           {weight.grams != null && ` · ${BUNCH_WEIGHT_SOURCE_LABEL[weight.source]}`}
         </span>
@@ -1707,7 +1720,9 @@ function SessionDetail({
                               ? "Recorded on trip"
                               : BUNCH_WEIGHT_SOURCE_LABEL[b.bunchWeightSource]
                           }`
-                        : "Bunch weight not set"
+                        : b.bunchWeightSource === "unavailable"
+                          ? "Bunch weight unavailable (weights not loaded)"
+                          : "Bunch weight not set"
                     }
                   />
                   {b.recordedBunchWeightKg != null && b.bunchWeightSource !== "recorded" && (
