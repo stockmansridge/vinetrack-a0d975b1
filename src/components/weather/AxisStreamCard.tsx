@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FlaskConical, Info } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { ProviderConnectionCard } from "@/components/weather/ProviderConnectionCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,10 +72,20 @@ function AxisStreamAdminCard({ vineyardId }: { vineyardId: string }) {
   const set = (fn: (v: string) => void) => (v: string) => { fn(v); setDirty(true); };
 
   return (
-    <Card className="space-y-3 rounded-lg border-dashed bg-card p-4 shadow-sm" data-testid="axisstream-card">
+    <ProviderConnectionCard
+      id="axisstream-card"
+      name="AxisStream Exchange"
+      mark="AxisStream"
+      icon={<FlaskConical className="h-7 w-7" />}
+      tone="text-muted-foreground"
+      description="Weather, rainfall & leaf wetness · testing only"
+      configured={!!c?.configured}
+      provides={["Live observations", "Rainfall actuals"]}
+      usedFor={[]}
+      help={<Badge variant="outline" className="whitespace-nowrap border-warning/40 bg-warning/10 px-1.5 py-0 text-[10px] text-warning">Testing only · Not active</Badge>}
+    >
+     <div className="space-y-3" data-testid="axisstream-dialog">
       <div className="flex flex-wrap items-center gap-2">
-        <FlaskConical className="h-5 w-5 text-muted-foreground" />
-        <h3 className="text-sm font-semibold">AxisStream Exchange</h3>
         <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning">Testing only · Not active</Badge>
         <Badge variant="outline" className="text-[10px]">System Admin</Badge>
         <Badge variant="outline" className="text-[10px]">{c?.configured ? `Configured · ${c.mode}` : "Not configured"}</Badge>
@@ -92,7 +102,7 @@ function AxisStreamAdminCard({ vineyardId }: { vineyardId: string }) {
       <div className="text-xs"><span className="text-muted-foreground">Staged readings: </span>{c?.stagedReadingCount ?? "—"}</div>
       <p className="text-[11px] text-muted-foreground">Test device choices only label staged readings for review. They do not change your vineyard's weather or rainfall source. Choosing "No test device" keeps the previous choice.</p>
       <div className="text-xs"><span className="text-muted-foreground">Discovered devices ({devices.length}): </span>{devices.length ? devices.map((d) => d.name).join(" · ") : "None yet"}</div>
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
           <Label htmlFor="axis-token" className="text-xs">{c?.hasToken ? "Replace token" : "Exchange token"}</Label>
           <Input id="axis-token" type="password" autoComplete="off" spellCheck={false} placeholder={c?.hasToken ? "•••••••• (stored securely)" : "Paste token"} value={token} onChange={(e) => setToken(e.target.value)} />
@@ -109,6 +119,7 @@ function AxisStreamAdminCard({ vineyardId }: { vineyardId: string }) {
         <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>Refresh Status</Button>
         <Button size="sm" variant="outline" className="text-destructive" disabled={busy || !c?.configured} onClick={() => { if (window.confirm("Disable and remove the AxisStream test connection?")) remove.mutate(); }}>Disable/Remove</Button>
       </div>
-    </Card>
+     </div>
+    </ProviderConnectionCard>
   );
 }

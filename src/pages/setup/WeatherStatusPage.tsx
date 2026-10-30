@@ -240,7 +240,7 @@ export default function WeatherStatusPage() {
               icon={<Plug className="h-5 w-5" />}
               tone="bg-primary/10 text-primary border-primary/30"
             />
-            <div className="grid auto-rows-fr items-stretch gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <div className="grid auto-rows-fr items-stretch gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
                 <OpenMeteoCard usedFor={usedFor.open_meteo} />
 
                 <DavisCard
@@ -272,8 +272,8 @@ export default function WeatherStatusPage() {
 
                 {selectedVineyardId && <MaitWeatherCard key={selectedVineyardId} vineyardId={selectedVineyardId} usedFor={usedFor.mait} />}
 
+                {selectedVineyardId && <AxisStreamCard vineyardId={selectedVineyardId} />}
             </div>
-            {selectedVineyardId && <AxisStreamCard vineyardId={selectedVineyardId} />}
           </section>
 
           <p className="text-xs text-muted-foreground">
