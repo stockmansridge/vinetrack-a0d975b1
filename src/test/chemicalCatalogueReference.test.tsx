@@ -153,6 +153,7 @@ describe("Edit chemical catalogue section", () => {
     wrap(editor(linked));
     await screen.findByText("Per hectare (1)");
     expect((screen.getByLabelText("Preferred rate amount") as HTMLInputElement).value).toBe("1.1");
+    expect(screen.getAllByText(/\b2 L\b/).length).toBeGreaterThan(0);
     fireEvent.change(screen.getByDisplayValue("Old notes"), { target: { value: "New notes" } });
     fireEvent.click(screen.getByRole("button", { name: /^Save/i }));
     await waitFor(() => expect(updateSavedChemical).toHaveBeenCalled());
