@@ -84,9 +84,11 @@ export function useVintageYieldEstimateTotal(
     return sumBlockEstimates(blocks.map((b) => b.id), tripTonnes, pruning);
   }, [blocksQ.data, reportsQ.data, weightsQ.data, seasonQ.data, grapeVarieties, vintage, seasonStartMonth, seasonStartDay]);
 
+  // Trip-owned blocks need the master weights: never total them from an
+  // unloaded/failed weight read (that silently understates the vintage).
   return {
-    data,
-    isLoading: blocksQ.isLoading || reportsQ.isLoading || seasonQ.isLoading,
-    error: blocksQ.error ?? reportsQ.error ?? null,
+    data: weightsQ.data ? data : null,
+    isLoading: blocksQ.isLoading || reportsQ.isLoading || seasonQ.isLoading || weightsQ.isLoading,
+    error: blocksQ.error ?? reportsQ.error ?? weightsQ.error ?? null,
   };
 }

@@ -787,6 +787,11 @@ export default function YieldReportsPage() {
 
 
 
+      {bunchWeightsQ.isError && (
+        <div role="alert" className="mb-3 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          Bunch weights couldn't be loaded, so current trip tonnes are unavailable — they are not "Not configured". Refresh to try again.
+        </div>
+      )}
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
         <TabsList>
           <TabsTrigger

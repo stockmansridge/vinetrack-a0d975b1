@@ -235,3 +235,20 @@ describe("Estimate source colour coding", () => {
     expect(badge.className).not.toContain("bg-accent");
   });
 });
+
+describe("bunch weight resolution — duplicate rows", () => {
+  it("picks the newest active row deterministically, regardless of read order", async () => {
+    const { resolveBunchWeight } = await import("@/lib/yieldBunchWeights");
+    const row = (id: string, grams: number, updated_at: string, paddock_id: string | null = null) => ({
+      id, vineyard_id: "v", paddock_id, variety_key: "shiraz", variety_name: "Shiraz", bunch_weight_grams: grams, updated_at,
+    });
+    const a = row("a", 120, "2026-01-01T00:00:00+00:00");
+    const b = row("b", 140, "2026-03-01T00:00:00+00:00");
+    expect(resolveBunchWeight([a, b], null, "shiraz").grams).toBe(140);
+    expect(resolveBunchWeight([b, a], null, "shiraz").grams).toBe(140);
+    const o1 = row("o1", 90, "2026-01-01T00:00:00+00:00", "P1");
+    const o2 = row("o2", 95, "2026-02-01T00:00:00+00:00", "p1");
+    expect(resolveBunchWeight([o1, o2, a], "p1", "shiraz")).toMatchObject({ grams: 95, source: "block_override" });
+    expect(resolveBunchWeight([a], "p1", "Shiraz").source).toBe("not_configured");
+  });
+});
