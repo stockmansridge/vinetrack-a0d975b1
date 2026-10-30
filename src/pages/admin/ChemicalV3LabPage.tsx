@@ -809,8 +809,8 @@ export default function ChemicalV3LabPage() {
           <TabsTrigger value="approved">Approved</TabsTrigger>
           {isAdmin && <TabsTrigger value="inventory">Inventory &amp; Purchases</TabsTrigger>}
         </TabsList>
-        <TabsContent value="review"><ReviewQueue onOpen={(id, j) => { setOpenRevision(id); setOpenJob(j ?? null); }} /></TabsContent>
-        <TabsContent value="approved"><ApprovedList onOpen={setOpenRevision} /></TabsContent>
+        <TabsContent value="review"><ReviewQueue onOpen={(id, j) => { setOpenRevision(id); setOpenJob(j ?? null); }} filter={tableFilter} /></TabsContent>
+        <TabsContent value="approved"><ApprovedList onOpen={setOpenRevision} filter={tableFilter} /></TabsContent>
         {isAdmin && <TabsContent value="inventory"><InventoryTab /></TabsContent>}
       </Tabs>
       {notice && <div className="flex items-center gap-2 rounded border border-warning/50 bg-warning/10 p-3 text-sm"><AlertTriangle className="h-4 w-4" />{notice}</div>}
