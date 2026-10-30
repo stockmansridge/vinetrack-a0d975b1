@@ -696,22 +696,7 @@ function ApprovedList({ onOpen, filter = "" }: { onOpen: (id: string) => void; f
         <thead className="bg-card text-left text-xs text-muted-foreground"><tr>
           {APPROVED_COLUMNS.map((h) => <SortTh key={h} label={h} col={h} sort={sort} onSort={(k) => setSort((s) => toggleSortState(s, k))} />)}
         </tr></thead>
-        <tbody>{visible.map((r, i) => {
-          const id = approvedRevisionId(r);
-          return (
-            <tr key={id ?? i} className={SOLID_ROW} data-testid="v3-approved-row" onClick={() => id && onOpen(id)}>
-              <td className="p-2 font-medium">{pick(r, "product_name") ?? "—"}</td>
-              <td className="p-2">{pick(r, "manufacturer", "registrant") ?? "—"}</td>
-              <td className="p-2">{pick(r, "country_code", "country") ?? "—"}</td>
-              <td className="p-2">{v3CategoryLabel(r, cats.data) ?? "—"}</td>
-              <td className="p-2">R</td>
-              <td className="p-2">{date(pick(r, "approved_at"))}</td>
-              <td className="p-2">{date(pick(r, "last_verified_at"))}</td>
-              <td className="p-2">{asList(pick(r, "warnings")).length || pick(r, "warning_count") || 0}</td>
-              <td className="p-2">T</td>
-            </tr>
-          );
-        })}</tbody>
+        <tbody></tbody>
       </table>
     </div>
   );
