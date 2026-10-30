@@ -94,3 +94,11 @@ export function useVintageYieldEstimateTotal(
     error: blocksQ.error ?? reportsQ.error ?? weightsQ.error ?? null,
   };
 }
+
+/** Dashboard total exists only for a CURRENT weight read (never stale cache after a failed refetch). */
+export function gateTotalOnWeightRead<T>(
+  weightsQ: Parameters<typeof bunchWeightReadStatus>[0],
+  total: T | null,
+): T | null {
+  return bunchWeightReadStatus(weightsQ) === "current" ? total : null;
+}
