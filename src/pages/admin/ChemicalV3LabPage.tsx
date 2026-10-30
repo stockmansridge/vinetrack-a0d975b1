@@ -676,21 +676,27 @@ export function ReviewQueue({ onOpen, filter = "" }: { onOpen: (id: string, jobI
 
 const SOLID_ROW = "cursor-pointer border-t bg-card hover:bg-muted";
 
-function ApprovedList({ onOpen }: { onOpen: (id: string) => void }) {
+function ApprovedList({ onOpen, filter = "" }: { onOpen: (id: string) => void; filter?: string }) {
   const cats = useCategories();
+  const [sort, setSort] = useState<SortState>(null);
   const q = useQuery({ queryKey: ["chemical-v3-approved"], queryFn: fetchApprovedCatalogue });
   if (q.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (q.error) return <p className="text-sm text-destructive">{(q.error as Error).message}</p>;
   const rows = q.data ?? [];
+  const needle = filter.trim().toLowerCase();
+  const visible0 = needle ? rows.filter((r) => rowSearchText(r, cats.data).includes(needle)) : rows;
+  const sortGetter = sort ? APPROVED_SORT_GETTERS[sort.key] : undefined;
+  const visible = sortGetter ? sortedBy(visible0, sort, (r) => sortGetter(r, cats.data)) : visible0;
   if (!rows.length) return <p className="rounded border bg-card p-3 text-sm text-muted-foreground">No approved catalogue products yet.</p>;
+  if (!visible.length) return <p className="rounded border bg-card p-3 text-sm text-muted-foreground">No approved products match “{filter}”.</p>;
   const date = (v: any) => (v ? new Date(v).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }) : "—");
   return (
     <div className="overflow-x-auto rounded border bg-card">
       <table className="w-full text-sm" data-testid="v3-approved-table">
         <thead className="bg-card text-left text-xs text-muted-foreground"><tr>
-          {["Product", "Manufacturer", "Country", "Category", "Resistance group", "Approved date", "Last verified", "Warnings", "Front label"].map((h) => <th key={h} className="p-2">{h}</th>)}
+          {APPROVED_COLUMNS.map((h) => <SortTh key={h} label={h} col={h} sort={sort} onSort={(k) => setSort((s) => toggleSortState(s, k))} />)}
         </tr></thead>
-        <tbody>{rows.map((r, i) => {
+        <tbody>{visible.map((r, i) => {
           const id = approvedRevisionId(r);
           return (
             <tr key={id ?? i} className={SOLID_ROW} data-testid="v3-approved-row" onClick={() => id && onOpen(id)}>
