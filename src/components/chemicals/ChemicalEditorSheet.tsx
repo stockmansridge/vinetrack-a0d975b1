@@ -494,7 +494,7 @@ export function ChemicalEditor({
       // manual-use recovery) is OMITTED, so a notes/preferred-only save never
       // re-encodes raw V3 uses/verification fields (e.g. crop "Grapes").
       const omitIntelligence =
-        !!initial && !!catalogueLinkOf(initial) && !manualMode && !manualUse &&
+        !!initial && !!catalogueLinkOf(initial) && !manualUse &&
         intelligenceDraftUnchanged(intelBase, intel);
       const encoded = omitIntelligence
         ? undefined

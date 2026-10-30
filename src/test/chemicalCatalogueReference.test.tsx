@@ -172,11 +172,10 @@ describe("Edit chemical catalogue section", () => {
     for (const k of ["default_rates", ...INTEL_KEYS]) expect([k, k in payload]).toEqual([k, false]);
   });
   it("a deliberate intelligence edit is still persisted", async () => {
-    const { container } = wrap(editor(linked));
+    wrap(editor(linked));
     await screen.findByText("Per hectare (1)");
-    const reg = container.querySelector('input[id*="registration"], input[name*="registration"]') as HTMLInputElement | null;
-    expect(reg).not.toBeNull();
-    fireEvent.change(reg!, { target: { value: "99999" } });
+    const reg = screen.getByText(/^Registration number/).closest("div")!.querySelector("input") as HTMLInputElement;
+    fireEvent.change(reg, { target: { value: "99999" } });
     fireEvent.click(screen.getByRole("button", { name: /^Save/i }));
     await waitFor(() => expect(updateSavedChemical).toHaveBeenCalled());
     const payload = updateSavedChemical.mock.calls[0][1] as any;
