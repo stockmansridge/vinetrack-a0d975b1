@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 
 let tables: Record<string, Record<string, any>> = {};
 let failNext = false;
@@ -57,7 +58,7 @@ const linked = {
 
 function wrap(ui: React.ReactNode) {
   const c = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={c}>{ui}</QueryClientProvider>);
+  return render(<MemoryRouter><QueryClientProvider client={c}>{ui}</QueryClientProvider></MemoryRouter>);
 }
 const editor = (initial: any, open = true) => (
   <ChemicalEditor open={open} onOpenChange={() => {}} initial={initial} vineyardId="v1" existingLibrary={[]} canSeeCosts onSaved={() => {}} />
@@ -127,7 +128,7 @@ describe("Edit chemical catalogue section", () => {
     tables.chemical_v3_products.p3 = { id: "p3", approved_revision_id: "rev-9" };
     tables.chemical_v3_product_revisions["rev-9"] = { id: "rev-9", product_id: "p3", review_status: "approved", default_rate_options: { per_hectare: [], per_100_litres: [] } };
     const c = new QueryClient();
-    rerender(<QueryClientProvider client={c}>{editor({ ...linked, id: "chem-2", name: "Other", chemical_v3_product_id: "p3" })}</QueryClientProvider>);
+    rerender(<MemoryRouter><QueryClientProvider client={c}>{editor({ ...linked, id: "chem-2", name: "Other", chemical_v3_product_id: "p3" })}</QueryClientProvider></MemoryRouter>);
     expect(screen.queryByText("0.8–1.2 L/ha")).toBeNull();
     expect(await screen.findByTestId("catalogue-no-rates")).toBeTruthy();
   });
