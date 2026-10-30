@@ -704,11 +704,11 @@ function ApprovedList({ onOpen, filter = "" }: { onOpen: (id: string) => void; f
               <td className="p-2">{pick(r, "manufacturer", "registrant") ?? "—"}</td>
               <td className="p-2">{pick(r, "country_code", "country") ?? "—"}</td>
               <td className="p-2">{v3CategoryLabel(r, cats.data) ?? "—"}</td>
-              <td className="p-2"><V3ResistanceBadge row={r} /></td>
+              <td className="p-2">R</td>
               <td className="p-2">{date(pick(r, "approved_at"))}</td>
               <td className="p-2">{date(pick(r, "last_verified_at"))}</td>
               <td className="p-2">{asList(pick(r, "warnings")).length || pick(r, "warning_count") || 0}</td>
-              <td className="p-2"><Thumb path={pick(r, "front_label_image_path")} className="h-10 w-10" /></td>
+              <td className="p-2">T</td>
             </tr>
           );
         })}</tbody>
