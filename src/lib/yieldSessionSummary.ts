@@ -262,7 +262,7 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
     if (opts.bunchWeightFor) {
       const r = blockId ? opts.bunchWeightFor(blockId) : { grams: null, source: "not_configured" as const };
       weight = r.grams != null ? r.grams / 1000 : null;
-      bunchWeightSource = r.grams != null ? r.source : "not_configured";
+      bunchWeightSource = r.grams != null || r.source === "unavailable" ? r.source : "not_configured";
     } else {
       weight = recordedWeight;
       bunchWeightSource = recordedWeight != null ? "recorded" : "not_configured";

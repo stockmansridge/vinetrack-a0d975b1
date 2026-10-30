@@ -26,7 +26,7 @@ export interface YieldBunchWeightRow {
 }
 
 export type BunchWeightSource = "block_override" | "variety_default" | "not_configured";
-export type BlockBunchWeightSource = BunchWeightSource | "mixed";
+export type BlockBunchWeightSource = BunchWeightSource | "mixed" | "unavailable";
 
 export interface ResolvedBunchWeight {
   grams: number | null;
@@ -44,23 +44,71 @@ export const BUNCH_WEIGHT_SOURCE_LABEL: Record<BlockBunchWeightSource, string> =
   variety_default: "Variety master",
   mixed: "Block override + Variety master",
   not_configured: "Not configured",
+  unavailable: "Unavailable (weights not loaded)",
 };
 
 const WRITE_ROLES = new Set(["owner", "manager", "supervisor"]);
 export const canEditBunchWeights = (role: string | null | undefined) =>
   WRITE_ROLES.has(String(role ?? "").toLowerCase());
 
-export async function fetchYieldBunchWeights(vineyardId: string): Promise<YieldBunchWeightRow[]> {
-  const { data, error } = await (supabase as any)
-    .from("yield_bunch_weights")
-    .select("id, vineyard_id, paddock_id, variety_key, variety_name, bunch_weight_grams, updated_at")
-    .eq("vineyard_id", vineyardId)
-    .is("deleted_at", null);
-  if (error) throw error;
-  return ((data ?? []) as any[]).map((r) => ({
-    ...r,
-    bunch_weight_grams: Number(r.bunch_weight_grams),
-  }));
+/** DB canonical form (upsert/resolve RPCs use lower(btrim(p_variety_key))). */
+export const canonicalVarietyKey = (k: string | null | undefined) => String(k ?? "").trim().toLowerCase();
+
+export const BUNCH_WEIGHT_PAGE_SIZE = 1000;
+
+/** Thrown when a read is partial, inconsistent or outside the requested vineyard. */
+export class BunchWeightReadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BunchWeightReadError";
+  }
+}
+
+/**
+ * Reads EVERY active row for one vineyard: stable (id) ordering, exact count,
+ * paged so no server page limit can truncate it. The result is rejected —
+ * never partially returned — if the pages don't add up to the exact count,
+ * an id repeats, a row belongs to another vineyard, or a stored key isn't in
+ * canonical lower+trim form.
+ */
+export async function fetchYieldBunchWeights(
+  vineyardId: string,
+  pageSize = BUNCH_WEIGHT_PAGE_SIZE,
+): Promise<YieldBunchWeightRow[]> {
+  const want = vineyardId.toLowerCase();
+  const out: YieldBunchWeightRow[] = [];
+  const seen = new Set<string>();
+  let expected: number | null = null;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error, count } = await (supabase as any)
+      .from("yield_bunch_weights")
+      .select("id, vineyard_id, paddock_id, variety_key, variety_name, bunch_weight_grams, updated_at", {
+        count: "exact",
+      })
+      .eq("vineyard_id", vineyardId)
+      .is("deleted_at", null)
+      .order("id", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    if (typeof count !== "number") throw new BunchWeightReadError("Bunch weight read returned no exact count.");
+    if (expected == null) expected = count;
+    else if (count !== expected) throw new BunchWeightReadError("Bunch weights changed while loading; refresh to retry.");
+    const page = (data ?? []) as any[];
+    for (const r of page) {
+      const id = String(r.id ?? "").toLowerCase();
+      if (!id || seen.has(id)) throw new BunchWeightReadError("Bunch weight read returned a repeated row.");
+      if (String(r.vineyard_id ?? "").toLowerCase() !== want)
+        throw new BunchWeightReadError("Bunch weight read returned a row from another vineyard.");
+      const key = String(r.variety_key ?? "");
+      if (!key || canonicalVarietyKey(key) !== key)
+        throw new BunchWeightReadError("Bunch weight read returned a non-canonical variety key.");
+      seen.add(id);
+      out.push({ ...r, bunch_weight_grams: Number(r.bunch_weight_grams) });
+    }
+    if (out.length > expected) throw new BunchWeightReadError("Bunch weight read returned more rows than counted.");
+    if (out.length === expected) return out;
+    if (page.length < pageSize) throw new BunchWeightReadError("Bunch weight read was incomplete; refresh to retry.");
+  }
 }
 
 export function useYieldBunchWeights(vineyardId: string | null | undefined) {
@@ -70,6 +118,34 @@ export function useYieldBunchWeights(vineyardId: string | null | undefined) {
     queryFn: () => fetchYieldBunchWeights(vineyardId!),
   });
 }
+
+export type BunchWeightReadStatus = "idle" | "loading" | "unavailable" | "stale" | "current";
+
+/**
+ * One status for every consumer. "stale" = last confirmed rows kept after a
+ * failed refetch (must be labelled as such); "unavailable" = no confirmed rows.
+ */
+export function bunchWeightReadStatus(q: {
+  data?: unknown;
+  isError?: boolean;
+  isLoading?: boolean;
+  fetchStatus?: string;
+}): BunchWeightReadStatus {
+  if (q.data) return q.isError ? "stale" : "current";
+  if (q.isError) return "unavailable";
+  if (q.isLoading) return "loading";
+  return "idle";
+}
+
+/** Rows usable for resolution; null means weights are unknown (not "not configured"). */
+export function usableBunchWeightRows(
+  status: BunchWeightReadStatus,
+  data: YieldBunchWeightRow[] | undefined,
+): YieldBunchWeightRow[] | null {
+  return status === "current" || status === "stale" ? data ?? null : null;
+}
+
+export const UNAVAILABLE_BLOCK_WEIGHT: ResolvedBlockBunchWeight = { grams: null, source: "unavailable" };
 
 export async function upsertYieldBunchWeight(input: {
   vineyardId: string;
@@ -129,20 +205,20 @@ const valid = (g: unknown): g is number => typeof g === "number" && Number.isFin
 
 /**
  * Block + variety override, then variety master, else not configured.
- * Matching is by EXACT canonical variety_key — never by display name.
+ * Matching is by canonical variety_key (lower+trim, as the DB RPCs) — never by display name.
  */
 export function resolveBunchWeight(
   rows: YieldBunchWeightRow[],
   blockId: string | null,
   varietyKey: string | null | undefined,
 ): ResolvedBunchWeight {
-  const vk = (varietyKey ?? "").trim();
+  const vk = canonicalVarietyKey(varietyKey);
   const bk = blockId ? blockId.toLowerCase() : null;
   // Newest first (then id) so duplicate active rows resolve deterministically
   // instead of depending on PostgREST row order.
   const sameVariety = vk
     ? rows
-        .filter((r) => (r.variety_key ?? "").trim() === vk && valid(r.bunch_weight_grams))
+        .filter((r) => canonicalVarietyKey(r.variety_key) === vk && valid(r.bunch_weight_grams))
         .sort(
           (a, b) =>
             String(b.updated_at ?? "").localeCompare(String(a.updated_at ?? "")) ||
