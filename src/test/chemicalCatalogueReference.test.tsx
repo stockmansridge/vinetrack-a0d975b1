@@ -172,7 +172,8 @@ describe("Edit chemical catalogue section", () => {
     for (const k of ["default_rates", ...INTEL_KEYS]) expect([k, k in payload]).toEqual([k, false]);
   });
   it("a deliberate intelligence edit is still persisted", async () => {
-    wrap(editor(linked));
+    // No saved default here: an intelligence edit re-runs the existing stale-default gate.
+    wrap(editor({ ...linked, default_rates: null }));
     await screen.findByText("Per hectare (1)");
     const reg = screen.getByText(/^Registration number/).closest("div")!.querySelector("input") as HTMLInputElement;
     fireEvent.change(reg, { target: { value: "99999" } });
