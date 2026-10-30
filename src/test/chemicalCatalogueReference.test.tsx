@@ -159,7 +159,7 @@ describe("Edit chemical catalogue section", () => {
     const [id, payload] = updateSavedChemical.mock.calls[0] as [string, any];
     expect(id).toBe("chem-1");
     expect(payload.notes).toBe("New notes");
-    for (const k of ["chemical_v3_product_id", "chemical_v3_revision_id", "vineyard_preferred_rate", "default_rates", ...INTEL_KEYS]) expect(k in payload).toBe(false);
+    for (const k of ["chemical_v3_product_id", "chemical_v3_revision_id", "vineyard_preferred_rate", "default_rates", ...INTEL_KEYS]) expect([k, k in payload]).toEqual([k, false]);
   });
   it("a preferred-rate edit writes only that field, never intelligence or default_rates", async () => {
     wrap(editor(linked));
@@ -169,7 +169,7 @@ describe("Edit chemical catalogue section", () => {
     await waitFor(() => expect(updateSavedChemical).toHaveBeenCalled());
     const payload = updateSavedChemical.mock.calls[0][1] as any;
     expect(payload.vineyard_preferred_rate).toMatchObject({ amount: 1.4, unit: "L", basis: "per_hectare" });
-    for (const k of ["default_rates", ...INTEL_KEYS]) expect(k in payload).toBe(false);
+    for (const k of ["default_rates", ...INTEL_KEYS]) expect([k, k in payload]).toEqual([k, false]);
   });
   it("a deliberate intelligence edit is still persisted", async () => {
     const { container } = wrap(editor(linked));
