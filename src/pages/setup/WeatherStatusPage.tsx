@@ -116,6 +116,7 @@ const fmtDate = (v?: string | null) => {
 export default function WeatherStatusPage() {
   const { selectedVineyardId, currentRole } = useVineyard();
   const showWeatherDiagnostics = useDiagnosticPanel("show_weather_diagnostics");
+  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
   const qc = useQueryClient();
   const observationSource = useQuery({
     queryKey: ["local-observation-provider", selectedVineyardId],
