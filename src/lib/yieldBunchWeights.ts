@@ -138,8 +138,16 @@ export function resolveBunchWeight(
 ): ResolvedBunchWeight {
   const vk = (varietyKey ?? "").trim();
   const bk = blockId ? blockId.toLowerCase() : null;
+  // Newest first (then id) so duplicate active rows resolve deterministically
+  // instead of depending on PostgREST row order.
   const sameVariety = vk
-    ? rows.filter((r) => (r.variety_key ?? "").trim() === vk && valid(r.bunch_weight_grams))
+    ? rows
+        .filter((r) => (r.variety_key ?? "").trim() === vk && valid(r.bunch_weight_grams))
+        .sort(
+          (a, b) =>
+            String(b.updated_at ?? "").localeCompare(String(a.updated_at ?? "")) ||
+            String(a.id).localeCompare(String(b.id)),
+        )
     : [];
   const override = bk ? sameVariety.find((r) => r.paddock_id?.toLowerCase() === bk) : undefined;
   if (override) return { grams: override.bunch_weight_grams, source: "block_override", recordId: override.id };
