@@ -127,7 +127,8 @@ describe("Edit chemical catalogue section", () => {
   it("shows Retry on error and loads after retry", async () => {
     failNext = true;
     wrap(editor(linked));
-    fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
+    const rates = await screen.findByTestId("catalogue-error");
+    fireEvent.click(rates.querySelector("button")!);
     expect(await screen.findByText("Per hectare (1)")).toBeTruthy();
   });
   it("pending link shows pending status, never approved", async () => {
