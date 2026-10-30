@@ -676,7 +676,7 @@ export function ReviewQueue({ onOpen, filter = "" }: { onOpen: (id: string, jobI
 
 const SOLID_ROW = "cursor-pointer border-t bg-card hover:bg-muted";
 
-function ApprovedList({ onOpen, filter = "" }: { onOpen: (id: string) => void; filter?: string }) {
+export function ApprovedList({ onOpen, filter = "" }: { onOpen: (id: string) => void; filter?: string }) {
   const cats = useCategories();
   const [sort, setSort] = useState<SortState>(null);
   const q = useQuery({ queryKey: ["chemical-v3-approved"], queryFn: fetchApprovedCatalogue });
@@ -691,7 +691,29 @@ function ApprovedList({ onOpen, filter = "" }: { onOpen: (id: string) => void; f
   if (!visible.length) return <p className="rounded border bg-card p-3 text-sm text-muted-foreground">No approved products match “{filter}”.</p>;
   const date = (v: any) => (v ? new Date(v).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }) : "—");
   return (
-    <div data-testid="v3-approved-bisect">hello</div>
+    <div className="overflow-x-auto rounded border bg-card">
+      <table className="w-full text-sm" data-testid="v3-approved-table">
+        <thead className="bg-card text-left text-xs text-muted-foreground"><tr>
+          {APPROVED_COLUMNS.map((h) => <SortTh key={h} label={h} col={h} sort={sort} onSort={(k) => setSort((s) => toggleSortState(s, k))} />)}
+        </tr></thead>
+        <tbody>{visible.map((r, i) => {
+          const id = approvedRevisionId(r);
+          return (
+            <tr key={id ?? i} className={SOLID_ROW} data-testid="v3-approved-row" onClick={() => id && onOpen(id)}>
+              <td className="p-2 font-medium">{pick(r, "product_name") ?? "—"}</td>
+              <td className="p-2">{pick(r, "manufacturer", "registrant") ?? "—"}</td>
+              <td className="p-2">{pick(r, "country_code", "country") ?? "—"}</td>
+              <td className="p-2">{v3CategoryLabel(r, cats.data) ?? "—"}</td>
+              <td className="p-2"><V3ResistanceBadge row={r} /></td>
+              <td className="p-2">{date(pick(r, "approved_at"))}</td>
+              <td className="p-2">{date(pick(r, "last_verified_at"))}</td>
+              <td className="p-2">{asList(pick(r, "warnings")).length || pick(r, "warning_count") || 0}</td>
+              <td className="p-2"><Thumb path={pick(r, "front_label_image_path")} className="h-10 w-10" /></td>
+            </tr>
+          );
+        })}</tbody>
+      </table>
+    </div>
   );
 }
 
