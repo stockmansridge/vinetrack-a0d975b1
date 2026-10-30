@@ -608,8 +608,16 @@ export function ChemicalEditor({
    * a replacement (or clear the slot) before the chemical can be saved — the
    * portal never silently re-points a default at a different rate.
    */
+  // Narrow V3 safeguard: an untouched saved default on an existing V3-linked
+  // chemical whose intelligence is also untouched is omitted from the save, so
+  // the local grapevine-crop filter (e.g. raw crop "Grapes") must not flag it
+  // stale or block an unrelated save.
+  const untouchedV3Defaults =
+    !!initial && !!catalogueLinkOf(initial as any) && !rateLife.dirty &&
+    intelligenceDraftUnchanged(intelBase, intel);
   const staleDefaultRate =
-    structuredUses && !defaultRateStillSupported(defaultRates, intel.registeredUses);
+    structuredUses && !untouchedV3Defaults &&
+    !defaultRateStillSupported(defaultRates, intel.registeredUses);
 
   // Release contract §4 — a NEW chemical selected through registered/master
   // lookup may only be saved with a registered grapevine use AND an explicitly
