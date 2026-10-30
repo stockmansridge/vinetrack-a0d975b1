@@ -66,7 +66,7 @@ import {
 } from "@/lib/chemicalVineyardScope";
 
 import { DefaultRatesCard } from "@/components/chemicals/DefaultRatesCard";
-import { CatalogueIdentityBadge, CatalogueReferenceSection } from "@/components/chemicals/CatalogueReference";
+import { CatalogueIdentityBadge, CatalogueReferenceSection, CatalogueChemistrySection } from "@/components/chemicals/CatalogueReference";
 import { catalogueLinkOf, useCatalogueReference, intelligenceDraftUnchanged } from "@/lib/chemicalCatalogueReference";
 import {
   PREFERRED_RATE_HELPER,
@@ -104,7 +104,6 @@ import {
   OPEN_MANUFACTURER_LABEL,
   OPEN_PRODUCT_PAGE,
   OPEN_REGISTRATION_SOURCE,
-  OPEN_REGULATOR_LABEL,
   resolveChemicalLabelLinks,
 } from "@/lib/chemicalLabelLinks";
 import {
