@@ -64,8 +64,9 @@ describe("master bunch weight resolution", () => {
       row({ id: "byname", variety_key: "estate syrah selection", bunch_weight_grams: 999 }),
     ];
     expect(resolveBlockBunchWeight(rows, B1, ids)).toEqual({ grams: 130, source: "variety_default" });
-    // Exact key only: no display-name / case normalisation at resolve time.
-    expect(resolveBunchWeight(rows, B1, "Estate Syrah Selection").source).toBe("not_configured");
+    // Canonical key identity = lower(btrim(key)) like the DB RPCs; never a fuzzy name.
+    expect(resolveBunchWeight(rows, B1, " Shiraz ").recordId).toBe("canon");
+    expect(resolveBunchWeight(rows, B1, "syrah").source).toBe("not_configured");
   });
   it("legacy fallback derives a key only when no varietyKey is stored, and flags it", () => {
     const ids = blockVarietyIdentities([{ name: "Shiraz", percent: 100 }], buildVarietyMap([]));
@@ -249,6 +250,6 @@ describe("bunch weight resolution — duplicate rows", () => {
     const o1 = row("o1", 90, "2026-01-01T00:00:00+00:00", "P1");
     const o2 = row("o2", 95, "2026-02-01T00:00:00+00:00", "p1");
     expect(resolveBunchWeight([o1, o2, a], "p1", "shiraz")).toMatchObject({ grams: 95, source: "block_override" });
-    expect(resolveBunchWeight([a], "p1", "Shiraz").source).toBe("not_configured");
+    expect(resolveBunchWeight([a], "p1", "Shiraz").source).toBe("variety_default");
   });
 });
