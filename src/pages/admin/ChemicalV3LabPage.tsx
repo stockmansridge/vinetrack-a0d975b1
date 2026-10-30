@@ -46,7 +46,7 @@ import {
 import { fetchProductCategories, isV3Addable, setV3ProductCategory, v3CategoryLabel, type CategoryOption } from "@/lib/chemicalInventory";
 import { V3AddToVineyardButton } from "@/components/chemicals/V3AddToVineyardDialog";
 import { V3ResistanceBadge, V3ResistanceField } from "@/components/chemicals/V3ResistanceField";
-import { isV3ResistanceEditable, setV3ResistanceGroups, type V3ResistanceDraft } from "@/lib/chemicalV3Resistance";
+import { isV3ResistanceEditable, setV3ResistanceGroups, readV3Resistance, formatV3Resistance, type V3ResistanceDraft } from "@/lib/chemicalV3Resistance";
 
 function useCategories() {
   return useQuery({ queryKey: ["chemical-product-categories"], staleTime: 10 * 60_000, queryFn: fetchProductCategories });
