@@ -37,6 +37,8 @@ import { ChemicalIntelligenceDialog } from "@/components/chemicals/ChemicalIntel
 
 const approvedRev = {
   id: "rev-2", product_id: "p1", review_status: "approved",
+  active_ingredients: [{ name: "MEFENTRIFLUCONAZOLE", concentration: 75, concentration_unit: "g/L" }],
+  activity_group_scheme: "frac", activity_groups: ["3"], resistance_classification_state: "classified", resistance_group_source: "system_admin_review",
   default_rate_options: {
     per_hectare: [{ id: "a", min_value: 0.8, max_value: 1.2, unit: "L/ha", targets: ["Powdery mildew"] }],
     per_100_litres: [{ id: "b", value: 25, unit: "mL/100 L" }, { id: "c", value: 40, unit: "mL/100 L", restrictions: "Do not exceed 3 sprays" }],
@@ -205,6 +207,65 @@ describe("Edit chemical catalogue section", () => {
     wrap(editor(linked));
     expect(await screen.findByText("Catalogue: rejected")).toBeTruthy();
     expect(screen.queryByTitle("Approved VineTrack catalogue product")).toBeNull();
+  });
+});
+
+describe("Edit chemical catalogue chemistry", () => {
+  const noIngredientEditing = () => {
+    expect(screen.queryByRole("button", { name: /Add active ingredient/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Upgrade to structured chemistry|Start from scratch/i })).toBeNull();
+    expect(screen.queryByText(/Not applicable/i)).toBeNull();
+  };
+  const legacy = { ...linked, active_ingredient: "Mefentrifluconazole", chemical_group: "" };
+  it("shows master FRAC 3 and actives despite a blank legacy group, with no ingredient editing", async () => {
+    wrap(editor(legacy));
+    expect((await screen.findByTestId("catalogue-resistance")).textContent).toBe("FRAC 3");
+    expect(screen.getByTestId("catalogue-actives").textContent).toContain("MEFENTRIFLUCONAZOLE — 75 g/L");
+    expect(screen.getByText("From the VineTrack catalogue.")).toBeTruthy();
+    noIngredientEditing();
+  });
+  it("renders HRAC and multiple groups exactly as recorded", async () => {
+    tables.chemical_v3_product_revisions["rev-2"] = { ...approvedRev, activity_group_scheme: "hrac", activity_groups: ["9"] };
+    const { unmount } = wrap(editor(legacy));
+    expect((await screen.findByTestId("catalogue-resistance")).textContent).toBe("HRAC 9");
+    unmount();
+    tables.chemical_v3_product_revisions["rev-2"] = { ...approvedRev, activity_group_scheme: "irac", activity_groups: ["4A", "28"] };
+    wrap(editor(legacy));
+    expect((await screen.findByTestId("catalogue-resistance")).textContent).toBe("IRAC 4A + 28");
+  });
+  it("error and pending states never expose ingredient editing or cached classification", async () => {
+    failNext = true;
+    const { unmount } = wrap(editor(legacy));
+    expect(await screen.findByTestId("catalogue-chemistry-error")).toBeTruthy();
+    expect(screen.queryByTestId("catalogue-resistance")).toBeNull();
+    noIngredientEditing();
+    unmount();
+    wrap(editor({ ...legacy, chemical_v3_product_id: "p2", chemical_v3_revision_id: "rev-p2" }));
+    expect(await screen.findByTestId("catalogue-chemistry-unavailable")).toBeTruthy();
+    expect(screen.queryByTestId("catalogue-resistance")).toBeNull();
+    noIngredientEditing();
+  });
+  it("loading state shows no editing controls", async () => {
+    wrap(editor(legacy));
+    expect(screen.getByTestId("catalogue-chemistry-loading")).toBeTruthy();
+    noIngredientEditing();
+    await screen.findByTestId("catalogue-resistance");
+  });
+  it("manual/unlinked chemicals keep the existing ingredient editor", async () => {
+    wrap(editor({ ...legacy, chemical_v3_product_id: null, chemical_v3_revision_id: null }));
+    await screen.findByDisplayValue("Belanty");
+    expect(screen.queryByTestId("catalogue-chemistry")).toBeNull();
+    expect(screen.queryAllByRole("button", { name: /Add active ingredient|Upgrade to structured chemistry/i }).length).toBeGreaterThan(0);
+  });
+  it("a notes save never copies master chemistry into the vineyard chemical", async () => {
+    wrap(editor(legacy));
+    await screen.findByTestId("catalogue-resistance");
+    fireEvent.change(screen.getByDisplayValue("Old notes"), { target: { value: "N2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Save/i }));
+    await waitFor(() => expect(updateSavedChemical).toHaveBeenCalled());
+    const payload = updateSavedChemical.mock.calls[0][1] as any;
+    for (const k of ["vineyard_preferred_rate", "default_rates", "activity_groups", "activity_group_scheme", "active_ingredients", ...INTEL_KEYS]) expect([k, k in payload]).toEqual([k, false]);
+    expect(JSON.stringify(payload)).not.toContain("MEFENTRIFLUCONAZOLE");
   });
 });
 
