@@ -739,6 +739,7 @@ export default function ChemicalV3LabPage() {
   const { user } = useAuth();
   const { isAdmin } = useIsSystemAdmin();
   const [tab, setTab] = useState("review");
+  const [tableFilter, setTableFilter] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const { selectedVineyardId, memberships, currentRole } = useVineyard();
   const { currentCountry } = useVineyard();
