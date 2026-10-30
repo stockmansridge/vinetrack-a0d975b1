@@ -3,7 +3,7 @@ import { getVineyardCoords } from "@/lib/rainForecastQuery";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useVineyard } from "@/context/VineyardContext";
-import { useDiagnosticPanel } from "@/lib/systemAdmin";
+import { useDiagnosticPanel, useIsSystemAdmin } from "@/lib/systemAdmin";
 import { Card } from "@/components/ui/card";
 import { ProviderConnectionCard } from "@/components/weather/ProviderConnectionCard";
 import davisLogo from "@/assets/providers/davis-instruments.png.asset.json";
