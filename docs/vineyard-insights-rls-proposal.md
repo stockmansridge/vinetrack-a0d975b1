@@ -1,9 +1,39 @@
 # Vineyard Insights RLS Proposal — Scout Reports & Vintage Notes (Portal)
 
-Status: **PROPOSED FOR APPROVAL — not approved, not executed.** No SQL in this
-document has been run against any environment. The permission matrix below is
-a proposal awaiting Jonathan Hambrook's explicit approval; nothing here is
-authorised for migration execution.
+Status: **DEPLOYED** — production migration
+`portal_scout_read_and_vintage_note_add_access` applied by Jonathan Hambrook
+(2026-10-30). Do NOT apply any SQL in this document again; the sections below
+are kept as historical proposal context. Where they differ, the deployed
+contract below is authoritative and must never be weakened.
+
+### Deployed contract (authoritative)
+
+- Three helpers, all `STABLE SECURITY INVOKER`, empty `search_path`, EXECUTE
+  revoked from PUBLIC/anon and granted to `authenticated`:
+  - `can_view_vineyard_insights(p_vineyard_id)` — authenticated membership of
+    THIS vineyard (vineyard `owner_id` included) AND the vineyard is active.
+  - `can_add_vintage_notes(p_vineyard_id)` — everything `can_view` requires,
+    PLUS role owner/manager/supervisor, PLUS
+    `get_my_vineyard_access(p_vineyard_id).has_vineyard_access = true`.
+    Expired-trial members can read but inserts are rejected server-side.
+  - `has_any_vineyard_membership()` helper.
+- 8 additive policies: SELECT on `scout_visits`, `scout_block_assessments`,
+  `scout_observations`, `scout_observation_photos`; SELECT + INSERT on
+  `vintage_notes`; SELECT on `vintage_note_types`; SELECT on `scout-photos`
+  Storage objects (vineyard-scoped path; malformed paths denied).
+- `vintage_notes` INSERT requires `observed_by_user_id = auth.uid()`,
+  `created_by`/`updated_by` NULL or `auth.uid()`, and a global or
+  same-vineyard ACTIVE note type.
+- Unchanged: `can_use_vineyard_insights`, all pre-existing policies, mobile and
+  AI/Vintage Report gates.
+- Migration embedded rollback-only synthetic tests passed: owner without a
+  membership row, manager/supervisor/operator, expired trial, cross-tenant
+  tables/photos, malformed path, spoofed observer, foreign note type,
+  non-member and anon. No fixture rows or customer data changed.
+
+Portal side: `checkInsightsAccess` uses `can_view_vineyard_insights`;
+`checkVintageNoteAddAccess` requires an owner/manager/supervisor role AND
+`can_add_vintage_notes` (any error hides Add).
 
 ## Why
 
