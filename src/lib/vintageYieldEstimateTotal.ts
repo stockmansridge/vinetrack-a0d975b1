@@ -5,7 +5,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchYieldBlocks, fetchYieldReportsForVineyard } from "@/lib/yieldReportsQuery";
-import { useYieldBunchWeights, blockVarietyIdentities, resolveBlockBunchWeight } from "@/lib/yieldBunchWeights";
+import { useYieldBunchWeights, blockVarietyIdentities, resolveBlockBunchWeight, bunchWeightReadStatus } from "@/lib/yieldBunchWeights";
 import { buildBunchCountTrips, currentEstimatesByBlock } from "@/lib/bunchCountTrips";
 import { useSeasonYieldBaseOverview } from "@/lib/seasonYieldQuery";
 import { buildSeasonYieldEstimates } from "@/lib/seasonYieldContract";
@@ -87,7 +87,9 @@ export function useVintageYieldEstimateTotal(
   // Trip-owned blocks need the master weights: never total them from an
   // unloaded/failed weight read (that silently understates the vintage).
   return {
-    data: weightsQ.data ? data : null,
+    // Only a CURRENT (successful latest) weight read yields a total; cached
+    // rows after a failed refetch are not presented as a current total.
+    data: bunchWeightReadStatus(weightsQ) === "current" ? data : null,
     isLoading: blocksQ.isLoading || reportsQ.isLoading || seasonQ.isLoading || weightsQ.isLoading,
     error: blocksQ.error ?? reportsQ.error ?? weightsQ.error ?? null,
   };
