@@ -95,9 +95,10 @@ describe("Approved list filter + column sort", () => {
   });
 
   it("unfiltered keeps data order; filter narrows rows", async () => {
-    mountApproved();
+    const first = mountApproved();
     await screen.findByText("Zeus");
     expect(firstApprovedRow()).toMatch(/^Zeus/);
+    first.unmount();
     mountApproved("altacor");
     await screen.findByText("Altacor");
     expect(screen.getAllByTestId("v3-approved-row")).toHaveLength(1);
