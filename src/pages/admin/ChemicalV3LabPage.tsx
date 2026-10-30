@@ -61,6 +61,92 @@ type Row = Record<string, any>;
 const JOB_KEY = "vt.chemical-v3.current-job";
 const NO_COUNTRY = "__none";
 
+// ---- Table filter + column sort helpers (shared by Pending Review and Approved) ----
+type SortState = { key: string; dir: "asc" | "desc" } | null;
+type SortValue = string | number | null;
+
+function toggleSortState(current: SortState, key: string): SortState {
+  if (current?.key !== key) return { key, dir: "asc" };
+  if (current.dir === "asc") return { key, dir: "desc" };
+  return null; // third click clears the sort
+}
+
+function dateSortValue(v: unknown): SortValue {
+  if (!v) return null;
+  const t = new Date(String(v)).getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
+function SortTh({ label, col, sort, onSort }: { label: string; col: string; sort: SortState; onSort: (key: string) => void }) {
+  const active = sort?.key === col;
+  return (
+    <th className="p-2" aria-sort={active ? (sort!.dir === "asc" ? "ascending" : "descending") : "none"}>
+      <button type="button"
+        className={cn("inline-flex items-center gap-0.5 rounded text-xs hover:text-foreground", active ? "font-semibold text-foreground" : "text-muted-foreground")}
+        onClick={() => onSort(col)}
+        title={`Sort by ${label}`}>
+        {label}
+        <span aria-hidden className="w-2 text-[10px]">{active ? (sort!.dir === "asc" ? "▲" : "▼") : ""}</span>
+      </button>
+    </th>
+  );
+}
+
+function sortedBy<T>(rows: T[], sort: SortState, getVal: (r: T) => SortValue): T[] {
+  if (!sort) return rows;
+  const dir = sort.dir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const va = getVal(a), vb = getVal(b);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1; // empty values always sink to the bottom
+    if (vb == null) return -1;
+    if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+    return String(va).localeCompare(String(vb), undefined, { sensitivity: "base", numeric: true }) * dir;
+  });
+}
+
+function rowSearchText(r: Row, cats?: CategoryOption[] | null): string {
+  return [
+    pick(r, "product_name"),
+    pick(r, "manufacturer", "registrant"),
+    pick(r, "country_code", "country"),
+    v3CategoryLabel(r, cats) ?? pick(r, "product_category"),
+    pick(r, "requested_by_name", "requester_name", "created_by_name", "user_name", "requested_by_email", "requester_email", "created_by_email", "user_email"),
+    pick(r, "vineyard_name", "requested_vineyard_name", "source_vineyard_name"),
+  ].filter((v) => v != null && String(v).trim() !== "").join(" ").toLowerCase();
+}
+
+const REVIEW_COLUMNS = ["Product", "Manufacturer", "Country", "Category", "Core complete", "Vineyard rates", "Manufacturer label", "Front label", "Warnings", "Unresolved", "Age", "Added by"] as const;
+const REVIEW_SORT_GETTERS: Record<string, (r: Row, cats: CategoryOption[] | undefined) => SortValue> = {
+  Product: (r) => pick(r, "product_name") ?? null,
+  Manufacturer: (r) => pick(r, "manufacturer") ?? null,
+  Country: (r) => pick(r, "country_code", "country") ?? null,
+  Category: (r, cats) => v3CategoryLabel(r, cats) ?? pick(r, "product_category") ?? null,
+  "Core complete": (r) => (r.core_fields_complete ? "Yes" : "No"),
+  "Vineyard rates": (r) => humaniseStage(pick(r, "vineyard_rate_status")) || null,
+  "Manufacturer label": (r) => humaniseStage(pick(r, "manufacturer_label_status")) || (pick(r, "manufacturer_label_url") ? "Present" : null),
+  "Front label": (r) => humaniseStage(pick(r, "front_label_status")) || (pick(r, "front_label_image_path") ? "Present" : null),
+  Warnings: (r) => asList(pick(r, "warnings")).length || Number(pick(r, "warning_count")) || 0,
+  Unresolved: (r) => asList(pick(r, "unresolved_fields")).length || Number(pick(r, "unresolved_count")) || 0,
+  Age: (r) => dateSortValue(pick(r, "created_at")),
+  "Added by": (r) => pick(r, "requested_by_name", "requester_name", "created_by_name", "user_name", "requested_by_email", "requester_email", "created_by_email", "user_email") ?? null,
+};
+
+const APPROVED_COLUMNS = ["Product", "Manufacturer", "Country", "Category", "Resistance group", "Approved date", "Last verified", "Warnings", "Front label"] as const;
+const APPROVED_SORT_GETTERS: Record<string, (r: Row, cats: CategoryOption[] | undefined) => SortValue> = {
+  Product: (r) => pick(r, "product_name") ?? null,
+  Manufacturer: (r) => pick(r, "manufacturer", "registrant") ?? null,
+  Country: (r) => pick(r, "country_code", "country") ?? null,
+  Category: (r, cats) => v3CategoryLabel(r, cats) ?? pick(r, "product_category") ?? null,
+  "Resistance group": (r) => {
+    const res = readV3Resistance(r);
+    return res.state === "not_applicable" ? null : res.state === "classified" ? formatV3Resistance(res) : "Group unresolved";
+  },
+  "Approved date": (r) => dateSortValue(pick(r, "approved_at")),
+  "Last verified": (r) => dateSortValue(pick(r, "last_verified_at")),
+  Warnings: (r) => asList(pick(r, "warnings")).length || Number(pick(r, "warning_count")) || 0,
+};
+
 const STATUS_CLASS = {
   ok: "border-success/40 bg-success/10",
   review: "border-warning/50 bg-warning/10",
