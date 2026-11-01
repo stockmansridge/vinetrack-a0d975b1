@@ -47,6 +47,7 @@ import { fetchProductCategories, isV3Addable, setV3ProductCategory, v3CategoryLa
 import { V3AddToVineyardButton } from "@/components/chemicals/V3AddToVineyardDialog";
 import { V3ResistanceBadge, V3ResistanceField } from "@/components/chemicals/V3ResistanceField";
 import { V3IngredientsField } from "@/components/chemicals/V3IngredientsField";
+import { refreshCatalogueCopies } from "@/lib/chemicalCatalogueFreshness";
 import { isV3ResistanceEditable, setV3ResistanceGroups, readV3Resistance, formatV3Resistance, type V3ResistanceDraft } from "@/lib/chemicalV3Resistance";
 
 function useCategories() {
@@ -325,8 +326,9 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
       if (!revisionId) throw new Error("No revision selected.");
       return approveV3(revisionId, note);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       refreshAfterReview();
+      await refreshCatalogueCopies(qc);
       toast.success(APPROVED_TOAST); onApproved?.(); setMsg(null);
     },
     onError: (e: any) => {

@@ -1,10 +1,15 @@
 # Roadmap
 
+## Catalogue automatic sync follow-up
+- [x] Replace obsolete manual update dependency with automatic/current or local-copy review status; refresh saved/catalogue reads on open, refresh and successful approval without hydrating unsaved edits.
+- [x] Focused tests: freshness 15/15, reference 24/24, editor 5/5, approved review 17/17, list 5/6 (66 pass, 1 fail). The list's unchanged explicit-column assertion also fails on isolated starting version 57fdd22b (5/6); both test and display source hashes match. Automatic compilation build OK; no customer writes or Trip changes, unpublished.
+- [ ] Signed-in QA — session mint has no managed auth users; actual chemical-page access redirected to /login. Shared-vineyard authenticated preview required before publication.
+
 ## Bounded linked catalogue freshness
 - [x] Add exact-id saved/current-approved revision comparison in editor/details and user-facing disabled update flow; scoped saved-row read detects version changes without mutating operator fields/history. Approved reference and saved-link checks refresh while open.
 - [x] Audit source-backed candidate RPCs and parallel Trip controls without writes; no verified member-scoped optimistic catalogue update or safe atomic Trip end contract found. Exact server requirements in docs/chemical-catalogue-linked-update-contract.md; Trip end remains disabled with no Trip code changes.
 - [x] Focused tests 56/56: chemicalCatalogueFreshness 10, chemicalCatalogueReference 24, chemicalEditorEditMode 5, tripManagement 17. Automatic preview build OK; exact JSX diff inspected. Preview /trips settles at /login; no customer mutations or publication.
-- [ ] Verify deployed shared catalogue-update and safe Trip-end function definitions/permissions and current September 24 Trip status — blocked on authenticated shared-backend read access and verified contracts. Enable update only after server CAS/preservation acceptance; no write RPC invented.
+- [x] Catalogue blocker superseded by owner-verified private approval auto-sync deployment; no client update RPC required. Portal follow-up recorded above. The separate Trip-end/status blocker remains unchanged below.
 
 ## Bounded Trip management correction
 - [x] Audit repository lifecycle, member/access reads and tank/spray contracts without live writes; admin force-stop resets tank pointers and lacks pending-device/occurrence conflict proof, so it is not a safe member end API.

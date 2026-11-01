@@ -89,6 +89,7 @@ import { ChemicalLabelThumb, UsedForCell } from "@/components/chemicals/Chemical
 import { useV3RevisionDisplay, v3RevisionIdOf, usedForOf, productLinkOf } from "@/lib/chemicalV3Display";
 import { Link } from "react-router-dom";
 import { ChemicalImportExport } from "@/components/chemicals/ChemicalImportExport";
+import { refreshCatalogueCopies } from "@/lib/chemicalCatalogueFreshness";
 
 // The legacy free-text `chemical_group` column is no longer displayed — the
 // structured resistance group is the single visible authority. The value is
@@ -227,7 +228,11 @@ export default function SavedChemicalsPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["saved_chemicals", selectedVineyardId, "active"],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchSavedChemicalsForVineyard(selectedVineyardId!),
+    refetchOnMount: "always",
+    queryFn: () => {
+      if (!selectedVineyardId) throw new Error("Select a vineyard.");
+      return fetchSavedChemicalsForVineyard(selectedVineyardId);
+    },
   });
   const chemicals = data?.chemicals ?? [];
   // Catalogue revision display metadata (image, label links, vineyard uses) —
@@ -239,7 +244,11 @@ export default function SavedChemicalsPage() {
   const archivedQuery = useQuery({
     queryKey: ["saved_chemicals", selectedVineyardId, "archived"],
     enabled: !!selectedVineyardId && tab === "archived",
-    queryFn: () => fetchSavedChemicalsForVineyard(selectedVineyardId!, { archived: true }),
+    refetchOnMount: "always",
+    queryFn: () => {
+      if (!selectedVineyardId) throw new Error("Select a vineyard.");
+      return fetchSavedChemicalsForVineyard(selectedVineyardId, { archived: true });
+    },
   });
   const archived = archivedQuery.data?.chemicals ?? [];
 
@@ -487,6 +496,7 @@ export default function SavedChemicalsPage() {
       <div className="space-y-5">
         <div className="min-h-14 space-y-1">
           <h1 className="text-2xl font-semibold">Chemicals</h1>
+          <Button size="sm" variant="outline" disabled={!selectedVineyardId || isLoading} onClick={() => void refreshCatalogueCopies(qc, selectedVineyardId)}>Refresh chemicals</Button>
           <p className="text-sm text-muted-foreground">
             {canEdit ? "Owner/Manager can add, edit and archive vineyard chemicals." : "Read-only view."}
             {" "}Soft-deleted records are excluded.

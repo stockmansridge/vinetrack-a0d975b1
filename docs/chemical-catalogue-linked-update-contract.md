@@ -1,6 +1,14 @@
-# Linked vineyard catalogue update — blocked, unpublished
+# Linked vineyard catalogue update — automatic backend deployed, Portal unpublished
 
-## Evidence and current Portal behaviour
+## Current authoritative contract (owner verified)
+
+Migration `chemical_v3_advance_approved_linked_vineyard_copies_20261102` is deployed. A private, no-client-access approval trigger advances older same-product copies only when saved rates and registered uses equal the previous catalogue and no unsynced client revision is detected. It preserves vineyard preferred rates, notes, inventory and historical sprays and writes an internal audit record. No client update RPC is needed or requested for normal copies. Do not recreate this migration or enable direct client updates.
+
+The owner verified a guarded backfill of JH Testing THIOVIT Jet 1→2, MIRAVIS 1→3 and Kocide Blue Xtra 1→4, with zero remaining approved-revision mismatches. Portal rereads scoped saved links and refreshes saved/catalogue caches on opening, explicit refresh and successful approval. A current stored link is shown as automatically synchronised even when the opening snapshot was older. Remaining different links show review required for customised/unsynced local fields, without overwriting them or treating older saved rates as current approved rates. Device availability is on the next sync; no dose is selected from a label range. Signed-in QA is still required before publication.
+
+The sections below are retained as historical pre-deployment investigation only, not a proposal to add another RPC or weaken the deployed trigger.
+
+## Historical evidence and previous Portal behaviour
 
 Owner read-only evidence: THIOVIT Jet product `d0c15ce7-aead-4ccb-870f-2fa3def36b43` has approved revision `3588437b-1a4a-4c8a-8038-deba45b5f731`; JH Testing's saved copy points to superseded revision `e310e341-7fc5-4f59-a2da-30efdd0f330e` with empty rates. The approved reference has 200–600 g/100L powdery mildew and 600 g/100L bud mite options. Showing these references in Portal does not update the stored mobile copy.
 

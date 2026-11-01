@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fetchCatalogueFreshness } from "@/lib/chemicalCatalogueFreshness";
+import { fetchCatalogueFreshness, refreshCatalogueCopies } from "@/lib/chemicalCatalogueFreshness";
 import { CatalogueLinkFreshness } from "@/components/chemicals/CatalogueLinkFreshness";
 import { useCatalogueReference } from "@/lib/chemicalCatalogueReference";
 
@@ -55,7 +55,7 @@ function wrap() {
 }
 describe("linked catalogue freshness", () => {
   it("detects old superseded to current approved with an exact scoped read", async () => {
-    expect(await fetchCatalogueFreshness(saved, "v1", ref)).toEqual({ state: "update_available", savedRevisionId: oldId, approvedRevisionId: newId, savedRevisionStatus: "superseded" });
+    expect(await fetchCatalogueFreshness(saved, "v1", ref)).toEqual({ state: "review_required", savedRevisionId: oldId, approvedRevisionId: newId, savedRevisionStatus: "superseded" });
     expect(db.filters).toContain("saved_chemicals:vineyard_id:v1");
   });
   it("same revision is a read-only no-op", async () => {
@@ -78,7 +78,7 @@ describe("linked catalogue freshness", () => {
   });
   it("detects newer user edits instead of offering an update", async () => {
     db.rows.saved_chemicals.c1 = { ...saved, sync_version: 5, notes: "Newer edit" };
-    expect((await fetchCatalogueFreshness(saved, "v1", ref)).state).toBe("changed");
+    expect((await fetchCatalogueFreshness(saved, "v1", ref)).state).toBe("review_required");
     expect(db.rows.saved_chemicals.c1.notes).toBe("Newer edit");
   });
   it("never alters notes, preferred/default selections, empty rates, archive or purchase history", async () => {
@@ -89,13 +89,12 @@ describe("linked catalogue freshness", () => {
     expect(db.rows.saved_chemicals.c1.rates.per_100_litres).toEqual([]);
     expect(db.writes).not.toHaveBeenCalled();
   });
-  it("shows both revision identities and keeps update disabled without a verified RPC", async () => {
+  it("shows both revision identities and review for skipped copies without a manual update", async () => {
     wrap();
-    const action = await screen.findByRole("button", { name: "Update linked VineTrack catalogue information" });
-    expect(action).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
     expect(screen.getByText(oldId, { exact: false }).textContent).toContain("Saved vineyard revision");
     expect(screen.getByText(newId, { exact: false }).textContent).toContain("Current approved catalogue revision");
-    fireEvent.click(action);
+    expect(screen.queryByRole("button", { name: /Update linked/ })).toBeNull();
     expect(db.writes).not.toHaveBeenCalled();
   });
   it("pending product refuses an update and no approved link is rendered", async () => {
@@ -107,10 +106,53 @@ describe("linked catalogue freshness", () => {
   });
   it("failed cached refetch removes the update rather than showing stale approval", async () => {
     const { client } = wrap();
-    await screen.findByRole("button", { name: "Update linked VineTrack catalogue information" });
+    await screen.findByRole("alert");
     db.error = true;
     await client.invalidateQueries({ queryKey: ["chemical-catalogue-reference"] });
     await waitFor(() => expect(screen.queryByTestId("catalogue-link-freshness")).toBeNull());
     expect(db.writes).not.toHaveBeenCalled();
+  });
+  it("uses the fresh automatically advanced link despite an older opening snapshot", async () => {
+    db.rows.saved_chemicals.c1 = { ...saved, chemical_v3_revision_id: newId, sync_version: 5 };
+    expect((await fetchCatalogueFreshness(saved, "v1", ref)).state).toBe("current");
+    wrap();
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    await waitFor(() => expect(screen.getByTestId("catalogue-link-freshness").textContent).toContain("automatically synchronised"));
+    expect(screen.queryByText(oldId, { exact: false })).toBeNull();
+    expect(db.writes).not.toHaveBeenCalled();
+  });
+  it("refresh reads the auto-synced row and leaves notes/rates unmodified", async () => {
+    wrap();
+    await screen.findByRole("alert");
+    db.rows.saved_chemicals.c1 = { ...saved, chemical_v3_revision_id: newId, sync_version: 5 };
+    const before = structuredClone(db.rows);
+    fireEvent.click(screen.getByRole("button", { name: "Refresh catalogue status" }));
+    await waitFor(() => expect(screen.getByTestId("catalogue-link-freshness").textContent).toContain("automatically synchronised"));
+    expect(db.rows).toEqual(before);
+    expect(db.writes).not.toHaveBeenCalled();
+  });
+  it("invalidates every vineyard copy and reference cache after approval", async () => {
+    const client = new QueryClient();
+    for (const key of [["saved_chemicals", "v1", "active"], ["saved_chemicals", "v2", "archived"], ["chemical-catalogue-reference", "v2"], ["chemical-catalogue-freshness", "v1"], ["v3-revision-display", [oldId]]]) client.setQueryData(key, { confirmed: true });
+    await refreshCatalogueCopies(client);
+    for (const query of client.getQueryCache().getAll()) expect(query.state.isInvalidated).toBe(true);
+    expect(db.writes).not.toHaveBeenCalled();
+  });
+  it("scopes manual refresh to the selected vineyard's saved copies", async () => {
+    const client = new QueryClient();
+    client.setQueryData(["saved_chemicals", "v1", "active"], []);
+    client.setQueryData(["saved_chemicals", "v2", "active"], []);
+    await refreshCatalogueCopies(client, "v1");
+    expect(client.getQueryState(["saved_chemicals", "v1", "active"])?.isInvalidated).toBe(true);
+    expect(client.getQueryState(["saved_chemicals", "v2", "active"])?.isInvalidated).toBe(false);
+  });
+  it("failed saved-link refetch does not label cached current data current", async () => {
+    db.rows.saved_chemicals.c1 = { ...saved, chemical_v3_revision_id: newId };
+    const { client } = wrap();
+    await waitFor(() => expect(screen.getByTestId("catalogue-link-freshness").textContent).toContain("automatically synchronised"));
+    db.error = true;
+    await client.invalidateQueries({ queryKey: ["chemical-catalogue-freshness"] });
+    await screen.findByRole("alert");
+    expect(screen.getByTestId("catalogue-link-freshness").textContent).not.toContain("automatically synchronised");
   });
 });
