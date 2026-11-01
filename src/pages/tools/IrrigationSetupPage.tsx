@@ -77,6 +77,12 @@ import {
 import { ValveRowSelector } from "@/components/irrigation/ValveRowSelector";
 import ValveImportDialog from "@/components/irrigation/ValveImportDialog";
 import { MaitControllerCard } from "@/components/mait/MaitControllerCard";
+import {
+  areaError,
+  haTextFromM2,
+  isAreaTypingAllowed,
+  servicedAreaM2ForSave,
+} from "@/lib/irrigationServicedArea";
 
 
 function useBlocks(vineyardId: string | null) {
