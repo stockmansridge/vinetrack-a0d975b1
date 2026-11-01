@@ -1,7 +1,7 @@
 # Roadmap
 
 ## Chemical approval active ingredients
-- [ ] Add compact multi-ingredient editor, validation and RPC-only save/read-back confirmation; preserve existing approval and catalogue flows.
+- [x] Add compact multi-ingredient editor, validation and RPC-only save/read-back confirmation; preserve existing approval and catalogue flows. Live saving remains disabled.
 - [ ] Run focused ingredient/approval tests and check automatic preview compilation.
 - [ ] Enable live saving only after shared-backend `chemical_v3_admin_set_active_ingredients` deployment, audit/security verification and signed-in save/reload/approval acceptance; blocked on shared-backend deployment access and authoritative existing audit/promotion contract.
 

@@ -70,7 +70,7 @@ describe("Chemical V3 ingredient correction", () => {
     expect(V3_INGREDIENT_SAVING_ENABLED).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Add ingredients" }));
     fireEvent.change(screen.getByLabelText("Ingredient 1 name"), { target: { value: "Sulphur" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add ingredient", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: /^Add ingredient$/ }));
     expect(screen.getByLabelText("Ingredient 2 concentration")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Remove ingredient 2" }));
     expect(screen.queryByLabelText("Ingredient 2 concentration")).toBeNull();
