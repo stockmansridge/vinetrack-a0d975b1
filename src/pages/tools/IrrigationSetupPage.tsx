@@ -1351,6 +1351,7 @@ function ConnectionsTab({
   const save = useSetValveBlocks(vineyardId);
   const [method, setMethod] = useState<AllocationMethod>("manual_percentage");
   const [draft, setDraft] = useState<Record<string, DraftRow>>({});
+  const [areaText, setAreaText] = useState<Record<string, string>>({});
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [rowsDirty, setRowsDirty] = useState(false);
 
@@ -1402,6 +1403,11 @@ function ConnectionsTab({
       };
     }
     setDraft(next);
+    setAreaText(
+      Object.fromEntries(
+        Object.values(next).map((r) => [r.block_id, haTextFromM2(r.serviced_area_m2)]),
+      ),
+    );
     setLoadedFor(valveId);
   }
 
@@ -1410,11 +1416,16 @@ function ConnectionsTab({
   const percentTotal = selected.reduce((sum, r) => sum + (r.allocation_percentage ?? 0), 0);
   const manual = method === "manual_percentage";
   const rowsMode = method === "rows";
+  const areaRequired = method === "irrigated_area";
+  const areaErrors: Record<string, string | null> = {};
+  for (const r of selected) areaErrors[r.block_id] = areaError(areaText[r.block_id] ?? "", method);
+  const areaInvalid = selected.some((r) => areaErrors[r.block_id]);
 
   const patch = (id: string, values: Partial<DraftRow>) =>
     setDraft((d) => ({ ...d, [id]: { ...d[id], ...values } }));
 
   const submit = async () => {
+    if (areaInvalid) return;
     try {
       await save.mutateAsync({
         valve_id: valveId,
@@ -1422,7 +1433,7 @@ function ConnectionsTab({
           block_id: r.block_id,
           allocation_method: method,
           allocation_percentage: manual ? r.allocation_percentage : null,
-          serviced_area_m2: r.serviced_area_m2 ?? null,
+          serviced_area_m2: servicedAreaM2ForSave(areaText[r.block_id] ?? ""),
           serviced_vine_count: r.serviced_vine_count ?? null,
           serviced_emitter_count: r.serviced_emitter_count ?? null,
         })),
@@ -1600,24 +1611,28 @@ function ConnectionsTab({
         {valveId && !rowsMode && (
           <>
             <div className="rounded-lg border border-border">
-              <div className="grid grid-cols-[auto_1fr_repeat(3,minmax(0,120px))] gap-2 border-b border-border bg-muted/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="grid grid-cols-[auto_1fr_repeat(4,minmax(0,120px))] gap-2 border-b border-border bg-muted/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 <span />
                 <span>Block</span>
                 <span>%</span>
+                <span>Area (ha)</span>
                 <span>Vines</span>
                 <span>Emitters</span>
               </div>
-              {rows.map((r) => (
+              {rows.map((r) => {
+                const err = r.selected ? areaErrors[r.block_id] : null;
+                return (
                 <div
                   key={r.block_id}
-                  className="grid grid-cols-[auto_1fr_repeat(3,minmax(0,120px))] items-center gap-2 border-b border-border px-3 py-2 last:border-0"
+                  className="grid grid-cols-[auto_1fr_repeat(4,minmax(0,120px))] items-start gap-2 border-b border-border px-3 py-2 last:border-0"
                 >
                   <Checkbox
                     checked={r.selected}
                     onCheckedChange={(c) => patch(r.block_id, { selected: !!c })}
                     aria-label={`Include ${r.block_name}`}
+                    className="mt-2"
                   />
-                  <span className="truncate text-sm">{r.block_name}</span>
+                  <span className="truncate pt-1.5 text-sm">{r.block_name}</span>
                   <Input
                     inputMode="decimal"
                     disabled={!r.selected || !manual}
@@ -1627,6 +1642,23 @@ function ConnectionsTab({
                     }
                     className="h-8"
                   />
+                  <div>
+                    <Input
+                      inputMode="decimal"
+                      disabled={!r.selected}
+                      aria-label={`Irrigated area (ha) for ${r.block_name}`}
+                      aria-invalid={!!err}
+                      placeholder={areaRequired ? "Required" : "Optional"}
+                      value={areaText[r.block_id] ?? ""}
+                      onChange={(e) => {
+                        const t = e.target.value;
+                        if (!isAreaTypingAllowed(t)) return;
+                        setAreaText((a) => ({ ...a, [r.block_id]: t }));
+                      }}
+                      className={`h-8 ${err ? "border-destructive" : ""}`}
+                    />
+                    {err && <p className="mt-0.5 text-[11px] text-destructive">{err}</p>}
+                  </div>
                   <Input
                     inputMode="numeric"
                     disabled={!r.selected}
@@ -1646,7 +1678,8 @@ function ConnectionsTab({
                     className="h-8"
                   />
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {manual && selected.length > 0 && Math.abs(percentTotal - 100) > 0.05 && (
@@ -1663,9 +1696,19 @@ function ConnectionsTab({
                 description="Percentages are derived on the server from the selected measure. Leave the % column blank."
               />
             )}
+            {areaRequired && (
+              <PortalNotice
+                compact
+                variant="info"
+                description="Enter the irrigated area in hectares for every selected block. Block map area is not used automatically."
+              />
+            )}
 
             <div className="flex justify-end">
-              <Button onClick={submit} disabled={save.isPending || selected.length === 0}>
+              <Button
+                onClick={submit}
+                disabled={save.isPending || selected.length === 0 || areaInvalid}
+              >
                 {save.isPending ? "Saving…" : "Save connections"}
               </Button>
             </div>
