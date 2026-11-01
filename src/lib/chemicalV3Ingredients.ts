@@ -2,8 +2,8 @@ import { supabase } from "@/integrations/ios-supabase/client";
 import { asList, fetchV3Revision, isV3RevisionEditable, pick } from "@/lib/chemicalV3";
 
 export const V3_INGREDIENT_RPC = "chemical_v3_admin_set_active_ingredients";
-// Release only after shared-backend deployment + signed-in save/reload/approval acceptance.
-export const V3_INGREDIENT_SAVING_ENABLED = false;
+// Shared-vineyard RPC deployment confirmed by the backend owner.
+export const V3_INGREDIENT_SAVING_ENABLED = true;
 export interface IngredientDraft {
   name: string;
   concentration: string;
@@ -53,12 +53,15 @@ function equalJson(a: unknown, b: unknown): boolean {
 /** RPC only; a successful HTTP response is not proof of a saved revision. */
 export async function saveAndConfirmV3Ingredients(revisionId: string, drafts: IngredientDraft[]) {
   const ingredients = buildIngredients(drafts);
-  const { error } = await supabase.rpc(V3_INGREDIENT_RPC, {
+  const { data: savedIngredients, error } = await supabase.rpc(V3_INGREDIENT_RPC, {
     p_revision_id: revisionId, p_active_ingredients: ingredients,
   });
   if (error) throw error;
+  if (!Array.isArray(savedIngredients)) {
+    throw new Error("Saved ingredients could not be confirmed. Reload and verify this revision before approving.");
+  }
   const revision = await fetchV3Revision(revisionId);
-  if (!revision || revision.id !== revisionId || !isV3RevisionEditable(revision.review_status) || !equalJson(revision.active_ingredients, ingredients)) {
+  if (!revision || revision.id !== revisionId || !isV3RevisionEditable(revision.review_status) || !equalJson(revision.active_ingredients, savedIngredients)) {
     throw new Error("Saved ingredients could not be confirmed. Reload and verify this revision before approving.");
   }
   return revision;

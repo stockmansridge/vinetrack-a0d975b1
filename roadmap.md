@@ -1,9 +1,11 @@
 # Roadmap
 
 ## Chemical approval active ingredients
-- [x] Add compact multi-ingredient editor, validation and RPC-only save/read-back confirmation; preserve existing approval and catalogue flows. Live saving remains disabled.
-- [x] Focused tests: 55/55 across five ingredient/approval/search-sort files; final ingredient file rerun 17/17 after test typing correction. Automatic preview build OK. No live save/reload/approval verification; shared-backend access unavailable.
-- [ ] Enable live saving only after shared-backend `chemical_v3_admin_set_active_ingredients` deployment, audit/security verification and signed-in save/reload/approval acceptance; blocked on shared-backend deployment access and authoritative existing audit/promotion contract.
+- [x] Backend owner confirmed ingredient RPC deployment, System Admin/editable-status restrictions, validation, issue resolution and audit logging.
+- [x] Enable RPC-only saving with concentration_unit and normalized-response revision read-back; preserve existing approval/promotion and block unsaved/unconfirmed changes.
+- [ ] Run focused ingredient/approval tests and check automatic preview compilation.
+- [ ] Signed-in System Admin save/reload/approval and live promotion acceptance — blocked: preview session mint has no managed auth users; Portal uses the separate shared-vineyard authentication client.
+- [ ] Publish after signed-in verification passes — blocked on the acceptance check above; no publication requested yet.
 
 ## Yields variety density
 - [x] Add t/ha beside variety totals and each block/planting tonnage using existing allocated hectares; variety density = sum yield / sum area, unavailable for missing yield or invalid area. 16 focused tests passed; preview build OK. No backend changes or publication; authenticated live-vineyard visual acceptance remains unavailable.
