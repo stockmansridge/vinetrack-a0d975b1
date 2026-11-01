@@ -3,7 +3,7 @@
 ## Chemical approval active ingredients
 - [x] Backend owner confirmed ingredient RPC deployment, System Admin/editable-status restrictions, validation, issue resolution and audit logging.
 - [x] Enable RPC-only saving with concentration_unit and normalized-response revision read-back; preserve existing approval/promotion and block unsaved/unconfirmed changes.
-- [ ] Run focused ingredient/approval tests and check automatic preview compilation.
+- [x] Focused tests passed: ingredients 22/22, approval panel 3/3, approved review 17/17, search/sort 8/8 (50 total); automatic preview build OK. Browser access check redirected to /login. No live mutations or promotion verification performed.
 - [ ] Signed-in System Admin save/reload/approval and live promotion acceptance — blocked: preview session mint has no managed auth users; Portal uses the separate shared-vineyard authentication client.
 - [ ] Publish after signed-in verification passes — blocked on the acceptance check above; no publication requested yet.
 
