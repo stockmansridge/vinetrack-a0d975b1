@@ -121,7 +121,7 @@ describe("Chemical V3 ingredient correction", () => {
     for (const key of [["chemical-v3-issues", "rev"], ["chemical-v3-queue"], ["chemical-v3-approved"]]) expect(invalidate).toHaveBeenCalledWith({ queryKey: key });
     expect(blocked).toHaveBeenLastCalledWith(false);
     await approveV3("rev", "Reviewed label ingredients");
-    expect(rpc).toHaveBeenLastCalledWith("chemical_v3_approve_revision", { p_revision_id: "rev", p_note: "Reviewed label ingredients" });
+    expect(rpc).toHaveBeenLastCalledWith("approve_chemical_v3_revision", { p_revision_id: "rev", p_note: "Reviewed label ingredients" });
   });
   it("persists deliberate edits and removal, including removing the last ingredient", async () => {
     const { client } = wrap(true, ingredients);
