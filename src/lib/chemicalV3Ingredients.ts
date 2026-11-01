@@ -30,7 +30,7 @@ export function buildIngredients(drafts: IngredientDraft[]): Record<string, unkn
     }
     if (!d.unit.trim()) throw new Error(`Ingredient ${index + 1}: enter the label concentration unit.`);
     // Preserve extra label/provenance keys; update existing aliases rather than discard them.
-    const row = { ...d.original, name: d.name.trim(), concentration, concentration_unit: d.unit.trim() };
+    const row: Record<string, unknown> = { ...d.original, name: d.name.trim(), concentration, concentration_unit: d.unit.trim() };
     for (const key of ["active_ingredient", "ingredient", "active_name", "label"]) {
       if (key in d.original) row[key] = d.name.trim();
     }
