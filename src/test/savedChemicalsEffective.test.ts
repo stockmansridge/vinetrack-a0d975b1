@@ -77,7 +77,7 @@ describe("v3.1.9 effective catalogue boundary", () => {
   });
   it("unapproved fallback retains original evidence without displaying a pinned revision as current approval", async () => {
     h.products[0].status = "rejected";
-    h.rows = [{ ...row, effective_catalogue_revision_id: null, rates: { per_100_litres: [] }, registered_uses: [] }];
+    h.rows = [{ ...row, effective_catalogue_revision_id: "e310", rates: { per_100_litres: [] }, registered_uses: [] }];
     const result = await fetchSavedChemicalsForVineyard("v1");
     expect(result.chemicals[0].rates.per_100_litres).toEqual([]);
     expect(v3RevisionIdOf(result.chemicals[0])).toBeNull();
@@ -91,5 +91,16 @@ describe("v3.1.9 effective catalogue boundary", () => {
     const chosen = productLineFromChemical({ savedChemicalId: "c1", productName: row.name, unit: "g", intelligence: toChemicalIntelligence(row) });
     expect(chosen.rate).toBe(300);
     expect(chosen.rateBasis).toBe("per_100_litres");
+  });
+  it("fails closed offline without reading or treating cached catalogue evidence as current", async () => {
+    const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    try {
+      await expect(fetchSavedChemicalsForVineyard("v1")).rejects.toThrow("offline");
+      expect(h.calls).toEqual([]);
+    } finally { online.mockRestore(); }
+  });
+  it("fails closed when an approved product and effective revision disagree", async () => {
+    h.products[0].approved_revision_id = "newer";
+    await expect(fetchSavedChemicalsForVineyard("v1")).rejects.toThrow("could not be confirmed");
   });
 });
