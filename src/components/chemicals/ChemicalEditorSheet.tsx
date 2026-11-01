@@ -68,6 +68,7 @@ import {
 import { DefaultRatesCard } from "@/components/chemicals/DefaultRatesCard";
 import { CatalogueIdentityBadge, CatalogueReferenceSection, CatalogueChemistrySection } from "@/components/chemicals/CatalogueReference";
 import { catalogueLinkOf, useCatalogueReference, intelligenceDraftUnchanged } from "@/lib/chemicalCatalogueReference";
+import { CatalogueLinkFreshness } from "@/components/chemicals/CatalogueLinkFreshness";
 import {
   PREFERRED_RATE_HELPER,
   PREFERRED_RATE_UNITS,
@@ -1259,6 +1260,7 @@ export function ChemicalEditor({
                   product label, Chemical Search, label extraction). */}
               {catalogueLinked && (
                 <Section title="Catalogue rates">
+                  <CatalogueLinkFreshness row={initial} query={catalogueQ} open={open} vineyardId={vineyardId} />
                   <CatalogueReferenceSection query={catalogueQ} />
                 </Section>
               )}

@@ -9,6 +9,7 @@
 // never rendered as zero and a missing restriction is never "No restrictions".
 import { CatalogueIdentityBadge, CatalogueReferenceSection } from "@/components/chemicals/CatalogueReference";
 import { catalogueLinkOf, useCatalogueReference } from "@/lib/chemicalCatalogueReference";
+import { CatalogueLinkFreshness } from "@/components/chemicals/CatalogueLinkFreshness";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -367,6 +368,7 @@ export function ChemicalIntelligenceDialog({
         {catalogueLinkOf(row) && (
           <section className="space-y-2 rounded border p-3" data-testid="catalogue-reference-detail">
             <h3 className="text-sm font-semibold">Catalogue rates</h3>
+            <CatalogueLinkFreshness row={row} query={catalogueQ} open={open} />
             <CatalogueReferenceSection query={catalogueQ} />
           </section>
         )}
