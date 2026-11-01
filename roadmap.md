@@ -1,5 +1,10 @@
 # Roadmap
 
+## Catalogue automatic sync follow-up
+- [ ] Replace obsolete manual update dependency with automatic/current or local-copy review status; refresh saved/catalogue reads on open, refresh and successful approval without hydrating unsaved edits.
+- [ ] Run focused catalogue/reference/list/editor tests and check automatic compilation; remain unpublished with no customer writes or Trip changes.
+- [ ] Signed-in QA — requires shared-vineyard authenticated preview access.
+
 ## Bounded linked catalogue freshness
 - [x] Add exact-id saved/current-approved revision comparison in editor/details and user-facing disabled update flow; scoped saved-row read detects version changes without mutating operator fields/history. Approved reference and saved-link checks refresh while open.
 - [x] Audit source-backed candidate RPCs and parallel Trip controls without writes; no verified member-scoped optimistic catalogue update or safe atomic Trip end contract found. Exact server requirements in docs/chemical-catalogue-linked-update-contract.md; Trip end remains disabled with no Trip code changes.
