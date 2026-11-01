@@ -25,7 +25,7 @@ export interface V3RevisionDisplay {
 
 export function v3RevisionIdOf(row: any): string | null {
   const v = Object.prototype.hasOwnProperty.call(row ?? {}, "effective_catalogue_revision_id")
-    ? row.effective_catalogue_revision_id : row?.chemical_v3_revision_id;
+    ? row.catalogue_effective_approved === true ? row.effective_catalogue_revision_id : null : row?.chemical_v3_revision_id;
   return typeof v === "string" && v ? v : null;
 }
 

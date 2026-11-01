@@ -133,7 +133,7 @@ export async function addV3ToVineyard(a: AddToVineyardArgs): Promise<{ reused: b
 /** Badge for a vineyard chemical that came from V3. */
 export function v3EntryBadge(row: Row | null | undefined, rev?: Row | null): { label: string; tone: "pending" | "approved" } | null {
   if (row && Object.prototype.hasOwnProperty.call(row, "effective_catalogue_revision_id")) {
-    if (row.effective_catalogue_revision_id && (row.chemical_v3_product_id || row.chemical_v3_revision_id))
+    if (row.catalogue_effective_approved === true && row.effective_catalogue_revision_id && (row.chemical_v3_product_id || row.chemical_v3_revision_id))
       return { label: "VineTrack catalogue · automatically updated", tone: "approved" };
     if (row.chemical_v3_product_id || row.chemical_v3_revision_id)
       return { label: "Catalogue: not approved", tone: "pending" };

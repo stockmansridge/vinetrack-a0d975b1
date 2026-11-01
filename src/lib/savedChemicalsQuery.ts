@@ -64,6 +64,9 @@ export interface SavedChemical {
   chemical_v3_review_status_snapshot?: string | null;
   saved_catalogue_revision_id?: string | null;
   effective_catalogue_revision_id?: string | null;
+  /** Read-only client approval proof from the exact current product pointer. */
+  catalogue_effective_approved?: boolean;
+  vineyard_preferred_rate?: Record<string, unknown> | null;
   catalogue_snapshot_differs?: boolean | null;
   vineyard_rate_override_evidence?: unknown;
   vineyard_use_override_evidence?: unknown;
@@ -124,6 +127,18 @@ export async function fetchSavedChemicalsForVineyard(
   const chemicals = (res.data ?? []) as SavedChemical[];
   if (chemicals.some((c) => c.vineyard_id?.toLowerCase() !== vineyardId.toLowerCase() ||
     (opts.archived ? !c.deleted_at : !!c.deleted_at))) throw new Error("Chemical read returned an inconsistent vineyard scope.");
+  const productIds = [...new Set(chemicals.map((c) => c.chemical_v3_product_id).filter((id): id is string => !!id))];
+  if (productIds.length) {
+    const products = await (supabase as any).from("chemical_v3_products").select("id,status,approved_revision_id").in("id", productIds);
+    if (products.error) throw products.error;
+    const byId = new Map<string, any>((products.data ?? []).map((p: any) => [String(p.id).toLowerCase(), p]));
+    for (const chemical of chemicals) {
+      const product = byId.get(chemical.chemical_v3_product_id?.toLowerCase() ?? "");
+      chemical.catalogue_effective_approved = product?.status === "approved" && !!product.approved_revision_id &&
+        String(product.approved_revision_id).toLowerCase() === chemical.effective_catalogue_revision_id?.toLowerCase();
+      if (product?.status === "approved" && !chemical.catalogue_effective_approved) throw new Error("Current approved catalogue evidence could not be confirmed. Refresh before using rates.");
+    }
+  }
   return {
     chemicals,
     source: chemicals.length ? "vineyard_id" : "empty",
@@ -349,7 +364,7 @@ function sanitize(input: SavedChemicalInput, mode: "insert" | "update" = "insert
  */
 
 export async function createSavedChemical(vineyardId: string, input: SavedChemicalInput) {
-  if ("effective_catalogue_revision_id" in input || "saved_catalogue_revision_id" in input) throw new Error("An effective catalogue row cannot be written back.");
+  if ("effective_catalogue_revision_id" in input || "saved_catalogue_revision_id" in input || "catalogue_effective_approved" in input) throw new Error("An effective catalogue row cannot be written back.");
   const now = new Date().toISOString();
   const base = sanitize(input);
   const payload: Record<string, any> = {

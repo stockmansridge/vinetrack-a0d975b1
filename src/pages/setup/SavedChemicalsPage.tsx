@@ -467,7 +467,7 @@ export default function SavedChemicalsPage() {
             <div className="font-medium leading-tight">{fmt(c.name)}</div>
           )}
           <ProductPageLink c={c} rev={revOf(c)} />
-          {c.effective_catalogue_revision_id && <span className="text-[10px] text-muted-foreground">VineTrack catalogue · automatically updated</span>}
+          {c.catalogue_effective_approved === true && <span className="text-[10px] text-muted-foreground">VineTrack catalogue · automatically updated</span>}
           {(!!c.vineyard_rate_override_evidence || !!c.vineyard_use_override_evidence) && <span className="text-[10px] text-muted-foreground">Vineyard settings retained</span>}
           </div>
         </TableCell>

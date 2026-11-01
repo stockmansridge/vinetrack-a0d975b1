@@ -5,7 +5,7 @@ import { productLineFromChemical } from "@/lib/sprayApplicationDraft";
 import { v3RevisionIdOf } from "@/lib/chemicalV3Display";
 import { v3EntryBadge } from "@/lib/chemicalInventory";
 
-const h = vi.hoisted(() => ({ rows: [] as any[], error: null as any, calls: [] as any[], payload: null as any }));
+const h = vi.hoisted(() => ({ rows: [] as any[], products: [] as any[], error: null as any, calls: [] as any[], payload: null as any }));
 vi.mock("@/integrations/ios-supabase/client", () => ({ supabase: {
   from: (table: string) => {
     const filters: any[] = [];
@@ -14,10 +14,11 @@ vi.mock("@/integrations/ios-supabase/client", () => ({ supabase: {
       eq: (k: string, v: unknown) => { filters.push([k, v]); return q; },
       is: (k: string, v: unknown) => { filters.push([k, "is", v]); return q; },
       not: (k: string, op: string, v: unknown) => { filters.push([k, "not", op, v]); return q; },
+      in: (k: string, v: unknown) => { filters.push([k, "in", v]); return q; },
       update: (payload: any) => { if (table !== "saved_chemicals") throw new Error("View write"); h.payload = payload; return q; },
       insert: () => { throw new Error("Unexpected insert"); },
       single: async () => { h.calls.push({ table, filters, write: true }); return { data: { id: "c1" }, error: h.error }; },
-      then: (resolve: any) => { h.calls.push({ table, filters }); return Promise.resolve({ data: h.rows, error: h.error }).then(resolve); },
+      then: (resolve: any) => { h.calls.push({ table, filters }); return Promise.resolve({ data: table === "chemical_v3_products" ? h.products : h.rows, error: h.error }).then(resolve); },
     };
     return q;
   },
@@ -34,12 +35,12 @@ const row = {
   rates: { per_hectare: [], per_100_litres: rates }, active_ingredient: "Sulfur 800 g/kg", label_url: "https://example.test/approved.pdf",
   purchase: { costPerBaseUnit: 12 }, inventory_quantity: 5, default_rates: null,
 };
-beforeEach(() => { h.rows = [structuredClone(row)]; h.calls = []; h.error = null; h.payload = null; });
+beforeEach(() => { h.rows = [structuredClone(row)]; h.products = [{ id: "p1", status: "approved", approved_revision_id: "358" }]; h.calls = []; h.error = null; h.payload = null; });
 
 describe("v3.1.9 effective catalogue boundary", () => {
   it("reads the effective view only with vineyard and active tombstone filters; retains both Thiovit /100L options", async () => {
     const result = await fetchSavedChemicalsForVineyard("v1");
-    expect(h.calls).toEqual([{ table: "saved_chemicals_effective", filters: [["vineyard_id", "v1"], ["deleted_at", "is", null]] }]);
+    expect(h.calls[0]).toEqual({ table: "saved_chemicals_effective", filters: [["vineyard_id", "v1"], ["deleted_at", "is", null]] });
     expect(result.chemicals[0].rates.per_100_litres).toEqual(rates);
     const intel = toChemicalIntelligence(result.chemicals[0]);
     expect(intel.registeredUses[0].rates).toHaveLength(2);
@@ -75,6 +76,7 @@ describe("v3.1.9 effective catalogue boundary", () => {
     expect(h.calls.every((c) => c.table === "saved_chemicals_effective")).toBe(true);
   });
   it("unapproved fallback retains original evidence without displaying a pinned revision as current approval", async () => {
+    h.products[0].status = "rejected";
     h.rows = [{ ...row, effective_catalogue_revision_id: null, rates: { per_100_litres: [] }, registered_uses: [] }];
     const result = await fetchSavedChemicalsForVineyard("v1");
     expect(result.chemicals[0].rates.per_100_litres).toEqual([]);
@@ -88,6 +90,6 @@ describe("v3.1.9 effective catalogue boundary", () => {
     expect(line.rate).toBeNull();
     const chosen = productLineFromChemical({ savedChemicalId: "c1", productName: row.name, unit: "g", intelligence: toChemicalIntelligence(row) });
     expect(chosen.rate).toBe(300);
-    expect(chosen.rateBasis).toBe("per100L");
+    expect(chosen.rateBasis).toBe("per_100_litres");
   });
 });
