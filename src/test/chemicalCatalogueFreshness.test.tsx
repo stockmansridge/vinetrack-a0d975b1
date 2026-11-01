@@ -28,6 +28,8 @@ const oldId = "e310e341-7fc5-4f59-a2da-30efdd0f330e";
 const newId = "3588437b-1a4a-4c8a-8038-deba45b5f731";
 const saved = {
   id: "c1", vineyard_id: "v1", chemical_v3_product_id: productId, chemical_v3_revision_id: oldId,
+  effective_catalogue_revision_id: newId, saved_catalogue_revision_id: oldId,
+  vineyard_rate_override_evidence: true, vineyard_use_override_evidence: null,
   sync_version: 4, updated_at: "2026-11-01T00:00:00Z", notes: "Keep me", deleted_at: "2026-10-01T00:00:00Z",
   vineyard_preferred_rate: { amount: 300, unit: "g", basis: "per_100_litres" },
   default_rates: { version: 1, per_hectare: null, per_100_litres: { value: 400, source: "operator" } },
@@ -40,7 +42,7 @@ const ref = { state: "approved" as const, productId, revision };
 beforeEach(() => {
   db.error = false; db.filters = []; db.writes.mockClear();
   db.rows = {
-    saved_chemicals: { c1: structuredClone(saved) },
+    saved_chemicals_effective: { c1: structuredClone(saved) },
     chemical_v3_products: { [productId]: { id: productId, status: "approved", approved_revision_id: newId } },
     chemical_v3_product_revisions: { [oldId]: { id: oldId, product_id: productId, review_status: "superseded" }, [newId]: structuredClone(revision) },
   };
@@ -55,12 +57,12 @@ function wrap() {
 }
 describe("linked catalogue freshness", () => {
   it("detects old superseded to current approved with an exact scoped read", async () => {
-    expect(await fetchCatalogueFreshness(saved, "v1", ref)).toEqual({ state: "review_required", savedRevisionId: oldId, approvedRevisionId: newId, savedRevisionStatus: "superseded" });
-    expect(db.filters).toContain("saved_chemicals:vineyard_id:v1");
+    expect(await fetchCatalogueFreshness(saved, "v1", ref)).toEqual({ state: "current", savedRevisionId: oldId, approvedRevisionId: newId, savedRevisionStatus: "superseded", settingsRetained: true });
+    expect(db.filters).toContain("saved_chemicals_effective:vineyard_id:v1");
   });
   it("same revision is a read-only no-op", async () => {
     const row = { ...saved, chemical_v3_revision_id: newId };
-    db.rows.saved_chemicals.c1 = row;
+    db.rows.saved_chemicals_effective.c1 = row;
     expect((await fetchCatalogueFreshness(row, "v1", ref)).state).toBe("current");
     expect(db.writes).not.toHaveBeenCalled();
   });
@@ -73,25 +75,25 @@ describe("linked catalogue freshness", () => {
   });
   it("refuses wrong vineyard both before reading and in returned data", async () => {
     await expect(fetchCatalogueFreshness(saved, "v2", ref)).rejects.toThrow("vineyard does not match");
-    db.rows.saved_chemicals.c1.vineyard_id = "v2";
+    db.rows.saved_chemicals_effective.c1.vineyard_id = "v2";
     await expect(fetchCatalogueFreshness(saved, "v1", ref)).rejects.toThrow("unavailable in this vineyard");
   });
   it("detects newer user edits instead of offering an update", async () => {
-    db.rows.saved_chemicals.c1 = { ...saved, sync_version: 5, notes: "Newer edit" };
-    expect((await fetchCatalogueFreshness(saved, "v1", ref)).state).toBe("review_required");
-    expect(db.rows.saved_chemicals.c1.notes).toBe("Newer edit");
+    db.rows.saved_chemicals_effective.c1 = { ...saved, sync_version: 5, notes: "Newer edit" };
+    expect((await fetchCatalogueFreshness(saved, "v1", ref)).state).toBe("current");
+    expect(db.rows.saved_chemicals_effective.c1.notes).toBe("Newer edit");
   });
   it("never alters notes, preferred/default selections, empty rates, archive or purchase history", async () => {
     const before = structuredClone(db.rows);
     await fetchCatalogueFreshness(saved, "v1", ref);
     expect(db.rows).toEqual(before);
-    expect(db.rows.saved_chemicals.c1.vineyard_preferred_rate.amount).toBe(300);
-    expect(db.rows.saved_chemicals.c1.rates.per_100_litres).toEqual([]);
+    expect(db.rows.saved_chemicals_effective.c1.vineyard_preferred_rate.amount).toBe(300);
+    expect(db.rows.saved_chemicals_effective.c1.rates.per_100_litres).toEqual([]);
     expect(db.writes).not.toHaveBeenCalled();
   });
   it("shows both revision identities and review for skipped copies without a manual update", async () => {
     wrap();
-    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+    await screen.findByText("Vineyard settings retained");
     expect(screen.getByText(oldId, { exact: false }).textContent).toContain("Saved vineyard revision");
     expect(screen.getByText(newId, { exact: false }).textContent).toContain("Current approved catalogue revision");
     expect(screen.queryByRole("button", { name: /Update linked/ })).toBeNull();
@@ -106,28 +108,28 @@ describe("linked catalogue freshness", () => {
   });
   it("failed cached refetch removes the update rather than showing stale approval", async () => {
     const { client } = wrap();
-    await screen.findByRole("alert");
+    await screen.findByText("Vineyard settings retained");
     db.error = true;
     await client.invalidateQueries({ queryKey: ["chemical-catalogue-reference"] });
     await waitFor(() => expect(screen.queryByTestId("catalogue-link-freshness")).toBeNull());
     expect(db.writes).not.toHaveBeenCalled();
   });
   it("uses the fresh automatically advanced link despite an older opening snapshot", async () => {
-    db.rows.saved_chemicals.c1 = { ...saved, chemical_v3_revision_id: newId, sync_version: 5 };
+    db.rows.saved_chemicals_effective.c1 = { ...saved, chemical_v3_revision_id: newId, sync_version: 5 };
     expect((await fetchCatalogueFreshness(saved, "v1", ref)).state).toBe("current");
     wrap();
     await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
-    await waitFor(() => expect(screen.getByTestId("catalogue-link-freshness").textContent).toContain("automatically synchronised"));
+    await waitFor(() => expect(screen.getByTestId("catalogue-link-freshness").textContent).toContain("automatically updated"));
     expect(screen.queryByText(oldId, { exact: false })).toBeNull();
     expect(db.writes).not.toHaveBeenCalled();
   });
   it("refresh reads the auto-synced row and leaves notes/rates unmodified", async () => {
     wrap();
-    await screen.findByRole("alert");
-    db.rows.saved_chemicals.c1 = { ...saved, chemical_v3_revision_id: newId, sync_version: 5 };
+    await screen.findByText("Vineyard settings retained");
+    db.rows.saved_chemicals_effective.c1 = { ...saved, chemical_v3_revision_id: newId, sync_version: 5 };
     const before = structuredClone(db.rows);
     fireEvent.click(screen.getByRole("button", { name: "Refresh catalogue status" }));
-    await waitFor(() => expect(screen.getByTestId("catalogue-link-freshness").textContent).toContain("automatically synchronised"));
+    await waitFor(() => expect(screen.getByTestId("catalogue-link-freshness").textContent).toContain("automatically updated"));
     expect(db.rows).toEqual(before);
     expect(db.writes).not.toHaveBeenCalled();
   });
@@ -147,12 +149,12 @@ describe("linked catalogue freshness", () => {
     expect(client.getQueryState(["saved_chemicals", "v2", "active"])?.isInvalidated).toBe(false);
   });
   it("failed saved-link refetch does not label cached current data current", async () => {
-    db.rows.saved_chemicals.c1 = { ...saved, chemical_v3_revision_id: newId };
+    db.rows.saved_chemicals_effective.c1 = { ...saved, chemical_v3_revision_id: newId };
     const { client } = wrap();
-    await waitFor(() => expect(screen.getByTestId("catalogue-link-freshness").textContent).toContain("automatically synchronised"));
+    await waitFor(() => expect(screen.getByTestId("catalogue-link-freshness").textContent).toContain("automatically updated"));
     db.error = true;
     await client.invalidateQueries({ queryKey: ["chemical-catalogue-freshness"] });
     await screen.findByRole("alert");
-    expect(screen.getByTestId("catalogue-link-freshness").textContent).not.toContain("automatically synchronised");
+    expect(screen.getByTestId("catalogue-link-freshness").textContent).not.toContain("automatically updated");
   });
 });
