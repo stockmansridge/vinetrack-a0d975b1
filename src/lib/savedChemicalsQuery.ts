@@ -349,6 +349,7 @@ function sanitize(input: SavedChemicalInput, mode: "insert" | "update" = "insert
  */
 
 export async function createSavedChemical(vineyardId: string, input: SavedChemicalInput) {
+  if ("effective_catalogue_revision_id" in input || "saved_catalogue_revision_id" in input) throw new Error("An effective catalogue row cannot be written back.");
   const now = new Date().toISOString();
   const base = sanitize(input);
   const payload: Record<string, any> = {

@@ -449,7 +449,7 @@ export function SprayJobWizard({
               <Button
                 type="button"
                 size="sm"
-                disabled={!canEdit || !gate.canSave || resistanceBlocksSave || saveMut.isPending}
+                disabled={!canEdit || chemicalReadError || chemicalReading || !gate.canSave || resistanceBlocksSave || saveMut.isPending}
                 onClick={() => saveMut.mutate()}
               >
                 {saveMut.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
