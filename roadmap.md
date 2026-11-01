@@ -1,9 +1,10 @@
 # Roadmap
 
 ## Bounded linked catalogue freshness
-- [ ] Add exact-id saved/current-approved revision comparison and user-facing disabled update flow; preserve all operator fields and recent catalogue/save safeguards.
-- [ ] Verify any existing shared update RPC and parallel September 24 Trip safety status without writes; document secure missing contracts.
-- [ ] Run only focused catalogue/editor/Trip tests and inspect preview compilation; remain unpublished.
+- [x] Add exact-id saved/current-approved revision comparison in editor/details and user-facing disabled update flow; scoped saved-row read detects version changes without mutating operator fields/history. Approved reference and saved-link checks refresh while open.
+- [x] Audit source-backed candidate RPCs and parallel Trip controls without writes; no verified member-scoped optimistic catalogue update or safe atomic Trip end contract found. Exact server requirements in docs/chemical-catalogue-linked-update-contract.md; Trip end remains disabled with no Trip code changes.
+- [x] Focused tests 56/56: chemicalCatalogueFreshness 10, chemicalCatalogueReference 24, chemicalEditorEditMode 5, tripManagement 17. Automatic preview build OK; exact JSX diff inspected. Preview /trips settles at /login; no customer mutations or publication.
+- [ ] Verify deployed shared catalogue-update and safe Trip-end function definitions/permissions and current September 24 Trip status — blocked on authenticated shared-backend read access and verified contracts. Enable update only after server CAS/preservation acceptance; no write RPC invented.
 
 ## Bounded Trip management correction
 - [x] Audit repository lifecycle, member/access reads and tank/spray contracts without live writes; admin force-stop resets tank pointers and lacks pending-device/occurrence conflict proof, so it is not a safe member end API.
