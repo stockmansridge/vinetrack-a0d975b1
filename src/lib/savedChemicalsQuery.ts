@@ -1,4 +1,4 @@
-// READ-ONLY query helper for saved_chemicals. No writes.
+// Effective catalogue reads and separate base-table/RPC writes.
 //
 // Schema (docs/supabase-schema.md §3.12):
 //   saved_chemicals: name, rate_per_ha, unit, chemical_group, use,
@@ -396,7 +396,7 @@ export function vineyardChemicalEdit(input: SavedChemicalInput, initial: SavedCh
 }
 
 export async function updateSavedChemical(id: string, input: SavedChemicalInput, initial?: SavedChemical) {
-  if ("effective_catalogue_revision_id" in input || "saved_catalogue_revision_id" in input) throw new Error("An effective catalogue row cannot be written back.");
+  if ("effective_catalogue_revision_id" in input || "saved_catalogue_revision_id" in input || "catalogue_effective_approved" in input) throw new Error("An effective catalogue row cannot be written back.");
   const linked = !!initial && !!(initial.chemical_v3_product_id || initial.chemical_v3_revision_id);
   const payload: Record<string, any> = {
     ...sanitize(initial ? vineyardChemicalEdit(input, initial) : input, "update"),
