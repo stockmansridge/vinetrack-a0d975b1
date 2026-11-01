@@ -14,7 +14,6 @@ export type CatalogueFreshness = {
 export async function refreshCatalogueCopies(client: QueryClient, vineyardId?: string | null) {
   await Promise.all([
     client.invalidateQueries({ queryKey: vineyardId ? ["saved_chemicals", vineyardId] : ["saved_chemicals"] }),
-    client.invalidateQueries({ queryKey: ["v3-vineyard-chemicals"] }),
     client.invalidateQueries({ queryKey: ["v3-revision-display"] }),
     client.invalidateQueries({ queryKey: vineyardId ? ["chemical-catalogue-reference", vineyardId] : ["chemical-catalogue-reference"] }),
     client.invalidateQueries({ queryKey: vineyardId ? ["chemical-catalogue-freshness", vineyardId] : ["chemical-catalogue-freshness"] }),
