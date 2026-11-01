@@ -1,5 +1,10 @@
 # Roadmap
 
+## Bounded linked catalogue freshness
+- [ ] Add exact-id saved/current-approved revision comparison and user-facing disabled update flow; preserve all operator fields and recent catalogue/save safeguards.
+- [ ] Verify any existing shared update RPC and parallel September 24 Trip safety status without writes; document secure missing contracts.
+- [ ] Run only focused catalogue/editor/Trip tests and inspect preview compilation; remain unpublished.
+
 ## Bounded Trip management correction
 - [x] Audit repository lifecycle, member/access reads and tank/spray contracts without live writes; admin force-stop resets tank pointers and lacks pending-device/occurrence conflict proof, so it is not a safe member end API.
 - [x] Add Manage Trip with exact scoped status/member/access reads and disabled stale ending; disable legacy completion writes; retain recoverable delete with fresh confirmation, vineyard/version/inactive/fill predicates and affected-row verification.
