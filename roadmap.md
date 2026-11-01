@@ -1,5 +1,10 @@
 # Roadmap
 
+## Chemical approval active ingredients
+- [ ] Add compact multi-ingredient editor, validation and RPC-only save/read-back confirmation; preserve existing approval and catalogue flows.
+- [ ] Run focused ingredient/approval tests and check automatic preview compilation.
+- [ ] Enable live saving only after shared-backend `chemical_v3_admin_set_active_ingredients` deployment, audit/security verification and signed-in save/reload/approval acceptance; blocked on shared-backend deployment access and authoritative existing audit/promotion contract.
+
 ## Yields variety density
 - [x] Add t/ha beside variety totals and each block/planting tonnage using existing allocated hectares; variety density = sum yield / sum area, unavailable for missing yield or invalid area. 16 focused tests passed; preview build OK. No backend changes or publication; authenticated live-vineyard visual acceptance remains unavailable.
 
