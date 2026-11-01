@@ -24,7 +24,8 @@ export interface V3RevisionDisplay {
 }
 
 export function v3RevisionIdOf(row: any): string | null {
-  const v = row?.chemical_v3_revision_id;
+  const v = Object.prototype.hasOwnProperty.call(row ?? {}, "effective_catalogue_revision_id")
+    ? row.effective_catalogue_revision_id : row?.chemical_v3_revision_id;
   return typeof v === "string" && v ? v : null;
 }
 
@@ -51,7 +52,7 @@ export function useV3RevisionDisplay(rows: any[]) {
 
 /** Flattened, de-duplicated (case-insensitive) targets across all vineyard uses. */
 export function v3UseTargets(rev: V3RevisionDisplay | null | undefined): string[] {
-  const uses = Array.isArray(rev?.vineyard_uses) ? rev!.vineyard_uses : [];
+  const uses = Array.isArray(rev?.vineyard_uses) ? rev?.vineyard_uses : [];
   const out: string[] = [];
   const seen = new Set<string>();
   for (const u of uses) {

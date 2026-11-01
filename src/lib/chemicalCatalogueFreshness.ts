@@ -8,12 +8,14 @@ export type CatalogueFreshness = {
   savedRevisionId: string;
   approvedRevisionId: string;
   savedRevisionStatus: string | null;
+  settingsRetained?: boolean;
 };
 
 /** Approval can advance copies in every vineyard; invalidate reads, never write copies. */
 export async function refreshCatalogueCopies(client: QueryClient, vineyardId?: string | null) {
   await Promise.all([
     client.invalidateQueries({ queryKey: vineyardId ? ["saved_chemicals", vineyardId] : ["saved_chemicals"] }),
+    client.invalidateQueries({ queryKey: vineyardId ? ["saved-chemicals", vineyardId] : ["saved-chemicals"] }),
     client.invalidateQueries({ queryKey: ["v3-revision-display"] }),
     client.invalidateQueries({ queryKey: vineyardId ? ["chemical-catalogue-reference", vineyardId] : ["chemical-catalogue-reference"] }),
     client.invalidateQueries({ queryKey: vineyardId ? ["chemical-catalogue-freshness", vineyardId] : ["chemical-catalogue-freshness"] }),
@@ -26,7 +28,8 @@ export async function fetchCatalogueFreshness(row: Row, vineyardId: string, refe
   if (reference.state !== "approved" || reference.revision.review_status !== "approved") throw new Error("Approved catalogue information is required.");
   if (!sameId(row.vineyard_id, vineyardId) || !row.id) throw new Error("Chemical vineyard does not match.");
   const sb = supabase as any;
-  const { data: saved, error } = await sb.from("saved_chemicals").select("*").eq("vineyard_id", vineyardId).eq("id", row.id).maybeSingle();
+  if (typeof navigator !== "undefined" && navigator.onLine === false) throw new Error("Live catalogue unavailable offline.");
+  const { data: saved, error } = await sb.from("saved_chemicals_effective").select("*").eq("vineyard_id", vineyardId).eq("id", row.id).maybeSingle();
   if (error) throw error;
   if (!saved || !sameId(saved.id, row.id) || !sameId(saved.vineyard_id, vineyardId)) throw new Error("Saved chemical is unavailable in this vineyard.");
   const link = catalogueLinkOf(saved);
@@ -36,10 +39,11 @@ export async function fetchCatalogueFreshness(row: Row, vineyardId: string, refe
   if (!revision || !sameId(revision.id, link.revisionId) || !sameId(revision.product_id, reference.productId) || !sameId(reference.revision.product_id, reference.productId)) throw new Error("Saved revision belongs to a different catalogue product or is unavailable.");
   return {
     // The fresh stored link wins over the opening snapshot after server auto-sync.
-    state: sameId(link.revisionId, reference.revision.id) ? "current" : "review_required",
+    state: sameId(saved.effective_catalogue_revision_id, reference.revision.id) ? "current" : "review_required",
     savedRevisionId: link.revisionId,
     approvedRevisionId: reference.revision.id,
     savedRevisionStatus: typeof revision.review_status === "string" ? revision.review_status : null,
+    settingsRetained: !!(saved.vineyard_rate_override_evidence || saved.vineyard_use_override_evidence),
   };
 }
 

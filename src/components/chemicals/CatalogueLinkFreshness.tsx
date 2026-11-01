@@ -20,12 +20,14 @@ export function CatalogueLinkFreshness({ row, query, open, vineyardId }: {
       <div className="break-all"><span className="font-semibold">Current approved catalogue revision: </span>{query.data?.state === "approved" ? query.data.revision.id : "Unavailable"}</div>
       {fresh.isError ? <div role="alert">Saved catalogue link could not be checked. <Button type="button" size="sm" variant="outline" onClick={() => fresh.refetch()}>Retry link check</Button></div>
         : fresh.isFetching || fresh.isLoading ? <p>Checking saved catalogue link…</p>
-        : fresh.data?.state === "current" ? <p>Current approved catalogue — automatically synchronised.</p>
+        : fresh.data?.state === "current" ? <>
+          <p>VineTrack catalogue · automatically updated</p>
+          {fresh.data.settingsRetained && <p>Vineyard settings retained</p>}
+        </>
         : fresh.data?.state === "review_required" ? <>
-          <p role="alert">Review required — local catalogue fields differ</p>
-          <p>This copy was not automatically advanced. Customised or unsynced catalogue content needs review. Its older saved rates are not the current approved catalogue rates.</p>
+          <p role="alert">Current approved catalogue could not be confirmed. Refresh before using catalogue rates.</p>
         </> : null}
-      <p>Eligible copies update automatically after catalogue approval. Rate changes are available on the next device sync. Label ranges are not automatically selected; label restrictions, vineyard preferences and history are preserved.</p>
+      <p>Catalogue evidence is read live. Device copies refresh on their next sync. Label ranges are not automatically selected; vineyard preferences and history are preserved.</p>
       <Button type="button" size="sm" variant="outline" disabled={fresh.isFetching || query.isFetching} onClick={() => void refreshCatalogueCopies(client, vineyardId ?? row?.vineyard_id)}>Refresh catalogue status</Button>
     </div>
   );
