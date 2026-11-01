@@ -1,9 +1,10 @@
 # Roadmap
 
 ## Bounded Trip management correction
-- [ ] Audit lifecycle, fresh status/permissions and occurrence/tank/spray dependencies without live writes.
-- [ ] Add Manage Trip with fail-closed status and disabled stale ending unless an authorised atomic audited API is verified; retain confirmed-inactive delete.
-- [ ] Run focused status/role/offline/UI tests and preview compilation; keep unpublished and report server/auth blockers.
+- [x] Audit repository lifecycle, member/access reads and tank/spray contracts without live writes; admin force-stop resets tank pointers and lacks pending-device/occurrence conflict proof, so it is not a safe member end API.
+- [x] Add Manage Trip with exact scoped status/member/access reads and disabled stale ending; disable legacy completion writes; retain recoverable delete with fresh confirmation, vineyard/version/inactive/fill predicates and affected-row verification.
+- [x] Focused tests 36/36: tripManagement 17, tripDetailsEdit 5, tripCostAllocationsQuery 9, tripReportTankSessions 5; automatic preview build OK. Actual /trips browser check redirects to /login. Unpublished; no live/customer mutations.
+- [ ] Verify shared live endpoint definitions, affected historical Trip status/permissions and device occurrence/tank/spray preflight — blocked by unavailable shared-vineyard authenticated access and unverified safe end contract; requirements in docs/trip-management-safety.md. No end action enabled.
 
 ## Chemical approval active ingredients
 - [x] Backend owner confirmed ingredient RPC deployment, System Admin/editable-status restrictions, validation, issue resolution and audit logging.
