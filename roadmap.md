@@ -1,5 +1,10 @@
 # Roadmap
 
+## v3.1.9 effective catalogue hotfix
+- [ ] Switch scoped Portal chemical reads to the effective view; retain base-only partial guarded writes and current approved evidence.
+- [ ] Replace pinned-copy warnings with effective-current/retained-settings status; refresh on save and approval; fail closed on errors/offline.
+- [ ] Run focused read/write, Thiovit options, fallback, scope and range-dose tests; check compilation and report signed-in limitations. Keep unpublished; no backend/customer/Trip changes.
+
 ## Catalogue automatic sync follow-up
 - [x] Replace obsolete manual update dependency with automatic/current or local-copy review status; refresh saved/catalogue reads on open, refresh and successful approval without hydrating unsaved edits.
 - [x] Focused tests: freshness 15/15, reference 24/24, editor 5/5, approved review 17/17, list 5/6 (66 pass, 1 fail). The list's unchanged explicit-column assertion also fails on isolated starting version 57fdd22b (5/6); both test and display source hashes match. Automatic compilation build OK; no customer writes or Trip changes, unpublished.
