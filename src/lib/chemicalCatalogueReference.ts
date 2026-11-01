@@ -6,7 +6,8 @@
 // missing status is never treated as approved. Links are resolved by exact ids only.
 // Revision-only links resolve the product through the linked row's product_id and
 // still require the product's approved pointer. Never writes anything.
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 
 type Row = Record<string, any>;
@@ -75,6 +76,16 @@ export async function fetchCatalogueReference(link: { productId: string | null; 
 /** Enabled only while the owning dialog is open; refetches on every reopen. */
 export function useCatalogueReference(row: Row | null | undefined, open: boolean, vineyardId?: string | null) {
   const link = catalogueLinkOf(row);
+  const client = useQueryClient();
+  const scope = vineyardId ?? row?.vineyard_id ?? null;
+  const rowId = row?.id;
+  const linked = !!link;
+  useEffect(() => {
+    if (!open || !linked || !scope || !rowId) return;
+    // Reload list consumers without hydrating/resetting an in-progress editor draft.
+    void client.invalidateQueries({ queryKey: ["saved_chemicals", scope] });
+    void client.invalidateQueries({ queryKey: ["v3-revision-display"] });
+  }, [client, open, linked, scope, rowId]);
   return useQuery({
     queryKey: ["chemical-catalogue-reference", vineyardId ?? row?.vineyard_id ?? null, row?.id ?? null, link?.productId ?? null, link?.revisionId ?? null],
     queryFn: () => {
