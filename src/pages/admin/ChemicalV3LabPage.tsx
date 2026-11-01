@@ -46,6 +46,7 @@ import {
 import { fetchProductCategories, isV3Addable, setV3ProductCategory, v3CategoryLabel, type CategoryOption } from "@/lib/chemicalInventory";
 import { V3AddToVineyardButton } from "@/components/chemicals/V3AddToVineyardDialog";
 import { V3ResistanceBadge, V3ResistanceField } from "@/components/chemicals/V3ResistanceField";
+import { V3IngredientsField } from "@/components/chemicals/V3IngredientsField";
 import { isV3ResistanceEditable, setV3ResistanceGroups, readV3Resistance, formatV3Resistance, type V3ResistanceDraft } from "@/lib/chemicalV3Resistance";
 
 function useCategories() {
@@ -306,19 +307,24 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
   const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const [needDecisions, setNeedDecisions] = useState(false);
   const [invOpen, setInvOpen] = useState(false);
+  const [ingredientsBlocked, setIngredientsBlocked] = useState(false);
   const decisionsRef = useRef<HTMLElement>(null);
   const ratesRef = useRef<HTMLElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const q = useQuery({ queryKey: ["chemical-v3-revision", revisionId], enabled: !!revisionId, queryFn: () => fetchV3Revision(revisionId!) });
   const issuesQ = useQuery({ queryKey: ["chemical-v3-issues", revisionId], enabled: !!revisionId, queryFn: () => fetchReviewIssues(revisionId!) });
-  useEffect(() => { setNote(""); setMsg(null); setNeedDecisions(false); setInvOpen(false); }, [revisionId]);
+  useEffect(() => { setNote(""); setMsg(null); setNeedDecisions(false); setInvOpen(false); setIngredientsBlocked(false); }, [revisionId]);
   const refreshAfterReview = () => {
     qc.invalidateQueries({ queryKey: ["chemical-v3-queue"] });
     qc.invalidateQueries({ queryKey: ["chemical-v3-approved"] });
     qc.invalidateQueries({ queryKey: ["chemical-v3-revision", revisionId] });
   };
   const approveMut = useMutation({
-    mutationFn: async () => approveV3(revisionId!, note),
+    mutationFn: async () => {
+      if (ingredientsBlocked) throw new Error("Save and confirm ingredient changes, or cancel unsaved edits, before approving.");
+      if (!revisionId) throw new Error("No revision selected.");
+      return approveV3(revisionId, note);
+    },
     onSuccess: () => {
       refreshAfterReview();
       toast.success(APPROVED_TOAST); onApproved?.(); setMsg(null);
@@ -518,7 +524,8 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
                 <V3ResistanceField row={r} editable={isAdmin && !!revisionId && isV3ResistanceEditable(status)}
                   busy={resMut.isPending} onSave={(d) => resMut.mutate(d)} msg={resMsg} />
                 <Field label="Product form" value={pick(r, "product_form", "formulation")} status={has("product_form", "formulation") ? "ok" : "review"} />
-                <Field label="Active ingredients" value={actives.length ? actives.map(labelOf).join("; ") : undefined} status={actives.length ? "ok" : "missing"} />
+                {revisionId && <V3IngredientsField key={revisionId} revisionId={revisionId} value={r.active_ingredients}
+                  editable={canEdit} approvalBusy={reviewBusy} onApprovalBlocked={setIngredientsBlocked} />}
                 <Field label="Registration scheme" value={pick(r, "registration_scheme") ?? "Not applicable"} status={opt("registration_scheme")} />
                 <Field label="Registration number" value={pick(r, "registration_number") ?? "No registration number"} status={opt("registration_number")} />
                 <Field label="Manufacturer product URL" value={pick(r, "manufacturer_product_url")} status={has("manufacturer_product_url") ? "ok" : "review"} />
@@ -563,7 +570,7 @@ function ReviewSheet({ revisionId, jobId: queueJobId, onClose, onApproved, onOpe
                   <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Review note (required to reject)" aria-label="Review note" />
                   {msg && <p className={cn("text-sm", msg.tone === "err" ? "text-destructive" : "text-success")}>{msg.text}</p>}
                   <div className="flex gap-2">
-                    <Button disabled={reviewBusy} onClick={() => approveMut.mutate()}>Approve</Button>
+                    <Button disabled={reviewBusy || ingredientsBlocked} onClick={() => approveMut.mutate()}>Approve</Button>
                     <Button
                       variant="destructive"
                       disabled={reviewBusy}
