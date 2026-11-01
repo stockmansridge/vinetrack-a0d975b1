@@ -1,9 +1,10 @@
 # Roadmap
 
 ## v3.1.9 effective catalogue hotfix
-- [ ] Switch scoped Portal chemical reads to the effective view; retain base-only partial guarded writes and current approved evidence.
-- [ ] Replace pinned-copy warnings with effective-current/retained-settings status; refresh on save and approval; fail closed on errors/offline.
-- [ ] Run focused read/write, Thiovit options, fallback, scope and range-dose tests; check compilation and report signed-in limitations. Keep unpublished; no backend/customer/Trip changes.
+- [x] Shared Store/details/spray reads use the effective view with unchanged vineyard/tombstone scopes and query keys; exact product approval proof rejects mismatched current evidence. Linked edits submit only changed vineyard settings to guarded pinned base rows, then live read-back.
+- [x] Effective-current/retained-settings labels replace obsolete pinned-copy warnings; both query families invalidate on approval/save; failed/offline reads do not offer cached catalogue selection.
+- [x] 90 focused tests pass: effective boundary 9, freshness 15, reference 24, editor 5, preferred rates 8, approval 17, range-dose 12. Automatic compilation build OK. No backend/customer/Trip changes; unpublished.
+- [ ] Signed-in live visual acceptance — actual /setup/chemicals check redirects to /login (zero runtime errors); shared-vineyard session unavailable in this sandbox. No live save/approval exercised.
 
 ## Catalogue automatic sync follow-up
 - [x] Replace obsolete manual update dependency with automatic/current or local-copy review status; refresh saved/catalogue reads on open, refresh and successful approval without hydrating unsaved edits.
