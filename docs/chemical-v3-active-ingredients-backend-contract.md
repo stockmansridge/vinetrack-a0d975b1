@@ -1,6 +1,6 @@
 # Chemical V3 ingredient correction deployment dependency
 
-Status: Portal editor implemented; live saving DISABLED. No backend migration was applied. The available managed database tools target the separate Portal backend, not the shared vineyard backend; do not create this RPC there.
+Status: Backend owner confirmed the shared-vineyard RPC is DEPLOYED, including System Admin authorization, pending_review/needs_attention-only edits, approved-revision protection, missing-ingredient issue resolution, before/after auditing, and ingredient validation. Portal saving is enabled. No backend migration was applied by the Portal agent; do not duplicate this RPC in the separate Portal backend.
 
 ## Required shared-vineyard RPC
 
@@ -15,8 +15,8 @@ Status: Portal editor implemented; live saving DISABLED. No backend migration wa
 
 ## Portal release gate / acceptance
 
-`V3_INGREDIENT_SAVING_ENABLED` is false. The Portal currently permits drafting only; Save Ingredients is disabled and no new RPC runs. Enable only after the shared owner deploys the contract and a signed-in save/reload/approval workflow passes against safe test records.
+`V3_INGREDIENT_SAVING_ENABLED` is true following the owner's deployment confirmation. Publication still requires a signed-in save/reload/approval workflow against safe test records.
 
-The prepared client calls the RPC with exactly the two named arguments, then reloads the exact revision and requires identical ingredient JSON and an editable review status before confirmation. Editing or an unconfirmed save blocks Approve. No direct table update fallback exists.
+The client calls the RPC with exactly the two named arguments and concentration_unit, then reloads the exact revision and requires ingredient JSON identical to the RPC's normalized saved response and an editable review status before confirmation. Editing or an unconfirmed save blocks Approve. Revision completeness is refreshed from this read; review issues, queue and approved catalogue queries are invalidated. No direct table update fallback exists.
 
-Acceptance must cover non-admin/anonymous denial, both editable statuses, immutable approved revisions, invalid numbers/units/names, multiple ingredients and removal, audit before/after, save/read-back failures and mismatches, corrected approval promotion, and no changes to existing vineyard preferred/default rates or historical snapshots. Backend deployment, audit, promotion and live acceptance remain unverified.
+Acceptance must cover non-admin/anonymous denial, both editable statuses, immutable approved revisions, invalid numbers/units/names, multiple ingredients and removal, audit before/after, save/read-back failures and mismatches, corrected approval promotion, and no changes to existing vineyard preferred/default rates or historical snapshots. Backend deployment/protections are owner-confirmed, not independently inspected here. Live audit and promotion acceptance remain unverified: managed preview session mint reports no auth users and cannot supply a shared-vineyard System Admin session.

@@ -20,6 +20,7 @@ export function V3IngredientsField({ revisionId, value, editable, approvalBusy, 
   useEffect(() => { onApprovalBlocked(editing || uncertain); }, [editing, uncertain, onApprovalBlocked]);
   const mut = useMutation({
     mutationFn: async () => {
+      if (!editable || approvalBusy) throw new Error("Only revisions awaiting approval can be edited.");
       if (!V3_INGREDIENT_SAVING_ENABLED) throw new Error("Ingredient saving is awaiting shared-backend deployment and verification.");
       setUncertain(true);
       return saveAndConfirmV3Ingredients(revisionId, drafts);
@@ -52,7 +53,7 @@ export function V3IngredientsField({ revisionId, value, editable, approvalBusy, 
           setEditing(true); setConfirmed(false); setError(null);
         }}>{asList(value).length ? "Edit ingredients" : "Add ingredients"}</Button>}
       </div>
-      {!editing && <p className={asList(value).length ? "font-medium" : "text-destructive"}>{asList(value).length ? asList(value).map(labelOf).join("; ") : "Missing"}</p>}
+      {!editing && <p className={asList(value).length ? "font-medium" : "text-destructive"}>{asList(value).length ? ingredientDrafts(value).map((d) => [d.name || labelOf(d.original), d.concentration, d.unit].filter(Boolean).join(" ")).join("; ") : "Missing"}</p>}
       {editable && !V3_INGREDIENT_SAVING_ENABLED && <p className="text-xs text-warning">Ingredient saving pending backend deployment and verification.</p>}
       {editing && editable && <div className="space-y-2">
         {drafts.map((d, index) => <div key={index} className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
