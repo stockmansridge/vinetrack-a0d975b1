@@ -574,7 +574,7 @@ export function ChemicalEditor({
           (payload as any)[key] = "";
         }
       }
-      if (initial) return updateSavedChemical(initial.id, payload);
+      if (initial) return updateSavedChemical(initial.id, payload, initial);
       return createSavedChemical(vineyardId, payload);
     },
     onSuccess: (saved: SavedChemical) => {

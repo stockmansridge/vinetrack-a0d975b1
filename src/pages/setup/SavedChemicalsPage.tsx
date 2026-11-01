@@ -234,7 +234,7 @@ export default function SavedChemicalsPage() {
       return fetchSavedChemicalsForVineyard(selectedVineyardId);
     },
   });
-  const chemicals = data?.chemicals ?? [];
+  const chemicals = error ? [] : data?.chemicals ?? [];
   // Catalogue revision display metadata (image, label links, vineyard uses) —
   // read-only, never written back to saved_chemicals.
   const { data: revDisplay } = useV3RevisionDisplay(chemicals);
@@ -250,7 +250,7 @@ export default function SavedChemicalsPage() {
       return fetchSavedChemicalsForVineyard(selectedVineyardId, { archived: true });
     },
   });
-  const archived = archivedQuery.data?.chemicals ?? [];
+  const archived = archivedQuery.isError ? [] : archivedQuery.data?.chemicals ?? [];
 
   const groupOptions = useMemo(
     () => buildGroupOptions(chemicals.map((c) => c.chemical_group)),
@@ -379,6 +379,7 @@ export default function SavedChemicalsPage() {
     qc.invalidateQueries({ queryKey: ["saved_chemicals", selectedVineyardId] });
     // Spray Job pickers and any chemical consumers should refresh too.
     qc.invalidateQueries({ queryKey: ["saved_chemicals"] });
+    qc.invalidateQueries({ queryKey: ["saved-chemicals"] });
   };
 
   const archiveMut = useMutation({
@@ -466,6 +467,8 @@ export default function SavedChemicalsPage() {
             <div className="font-medium leading-tight">{fmt(c.name)}</div>
           )}
           <ProductPageLink c={c} rev={revOf(c)} />
+          {c.catalogue_effective_approved === true && <span className="text-[10px] text-muted-foreground">VineTrack catalogue · automatically updated</span>}
+          {(!!c.vineyard_rate_override_evidence || !!c.vineyard_use_override_evidence) && <span className="text-[10px] text-muted-foreground">Vineyard settings retained</span>}
           </div>
         </TableCell>
       );

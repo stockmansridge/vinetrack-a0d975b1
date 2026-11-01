@@ -26,7 +26,7 @@ vi.mock("@/lib/permissions", () => ({ useCanSeeCosts: () => true }));
 const updateSavedChemical = vi.fn(async (id: string, input: unknown) => ({ id, ...(input as object) }));
 vi.mock("@/lib/savedChemicalsQuery", async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
-  fetchSavedChemicalsForVineyard: vi.fn(async () => []),
+  fetchSavedChemicalsForVineyard: vi.fn(async () => ({ chemicals: [linked] })),
   updateSavedChemical: (...a: [string, unknown]) => updateSavedChemical(...a),
   createSavedChemical: vi.fn(),
 }));

@@ -10,6 +10,8 @@
 import { CatalogueIdentityBadge, CatalogueReferenceSection } from "@/components/chemicals/CatalogueReference";
 import { catalogueLinkOf, useCatalogueReference } from "@/lib/chemicalCatalogueReference";
 import { CatalogueLinkFreshness } from "@/components/chemicals/CatalogueLinkFreshness";
+import { useQuery } from "@tanstack/react-query";
+import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -353,22 +355,37 @@ export function ChemicalIntelligenceDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const chem = row ? toChemicalIntelligence(row) : null;
-  const catalogueQ = useCatalogueReference(row, open);
+  const live = useQuery({
+    queryKey: ["saved_chemicals", row?.vineyard_id, "detail", row?.id],
+    enabled: open && !!row?.id && !!row?.vineyard_id,
+    refetchOnMount: "always", staleTime: 0, retry: false,
+    queryFn: async () => {
+      if (!row?.vineyard_id || !row.id) throw new Error("Chemical scope unavailable.");
+      const result = await fetchSavedChemicalsForVineyard(row.vineyard_id, { archived: !!row.deleted_at });
+      const found = result.chemicals.find((c) => c.id === row.id);
+      if (!found) throw new Error("Chemical is unavailable in this vineyard.");
+      return found;
+    },
+  });
+  const confirmed = !live.isError && !live.isFetching ? live.data : null;
+  const chem = confirmed ? toChemicalIntelligence(confirmed) : null;
+  const catalogueQ = useCatalogueReference(confirmed, open && !!confirmed);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-2">
             {chem?.name ?? "Chemical"}
-            {row && <CatalogueIdentityBadge row={row} query={catalogueQ} />}
+            {confirmed && <CatalogueIdentityBadge row={confirmed} query={catalogueQ} />}
           </DialogTitle>
           <DialogDescription>Chemical intelligence (read-only)</DialogDescription>
         </DialogHeader>
-        {catalogueLinkOf(row) && (
+        {live.isError && <p role="alert" className="text-sm text-destructive">Live chemical information could not be loaded. Reopen or refresh before using catalogue evidence.</p>}
+        {live.isFetching && <p className="text-sm text-muted-foreground">Loading live chemical information…</p>}
+        {catalogueLinkOf(confirmed) && (
           <section className="space-y-2 rounded border p-3" data-testid="catalogue-reference-detail">
             <h3 className="text-sm font-semibold">Catalogue rates</h3>
-            <CatalogueLinkFreshness row={row} query={catalogueQ} open={open} />
+            <CatalogueLinkFreshness row={confirmed} query={catalogueQ} open={open} />
             <CatalogueReferenceSection query={catalogueQ} />
           </section>
         )}

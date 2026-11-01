@@ -61,20 +61,21 @@ export function ProgramStepDetailDialog({
 }) {
   const { labels: targetLabels } = useVineyardSprayTargets(open ? vineyardId : null);
 
-  const { data: chemResult } = useQuery({
+  const { data: chemResult, isError: chemicalReadError, isFetching: chemicalReading } = useQuery({
     queryKey: ["saved-chemicals", vineyardId, "intelligence"],
     enabled: open && !!vineyardId,
+    refetchOnMount: "always", staleTime: 0,
     queryFn: () => fetchSavedChemicalsForVineyard(vineyardId),
   });
 
   const intelligenceById = useMemo(() => {
     const m = new Map<string, ChemicalIntelligence>();
-    for (const row of chemResult?.chemicals ?? []) {
+    for (const row of chemicalReadError || chemicalReading ? [] : chemResult?.chemicals ?? []) {
       const intel = toChemicalIntelligence(row as any);
       m.set(intel.id, intel);
     }
     return m;
-  }, [chemResult]);
+  }, [chemResult, chemicalReadError, chemicalReading]);
 
   const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
   const isFertigation = isFertigationProgramStep(job);

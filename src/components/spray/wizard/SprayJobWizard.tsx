@@ -122,20 +122,21 @@ export function SprayJobWizard({
   });
   const [hydrated, setHydrated] = useState(false);
 
-  const { data: chemicalsResult } = useQuery({
+  const { data: chemicalsResult, isError: chemicalReadError, isFetching: chemicalReading } = useQuery({
     queryKey: ["saved-chemicals", vineyardId, "intelligence"],
     enabled: open && !!vineyardId,
+    refetchOnMount: "always", staleTime: 0,
     queryFn: () => fetchSavedChemicalsForVineyard(vineyardId),
   });
 
   const intelligenceById = useMemo(() => {
     const map = new Map<string, ChemicalIntelligence>();
-    for (const row of chemicalsResult?.chemicals ?? []) {
+    for (const row of chemicalReadError || chemicalReading ? [] : chemicalsResult?.chemicals ?? []) {
       const intel = toChemicalIntelligence(row as any);
       map.set(intel.id, intel);
     }
     return map;
-  }, [chemicalsResult]);
+  }, [chemicalsResult, chemicalReadError, chemicalReading]);
 
   const { data: paddockIds } = useQuery({
     queryKey: ["spray_job_paddocks", job?.id],
@@ -392,7 +393,7 @@ export function SprayJobWizard({
                       frozen={provenanceFrozen}
                     />
                   )}
-                  {renderStep()}
+                  {chemicalReadError || chemicalReading ? <p role="alert" className="text-sm text-muted-foreground">{chemicalReadError ? "Live chemical information could not be loaded. Refresh before selecting chemicals." : "Loading live catalogue…"}</p> : renderStep()}
                 </div>
               )}
             </div>
@@ -448,7 +449,7 @@ export function SprayJobWizard({
               <Button
                 type="button"
                 size="sm"
-                disabled={!canEdit || !gate.canSave || resistanceBlocksSave || saveMut.isPending}
+                disabled={!canEdit || chemicalReadError || chemicalReading || !gate.canSave || resistanceBlocksSave || saveMut.isPending}
                 onClick={() => saveMut.mutate()}
               >
                 {saveMut.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}

@@ -25,9 +25,10 @@ export function PlanSprayFromProgramStep({
   canEdit: boolean;
   lookups: WizardLookups;
 }) {
-  const { data: chemResult } = useQuery({
+  const { data: chemResult, isError: chemicalReadError, isFetching: chemicalReading } = useQuery({
     queryKey: ["saved-chemicals", vineyardId, "intelligence"],
     enabled: open && !!vineyardId,
+    refetchOnMount: "always", staleTime: 0,
     queryFn: () => fetchSavedChemicalsForVineyard(vineyardId),
   });
 
@@ -56,7 +57,8 @@ export function PlanSprayFromProgramStep({
     return prefill;
   }, [chemResult, programStep, vineyardId]);
 
-  if (chemResult === undefined) return null;
+  if (chemicalReadError) return <p role="alert">Live chemical information could not be loaded. Refresh before planning a spray.</p>;
+  if (chemResult === undefined || chemicalReading) return null;
 
   return (
     <SprayJobWizard

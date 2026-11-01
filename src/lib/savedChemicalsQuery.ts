@@ -1,4 +1,4 @@
-// READ-ONLY query helper for saved_chemicals. No writes.
+// Effective catalogue reads and separate base-table/RPC writes.
 //
 // Schema (docs/supabase-schema.md §3.12):
 //   saved_chemicals: name, rate_per_ha, unit, chemical_group, use,
@@ -62,6 +62,14 @@ export interface SavedChemical {
   chemical_v3_product_id?: string | null;
   chemical_v3_revision_id?: string | null;
   chemical_v3_review_status_snapshot?: string | null;
+  saved_catalogue_revision_id?: string | null;
+  effective_catalogue_revision_id?: string | null;
+  /** Read-only client approval proof from the exact current product pointer. */
+  catalogue_effective_approved?: boolean;
+  vineyard_preferred_rate?: Record<string, unknown> | null;
+  catalogue_snapshot_differs?: boolean | null;
+  vineyard_rate_override_evidence?: unknown;
+  vineyard_use_override_evidence?: unknown;
   verification_sources?: any;
   verification_conflicts?: any;
   verification_unresolved_fields?: any;
@@ -109,12 +117,28 @@ export async function fetchSavedChemicalsForVineyard(
   vineyardId: string,
   opts: { archived?: boolean } = {},
 ): Promise<SavedChemicalsQueryResult> {
-  let q = supabase.from("saved_chemicals").select("*").eq("vineyard_id", vineyardId);
+  if (!vineyardId) throw new Error("Select a vineyard.");
+  if (typeof navigator !== "undefined" && navigator.onLine === false) throw new Error("Live catalogue unavailable offline.");
+  let q = (supabase as any).from("saved_chemicals_effective").select("*").eq("vineyard_id", vineyardId);
   q = opts.archived ? q.not("deleted_at", "is", null) : q.is("deleted_at", null);
   const res = await q;
   if (res.error) throw res.error;
 
   const chemicals = (res.data ?? []) as SavedChemical[];
+  if (chemicals.some((c) => c.vineyard_id?.toLowerCase() !== vineyardId.toLowerCase() ||
+    (opts.archived ? !c.deleted_at : !!c.deleted_at))) throw new Error("Chemical read returned an inconsistent vineyard scope.");
+  const productIds = [...new Set(chemicals.map((c) => c.chemical_v3_product_id).filter((id): id is string => !!id))];
+  if (productIds.length) {
+    const products = await (supabase as any).from("chemical_v3_products").select("id,status,approved_revision_id").in("id", productIds);
+    if (products.error) throw products.error;
+    const byId = new Map<string, any>((products.data ?? []).map((p: any) => [String(p.id).toLowerCase(), p]));
+    for (const chemical of chemicals) {
+      const product = byId.get(chemical.chemical_v3_product_id?.toLowerCase() ?? "");
+      chemical.catalogue_effective_approved = product?.status === "approved" && !!product.approved_revision_id &&
+        String(product.approved_revision_id).toLowerCase() === chemical.effective_catalogue_revision_id?.toLowerCase();
+      if (product?.status === "approved" && !chemical.catalogue_effective_approved) throw new Error("Current approved catalogue evidence could not be confirmed. Refresh before using rates.");
+    }
+  }
   return {
     chemicals,
     source: chemicals.length ? "vineyard_id" : "empty",
@@ -340,6 +364,7 @@ function sanitize(input: SavedChemicalInput, mode: "insert" | "update" = "insert
  */
 
 export async function createSavedChemical(vineyardId: string, input: SavedChemicalInput) {
+  if ("effective_catalogue_revision_id" in input || "saved_catalogue_revision_id" in input || "catalogue_effective_approved" in input) throw new Error("An effective catalogue row cannot be written back.");
   const now = new Date().toISOString();
   const base = sanitize(input);
   const payload: Record<string, any> = {
@@ -358,17 +383,50 @@ export async function createSavedChemical(vineyardId: string, input: SavedChemic
   return data as SavedChemical;
 }
 
-export async function updateSavedChemical(id: string, input: SavedChemicalInput) {
+/** Effective rows are read models, never full write payloads. Linked edits only
+ * submit changed vineyard-owned settings, guarded by the pinned base identity. */
+export function vineyardChemicalEdit(input: SavedChemicalInput, initial: SavedChemical): SavedChemicalInput {
+  if (!initial.chemical_v3_product_id && !initial.chemical_v3_revision_id) return input;
+  const fields = ["name", "notes", "vineyard_preferred_rate", "default_rates", "application_notes", "organic_certified"] as const;
+  const out: Record<string, unknown> = {};
+  for (const key of fields) {
+    if (input[key] !== undefined && JSON.stringify(input[key]) !== JSON.stringify((initial as any)[key])) out[key] = input[key];
+  }
+  return out as unknown as SavedChemicalInput;
+}
+
+export async function updateSavedChemical(id: string, input: SavedChemicalInput, initial?: SavedChemical) {
+  if ("effective_catalogue_revision_id" in input || "saved_catalogue_revision_id" in input || "catalogue_effective_approved" in input) throw new Error("An effective catalogue row cannot be written back.");
+  const linked = !!initial && !!(initial.chemical_v3_product_id || initial.chemical_v3_revision_id);
   const payload: Record<string, any> = {
-    ...sanitize(input, "update"),
+    ...sanitize(initial ? vineyardChemicalEdit(input, initial) : input, "update"),
     client_updated_at: new Date().toISOString(),
   };
+  // sanitize's legacy unit default is for ordinary/manual writes, not linked patches.
+  if (linked) delete payload.unit;
   if (import.meta.env.DEV) {
     console.debug("Sanitised saved chemical payload", payload);
   }
-  const { data, error } = await supabase
-    .from("saved_chemicals").update(payload).eq("id", id).select().single();
+  let q = (supabase as any).from("saved_chemicals").update(payload).eq("id", id);
+  if (initial) {
+    if (initial.id !== id || !initial.vineyard_id) throw new Error("Chemical identity does not match.");
+    q = q.eq("vineyard_id", initial.vineyard_id);
+    if (initial.sync_version != null) q = q.eq("sync_version", initial.sync_version);
+    if (initial.updated_at) q = q.eq("updated_at", initial.updated_at);
+    if (linked) {
+      q = initial.chemical_v3_revision_id ? q.eq("chemical_v3_revision_id", initial.chemical_v3_revision_id) : q.is("chemical_v3_revision_id", null);
+      q = initial.chemical_v3_product_id ? q.eq("chemical_v3_product_id", initial.chemical_v3_product_id) : q.is("chemical_v3_product_id", null);
+    }
+  }
+  const { data, error } = await q.select().single();
   if (error) throw error;
+  if (!data || data.id !== id) throw new Error("Chemical changed or is no longer available. Reopen before saving.");
+  if (initial) {
+    const fresh = await fetchSavedChemicalsForVineyard(initial.vineyard_id, { archived: !!initial.deleted_at });
+    const saved = fresh.chemicals.find((c) => c.id === id);
+    if (!saved) throw new Error("Saved chemical could not be confirmed from the live catalogue.");
+    return saved;
+  }
   return data as SavedChemical;
 }
 

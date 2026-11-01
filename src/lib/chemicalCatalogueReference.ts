@@ -47,6 +47,7 @@ export function intelligenceDraftUnchanged(a: unknown, b: unknown): boolean {
 }
 
 export async function fetchCatalogueReference(link: { productId: string | null; revisionId: string | null }): Promise<CatalogueReference> {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) throw new Error("Live catalogue unavailable offline.");
   let productId = link.productId;
   let linked: Row | null = null;
   if (!productId && link.revisionId) {
