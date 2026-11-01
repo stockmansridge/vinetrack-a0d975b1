@@ -327,9 +327,8 @@ export function describeTripTitleError(err: unknown): string {
 
 // ------------------- Complete trip -------------------
 //
-// Completing a paused/active trip clears the active/paused flags and stamps
-// `end_time` (only when missing — an existing end_time is never overwritten).
-// Tracking data, path points and costing fields are untouched.
+// Legacy Portal completion is disabled: no verified membership-scoped atomic
+// dependency/sync preflight and audit contract exists here. Never force-close.
 
 export async function completeTrip(params: {
   tripId: string;
@@ -337,21 +336,8 @@ export async function completeTrip(params: {
   userId?: string | null;
   existingEndTime?: string | null;
 }): Promise<void> {
-  const { tripId, currentSyncVersion, userId, existingEndTime } = params;
-  const ts = tripsNowIso();
-  const { error } = await supabase
-    .from("trips")
-    .update({
-      is_active: false,
-      is_paused: false,
-      end_time: existingEndTime ?? ts,
-      updated_by: userId ?? null,
-      client_updated_at: ts,
-      sync_version: (currentSyncVersion ?? 0) + 1,
-    })
-    .eq("id", tripId)
-    .is("deleted_at", null);
-  if (error) throw error;
+  void params;
+  throw new Error("Safe Trip ending is unavailable until a verified server sync/dependency preflight and audited end action is deployed.");
 }
 
 export function describeTripCompleteError(err: unknown): string {
@@ -371,12 +357,16 @@ export function describeTripCompleteError(err: unknown): string {
 
 export async function softDeleteTrip(params: {
   tripId: string;
+  vineyardId?: string;
   currentSyncVersion?: number | null;
   userId?: string | null;
 }): Promise<void> {
-  const { tripId, currentSyncVersion, userId } = params;
+  const { tripId, vineyardId, currentSyncVersion, userId } = params;
+  if (!vineyardId || !userId || !Number.isSafeInteger(currentSyncVersion) || Number(currentSyncVersion) < 0) {
+    throw new Error("Refresh Trip status and permissions before deleting.");
+  }
   const ts = tripsNowIso();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("trips")
     .update({
       deleted_at: ts,
@@ -385,8 +375,18 @@ export async function softDeleteTrip(params: {
       sync_version: (currentSyncVersion ?? 0) + 1,
     })
     .eq("id", tripId)
-    .is("deleted_at", null);
+    .eq("vineyard_id", vineyardId)
+    .eq("sync_version", currentSyncVersion)
+    .eq("is_active", false)
+    .eq("is_paused", false)
+    .eq("is_filling_tank", false)
+    .not("end_time", "is", null)
+    .is("deleted_at", null)
+    .select("id");
   if (error) throw error;
+  if (!Array.isArray(data) || data.length !== 1 || data[0].id !== tripId) {
+    throw new TripDetailsConflictError();
+  }
 }
 
 export function describeTripDeleteError(err: unknown): string {
