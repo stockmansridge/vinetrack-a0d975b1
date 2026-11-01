@@ -54,7 +54,8 @@ export async function fetchCatalogueReference(link: { productId: string | null; 
     productId = str(linked.product_id);
     if (!productId) return { state: "not_approved", status: statusOf(linked) };
   }
-  const product = await one("chemical_v3_products", "id, status, approved_revision_id", productId!);
+  if (!productId) return { state: "unavailable", reason: "product_missing" };
+  const product = await one("chemical_v3_products", "id, status, approved_revision_id", productId);
   if (!product) return { state: "unavailable", reason: "product_missing" };
   // The PRODUCT must be explicitly approved; a missing status is never approval,
   // and an old approved pointer on a pending/rejected product does not count.
@@ -68,7 +69,7 @@ export async function fetchCatalogueReference(link: { productId: string | null; 
   const rev = linked && linked.id === approvedId ? linked : await one("chemical_v3_product_revisions", "*", approvedId);
   if (!rev) return { state: "unavailable", reason: "revision_missing" };
   if (str(rev.product_id) !== productId || statusOf(rev) !== "approved") return { state: "unavailable", reason: "mismatch" };
-  return { state: "approved", productId: productId!, revision: rev };
+  return { state: "approved", productId, revision: rev };
 }
 
 /** Enabled only while the owning dialog is open; refetches on every reopen. */
@@ -76,11 +77,15 @@ export function useCatalogueReference(row: Row | null | undefined, open: boolean
   const link = catalogueLinkOf(row);
   return useQuery({
     queryKey: ["chemical-catalogue-reference", vineyardId ?? row?.vineyard_id ?? null, row?.id ?? null, link?.productId ?? null, link?.revisionId ?? null],
-    queryFn: () => fetchCatalogueReference(link!),
+    queryFn: () => {
+      if (!link) throw new Error("Catalogue link is unavailable.");
+      return fetchCatalogueReference(link);
+    },
     enabled: open && !!link,
     staleTime: 0,
     gcTime: 0,
     refetchOnMount: "always",
+    refetchInterval: open && !!link ? 60_000 : false,
     retry: false,
   });
 }

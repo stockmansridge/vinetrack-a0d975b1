@@ -1,0 +1,31 @@
+# Linked vineyard catalogue update — blocked, unpublished
+
+## Evidence and current Portal behaviour
+
+Owner read-only evidence: THIOVIT Jet product `d0c15ce7-aead-4ccb-870f-2fa3def36b43` has approved revision `3588437b-1a4a-4c8a-8038-deba45b5f731`; JH Testing's saved copy points to superseded revision `e310e341-7fc5-4f59-a2da-30efdd0f330e` with empty rates. The approved reference has 200–600 g/100L powdery mildew and 600 g/100L bud mite options. Showing these references in Portal does not update the stored mobile copy.
+
+Portal now distinguishes saved revision and current approved revision, checks the exact vineyard-scoped saved row and its version on open, refocus/reconnect and once per minute while open, and validates the linked revision's product identity. Pending/rejected/unavailable or failed/in-flight approved reads cannot offer an update. Changed saved version/link requires closing and reopening; errors never become a current/no-op state. A different validated revision offers a disabled **Update linked VineTrack catalogue information** action. No mutation is implemented.
+
+Repository references `chemical_v3_match_revision_to_catalogue(p_revision_id,p_catalogue_product_id,p_note)` and `approve_chemical_v3_revision`; neither has an inspectable deployed function definition proving a member-scoped old-copy update, preservation or optimistic contract. Matching a discovery revision is not a verified per-saved-chemical refresh. No write RPC was invoked, recreated or invented. Connected Cloud catalog access cannot establish contracts in the separate shared vineyard backend.
+
+## Required shared server contract (specification only, no assigned RPC name)
+
+Before enabling saving, inspect the deployed function definition, signature, grants and security checks read-only. The action must accept the exact vineyard id, saved chemical id, expected product id, expected saved revision id, expected approved target revision id and a server-owned optimistic row version (sync_version plus updated_at or equivalent verified CAS token). No arbitrary chemistry, rate JSON, notes, preferred rate or other operator values may be supplied by the client.
+
+1. Authenticate via auth.uid(); require current non-archived same-vineyard membership and existing Chemical manage/write authorization (including expired-trial restrictions). Do not invent a new System Admin-only gate or broaden existing RLS. Authorization must be enforced inside the transaction, not inferred from browser state.
+2. Lock the saved chemical and authoritative catalogue product/revisions consistently. Check vineyard/id/product/link exactly and compare expected saved version. Refuse stale edits, wrong vineyard, missing/mismatched links, removed/archived records unless existing authorized policy explicitly permits maintaining that state, and inaccessible rows. Recheck the product's approved pointer equals the expected target with explicit product.status='approved', revision.review_status='approved' and matching product_id. Never current_revision_id or name matching.
+3. Same revision is an idempotent no-op, with no timestamp/version/audit churn. A stale expected target after a new approval is a conflict, not silent promotion. For different revisions require authoritative revision lineage/order proves a newer approved target; never downgrade.
+4. Update only backend-owned linked catalogue snapshots through the existing canonical promotion/serialization machinery: revision link/review snapshot, catalogue chemistry/resistance, label uses/verification and grouped catalogue reference rates. This requires inspecting the actual existing serializer and field ownership; do not replace it with inferred Portal JSON or convert ranges into selected rates.
+5. Preserve saved id, vineyard/product identity, archived/deleted status, notes, vineyard_preferred_rate, independent default_rates/operator choices, purchase ledger/history, inventory, and all legacy spray/tank/trip snapshots. If an independent selection is no longer supported, retain it and return an explicit review warning; never silently choose a replacement. Preserve operator-owned fields without round-tripping them through the browser.
+6. Increment the canonical sync version/timestamps using the existing shared sync conventions. Audit actor, vineyard, saved id, before/after revision, before/after optimistic version and changed catalogue-owned fields in the same transaction. Roll back on any conflict or incomplete update.
+7. Return the persisted canonical saved row, exact applied revisions/version and any selection-review warnings. Portal must invalidate saved-chemical/catalogue/freshness reads, reread the exact scoped saved row, and confirm applied revision and preserved operator fields before reporting success. An unconfirmed response stays visibly unconfirmed and cannot trigger a fallback direct write.
+
+## Permissions and acceptance required
+
+EXECUTE only for authenticated authorized members and required service-role callers; no anon grant. If SECURITY DEFINER is necessary, fix search_path, enforce all member/write/CAS checks internally and revoke default PUBLIC execution. If invoker, retain existing RLS/grants; do not broaden table privileges to compensate. No new table grant is requested.
+
+Use isolated non-customer fixtures to verify old superseded→new approved, same-revision no-op, pending/rejected and stale-approved-pointer refusal, wrong product/vineyard, newer user edit conflicts, preservation of notes/preferred/defaults/archive/purchases/history, ranges remaining unselected, canonical shared sync/read-back and mobile consumption. Signed-in acceptance and deployed contract inspection remain prerequisites; nothing may be published or mutate customer records during this task.
+
+## Parallel Trip check
+
+Manage Trip still freshly reads scoped status/membership/access and keeps stale ending disabled. No verified owner/manager atomic audited sync/dependency end contract is available; System Admin force-stop resets operational pointers and is not a substitute. September 24 JH Testing's actual live status, signed-in permissions and pending device work remain unverified without shared authenticated access. No force stop/delete/end was invoked. See `trip-management-safety.md`.
