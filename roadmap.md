@@ -1,5 +1,10 @@
 # Roadmap
 
+## Bounded Trip management correction
+- [ ] Audit lifecycle, fresh status/permissions and occurrence/tank/spray dependencies without live writes.
+- [ ] Add Manage Trip with fail-closed status and disabled stale ending unless an authorised atomic audited API is verified; retain confirmed-inactive delete.
+- [ ] Run focused status/role/offline/UI tests and preview compilation; keep unpublished and report server/auth blockers.
+
 ## Chemical approval active ingredients
 - [x] Backend owner confirmed ingredient RPC deployment, System Admin/editable-status restrictions, validation, issue resolution and audit logging.
 - [x] Enable RPC-only saving with concentration_unit and normalized-response revision read-back; preserve existing approval/promotion and block unsaved/unconfirmed changes.
