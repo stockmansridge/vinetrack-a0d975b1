@@ -1,6 +1,7 @@
 # Roadmap
 
 ## MAIT read-only controller acceptance
+- [x] Final safety correction: nested output mapping guards reject read-only/access/tenant changes, zero-event previews are not acceptance evidence, and partial module lists are labelled incomplete. 195 mocked tests pass across eight MAIT/import files; automatic compilation OK. No live operations or publication.
 - [x] Add connected-owner/manager checklist, explicit read-only usage preview, scoped reset and confirmed Setup sync.
 - [x] Update acceptance help; diagrams and paused scheduler preserved. 184 mocked tests pass across eight MAIT/file test files; automatic compilation OK.
 - [ ] Real-controller acceptance requires an authorised vineyard owner/manager using the Portal; intentionally not performed here. No live provider requests, membership changes, imports or publication.
