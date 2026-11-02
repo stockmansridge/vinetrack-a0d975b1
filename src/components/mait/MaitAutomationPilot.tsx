@@ -30,7 +30,7 @@ function PilotStatus({ vineyardId, moduleId, timezone }: Props) {
   const query = useQuery({ queryKey: ['mait', vineyardId, 'automation'], retry: false,
     queryFn: async () => {
       const data = maitRow(await maitRpc('get_mait_irrigation_automation_status', vineyardId));
-      if (typeof data.scheduler_active !== 'boolean' || data.pilot_system_admin_only !== true || !Array.isArray(data.modules)) throw new Error('MAIT automation pilot status could not be verified. Preferences are unavailable.');
+      if (typeof data.scheduler_active !== 'boolean' || data.pilot_system_admin_only !== true || typeof data.pilot_vineyard_selected !== 'boolean' || !Array.isArray(data.modules)) throw new Error('MAIT automation pilot status could not be verified. Preferences are unavailable.');
       return data;
     },
   });
