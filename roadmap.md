@@ -1,6 +1,7 @@
 # Roadmap
 
 ## MAIT irrigation automation pilot
+- [x] Follow-up: retrieval/record-creation dependency, cancellable confirmation, installed-but-paused guidance and default-module saves; 145 mocked tests pass across six MAIT files, automatic compilation OK. No live operations or publication.
 - [x] Add RPC-only System Admin/member preferences, inactive scheduler status and read-only protection; preserve manual sync.
 - [x] Update irrigation/weather help and extend mapping help with a responsive MAIT path; retain original illustration.
 - [x] 121 isolated pilot/manual regression tests pass across five files; automatic compilation build OK. No live sync or publication.
