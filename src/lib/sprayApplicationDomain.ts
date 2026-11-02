@@ -401,6 +401,11 @@ export interface SprayCarrierInput {
    * is authoritative history and is never silently re-derived.
    */
   concentrationFactor?: number | null;
+  /**
+   * Draft-only operator decision: keep the recorded CF even though the current
+   * water rates derive this different CF. Invalid once the derived CF changes.
+   */
+  concentrationFactorKeptAgainst?: number | null;
   /* ---- canopy answer (drives the AWRI dilute/runoff recommendation) ---- */
   /**
    * Trellis form. Not persisted by the current spray_jobs contract — see the
