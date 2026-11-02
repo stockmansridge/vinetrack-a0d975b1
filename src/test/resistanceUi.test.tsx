@@ -222,7 +222,7 @@ describe("Review acknowledgement", () => {
 
   it("asks for acknowledgement when the rotation cannot be fully assessed", () => {
     setup("unable_to_fully_assess", true);
-    expect(screen.getByText(/cannot be fully assessed/i)).toBeTruthy();
+    expect(screen.getAllByText(/cannot be fully assessed/i).length).toBeGreaterThan(0);
   });
 
   it("does not ask for acknowledgement on a good fit", () => {
@@ -235,5 +235,74 @@ describe("Review acknowledgement", () => {
     setup("unsupported_ruleset", false);
     expect(screen.queryByTestId("resistance-ack")).toBeNull();
     expect(screen.getByText("No strategy configured for this country")).toBeTruthy();
+  });
+});
+
+describe("Review acknowledgement layout (Issue #46)", () => {
+  const manyLines = Array.from({ length: 23 }, (_, i) => `Block A: finding ${i + 1}`);
+
+  function renderAck(over: Partial<Parameters<typeof ResistanceAcknowledgement>[0]> = {}) {
+    const onChange = vi.fn();
+    const view = render(
+      <ResistanceAcknowledgement
+        status="unable_to_fully_assess"
+        lines={manyLines}
+        requiresAcknowledgement
+        acknowledged={false}
+        onAcknowledgedChange={onChange}
+        {...over}
+      />,
+    );
+    return { onChange, ...view };
+  }
+
+  it("keeps the acknowledgement checkbox above 23 findings, collapsed behind a labelled toggle", () => {
+    renderAck();
+    const box = screen.getByTestId("resistance-ack");
+    const toggle = screen.getByRole("button", { name: /Show resistance details \(23\)/ });
+    // Checkbox renders BEFORE the details toggle in DOM order.
+    expect(
+      box.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // Findings start collapsed — not a wall of text hiding the control.
+    expect(screen.queryByText("Block A: finding 1")).toBeNull();
+    expect(screen.getByText("23 block/disease evaluations listed.")).toBeTruthy();
+    // …but remain reviewable before acknowledging.
+    fireEvent.click(toggle);
+    expect(screen.getByText("Block A: finding 23")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Hide resistance details \(23\)/ })).toBeTruthy();
+  });
+
+  it("explains unable_to_fully_assess as missing evidence, not confirmed violations", () => {
+    renderAck();
+    expect(screen.getByText(/missing or disputed/i)).toBeTruthy();
+    expect(screen.getByText(/not a list of confirmed label violations/i)).toBeTruthy();
+  });
+
+  it("shows few findings inline without a collapse", () => {
+    renderAck({ lines: ["Block A: one finding"] });
+    expect(screen.getByText("Block A: one finding")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /resistance details \(1\)/ })).toBeTruthy();
+  });
+
+  it("exposes a real checkbox with checked semantics for keyboard and assistive tech", () => {
+    const { onChange } = renderAck();
+    const box = screen.getByTestId("resistance-ack");
+    expect(box.getAttribute("role")).toBe("checkbox");
+    expect(box.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(box);
+    expect(onChange).toHaveBeenCalledWith(true);
+  });
+
+  it("disables the checkbox when the job is view-only", () => {
+    renderAck({ disabled: true });
+    expect(screen.getByTestId("resistance-ack")).toHaveProperty("disabled", true);
+  });
+
+  it("quotes the engine result for limit states without downgrading it", () => {
+    renderAck({ status: "strategy_exceeded", lines: ["Block A: exceeded"] });
+    expect(screen.getByText("Strategy exceeded")).toBeTruthy();
+    expect(screen.getByText(/exceeds a CropLife strategy maximum/i)).toBeTruthy();
+    expect(screen.getByText(/I have read the CropLife strategy findings/i)).toBeTruthy();
   });
 });
