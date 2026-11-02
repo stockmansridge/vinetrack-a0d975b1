@@ -17,7 +17,7 @@ function mount(moduleId = 'controller') {
 }
 beforeEach(() => {
   vi.clearAllMocks(); m.admin = true; m.adminLoading = false; m.member = true;
-  m.status = { scheduler_active: false, pilot_system_admin_only: true, modules: [{ module_id: 'controller', auto_sync_enabled: false, auto_commit_enabled: false, overlap_days: 3 }, { module_id: 'other', auto_sync_enabled: false, auto_commit_enabled: false, overlap_days: 3 }] };
+  m.status = { scheduler_active: false, pilot_system_admin_only: true, pilot_vineyard_selected: true, modules: [{ module_id: 'controller', auto_sync_enabled: false, auto_commit_enabled: false, overlap_days: 3 }, { module_id: 'other', auto_sync_enabled: false, auto_commit_enabled: false, overlap_days: 3 }] };
   m.rpc.mockImplementation(async name => name === 'get_mait_irrigation_automation_status' ? m.status : true);
   readOnlyStore.setReadOnly(false);
   vi.stubGlobal('fetch', vi.fn());
@@ -119,7 +119,7 @@ describe('MAIT irrigation automation pilot', () => {
     expect(m.rpc.mock.calls.some(c => c[0] === 'set_mait_irrigation_automation_options')).toBe(false);
   });
   it('fails closed on status errors or missing selected module', async () => {
-    m.status = { scheduler_active: false, pilot_system_admin_only: true, modules: [] }; mount();
+    m.status = { scheduler_active: false, pilot_system_admin_only: true, pilot_vineyard_selected: true, modules: [] }; mount();
     await waitFor(() => expect(m.rpc).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole('button', { name: 'Save pilot preferences' })).not.toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
@@ -127,6 +127,31 @@ describe('MAIT irrigation automation pilot', () => {
   it('fails closed on an unrecognised status envelope', async () => {
     m.status = {}; mount(); await screen.findByRole('alert');
     expect(screen.queryByRole('button', { name: 'Save pilot preferences' })).not.toBeInTheDocument();
+  });
+  it('shows the selected-pilot message with paused scheduler for the approved vineyard', async () => {
+    mount();
+    expect(await screen.findByText(/selected for the System Admin MAIT irrigation pilot/)).toBeInTheDocument();
+    expect(screen.getByText(/Scheduler installed but paused/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save pilot preferences' })).toBeInTheDocument();
+  });
+  it('hides all pilot controls when the vineyard is not selected, even with a legacy sync-state row', async () => {
+    m.status = { scheduler_active: false, pilot_system_admin_only: true, pilot_vineyard_selected: false, modules: [{ module_id: 'controller', auto_sync_enabled: true, auto_commit_enabled: true, overlap_days: 5 }] };
+    mount();
+    expect(await screen.findByText(/not selected for the MAIT automatic-sync pilot/)).toBeInTheDocument();
+    expect(screen.getByText(/Scheduler installed but paused/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save pilot preferences' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    expect(m.rpc.mock.calls.some(c => c[0] === 'set_mait_irrigation_automation_options')).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it('fails closed when the pilot selection flag is missing from the status', async () => {
+    m.status = { scheduler_active: false, pilot_system_admin_only: true, modules: [{ module_id: 'controller', auto_sync_enabled: false, auto_commit_enabled: false, overlap_days: 3 }] };
+    mount(); await screen.findByRole('alert');
+    expect(screen.queryByText(/selected for the System Admin MAIT irrigation pilot/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save pilot preferences' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(m.rpc.mock.calls.some(c => c[0] === 'set_mait_irrigation_automation_options')).toBe(false);
   });
   it('shows save failure without reporting success or running a sync', async () => {
     m.rpc.mockImplementation(async name => { if (name === 'set_mait_irrigation_automation_options') throw new Error('Pilot preferences could not be saved'); return m.status; });
