@@ -383,7 +383,9 @@ function ValveDialog({
               />
             </div>
             <div>
-              <Label htmlFor="valve-flow">Configured flow (L/hour)</Label>
+              <Label htmlFor="valve-flow">
+                Configured flow (L/hour) <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+              </Label>
               <Input
                 id="valve-flow"
                 inputMode="decimal"
@@ -392,7 +394,9 @@ function ValveDialog({
               />
             </div>
             <div>
-              <Label htmlFor="valve-measured">Measured flow (L/hour)</Label>
+              <Label htmlFor="valve-measured">
+                Measured flow (L/hour) <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+              </Label>
               <Input
                 id="valve-measured"
                 inputMode="decimal"
