@@ -37,6 +37,7 @@ describe('MAIT irrigation automation pilot', () => {
     mount();
     expect(await screen.findByRole('switch', { name: 'Automatic retrieval' })).not.toBeChecked();
     expect(screen.getByRole('switch', { name: 'Automatic record creation' })).not.toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Automatic record creation' })).toBeDisabled();
     expect(screen.getByRole('spinbutton', { name: 'Overlap (days)' })).toHaveValue(3);
     expect(m.rpc).toHaveBeenCalledTimes(1);
     expect(m.rpc).toHaveBeenCalledWith('get_mait_irrigation_automation_status', 'v');
@@ -46,11 +47,53 @@ describe('MAIT irrigation automation pilot', () => {
     mount();
     fireEvent.click(await screen.findByRole('switch', { name: 'Automatic retrieval' }));
     fireEvent.click(screen.getByRole('switch', { name: 'Automatic record creation' }));
+    expect(screen.getByRole('switch', { name: 'Automatic record creation' })).not.toBeChecked();
+    expect(m.rpc.mock.calls.some(c => c[0] === 'set_mait_irrigation_automation_options')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm record creation' }));
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '7' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save pilot preferences' }));
     await waitFor(() => expect(m.rpc).toHaveBeenCalledWith('set_mait_irrigation_automation_options', 'v', { p_module_id: 'controller', p_auto_sync_enabled: true, p_auto_commit_enabled: true, p_overlap_days: 7 }));
     expect(m.rpc.mock.calls.filter(c => c[0] === 'set_mait_irrigation_automation_options')).toHaveLength(1);
     expect(fetch).not.toHaveBeenCalled();
+  });
+  it.each([false, true])('saves a default controller with no sync-state row and retrieval=%s', async retrieve => {
+    m.status.modules = [{ module_id: 'controller', auto_sync_enabled: false, auto_commit_enabled: false, overlap_days: 3 }];
+    mount(); const retrieval = await screen.findByRole('switch', { name: 'Automatic retrieval' });
+    if (retrieve) fireEvent.click(retrieval);
+    fireEvent.click(screen.getByRole('button', { name: 'Save pilot preferences' }));
+    await waitFor(() => expect(m.rpc).toHaveBeenCalledWith('set_mait_irrigation_automation_options', 'v', { p_module_id: 'controller', p_auto_sync_enabled: retrieve, p_auto_commit_enabled: false, p_overlap_days: 3 }));
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it('cancels record creation without changing the preference or saving', async () => {
+    mount(); fireEvent.click(await screen.findByRole('switch', { name: 'Automatic retrieval' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Automatic record creation' }));
+    expect(screen.getByRole('button', { name: 'Save pilot preferences' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Automatic record creation' })).not.toBeChecked();
+    expect(m.rpc.mock.calls.some(c => c[0] === 'set_mait_irrigation_automation_options')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Save pilot preferences' }));
+    await waitFor(() => expect(m.rpc).toHaveBeenCalledWith('set_mait_irrigation_automation_options', 'v', expect.objectContaining({ p_auto_sync_enabled: true, p_auto_commit_enabled: false })));
+  });
+  it('turning retrieval off resets confirmed record creation and sends both off', async () => {
+    mount(); const retrieval = await screen.findByRole('switch', { name: 'Automatic retrieval' });
+    fireEvent.click(retrieval); fireEvent.click(screen.getByRole('switch', { name: 'Automatic record creation' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm record creation' }));
+    expect(screen.getByRole('switch', { name: 'Automatic record creation' })).toBeChecked();
+    fireEvent.click(retrieval);
+    expect(screen.getByRole('switch', { name: 'Automatic record creation' })).not.toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Automatic record creation' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save pilot preferences' }));
+    await waitFor(() => expect(m.rpc).toHaveBeenCalledWith('set_mait_irrigation_automation_options', 'v', expect.objectContaining({ p_auto_sync_enabled: false, p_auto_commit_enabled: false })));
+  });
+  it('does not accept record creation confirmation after the vineyard becomes read-only', async () => {
+    mount(); fireEvent.click(await screen.findByRole('switch', { name: 'Automatic retrieval' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Automatic record creation' }));
+    readOnlyStore.setReadOnly(true);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm record creation' })).toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm record creation' }));
+    expect(screen.getByRole('switch', { name: 'Automatic record creation' })).not.toBeChecked();
+    expect(m.rpc.mock.calls.some(c => c[0] === 'set_mait_irrigation_automation_options')).toBe(false);
   });
   it.each(['0', '15', '1.5', ''])('rejects overlap %s before a save request', async value => {
     mount(); await screen.findByRole('spinbutton');
