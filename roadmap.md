@@ -1,9 +1,9 @@
 # Roadmap
 
 ## MAIT read-only controller acceptance
-- [ ] Add connected-owner/manager checklist, explicit read-only usage preview, scoped reset and confirmed Setup sync.
-- [ ] Update acceptance help, preserve diagrams and paused scheduler; run mocked MAIT/file regressions and compilation checks.
-- [ ] Real-controller acceptance is customer-led only; no live provider requests, membership changes or imports during development.
+- [x] Add connected-owner/manager checklist, explicit read-only usage preview, scoped reset and confirmed Setup sync.
+- [x] Update acceptance help; diagrams and paused scheduler preserved. 184 mocked tests pass across eight MAIT/file test files; automatic compilation OK.
+- [ ] Real-controller acceptance requires an authorised vineyard owner/manager using the Portal; intentionally not performed here. No live provider requests, membership changes, imports or publication.
 
 ## MAIT irrigation automation pilot
 - [x] Follow-up: retrieval/record-creation dependency, cancellable confirmation, installed-but-paused guidance and default-module saves; 145 mocked tests pass across six MAIT files, automatic compilation OK. No live operations or publication.
