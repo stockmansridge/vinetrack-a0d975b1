@@ -6,6 +6,7 @@ import MaitImportSyncCard from './MaitImportSyncCard';
 import IrrigationImportPage from '@/pages/tools/IrrigationImportPage';
 import { maitHttpResult } from '@/lib/maitIntelliwebQuery';
 import { readOnlyStore } from '@/lib/vineyardWriteAccess';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 const m = vi.hoisted(() => ({ vineyard: 'v' as string | null, role: 'owner', manage: true, connected: true, controllers: [] as Record<string, unknown>[], mappings: [] as Record<string, unknown>[], valves: [] as Record<string, unknown>[], rpc: vi.fn(), proxy: vi.fn(), error: false }));
 vi.mock('@/context/VineyardContext', () => ({ useVineyard: () => ({ selectedVineyardId: m.vineyard, currentRole: m.role, memberships: [], loading: false }) }));
@@ -25,7 +26,7 @@ vi.mock('@/lib/irrigationImportQuery', () => ({
 }));
 function mount(page = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  const view = render(<QueryClientProvider client={client}><MemoryRouter>{page ? <IrrigationImportPage /> : <MaitImportSyncCard />}</MemoryRouter></QueryClientProvider>);
+  const view = render(<QueryClientProvider client={client}><TooltipProvider><MemoryRouter>{page ? <IrrigationImportPage /> : <MaitImportSyncCard />}</MemoryRouter></TooltipProvider></QueryClientProvider>);
   return { ...view, client, redraw: () => view.rerender(<QueryClientProvider client={client}><MemoryRouter><MaitImportSyncCard /></MemoryRouter></QueryClientProvider>) };
 }
 async function choose(label = 'Pump · controller') {
