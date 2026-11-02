@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Info } from 'lucide-react';
 import { useIrrigationSystems, useIrrigationValves } from '@/lib/irrigationQuery';
 import { maitRpc, maitProxy, maitModules, maitOutputs, maitRows, maitDateWindow, maitSyncCounts, maitControllerSyncState, MAIT_PROVIDER, MAIT_PARTIAL_WARNING, type MaitResult } from '@/lib/maitIntelliwebQuery';
 import { MaitChoice, useMait } from './MaitWeatherCard';
