@@ -10,6 +10,7 @@
 // design, so nothing here requires block area, row length or row spacing.
 import { AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -425,6 +426,32 @@ export function CarrierStep({ app, patch, geometry, calc, canEdit }: StepProps) 
               CF = dilute ÷ applied, floored at 1.00. Per-100 L label rates are multiplied by it so the
               block still receives the labelled dose.
             </p>
+          )}
+          {carrier.concentrationFactorInputs && (
+            <p className="text-xs text-muted-foreground" data-testid="cf-inputs">
+              CF from water rates: {fmtNum(carrier.concentrationFactorInputs.diluteReference, 1)} ÷{" "}
+              {fmtNum(carrier.concentrationFactorInputs.applied, 1)} {carrier.concentrationFactorInputs.unit} = ×
+              {fmtNum(carrier.derivedConcentrationFactor ?? 1, 4)}
+            </p>
+          )}
+          {carrier.diagnostics.some((d) => d.code === "concentration_factor_mismatch") && canEdit && (
+            <div className="flex flex-wrap gap-2" data-testid="cf-mismatch-actions">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setCarrier({ concentrationFactor: null, concentrationFactorKeptAgainst: null })}
+              >
+                Use ×{fmtNum(carrier.derivedConcentrationFactor ?? 1, 2)} from water rates
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setCarrier({ concentrationFactorKeptAgainst: carrier.derivedConcentrationFactor })}
+              >
+                Keep recorded ×{fmtNum(carrier.persistedConcentrationFactor ?? 1, 2)}
+              </Button>
+            </div>
           )}
           {carrier.diagnostics.length > 0 && (
             <ul className="space-y-1 text-xs">
