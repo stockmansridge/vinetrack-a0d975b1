@@ -38,9 +38,12 @@ function PilotStatus({ vineyardId, moduleId, timezone }: Props) {
   return <section aria-label="MAIT automation pilot" className="space-y-3 border-t pt-4">
     <div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-semibold">Irrigation automation pilot</h3><Badge variant="outline">System Admin only</Badge></div>
     {query.isPending ? <p role="status" className="text-sm">Checking automation pilot status…</p> : query.isError ? <Alert variant="destructive"><AlertDescription>{query.error.message}</AlertDescription></Alert> : <>
+      {query.data?.pilot_vineyard_selected === true ? <p role="status" className="text-sm font-medium">This vineyard is selected for the System Admin MAIT irrigation pilot.</p> : <Alert><AlertDescription>This vineyard is not selected for the MAIT automatic-sync pilot. Pilot preferences are unavailable; manual Sync now remains operational.</AlertDescription></Alert>}
       {query.data?.scheduler_active === false && <Alert><AlertDescription>Scheduler installed but paused — automatic retrieval and record creation are not running. Cadence: every 6 hours after authorised activation. Saving these pilot preferences does not activate the scheduler. Manual Sync now remains operational.</AlertDescription></Alert>}
-      <p className="text-xs text-muted-foreground">Cadence: every 6 hours. Defaults: automatic retrieval off, automatic record creation off, overlap 3 days.</p>
-      {module ? <PilotOptions key={`${moduleId}:${String(module.auto_sync_enabled)}:${String(module.auto_commit_enabled)}:${String(module.overlap_days)}`} vineyardId={vineyardId} moduleId={moduleId} module={module} timezone={timezone} verifying={query.isFetching} /> : <p className="text-sm">This controller is not available in the automation pilot status. Reload status before saving preferences.</p>}
+      {query.data?.pilot_vineyard_selected === true && <>
+        <p className="text-xs text-muted-foreground">Cadence: every 6 hours. Defaults: automatic retrieval off, automatic record creation off, overlap 3 days.</p>
+        {module ? <PilotOptions key={`${moduleId}:${String(module.auto_sync_enabled)}:${String(module.auto_commit_enabled)}:${String(module.overlap_days)}`} vineyardId={vineyardId} moduleId={moduleId} module={module} timezone={timezone} verifying={query.isFetching} /> : <p className="text-sm">This controller is not available in the automation pilot status. Reload status before saving preferences.</p>}
+      </>}
     </>}
     <Button variant="ghost" size="sm" disabled={query.isFetching} onClick={() => void query.refetch()}>Refresh pilot status</Button>
   </section>;
