@@ -1,5 +1,10 @@
 # Roadmap
 
+## MAIT read-only controller acceptance
+- [ ] Add connected-owner/manager checklist, explicit read-only usage preview, scoped reset and confirmed Setup sync.
+- [ ] Update acceptance help, preserve diagrams and paused scheduler; run mocked MAIT/file regressions and compilation checks.
+- [ ] Real-controller acceptance is customer-led only; no live provider requests, membership changes or imports during development.
+
 ## MAIT irrigation automation pilot
 - [x] Follow-up: retrieval/record-creation dependency, cancellable confirmation, installed-but-paused guidance and default-module saves; 145 mocked tests pass across six MAIT files, automatic compilation OK. No live operations or publication.
 - [x] Add RPC-only System Admin/member preferences, inactive scheduler status and read-only protection; preserve manual sync.
