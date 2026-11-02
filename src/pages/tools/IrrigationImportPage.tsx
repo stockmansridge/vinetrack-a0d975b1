@@ -38,6 +38,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import ImportValveMappingStep from "@/components/irrigation/import/ImportValveMappingStep";
 import ImportRowReview from "@/components/irrigation/import/ImportRowReview";
 import ImportBatchHistory from "@/components/irrigation/import/ImportBatchHistory";
+import MaitImportSyncCard from "@/components/irrigation/import/MaitImportSyncCard";
 import {
   COMPARISON_LABEL,
   browserTimezone,
@@ -197,7 +198,7 @@ export default function IrrigationImportPage() {
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Irrigation controller</CardTitle>
+              <CardTitle className="text-base">Import from a file</CardTitle>
               <CardDescription>
                 Select the system that created the irrigation export file. VineTrack uses this to
                 interpret the file correctly.
@@ -244,6 +245,7 @@ export default function IrrigationImportPage() {
             </CardContent>
           </Card>
 
+          <MaitImportSyncCard />
           <UnlistedControllerPanel onContact={() => setSupportOpen(true)} />
         </div>
       )}

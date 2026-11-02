@@ -70,7 +70,7 @@ export function ImportBatchHistory({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Import history</CardTitle>
+        <CardTitle className="text-base">File import history</CardTitle>
       </CardHeader>
       <CardContent>
         {batchesQ.isLoading && <p className="text-sm text-muted-foreground">Loading batches…</p>}
