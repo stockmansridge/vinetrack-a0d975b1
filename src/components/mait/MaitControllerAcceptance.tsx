@@ -12,7 +12,7 @@ export function MaitControllerAcceptance({ vineyardId, linked, mappingsChecked, 
       <Check label="MAIT network connected (saved configuration; not a connection test)" state="Ready" />
       <Check label="Confirmed controller linked to an active VineTrack irrigation system" state={linked ? 'Ready' : 'Not configured'} />
       <Check label={`Saved output mappings: ${mappedValveIds.length} active target valves from ${mappingCount} outputs`} state={!mappingsChecked ? 'Not checked' : mappingCount > 0 && mappedValveIds.length > 0 ? 'Ready' : 'Not configured'} />
-      <Check label="Read-only usage preview" state={!preview ? 'Not checked' : preview.partial || preview.empty ? 'Checked — incomplete or empty' : 'Ready'} />
+      <Check label="Read-only usage preview" state={!preview ? 'Not checked' : preview.partial || preview.empty ? 'Checked — incomplete or empty' : 'Checked — compare with MAIT'} />
     </dl>
     <p className="text-xs text-muted-foreground">Ready describes this check only. One mapped output does not verify every controller output or enable automation. Compare the preview with MAIT records and review every relevant output.</p>
     {mappedValveIds.length ? mappedValveIds.map(id => <ValveAllocation key={id} vineyardId={vineyardId} valveId={id} />) : <p className="text-sm text-muted-foreground">Valve-to-block / row / area allocations: Not configured.</p>}
