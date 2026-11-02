@@ -46,7 +46,7 @@ export const PROVIDER_PROVIDES: Record<WeatherProviderId, string[]> = {
   willyweather: ["Forecasts"],
   davis: ["Live observations", "Rainfall actuals"],
   wunderground: ["Live observations", "Rainfall actuals"],
-  mait: ["Live observations", "Rainfall actuals"],
+  mait: ["Live observations", "Rainfall actuals", "Irrigation run history (if configured)"],
 };
 
 /**
