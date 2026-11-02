@@ -1,3 +1,4 @@
+import { normalizeSprayJobStatus } from "./sprayJobStatus";
 // Stage 3A — canonical Spray Application domain model.
 //
 // One vocabulary for the whole portal: application mode, operation type,
@@ -569,7 +570,7 @@ export function fromLegacySprayJob(
   app.isTemplate = !!job.is_template;
   app.name = job.name ?? null;
   app.plannedDate = job.planned_date ?? null;
-  app.status = job.status ?? null;
+  app.status = normalizeSprayJobStatus(job.status) ?? job.status ?? null;
 
   app.operationType = normaliseOperationType(job.operation_type);
   app.mode =

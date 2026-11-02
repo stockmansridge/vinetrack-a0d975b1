@@ -315,3 +315,6 @@
 - [x] Minimal upload dialog (file + vineyard only; parser fills metadata); retrySoilExtraction reuses existing sample/document ids, resets pending, clears extraction_error, never re-uploads or duplicates; describeFunctionError surfaces FunctionsHttpError JSON detail safely; Retry on detail page and samples list; 80 focused/nav tests + typecheck pass.
 - [x] Extraction-failure presentation polish: concise main message (EXTRACTION_FAILED_MESSAGE), cleaned one-line human detail via cleanExtractionDetail (tolerant JSON parsing for pretty-printed nested errors), raw text only behind a collapsed "Technical details" disclosure (ExtractionErrorNotice) on the samples list, upload dialog, detail-page documents and retry failures; retry and evidence-preservation behaviour unchanged.
 - [x] Multi-analyte Trends: searchable SoilAnalyteMultiSelect (tick list, Select all visible, Clear analytes, selections survive search); one listBlocksTrendResults query per block selection; one stacked graph section per selected analyte in catalogue order; per-analyte series/method-unit separation, no-data state and raw table preserved; help copy updated.
+
+## Ticket #46 Greg planned spray status
+- [x] Portal sends only constraint-valid spray_jobs statuses ("Planned"); legacy "scheduled" read as planned at UI only.

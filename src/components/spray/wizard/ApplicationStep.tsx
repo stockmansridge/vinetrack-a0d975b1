@@ -21,8 +21,8 @@ import { chemicalLinesSummary, fetchSprayJobs } from "@/lib/sprayJobsQuery";
 import { SelectTile } from "./controls";
 import { isFertigationOperationType } from "@/lib/fertigation";
 import type { StepProps } from "./types";
+import { SELECTABLE_SPRAY_JOB_STATUSES, SPRAY_JOB_STATUS_LABEL, normalizeSprayJobStatus } from "@/lib/sprayJobStatus";
 
-const STATUS_OPTIONS = ["draft", "scheduled", "in_progress", "completed", "cancelled"];
 
 const OPERATION_HELP: Record<OperationType, string> = {
   foliar: "Sprayed over the canopy — carrier volume and head target apply.",
@@ -82,14 +82,14 @@ export function ApplicationStep({ app, patch, update, canEdit, vineyardId, intel
               <div className="space-y-1">
                 <Label>Status</Label>
                 <Select
-                  value={app.status ?? "draft"}
+                  value={normalizeSprayJobStatus(app.status) ?? "draft"}
                   disabled={!canEdit}
                   onValueChange={(v) => patch({ status: v })}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {STATUS_OPTIONS.map((s) => (
-                      <SelectItem key={s} value={s}>{s.replace("_", " ")}</SelectItem>
+                    {SELECTABLE_SPRAY_JOB_STATUSES.map((s) => (
+                      <SelectItem key={s} value={s}>{SPRAY_JOB_STATUS_LABEL[s]}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

@@ -1,3 +1,4 @@
+import { sprayJobStatusForSave } from "./sprayJobStatus";
 // Stage 3B — the single canonical mapper from the Spray Application draft to
 // the existing `spray_jobs` contract. No step, panel or component writes to the
 // database directly: everything funnels through `toSprayJobInput`.
@@ -246,7 +247,7 @@ export function toSprayJobInput(args: {
     planned_date: isTemplate ? null : app.plannedDate ?? null,
     // `spray_jobs.status` is NOT NULL — a Program Step is still stored with a
     // valid status ('draft'); `is_template` is what makes it a template.
-    status: isTemplate ? "draft" : app.status ?? "draft",
+    status: isTemplate ? "draft" : sprayJobStatusForSave(app.status),
     operation_type: app.operationType ? OPERATION_TYPE_LABEL[app.operationType] : null,
     application_mode: mode,
     target: legacyTargetText(app, args.targetLabels),
