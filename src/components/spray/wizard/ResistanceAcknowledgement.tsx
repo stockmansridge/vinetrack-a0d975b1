@@ -71,7 +71,15 @@ export function ResistanceAcknowledgement({
   onAcknowledgedChange: (v: boolean) => void;
   disabled?: boolean;
 }) {
-  const [detailsOpen, setDetailsOpen] = useState(lines.length <= COLLAPSE_THRESHOLD);
+  // The findings arrive asynchronously and `lines` is rebuilt by the parent on
+  // every render, so identity is the CONTENT, not the array reference. A user
+  // toggle is recorded against the current content key; when the findings
+  // change (empty → 23, 23 → 2, …) the auto default applies again, while
+  // unrelated rerenders with the same findings keep the user's choice.
+  const linesKey = lines.join("\n");
+  const [toggled, setToggled] = useState<{ key: string; open: boolean } | null>(null);
+  const detailsOpen =
+    toggled && toggled.key === linesKey ? toggled.open : lines.length <= COLLAPSE_THRESHOLD;
   if (!status) return null;
   const explanation = STATUS_EXPLANATION[status];
   return (
@@ -119,7 +127,7 @@ export function ResistanceAcknowledgement({
             type="button"
             aria-expanded={detailsOpen}
             aria-controls="resistance-details"
-            onClick={() => setDetailsOpen((o) => !o)}
+            onClick={() => setToggled({ key: linesKey, open: !detailsOpen })}
             className="flex items-center gap-1 text-xs font-medium text-muted-foreground underline-offset-2 hover:underline"
           >
             {detailsOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
