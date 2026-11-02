@@ -196,57 +196,65 @@ export default function IrrigationImportPage() {
 
       {step === "source" && (
         <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Import from a file</CardTitle>
-              <CardDescription>
-                Select the system that created the irrigation export file. VineTrack uses this to
-                interpret the file correctly.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {providersQ.isLoading && (
-                <p className="text-sm text-muted-foreground">Loading irrigation controllers…</p>
-              )}
-              {providersQ.error && (
-                <PortalNotice variant="error" title="Couldn't load irrigation controllers">
-                  {(providersQ.error as Error).message}
-                </PortalNotice>
-              )}
-              <div className="grid gap-3 md:grid-cols-2">
-                {(providersQ.data ?? []).map((p) => (
-                  <button
-                    key={p.provider_id}
-                    type="button"
-                    onClick={() => setProvider(p.provider_id)}
-                    className={`rounded-lg border p-4 text-left transition-colors hover:bg-sidebar-accent/40 ${
-                      provider === p.provider_id ? "border-sidebar-primary bg-sidebar-accent" : "border-border"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 font-medium">
-                      <FileSpreadsheet className="h-4 w-4" />
-                      {p.display_name}
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {p.supported_file_types.map((t) => t.toUpperCase()).join(" / ")} ·{" "}
-                      {Math.round((p.max_file_size_bytes ?? 0) / 1048576)} MB max
-                    </p>
-                  </button>
-                ))}
-              </div>
+          <div
+            data-testid="import-source-grid"
+            className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+          >
+            <Card className="flex h-full min-w-0 flex-col">
+              <CardHeader>
+                <CardTitle className="text-base">Import from a file</CardTitle>
+                <CardDescription>
+                  Select the system that created the irrigation export file. VineTrack uses this to
+                  interpret the file correctly.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-1 flex-col space-y-4">
+                {providersQ.isLoading && (
+                  <p className="text-sm text-muted-foreground">Loading irrigation controllers…</p>
+                )}
+                {providersQ.error && (
+                  <PortalNotice variant="error" title="Couldn't load irrigation controllers">
+                    {(providersQ.error as Error).message}
+                  </PortalNotice>
+                )}
+                <div className="grid min-w-0 gap-3">
+                  {(providersQ.data ?? []).map((p) => (
+                    <button
+                      key={p.provider_id}
+                      type="button"
+                      onClick={() => setProvider(p.provider_id)}
+                      className={`rounded-lg border p-4 text-left transition-colors hover:bg-sidebar-accent/40 ${
+                        provider === p.provider_id ? "border-sidebar-primary bg-sidebar-accent" : "border-border"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 font-medium">
+                        <FileSpreadsheet className="h-4 w-4" />
+                        {p.display_name}
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {p.supported_file_types.map((t) => t.toUpperCase()).join(" / ")} ·{" "}
+                        {Math.round((p.max_file_size_bytes ?? 0) / 1048576)} MB max
+                      </p>
+                    </button>
+                  ))}
+                </div>
 
-              {providerHelp && <ProviderInstructions help={providerHelp} />}
+                <div className="mt-auto flex justify-end">
+                  <Button disabled={!provider || !selectedVineyardId} onClick={() => setStep("upload")}>
+                    Continue
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
-              <div className="flex justify-end">
-                <Button disabled={!provider || !selectedVineyardId} onClick={() => setStep("upload")}>
-                  Continue
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+            <MaitImportSyncCard className="min-w-0" />
+            <UnlistedControllerPanel
+              className="min-w-0 md:col-span-2 xl:col-span-1"
+              onContact={() => setSupportOpen(true)}
+            />
+          </div>
 
-          <MaitImportSyncCard />
-          <UnlistedControllerPanel onContact={() => setSupportOpen(true)} />
+          {providerHelp && <ProviderInstructions help={providerHelp} />}
         </div>
       )}
 
