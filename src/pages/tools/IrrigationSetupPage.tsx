@@ -37,8 +37,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { AlertTriangle, ArrowLeft, Check, Pencil, Plus } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, CircleHelp, Pencil, Plus } from "lucide-react";
 import { HelpTip } from "@/components/spray/wizard/controls";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import mappingGuideAsset from "@/assets/irrigation-mapping-guide.png.asset.json";
 import {
   ALLOCATION_METHOD_LABEL,
   useAvailableRows,
