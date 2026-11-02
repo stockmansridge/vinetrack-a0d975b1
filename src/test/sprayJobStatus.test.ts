@@ -74,7 +74,7 @@ describe("spray job status (ticket #46)", () => {
 
   it("'completed' is only a label — it creates no spray record", () => {
     expect(normalizeSprayJobStatus("completed")).toBe("completed");
-    const input = save(draft({ status: "completed" })) as Record<string, unknown>;
+    const input = save(draft({ status: "completed" })) as unknown as Record<string, unknown>;
     expect(input.status).toBe("completed");
     expect(Object.keys(input).some((k) => /spray_record|actual/i.test(k))).toBe(false);
   });
