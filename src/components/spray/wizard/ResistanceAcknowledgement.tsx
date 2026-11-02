@@ -127,7 +127,7 @@ export function ResistanceAcknowledgement({
             type="button"
             aria-expanded={detailsOpen}
             aria-controls="resistance-details"
-            onClick={() => setDetailsOpen((o) => !o)}
+            onClick={() => setToggled({ key: linesKey, open: !detailsOpen })}
             className="flex items-center gap-1 text-xs font-medium text-muted-foreground underline-offset-2 hover:underline"
           >
             {detailsOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
