@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => ({ rpc: vi.fn(), manage: true, connected: false, 
 vi.mock('@/integrations/ios-supabase/client', () => ({ supabase: { rpc: mocks.rpc, auth: { getSession: async () => ({data:{session:{access_token:'fixture'}}}) } }, IOS_SUPABASE_URL:'https://example.test', IOS_SUPABASE_ANON_KEY:'public' }));
 vi.mock('@/lib/vineyardSettingsQuery', () => ({ fetchVineyard: async () => ({timezone:'Australia/Sydney'}) }));
 vi.mock('@/lib/systemAdmin', () => ({ useIsSystemAdmin: () => ({ isAdmin: false, loading: false }) }));
-vi.mock('@/lib/irrigationQuery', () => ({ useIrrigationSystems: () => ({ data:[{id:'system',name:'East system'}] }), useIrrigationValves: () => ({data:[{id:'valve',name:'East valve',irrigation_system_id:'system'}]}) }));
+vi.mock('@/context/VineyardContext', () => ({ useVineyard: () => ({ selectedVineyardId: 'v', currentRole: 'owner', loading: false }) }));
+vi.mock('@/lib/irrigationQuery', () => ({ useIrrigationSystems: () => ({ data:[{id:'system',name:'East system',vineyard_id:'v',is_active:true}] }), useIrrigationValves: () => ({data:[{id:'valve',name:'East valve',irrigation_system_id:'system',vineyard_id:'v',is_active:true}]}), useValveBlocks: () => ({ data:[] }), useSetupStatus: () => ({ data: { valves:[] } }) }));
 function mount(ui: React.ReactNode) { return render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}})}><MemoryRouter>{ui}</MemoryRouter></QueryClientProvider>); }
 beforeEach(() => { cleanup(); vi.clearAllMocks(); mocks.manage=true; mocks.connected=false; mocks.conflict=false; mocks.config=maitConfigurationFixture(); mocks.rpc.mockImplementation(async (name:string,args:any) => {
   if (name === 'has_mait_intelliweb_manage_access') return {data:mocks.manage};
@@ -137,7 +138,7 @@ describe('MAIT setup actions', () => {
     fireEvent.click(screen.getByRole('combobox',{name:'Choose controller module'})); fireEvent.click(await screen.findByRole('option',{name:'new-module · New module'}));
     fireEvent.click(screen.getByRole('combobox',{name:'VineTrack Irrigation System'})); fireEvent.click(await screen.findByRole('option',{name:'East system'}));
     fireEvent.click(screen.getByRole('button',{name:'Save controller module'}));
-    expect(await screen.findByRole('button',{name:'Discover recent outputs'})).toBeEnabled();
+    expect(await screen.findByRole('button',{name:'Preview MAIT usage (read-only)'})).toBeEnabled();
     await waitFor(()=>expect(mocks.rpc).toHaveBeenCalledWith('get_mait_intelliweb_controller_mappings',{p_vineyard_id:'v',p_module_id:'new-module'}));
   });
   it('warns on weather module change and inspects newly saved active module', async () => {
@@ -191,6 +192,7 @@ describe('MAIT setup actions', () => {
     fireEvent.click(await screen.findByRole('option',{name:'controller · Pump'}));
     const sync=await screen.findByRole('button',{name:'Sync now'}); await waitFor(()=>expect(sync).toBeEnabled());
     fireEvent.click(sync);
+    fireEvent.click(await screen.findByRole('button',{name:'Confirm & sync'}));
     await screen.findByText('Committed');
     expect(screen.getByRole('status')).toHaveTextContent('Committed4');
     expect(screen.getByRole('status')).toHaveTextContent('partial/truncated');

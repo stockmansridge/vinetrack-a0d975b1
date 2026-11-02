@@ -33,9 +33,19 @@ export function MaitSetupHelp() {
       </li>
     </ol>
     <section className="border-t pt-4"><h3 className="font-semibold">Using MAIT for irrigation</h3>
-      <p className="mt-1">The same MAIT connection can also be used for a MAIT irrigation controller. Go to <strong>Irrigation Setup</strong>, choose the controller module, map MAIT outputs to VineTrack valves, then use <strong>Sync now</strong>.</p>
+      <p className="mt-1">The same MAIT connection can also be used for a MAIT irrigation controller. Go to <strong>Irrigation Setup</strong> and follow the controller acceptance checklist.</p>
+      <ol className="mt-2 list-decimal space-y-1 pl-5">
+        <li>Connect and test the MAIT network in Weather setup. A saved connection alone does not prove controller access.</li>
+        <li>Load available modules without saving or importing. Identify a confirmed MAIT irrigation controller, not a weather or soil sensor module. Ask MAIT to confirm compatible controller and getdata access if none is available.</li>
+        <li>Link the confirmed controller to an active VineTrack irrigation system and match its outputs to active valves in that exact system.</li>
+        <li>Verify each valve's saved block and row allocations. Keep the existing five mapping methods: Rows, Manual percentage, Emitter count, Vine count and Irrigated area.</li>
+        <li>Select <strong>Preview MAIT usage (read-only)</strong>. Compare output numbers, start times, durations and reported water volumes with MAIT. Empty or partial data does not prove complete coverage; no records are created by preview.</li>
+        <li>Use <strong>Sync now</strong> only after reviewing today's saved mappings and allocations, then explicitly confirm. Valid runs may immediately create irrigation records for the last three local days.</li>
+        <li>Compare the imported Irrigation Records and Reports against MAIT records.</li>
+        <li>Only then consider pilot scheduled retrieval with an authorised System Admin who also has vineyard access. The scheduler remains installed but paused; this checklist does not activate it.</li>
+      </ol>
       <p className="mt-2 text-muted-foreground">VineTrack currently reads MAIT data only. It does not start, stop or program MAIT irrigation hardware.</p>
-      <p className="mt-2 text-muted-foreground">Manual sync is operational: it imports controller-reported run history and recorded water volumes, not live flow measurements. Automatic retrieval and automatic record creation are System Admin-only pilot preferences. The scheduler is inactive, so automatic syncing is not yet running; saving preferences does not start a sync.</p>
+      <p className="mt-2 text-muted-foreground">Manual sync is operational: it imports controller-reported run history and recorded water volumes, not live flow measurements. Automatic retrieval and automatic record creation are System Admin-only pilot preferences. Scheduler installed but paused: automatic syncing is not running; saving preferences does not start a sync.</p>
     </section>
   </ProviderSetupHelp>;
 }
