@@ -11,6 +11,7 @@ import { Info } from 'lucide-react';
 import { useIrrigationSystems, useIrrigationValves } from '@/lib/irrigationQuery';
 import { maitRpc, maitProxy, maitModules, maitOutputs, maitRows, maitDateWindow, maitSyncCounts, maitControllerSyncState, MAIT_PROVIDER, MAIT_PARTIAL_WARNING, type MaitResult } from '@/lib/maitIntelliwebQuery';
 import { MaitChoice, useMait } from './MaitWeatherCard';
+import { MaitAutomationPilot } from './MaitAutomationPilot';
 
 type Row = Record<string, any>;
 export function MaitSyncResult({ result }: { result: MaitResult }) {
@@ -62,9 +63,9 @@ export function MaitControllerCard({ vineyardId }: { vineyardId: string }) {
       <h2 className="font-semibold">MAIT iNTELLiWeb controller</h2>
       <Popover>
         <PopoverTrigger asChild>
-          <button type="button" aria-label="About MAIT irrigation integration" className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Button type="button" variant="ghost" size="icon" aria-label="About MAIT irrigation integration" className="h-6 w-6 shrink-0 rounded-full border border-border text-muted-foreground">
             <Info className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
+          </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-80 space-y-2">
           <p className="text-sm font-semibold">What MAIT adds to irrigation</p>
@@ -75,7 +76,7 @@ export function MaitControllerCard({ vineyardId }: { vineyardId: string }) {
             <li>The MAIT connection is shared with the Weather setup area.</li>
             <li>Only available when the MAIT network has compatible controller modules and MAIT getdata access.</li>
           </ul>
-          <p className="text-xs text-muted-foreground">MAIT does not currently provide live flow monitoring, remote start/stop valve control, or an automatic scheduler.</p>
+          <p className="text-xs text-muted-foreground">Manual sync is operational. Automatic retrieval and record creation are a System Admin-only pilot, not yet running while the scheduler is inactive. MAIT reports recorded water volume, not live flow monitoring, and provides no remote start/stop valve control.</p>
         </PopoverContent>
       </Popover>
     </div>
@@ -104,6 +105,7 @@ export function MaitControllerCard({ vineyardId }: { vineyardId: string }) {
         {result && <MaitSyncResult result={result} />}
         <Button variant="ghost" disabled={run.isPending} onClick={() => act(async () => { const r = await maitProxy(vineyardId, 'sync_status'); setSyncStatus(r.data); })}>Check sync status</Button>
         {syncStatus && <MaitSyncStatus data={syncStatus} moduleId={moduleId} timezone={timezone} />}
+        {connected && connection.network_id && controller.is_active === true && <MaitAutomationPilot key={`${vineyardId}:${moduleId}`} vineyardId={vineyardId} moduleId={moduleId} timezone={timezone} />}
       </div>}
     </>}
   </Card>;

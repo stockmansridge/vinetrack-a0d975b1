@@ -81,6 +81,7 @@ import {
 import { ValveRowSelector } from "@/components/irrigation/ValveRowSelector";
 import ValveImportDialog from "@/components/irrigation/ValveImportDialog";
 import { MaitControllerCard } from "@/components/mait/MaitControllerCard";
+import { MaitIrrigationPathDiagram } from "@/components/mait/MaitIrrigationPathDiagram";
 import {
   areaError,
   haTextFromM2,
@@ -1783,6 +1784,7 @@ export default function IrrigationSetupPage() {
                     className="w-full h-auto"
                     loading="lazy"
                   />
+                  <MaitIrrigationPathDiagram />
                 </div>
                 <div className="flex items-center justify-between gap-4">
                   <p className="text-xs text-muted-foreground">

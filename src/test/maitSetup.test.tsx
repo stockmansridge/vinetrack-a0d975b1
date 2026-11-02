@@ -9,6 +9,7 @@ import { MaitControllerCard } from '@/components/mait/MaitControllerCard';
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), manage: true, connected: false, conflict: false, config: {} as ReturnType<typeof maitConfigurationFixture> }));
 vi.mock('@/integrations/ios-supabase/client', () => ({ supabase: { rpc: mocks.rpc, auth: { getSession: async () => ({data:{session:{access_token:'fixture'}}}) } }, IOS_SUPABASE_URL:'https://example.test', IOS_SUPABASE_ANON_KEY:'public' }));
 vi.mock('@/lib/vineyardSettingsQuery', () => ({ fetchVineyard: async () => ({timezone:'Australia/Sydney'}) }));
+vi.mock('@/lib/systemAdmin', () => ({ useIsSystemAdmin: () => ({ isAdmin: false, loading: false }) }));
 vi.mock('@/lib/irrigationQuery', () => ({ useIrrigationSystems: () => ({ data:[{id:'system',name:'East system'}] }), useIrrigationValves: () => ({data:[{id:'valve',name:'East valve',irrigation_system_id:'system'}]}) }));
 function mount(ui: React.ReactNode) { return render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}})}><MemoryRouter>{ui}</MemoryRouter></QueryClientProvider>); }
 beforeEach(() => { cleanup(); vi.clearAllMocks(); mocks.manage=true; mocks.connected=false; mocks.conflict=false; mocks.config=maitConfigurationFixture(); mocks.rpc.mockImplementation(async (name:string,args:any) => {
@@ -62,7 +63,7 @@ describe('MAIT setup actions', () => {
     const calls=mocks.rpc.mock.calls.length;
     fireEvent.click(screen.getByRole('button',{name:'About MAIT irrigation integration'}));
     expect(screen.getByText('What MAIT adds to irrigation')).toBeVisible();
-    expect(screen.getByText(/does not currently provide live flow monitoring, remote start\/stop valve control, or an automatic scheduler/)).toBeVisible();
+    expect(screen.getByText(/Manual sync is operational\. Automatic retrieval and record creation/)).toBeVisible();
     expect(mocks.rpc.mock.calls.length).toBe(calls);
     expect(fetch).not.toHaveBeenCalled();
   });
