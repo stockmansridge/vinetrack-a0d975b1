@@ -1,7 +1,7 @@
 # Roadmap
 
 ## MAIT read-only controller acceptance
-- [ ] Update the editable path and original-image import help with read-only preview, explicit manual confirmation and paused pilot guidance; presentation-only, mocked regressions and automatic compilation.
+- [x] Updated the seven-stage editable path and original-image import help with read-only preview, explicit manual confirmation and paused pilot guidance. 197 mocked tests pass across eight MAIT/import files; automatic compilation OK. Presentation-only; no live operations or publication.
 - [x] Final safety correction: nested output mapping guards reject read-only/access/tenant changes, zero-event previews are not acceptance evidence, and partial module lists are labelled incomplete. 195 mocked tests pass across eight MAIT/import files; automatic compilation OK. No live operations or publication.
 - [x] Add connected-owner/manager checklist, explicit read-only usage preview, scoped reset and confirmed Setup sync.
 - [x] Update acceptance help; diagrams and paused scheduler preserved. 184 mocked tests pass across eight MAIT/file test files; automatic compilation OK.
