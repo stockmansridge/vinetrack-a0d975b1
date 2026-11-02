@@ -1769,14 +1769,14 @@ export default function IrrigationSetupPage() {
                   <CircleHelp className="h-4 w-4" /> How mapping works
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-3xl">
+              <DialogContent className="w-[96vw] max-w-[1400px]">
                 <DialogHeader>
                   <DialogTitle>How irrigation mapping works</DialogTitle>
                   <DialogDescription>
                     How a controller's valves connect to vineyard blocks, and the five ways to share a valve's water.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="overflow-y-auto rounded-md border border-border">
+                <div className="max-h-[calc(96vh-13rem)] overflow-y-auto rounded-md border border-border">
                   <img
                     src={mappingGuideAsset.url}
                     alt="Diagram: a controller's valves map to blocks using one of five mapping methods — rows, manual percentage, emitter count, vine count or irrigated area."
@@ -1784,9 +1784,19 @@ export default function IrrigationSetupPage() {
                     loading="lazy"
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  VineTrack maps and records irrigation; this does not imply remote operation of physical valves.
-                </p>
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-xs text-muted-foreground">
+                    VineTrack maps and records irrigation; this does not imply remote operation of physical valves.
+                  </p>
+                  <a
+                    href={mappingGuideAsset.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 text-sm font-medium text-primary underline-offset-4 hover:underline"
+                  >
+                    Open full size in new tab
+                  </a>
+                </div>
               </DialogContent>
             </Dialog>
           </div>
