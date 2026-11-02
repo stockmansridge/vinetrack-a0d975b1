@@ -504,9 +504,9 @@ function ProviderInstructions({ help }: { help: ProviderHelp }) {
   );
 }
 
-function UnlistedControllerPanel({ onContact }: { onContact: () => void }) {
+function UnlistedControllerPanel({ onContact, className = "" }: { onContact: () => void; className?: string }) {
   return (
-    <Card>
+    <Card className={`flex h-full flex-col ${className}`}>
       <CardHeader>
         <CardTitle className="text-base">Can't see your irrigation controller?</CardTitle>
         <CardDescription>
@@ -515,7 +515,7 @@ function UnlistedControllerPanel({ onContact }: { onContact: () => void }) {
           added.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="mt-auto">
         <Button variant="outline" onClick={onContact}>
           <LifeBuoy className="mr-1.5 h-4 w-4" /> Contact support
         </Button>
