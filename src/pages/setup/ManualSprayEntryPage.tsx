@@ -38,6 +38,7 @@ import {
   type ManualChemicalLine, type ManualSprayDraft,
 } from "@/lib/manualSpray/domain";
 import { validateManualSpray } from "@/lib/manualSpray/validate";
+import { labelRateReferences } from "@/lib/manualSpray/labelRateReference";
 import { parseAmountText, unitsForForm, UNIT_DISPLAY_LABEL, WIRE_UNITS, type WireUnit } from "@/lib/manualSpray/units";
 import {
   MANUAL_SPRAY_UNAVAILABLE_MESSAGE, probeManualSprayContract, saveManualSpray,
@@ -474,6 +475,18 @@ export default function ManualSprayEntryPage() {
                   </Button>
                   <div className="sm:col-span-4 -mt-1 text-xs text-muted-foreground">
                     {line.productName ? `${line.productName}${line.category ? ` · ${line.category}` : ""} · ${line.physicalForm}` : "No product selected"}
+                    {(() => {
+                      const chem = chemicals.find((c) => c.id === line.savedChemicalId);
+                      const refs = chem ? labelRateReferences((chem as any).default_rates, tank.waterLitres) : [];
+                      return refs.map((r) => (
+                        <span key={r.basis} className="block" data-testid="manual-label-rate-reference">
+                          Label reference: {r.label}
+                          {r.basis === "per_100_litres"
+                            ? r.estimate ? ` · ≈ ${r.estimate} for this tank's water (reference only — enter what was actually used)` : " · enter tank water to see a reference amount"
+                            : " · depends on area, not tank water"}
+                        </span>
+                      ));
+                    })()}
                     {errorFor((v) => v.lineId === line.id) && (
                       <span className="text-destructive"> — {errorFor((v) => v.lineId === line.id)}</span>
                     )}
