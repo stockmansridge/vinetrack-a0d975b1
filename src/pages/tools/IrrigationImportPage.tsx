@@ -10,6 +10,7 @@ import {
   Upload,
 } from "lucide-react";
 
+import galconLogo from "@/assets/galcon-logo.png.asset.json";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -202,7 +203,10 @@ export default function IrrigationImportPage() {
           >
             <Card className="flex h-full min-w-0 flex-col">
               <CardHeader>
-                <CardTitle className="text-base">Import from a file</CardTitle>
+                <div className="flex items-center gap-3">
+                  <img src={galconLogo.url} alt="Galcon" className="h-8 w-auto shrink-0" />
+                  <CardTitle className="text-base">Import from a file</CardTitle>
+                </div>
                 <CardDescription>
                   Select the system that created the irrigation export file. VineTrack uses this to
                   interpret the file correctly.

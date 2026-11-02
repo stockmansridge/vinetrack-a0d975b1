@@ -12,6 +12,7 @@ import { MaitSyncResult } from '@/components/mait/MaitControllerCard';
 import { useIrrigationSystems, useIrrigationValves } from '@/lib/irrigationQuery';
 import { maitDateWindow, maitProxy, maitRows, maitRpc, type MaitResult } from '@/lib/maitIntelliwebQuery';
 import { guardMutation, readOnlyStore } from '@/lib/vineyardWriteAccess';
+import maitLogo from '@/assets/mait-industries-logo.png.asset.json';
 
 const setup = '/irrigation/setup#mait-controller';
 const explanation = 'Import recent irrigation run history and controller-reported water volumes directly from a connected MAIT system. No file upload needed. Sync is manual; scheduled syncing is not currently enabled.';
@@ -19,7 +20,7 @@ const explanation = 'Import recent irrigation run history and controller-reporte
 export default function MaitImportSyncCard({ className = '' }: { className?: string }) {
   const { selectedVineyardId, currentRole, loading } = useVineyard();
   return <Card className={`flex h-full flex-col border-task-water/40 bg-task-water/5 ${className}`}>
-    <CardHeader><CardTitle className="text-base">MAIT iNTELLiWeb — API sync</CardTitle></CardHeader>
+    <CardHeader><div className="flex items-center gap-3"><img src={maitLogo.url} alt="MAIT Industries" className="h-8 w-auto shrink-0" /><CardTitle className="text-base">MAIT iNTELLiWeb — API sync</CardTitle></div></CardHeader>
     <CardContent className="flex flex-1 flex-col space-y-3">
       <p className="text-sm text-muted-foreground">{explanation}</p>
       {selectedVineyardId ? <VineyardSync key={selectedVineyardId} vineyardId={selectedVineyardId} allowedRole={!loading && ['owner', 'manager'].includes(currentRole ?? '')} /> : <p className="text-sm">Select a vineyard to configure or sync MAIT irrigation.</p>}
