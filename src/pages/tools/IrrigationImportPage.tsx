@@ -208,7 +208,7 @@ export default function IrrigationImportPage() {
                   interpret the file correctly.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="flex flex-1 flex-col space-y-4">
+              <CardContent className="flex flex-1 flex-col gap-4">
                 {providersQ.isLoading && (
                   <p className="text-sm text-muted-foreground">Loading irrigation controllers…</p>
                 )}
