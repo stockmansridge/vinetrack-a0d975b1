@@ -1,77 +1,30 @@
-# Greg incident triage — Planned Spray / Manual Spray / Scout (read-only findings)
+# Issue #46 release audit (read-only, no changes made)
 
-No code, database, mobile, auth or Issue #43 work is proposed for this turn. Approving this plan records the findings only; each fix below needs its own go-ahead.
+Source HEAD: `cf2a23180d9569490e7609bac50f355eb15fbd2d` (2026-11-02 10:40 UTC).
+Production: https://portal.vinetrack.com.au serves one main bundle, `assets/index-CMXz8Egu.js` (7.4 MB), downloaded and searched 11:41 UTC.
 
-## 1. Status "scheduled" fails with spray_jobs_status_check — HIGH, likely Portal bug
-Known:
-- `src/components/spray/wizard/ApplicationStep.tsx:25` and `src/pages/setup/SprayJobsPage.tsx:83` both offer `["draft","scheduled","in_progress","completed","cancelled"]`.
-- Save passes `app.status ?? "draft"` through (`src/lib/sprayApplicationSave.ts:249`). Program import and Program Step creation hard-code `"draft"`.
-- `src/test/sprayWizardStage3b.test.ts:368` uses `"planned"`, which does not appear in the option list.
-Unknown:
-- The real constraint. `spray_jobs` lives in the shared mobile backend; it is not in this project's tables or SQL, so the allowed values could not be read.
-Smallest safe fix (after the allowed values are confirmed):
-- Read `pg_get_constraintdef` for `spray_jobs_status_check`, then make both option lists one shared constant that matches it exactly.
-- Keep the rest of the UI unchanged. Add a test that every offered status is in the confirmed allowed set.
-- If iOS writes a different value (for example "planned"), relabel it rather than remap stored rows.
+## Which revision is live
+The live bundle contains code that was **only added in HEAD cf2a2318** (the resistance auto-collapse fix, compiled as `onClick:()=>c({key:o,open:!d})` with `aria-controls:"resistance-details"`). So production is serving HEAD cf2a2318 (or a later build of the same code), not just the earlier release `ffa8b30b`. The bundle has no embedded commit SHA; I identified the revision from unique code.
 
-## 2. Resistance step: "indeterminate" verdict, checkbox hidden on Review — MEDIUM
-Known:
-- Review shows `ResistanceAcknowledgement`, built from `resistance.overallStatus` and `requiresAcknowledgement` (`SprayJobWizard.tsx:326`).
-- The component returns nothing when `status` is null (`ResistanceAcknowledgement.tsx:49`).
-- The engine sets evidence quality to `"indeterminate"` for opaque or unattributed evidence (`resistanceEngine.ts:892/907/1068/1158`). The card labels this "Incomplete evidence".
-Unknown:
-- Whether Greg's job reaches Review with a null status or with `requiresAcknowledgement=false`. Either one hides the checkbox.
-- Whether saving was blocked or allowed. I need his job id or the step-23 inputs to reproduce it.
-Proposed:
-- Reproduce with a mocked engine result where evidence is indeterminate.
-- If confirmed, show a "Resistance could not be fully assessed" notice on Review whenever status is null or evidence is indeterminate.
-- Do not change the acknowledgement rules without approval: they are regulatory/advisory semantics.
+## Matrix
 
-## 3. CF 1.21 (400 dilute / 330 applied) changes quantities or stays at 1 — MEDIUM, cause unconfirmed
-Known (`src/lib/sprayCalculation.ts:277-293`):
-- A persisted `concentrationFactor` wins over the derived one.
-- The manual basis is forced to 1.00.
-- CF is derived only when nothing is persisted.
-- So a job that was once saved with CF 1 (or switched to manual) keeps 1 even after volumes give 400/330 = 1.21. Re-opening a job that has no persisted CF re-derives it, which changes product quantities.
-Unknown:
-- Which path Greg hit. That needs the job's stored `concentration_factor`, carrier basis and dilute/applied values.
-Proposed:
-- Test both cases: persisted 1 with 400/330 → shows 1 plus a visible "differs from derived 1.21" notice; nothing persisted → 1.21.
-- Never silently overwrite a persisted value.
+| # | Item | In code (HEAD) | Live | Tested | Gaps / evidence |
+|---|------|------|------|--------|-----------------|
+| 1 | "scheduled" changed to "planned" | Yes: `src/lib/sprayJobStatus.ts`, `ApplicationStep.tsx`, `SprayJobsPage.tsx`, `sprayApplicationSave.ts` | Yes: live code turns `"scheduled"` into `"planned"` (`t==="scheduled"?"planned":...`) | `src/test/sprayJobStatus.test.ts` 7/7 | Other live `"scheduled"` strings belong to separate features (newsletter/email scheduling, display filters), not the spray job save. **No signed-in production save receipt**: I had no account to sign in with. |
+| 2 | CF 400/330, stale CF decision, per 100 L only | Yes: `src/lib/sprayCalculation.ts`, `CarrierStep.tsx`, `ReviewStep.tsx`, `sprayApplicationDraft.ts` | Yes: `concentration_factor_mismatch`, "CF from water rates", "Keep recorded" and "CF not applied" all found | `src/test/sprayConcentrationFactor.test.ts` 11/11 | Completed or archived jobs keep their recorded CF (read-only). |
+| 3 | Manual Spray label-rate reference vs actual amounts | Yes: `src/lib/manualSpray/labelRateReference.ts`, `src/pages/setup/ManualSprayEntryPage.tsx:480` | Yes: `manual-label-rate-reference` found | Manual Spray suites 51/51 | The reference is display-only and never fills "Amount used". |
+| 4 | Resistance: checkbox at top, "Show resistance details (n)", auto-collapse, footer jump | Yes: `ResistanceAcknowledgement.tsx`, `SprayJobWizard.tsx:416-417` | Yes: checkbox `resistance-ack`, toggle, keyed collapse and footer jump to `resistance-ack` all found | `src/test/resistanceUi.test.tsx` 20/20 | Wording that "missing history" is not a list of confirmed violations is live. Not checked by clicking through while signed in on production. |
+| 5 | Planned spray "completed" vs real spray record start/end | Partly | Partly (same as code) | No dedicated test | `SprayJobsPage.tsx:904-965` shows linked spray records with date and start time, and warns when a matching record exists but the job is not completed. **Not built:** showing the record's end time, and entering a manual completion date/time on the planned job. |
+| 6 | E-L stage per block | Partly | Partly (same as code) | Not checked this round | **Exists:** Growth Stage Records report (`src/pages/reports/GrowthStageRecordsPage.tsx`, with date/block/variety/stage/notes/photo/operator columns) and a Block Detail growth tab (`BlockDetailPage.tsx:213`, via `growthStageRecordsQuery.ts`), which already includes growth pins and their photos. **Not built:** a single "current E-L per block" summary, E-L charts over time, and auto-filling the latest E-L for each selected block in the Spray Wizard. `GrowthStageStep.tsx` is manual only, with "Not set" as the default. |
 
-## 4. Completed planned spray has no actual completion timestamp — gap, not a bug
-Known:
-- The Planned Spray status is just a select value.
-- Completion evidence comes from linked spray records (`SprayJobsPage.tsx:923-945` warns when they don't match).
-- `end_time` exists only on the record type (`sprayJobsQuery.ts:434`).
-Unknown:
-- Whether `spray_jobs` has a completed-at column in the shared schema.
-Proposed:
-- Show the linked spray record's end time as "Completed at", read-only.
-- Don't add a field to the job without a schema decision.
+## Test commits
+Tests for items 1–2 landed by `ffa8b30b`; tests for item 4 landed in `370bce4c` and `cf2a2318`. Last full spray run: 483/484. The one failure is an older heading-style test in chemical components, not related to this release.
 
-## 5. Manual Spray expects actual amounts, not label rate per 100 L — working as designed
-Known:
-- `ManualSprayEntryPage.tsx:184`: "The amount is always the operator's entry — never a store default rate."
-Proposed:
-- Copy only: a helper line under the amount field saying "Enter the total actual amount used".
-- Optionally show the label rate as read-only reference. No change to calculations.
+## Blockers and open items
+- No signed-in production save receipt for item 1, and no live click-through for items 2–4: I have no Portal account to sign in with. One manual save on a test vineyard closes this.
+- Items 5 and 6 are only partly built. Issue #46 should stay open for: recorded end time and a manual completion time; a current E-L per block summary and charts; Spray Wizard auto-filling the latest E-L.
+- Android "session expired" error: outside the Portal, not audited.
+- Nothing was modified, published, or written to the database.
 
-## 6. Recent EL stage per block (mobile has it, Portal doesn't) — feature gap
-Known:
-- The Portal has `ELStagesButton`, `GrowthStageHeatmap` and a growth step in the wizard. No per-block "latest EL" column was found on the Blocks pages.
-Unknown:
-- Which mobile table or field is the source.
-Proposed:
-- After confirming the mobile source, add a read-only latest EL plus date to Block Detail.
-
-## 7. Android Scout "Sync failed: Your session has expired" with unsynced photos — out of scope
-- This is mobile/auth and not in the Portal source. The Portal's similar strings are unrelated (`adminDeleteUser.ts`, `wundergroundProxy.ts`).
-- Advice to Greg: do not sign out or reinstall until the Android team confirms the photos are kept locally.
-
-## Priority
-1 (blocks saving) → 3 (wrong quantities) → 2 → 4 → 5 → 6. Item 7 goes to the mobile team.
-
-## Needed from you / Greg
-- The `spray_jobs_status_check` definition from the shared backend.
-- Greg's planned spray id(s) for items 2 and 3.
+## Next step if approved
+No code work is included. If you approve, I can write separate plans for items 5 and 6.
