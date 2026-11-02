@@ -318,3 +318,4 @@
 
 ## Ticket #46 Greg planned spray status
 - [x] Portal sends only constraint-valid spray_jobs statuses ("Planned"); legacy "scheduled" read as planned at UI only.
+- [x] CF: derived 400/330 shown with inputs; stale persisted CF needs explicit Use/Keep; completed keeps recorded CF; CF only on per-100 L; Manual Spray read-only label reference.
