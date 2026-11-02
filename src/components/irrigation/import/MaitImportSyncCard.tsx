@@ -1,18 +1,19 @@
 import { useRef, useState, useSyncExternalStore } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw } from 'lucide-react';
+import { CircleHelp, RefreshCw } from 'lucide-react';
 import { useVineyard } from '@/context/VineyardContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { MaitChoice, useMait } from '@/components/mait/MaitWeatherCard';
 import { MaitSyncResult } from '@/components/mait/MaitControllerCard';
 import { useIrrigationSystems, useIrrigationValves } from '@/lib/irrigationQuery';
 import { maitDateWindow, maitProxy, maitRows, maitRpc, type MaitResult } from '@/lib/maitIntelliwebQuery';
 import { guardMutation, readOnlyStore } from '@/lib/vineyardWriteAccess';
 import maitLogo from '@/assets/mait-industries-logo.png.asset.json';
+import maitSetupGuide from '@/assets/mait-irrigation-setup-guide.png.asset.json';
 
 const setup = '/irrigation/setup#mait-controller';
 const explanation = 'Import recent irrigation run history and controller-reported water volumes directly from a connected MAIT system. No file upload needed. Sync is manual; scheduled syncing is not currently enabled.';
@@ -20,7 +21,7 @@ const explanation = 'Import recent irrigation run history and controller-reporte
 export default function MaitImportSyncCard({ className = '' }: { className?: string }) {
   const { selectedVineyardId, currentRole, loading } = useVineyard();
   return <Card className={`flex h-full flex-col border-task-water/40 bg-task-water/5 ${className}`}>
-    <CardHeader><div className="flex items-center gap-3"><img src={maitLogo.url} alt="MAIT Industries" className="h-8 w-auto shrink-0" /><CardTitle className="text-base">MAIT iNTELLiWeb — API sync</CardTitle></div></CardHeader>
+    <CardHeader><div className="flex items-center gap-3"><img src={maitLogo.url} alt="MAIT Industries" className="h-8 w-auto shrink-0" /><CardTitle className="text-base">MAIT iNTELLiWeb — API sync</CardTitle><Dialog><DialogTrigger asChild><Button variant="ghost" size="icon" className="ml-auto h-7 w-7 text-muted-foreground" aria-label="How MAIT irrigation sync works"><CircleHelp className="h-4 w-4" /></Button></DialogTrigger><DialogContent className="w-[96vw] max-w-[1400px]"><DialogHeader><DialogTitle>How MAIT irrigation sync works</DialogTitle><DialogDescription>One MAIT network connection maps controller outputs to saved VineTrack valves, then a manual sync imports run history into irrigation records.</DialogDescription></DialogHeader><div className="max-h-[calc(96vh-13rem)] overflow-y-auto rounded-md border border-border"><img src={maitSetupGuide.url} alt="Diagram: MAIT network connection feeds a controller module whose outputs map to saved VineTrack valves; a manual sync imports controller run history into block allocations and irrigation records." className="h-auto w-full" loading="lazy" /></div><div className="flex items-center justify-between gap-4"><p className="text-xs text-muted-foreground">Imports recorded run data — not live flow monitoring or remote start/stop of valves. Automatic scheduled syncing is not active.</p><a href={maitSetupGuide.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-sm font-medium text-primary underline-offset-4 hover:underline">Open full size in new tab</a></div></DialogContent></Dialog></div></CardHeader>
     <CardContent className="flex flex-1 flex-col space-y-3">
       <p className="text-sm text-muted-foreground">{explanation}</p>
       {selectedVineyardId ? <VineyardSync key={selectedVineyardId} vineyardId={selectedVineyardId} allowedRole={!loading && ['owner', 'manager'].includes(currentRole ?? '')} /> : <p className="text-sm">Select a vineyard to configure or sync MAIT irrigation.</p>}
