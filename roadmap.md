@@ -3,7 +3,7 @@
 ## MAIT irrigation automation pilot
 - [x] Add RPC-only System Admin/member preferences, inactive scheduler status and read-only protection; preserve manual sync.
 - [x] Update irrigation/weather help and extend mapping help with a responsive MAIT path; retain original illustration.
-- [ ] Run isolated pilot/manual regression tests and automatic compilation checks; no live sync or publication.
+- [x] 121 isolated pilot/manual regression tests pass across five files; automatic compilation build OK. No live sync or publication.
 - [ ] Shared-vineyard live acceptance — authenticated access and the full automation status module envelope are unavailable here; unknown/missing status fails closed. No live save or MAIT sync attempted.
 
 ## Manual MAIT sync from irrigation import
