@@ -1,8 +1,9 @@
 # Roadmap
 
 ## Manual MAIT sync from irrigation import
-- [ ] Add source-step API card with explicit controller selection, authoritative access/mapping checks and pre-sync confirmation; keep file wizard unchanged.
-- [ ] Run focused mocked UI regressions and automatic compilation; no live sync, backend changes or publication.
+- [x] Add source-step API card with explicit controller selection, authoritative access/mapping checks and pre-sync confirmation; keep file wizard unchanged.
+- [x] Focused tests pass: new import UI 20, existing MAIT setup 33, MAIT contracts 50 (103 total); automatic compilation build OK. No live sync, backend changes or publication.
+- [ ] Signed-in visual acceptance — /irrigation/import redirects to /login in this sandbox; authenticated shared-vineyard session unavailable. No real MAIT operations attempted.
 
 ## v3.1.9 effective catalogue hotfix
 - [x] Shared Store/details/spray reads use the effective view with unchanged vineyard/tombstone scopes and query keys; exact product approval proof rejects mismatched current evidence. Linked edits submit only changed vineyard settings to guarded pinned base rows, then live read-back.
