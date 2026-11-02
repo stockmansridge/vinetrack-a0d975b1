@@ -46,8 +46,9 @@ describe('MAIT irrigation automation pilot', () => {
   it('saves only preferences for the explicit vineyard/controller and does not invoke MAIT', async () => {
     mount();
     fireEvent.click(await screen.findByRole('switch', { name: 'Automatic retrieval' }));
-    fireEvent.click(screen.getByRole('switch', { name: 'Automatic record creation' }));
-    expect(screen.getByRole('switch', { name: 'Automatic record creation' })).not.toBeChecked();
+    const creation = screen.getByRole('switch', { name: 'Automatic record creation' });
+    fireEvent.click(creation);
+    expect(creation).not.toBeChecked();
     expect(m.rpc.mock.calls.some(c => c[0] === 'set_mait_irrigation_automation_options')).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Confirm record creation' }));
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '7' } });
@@ -66,8 +67,9 @@ describe('MAIT irrigation automation pilot', () => {
   });
   it('cancels record creation without changing the preference or saving', async () => {
     mount(); fireEvent.click(await screen.findByRole('switch', { name: 'Automatic retrieval' }));
+    const save = screen.getByRole('button', { name: 'Save pilot preferences' });
     fireEvent.click(screen.getByRole('switch', { name: 'Automatic record creation' }));
-    expect(screen.getByRole('button', { name: 'Save pilot preferences' })).toBeDisabled();
+    expect(save).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Automatic record creation' })).not.toBeChecked();
@@ -88,11 +90,12 @@ describe('MAIT irrigation automation pilot', () => {
   });
   it('does not accept record creation confirmation after the vineyard becomes read-only', async () => {
     mount(); fireEvent.click(await screen.findByRole('switch', { name: 'Automatic retrieval' }));
-    fireEvent.click(screen.getByRole('switch', { name: 'Automatic record creation' }));
+    const creation = screen.getByRole('switch', { name: 'Automatic record creation' });
+    fireEvent.click(creation);
     readOnlyStore.setReadOnly(true);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm record creation' })).toBeDisabled());
     fireEvent.click(screen.getByRole('button', { name: 'Confirm record creation' }));
-    expect(screen.getByRole('switch', { name: 'Automatic record creation' })).not.toBeChecked();
+    expect(creation).not.toBeChecked();
     expect(m.rpc.mock.calls.some(c => c[0] === 'set_mait_irrigation_automation_options')).toBe(false);
   });
   it.each(['0', '15', '1.5', ''])('rejects overlap %s before a save request', async value => {
