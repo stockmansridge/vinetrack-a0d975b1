@@ -6,7 +6,7 @@ import { useVineyard } from '@/context/VineyardContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { MaitChoice, useMait } from '@/components/mait/MaitWeatherCard';
 import { MaitSyncResult } from '@/components/mait/MaitControllerCard';
 import { useIrrigationSystems, useIrrigationValves } from '@/lib/irrigationQuery';
