@@ -147,7 +147,7 @@ function OutputRow({ output, saved, vineyardId, readOnly, allowed, controllerKey
   const [conflict, setConflict] = useState<string | null>(null);
   const permission = useRef(false);
   permission.current = allowed && !readOnly;
-  useEffect(() => () => { permission.current = false; }, []);
+  useEffect(() => { permission.current = allowed && !readOnly; return () => { permission.current = false; }; }, [allowed, readOnly]);
   const blocked = readOnly || !allowed;
   const save = useMutation({ mutationFn: (confirmChange: boolean) => {
     guardMutation(undefined);
