@@ -1,5 +1,9 @@
 # Roadmap
 
+## Manual MAIT sync from irrigation import
+- [ ] Add source-step API card with explicit controller selection, authoritative access/mapping checks and pre-sync confirmation; keep file wizard unchanged.
+- [ ] Run focused mocked UI regressions and automatic compilation; no live sync, backend changes or publication.
+
 ## v3.1.9 effective catalogue hotfix
 - [x] Shared Store/details/spray reads use the effective view with unchanged vineyard/tombstone scopes and query keys; exact product approval proof rejects mismatched current evidence. Linked edits submit only changed vineyard settings to guarded pinned base rows, then live read-back.
 - [x] Effective-current/retained-settings labels replace obsolete pinned-copy warnings; both query families invalidate on approval/save; failed/offline reads do not offer cached catalogue selection.
