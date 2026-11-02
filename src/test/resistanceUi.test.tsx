@@ -305,4 +305,54 @@ describe("Review acknowledgement layout (Issue #46)", () => {
     expect(screen.getByText(/exceeds a CropLife strategy maximum/i)).toBeTruthy();
     expect(screen.getByText(/I have read the CropLife strategy findings/i)).toBeTruthy();
   });
+
+  it("auto-collapses when findings arrive asynchronously after an empty mount", () => {
+    const { rerender } = renderAck({ lines: [] });
+    expect(screen.queryByRole("button", { name: /resistance details/ })).toBeNull();
+    rerender(
+      <ResistanceAcknowledgement
+        status="unable_to_fully_assess"
+        lines={manyLines}
+        requiresAcknowledgement
+        acknowledged={false}
+        onAcknowledgedChange={() => {}}
+      />,
+    );
+    // 23 late-arriving findings must NOT render expanded.
+    expect(screen.queryByText("Block A: finding 1")).toBeNull();
+    expect(screen.getByRole("button", { name: /Show resistance details \(23\)/ })).toBeTruthy();
+    expect(screen.getByTestId("resistance-ack")).toBeTruthy();
+  });
+
+  it("auto-expands when many findings shrink to a few", () => {
+    const { rerender } = renderAck();
+    expect(screen.queryByText("Block A: finding 1")).toBeNull();
+    rerender(
+      <ResistanceAcknowledgement
+        status="unable_to_fully_assess"
+        lines={["Block A: only finding"]}
+        requiresAcknowledgement
+        acknowledged={false}
+        onAcknowledgedChange={() => {}}
+      />,
+    );
+    expect(screen.getByText("Block A: only finding")).toBeTruthy();
+  });
+
+  it("keeps a user-opened list open across unrelated rerenders with the same findings", () => {
+    const { rerender } = renderAck();
+    fireEvent.click(screen.getByRole("button", { name: /Show resistance details \(23\)/ }));
+    expect(screen.getByText("Block A: finding 23")).toBeTruthy();
+    // Same findings, new array reference (as the parent's flatMap produces).
+    rerender(
+      <ResistanceAcknowledgement
+        status="unable_to_fully_assess"
+        lines={[...manyLines]}
+        requiresAcknowledgement
+        acknowledged={false}
+        onAcknowledgedChange={() => {}}
+      />,
+    );
+    expect(screen.getByText("Block A: finding 23")).toBeTruthy();
+  });
 });
