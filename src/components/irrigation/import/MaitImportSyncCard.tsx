@@ -32,7 +32,7 @@ function VineyardSync({ vineyardId, allowedRole }: { vineyardId: string; allowed
   const [moduleId, setModuleId] = useState('');
   const { readOnly } = useSyncExternalStore(readOnlyStore.subscribe, readOnlyStore.get);
   if (mait.access.error || mait.configuration.error || mait.status.error) return <Alert variant="destructive"><AlertDescription>Could not verify MAIT access or configuration. Reopen this page to retry.</AlertDescription></Alert>;
-  if (mait.access.isPending || mait.access.isFetching || (mait.access.data?.manage && (mait.configuration.isPending || mait.configuration.isFetching))) return <p role="status" className="text-sm">Checking MAIT access and configuration…</p>;
+  if (mait.access.isPending || (mait.access.data?.manage && mait.configuration.isPending)) return <p role="status" className="text-sm">Checking MAIT access and configuration…</p>;
   if (!allowedRole || mait.access.data?.manage !== true) return <div className="space-y-2"><p className="text-sm">Your vineyard owner or manager manages MAIT irrigation syncing.</p><SetupLink /></div>;
   if (readOnly) return <div className="space-y-2"><p className="text-sm">This vineyard is read-only. MAIT sync can create records and is unavailable.</p><SetupLink /></div>;
   if (!mait.connected || !mait.config.connection.network_id) return <Button asChild variant="outline"><Link to="/setup/weather#mait">Connect MAIT in Weather setup</Link></Button>;
@@ -41,7 +41,7 @@ function VineyardSync({ vineyardId, allowedRole }: { vineyardId: string; allowed
   const controller = controllers.find(c => String(c.module_id) === moduleId);
   return <div className="space-y-3">
     <MaitChoice label="MAIT irrigation controller" value={moduleId} onChange={setModuleId} items={controllers.map(c => ({ value: String(c.module_id), label: `${c.module_name || 'Controller'} · ${c.module_id}` }))} />
-    {controller ? <ControllerSync key={moduleId} vineyardId={vineyardId} moduleId={moduleId} systemId={controller.irrigation_system_id} timezone={mait.timezone} /> : <p className="text-sm text-muted-foreground">Choose the controller to sync.</p>}
+    {controller ? <ControllerSync key={moduleId} vineyardId={vineyardId} moduleId={moduleId} systemId={controller.irrigation_system_id} timezone={mait.timezone} verifying={mait.access.isFetching || mait.configuration.isFetching} /> : <p className="text-sm text-muted-foreground">Choose the controller to sync.</p>}
   </div>;
 }
 
@@ -49,7 +49,7 @@ function SetupLink({ label = 'Configure MAIT valve mappings' }: { label?: string
   return <Button asChild variant="outline"><Link to={setup}>{label}</Link></Button>;
 }
 
-function ControllerSync({ vineyardId, moduleId, systemId, timezone }: { vineyardId: string; moduleId: string; systemId: string | null; timezone: string }) {
+function ControllerSync({ vineyardId, moduleId, systemId, timezone, verifying }: { vineyardId: string; moduleId: string; systemId: string | null; timezone: string; verifying: boolean }) {
   const systems = useIrrigationSystems(vineyardId);
   const valves = useIrrigationValves(vineyardId);
   const mappings = useQuery({ queryKey: ['mait', vineyardId, 'controller-mappings', moduleId], staleTime: 0, refetchOnMount: 'always', queryFn: async () => maitRows(await maitRpc('get_mait_intelliweb_controller_mappings', vineyardId, { p_module_id: moduleId })) });
@@ -59,7 +59,7 @@ function ControllerSync({ vineyardId, moduleId, systemId, timezone }: { vineyard
   const busy = useRef(false);
   const reads = [systems, valves, mappings];
   const failed = reads.some(q => q.isError);
-  const loading = reads.some(q => q.isPending || q.isFetching);
+  const loading = verifying || reads.some(q => q.isPending || q.isFetching);
   const activeSystem = systems.data?.some(s => s.id === systemId && s.vineyard_id === vineyardId && s.is_active === true);
   const ready = !failed && !loading && activeSystem && mappings.data?.some(m => m.ignore !== true && m.is_ignored !== true && m.is_active !== false && (m.vineyard_id == null || m.vineyard_id === vineyardId) && (m.module_id == null || String(m.module_id) === moduleId) && valves.data?.some(v => v.id === m.irrigation_valve_id && v.vineyard_id === vineyardId && v.irrigation_system_id === systemId && v.is_active === true));
   const sync = useMutation({
