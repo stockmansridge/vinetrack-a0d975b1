@@ -11,6 +11,8 @@ import { CatalogueIdentityBadge, CatalogueReferenceSection } from "@/components/
 import { catalogueLinkOf, useCatalogueReference } from "@/lib/chemicalCatalogueReference";
 import { CatalogueLinkFreshness } from "@/components/chemicals/CatalogueLinkFreshness";
 import { useQuery } from "@tanstack/react-query";
+import { useVineyard } from "@/context/VineyardContext";
+import { PhysicalUnitConsistency } from "@/components/chemicals/PhysicalUnitConsistency";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
@@ -370,6 +372,7 @@ export function ChemicalIntelligenceDialog({
   const confirmed = !live.isError && !live.isFetching ? live.data : null;
   const chem = confirmed ? toChemicalIntelligence(confirmed) : null;
   const catalogueQ = useCatalogueReference(confirmed, open && !!confirmed);
+  const { memberships } = useVineyard();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
@@ -386,6 +389,7 @@ export function ChemicalIntelligenceDialog({
           <section className="space-y-2 rounded border p-3" data-testid="catalogue-reference-detail">
             <h3 className="text-sm font-semibold">Catalogue rates</h3>
             <CatalogueLinkFreshness row={confirmed} query={catalogueQ} open={open} />
+            <PhysicalUnitConsistency row={confirmed} reference={catalogueQ.isFetching || catalogueQ.isError ? undefined : (catalogueQ.data as any)} role={(memberships.find((m) => m.vineyard_id === confirmed?.vineyard_id) as any)?.role ?? null} />
             <CatalogueReferenceSection query={catalogueQ} />
           </section>
         )}

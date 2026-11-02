@@ -16,7 +16,7 @@ export function V3AddToVineyardButton({ revisionId, productName, status, vineyar
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [qty, setQty] = useState("");
-  const [unit, setUnit] = useState<StockUnit>("L");
+  const [unit, setUnit] = useState<StockUnit | null>(null);
   const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const mut = useMutation({
     mutationFn: () => addV3ToVineyard({ revisionId, vineyardId: vineyardId!, quantity: qty, unit }),
@@ -30,7 +30,7 @@ export function V3AddToVineyardButton({ revisionId, productName, status, vineyar
   return (
     <div className="space-y-1">
       {isPendingCatalogueReview(status) && <p className="text-xs text-warning-foreground" data-testid="v3-pending-note">{PENDING_CATALOGUE_REVIEW}</p>}
-      <Button size="sm" disabled={!vineyardId} title={vineyardId ? undefined : "Select a vineyard first"} onClick={() => { setMsg(null); setQty(""); setOpen(true); }}>Add to Vineyard</Button>
+      <Button size="sm" disabled={!vineyardId} title={vineyardId ? undefined : "Select a vineyard first"} onClick={() => { setMsg(null); setQty(""); setUnit(null); setOpen(true); }}>Add to Vineyard</Button>
       {msg && <p className={msg.tone === "err" ? "text-xs text-destructive" : "text-xs text-success"}>{msg.text}</p>}
       <Dialog open={open} onOpenChange={(o) => !mut.isPending && setOpen(o)}>
         <DialogContent>
@@ -38,8 +38,8 @@ export function V3AddToVineyardButton({ revisionId, productName, status, vineyar
           <Label htmlFor="v3-open-qty">Opening stock — optional</Label>
           <div className="flex gap-2">
             <Input id="v3-open-qty" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} className="w-40" />
-            <Select value={unit} onValueChange={(v) => setUnit(v as StockUnit)}>
-              <SelectTrigger className="w-24" aria-label="Opening stock unit"><SelectValue /></SelectTrigger>
+            <Select value={unit ?? undefined} onValueChange={(v) => setUnit(v as StockUnit)}>
+              <SelectTrigger className="w-24" aria-label="Opening stock unit"><SelectValue placeholder="Unit" /></SelectTrigger>
               <SelectContent>{STOCK_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
             </Select>
           </div>

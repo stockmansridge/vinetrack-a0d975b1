@@ -71,7 +71,7 @@ function AddButton({ revisionId, vineyardId, vineyardName, canEdit, onAdded }: {
   const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const mut = useMutation({
     // Customers never send opening stock in this release.
-    mutationFn: () => addV3ToVineyard({ revisionId, vineyardId: vineyardId!, quantity: "", unit: "L" }),
+    mutationFn: () => addV3ToVineyard({ revisionId, vineyardId: vineyardId!, quantity: "", unit: null }),
     onSuccess: (r) => {
       setMsg({ tone: "ok", text: addedMessage(r.reused, vineyardName) });
       qc.invalidateQueries({ queryKey: ["saved_chemicals"] });
