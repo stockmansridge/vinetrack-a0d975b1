@@ -17,7 +17,7 @@ function mount(moduleId = 'controller') {
 }
 beforeEach(() => {
   vi.clearAllMocks(); m.admin = true; m.adminLoading = false; m.member = true;
-  m.status = { scheduler_active: false, pilot_system_admin_only: true, modules: [{ module_id: 'controller', auto_sync_enabled: false, auto_commit_enabled: false, overlap_days: 3 }, { module_id: 'other', auto_sync_enabled: false, auto_commit_enabled: false, overlap_days: 3 }] };
+  m.status = { scheduler_active: false, pilot_system_admin_only: true, pilot_vineyard_selected: true, modules: [{ module_id: 'controller', auto_sync_enabled: false, auto_commit_enabled: false, overlap_days: 3 }, { module_id: 'other', auto_sync_enabled: false, auto_commit_enabled: false, overlap_days: 3 }] };
   m.rpc.mockImplementation(async name => name === 'get_mait_irrigation_automation_status' ? m.status : true);
   readOnlyStore.setReadOnly(false);
   vi.stubGlobal('fetch', vi.fn());
@@ -119,7 +119,7 @@ describe('MAIT irrigation automation pilot', () => {
     expect(m.rpc.mock.calls.some(c => c[0] === 'set_mait_irrigation_automation_options')).toBe(false);
   });
   it('fails closed on status errors or missing selected module', async () => {
-    m.status = { scheduler_active: false, pilot_system_admin_only: true, modules: [] }; mount();
+    m.status = { scheduler_active: false, pilot_system_admin_only: true, pilot_vineyard_selected: true, modules: [] }; mount();
     await waitFor(() => expect(m.rpc).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole('button', { name: 'Save pilot preferences' })).not.toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
