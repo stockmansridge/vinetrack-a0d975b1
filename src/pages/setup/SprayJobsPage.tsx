@@ -1,3 +1,4 @@
+import { SELECTABLE_SPRAY_JOB_STATUSES, SPRAY_JOB_STATUS_LABEL, SPRAY_JOB_STATUS_ORDER, normalizeSprayJobStatus, sprayJobStatusLabel } from "@/lib/sprayJobStatus";
 import { useNavigate } from "react-router-dom";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { applyViaIrrigationPath, isFertigationOperationType, isFertigationProgramStep } from "@/lib/fertigation";
@@ -80,7 +81,6 @@ const fmtDate = (v?: string | null) => {
 };
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 
-import { SELECTABLE_SPRAY_JOB_STATUSES, SPRAY_JOB_STATUS_LABEL, SPRAY_JOB_STATUS_ORDER, normalizeSprayJobStatus, sprayJobStatusLabel } from "@/lib/sprayJobStatus";
 
 // Operation type options. These describe HOW the job is applied (matches iOS).
 // Chemical use/type (Fungicide/Herbicide/Insecticide) lives on the chemical
