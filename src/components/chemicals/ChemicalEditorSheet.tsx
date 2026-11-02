@@ -66,6 +66,7 @@ import {
 } from "@/lib/chemicalVineyardScope";
 
 import { DefaultRatesCard } from "@/components/chemicals/DefaultRatesCard";
+import { PhysicalUnitConsistency } from "@/components/chemicals/PhysicalUnitConsistency";
 import { CatalogueIdentityBadge, CatalogueReferenceSection, CatalogueChemistrySection } from "@/components/chemicals/CatalogueReference";
 import { catalogueLinkOf, useCatalogueReference, intelligenceDraftUnchanged } from "@/lib/chemicalCatalogueReference";
 import { CatalogueLinkFreshness } from "@/components/chemicals/CatalogueLinkFreshness";
@@ -1261,6 +1262,7 @@ export function ChemicalEditor({
               {catalogueLinked && (
                 <Section title="Catalogue rates">
                   <CatalogueLinkFreshness row={initial} query={catalogueQ} open={open} vineyardId={vineyardId} />
+                  <PhysicalUnitConsistency row={initial as any} reference={catalogueQ.isFetching || catalogueQ.isError ? undefined : (catalogueQ.data as any)} role={editorRole} />
                   <CatalogueReferenceSection query={catalogueQ} />
                 </Section>
               )}

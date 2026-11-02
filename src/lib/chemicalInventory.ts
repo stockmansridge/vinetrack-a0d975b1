@@ -117,10 +117,12 @@ export function isPendingCatalogueReview(status: string | null | undefined): boo
   return s === "pending_review" || s === "needs_attention";
 }
 
-export interface AddToVineyardArgs { revisionId: string; vineyardId: string; quantity: string; unit: StockUnit }
+export interface AddToVineyardArgs { revisionId: string; vineyardId: string; quantity: string; unit: StockUnit | null }
 export function buildAddToVineyardArgs(a: AddToVineyardArgs): { args: Row } | { error: string } {
   const q = num(a.quantity);
   if (q !== null && (!Number.isFinite(q) || q < 0)) return { error: "Opening stock must be a number of 0 or more." };
+  // Never assume litres (or kg): an opening quantity needs an explicitly chosen unit.
+  if (q !== null && !a.unit) return { error: "Choose the opening stock unit." };
   return { args: { p_revision_id: a.revisionId, p_vineyard_id: a.vineyardId, p_opening_quantity: q, p_opening_unit: q === null ? null : a.unit } };
 }
 export async function addV3ToVineyard(a: AddToVineyardArgs): Promise<{ reused: boolean; savedChemicalId: string | null }> {
