@@ -35,6 +35,7 @@ export function MaitSetupHelp() {
     <section className="border-t pt-4"><h3 className="font-semibold">Using MAIT for irrigation</h3>
       <p className="mt-1">The same MAIT connection can also be used for a MAIT irrigation controller. Go to <strong>Irrigation Setup</strong>, choose the controller module, map MAIT outputs to VineTrack valves, then use <strong>Sync now</strong>.</p>
       <p className="mt-2 text-muted-foreground">VineTrack currently reads MAIT data only. It does not start, stop or program MAIT irrigation hardware.</p>
+      <p className="mt-2 text-muted-foreground">Manual sync is operational: it imports controller-reported run history and recorded water volumes, not live flow measurements. Automatic retrieval and automatic record creation are System Admin-only pilot preferences. The scheduler is inactive, so automatic syncing is not yet running; saving preferences does not start a sync.</p>
     </section>
   </ProviderSetupHelp>;
 }
