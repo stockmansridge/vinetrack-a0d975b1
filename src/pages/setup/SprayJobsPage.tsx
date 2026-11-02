@@ -80,7 +80,7 @@ const fmtDate = (v?: string | null) => {
 };
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 
-const STATUS_OPTIONS = ["draft", "scheduled", "in_progress", "completed", "cancelled"];
+import { SELECTABLE_SPRAY_JOB_STATUSES, SPRAY_JOB_STATUS_LABEL, SPRAY_JOB_STATUS_ORDER, normalizeSprayJobStatus, sprayJobStatusLabel } from "@/lib/sprayJobStatus";
 
 // Operation type options. These describe HOW the job is applied (matches iOS).
 // Chemical use/type (Fungicide/Herbicide/Insecticide) lives on the chemical
@@ -514,7 +514,7 @@ function JobsTable({
         ].filter(Boolean).join(" ").toLowerCase();
         if (!hay.includes(q)) return false;
       }
-      if (statusFilter !== "all" && String(j.status ?? "").toLowerCase() !== statusFilter) return false;
+      if (statusFilter !== "all" && normalizeSprayJobStatus(j.status) !== statusFilter) return false;
       if (opFilter !== "all" && String(j.operation_type ?? "").toLowerCase() !== opFilter.toLowerCase()) return false;
       if (growthFilter !== "all" && j.growth_stage_code !== growthFilter) return false;
       if (equipmentFilter !== "all" && j.equipment_id !== equipmentFilter) return false;
@@ -538,9 +538,7 @@ function JobsTable({
   };
 
   type ColDef = { key: string; label: string; align?: "right"; accessor: (j: SprayJob) => any; render: (j: SprayJob) => React.ReactNode };
-  const STATUS_ORDER: Record<string, number> = {
-    draft: 1, scheduled: 2, in_progress: 3, completed: 4, cancelled: 5,
-  };
+  const STATUS_ORDER: Record<string, number> = SPRAY_JOB_STATUS_ORDER;
   const growthCol: ColDef = {
     key: "growth",
     label: "Growth Stage",
@@ -605,7 +603,7 @@ function JobsTable({
       return [
         { key: "name", label: "Name", accessor: (j) => j.name ?? "", render: (j) => <TableCell className="font-medium">{fmt(j.name)}</TableCell> },
         { key: "type", label: "Type", accessor: (j) => (j.is_template ? "Program Step" : "Planned Spray"), render: (j) => <TableCell>{j.is_template ? "Program Step" : "Planned Spray"}</TableCell> },
-        { key: "status", label: "Status", accessor: (j) => STATUS_ORDER[String(j.status ?? "").toLowerCase()] ?? 0, render: (j) => <TableCell><Badge variant="secondary">{fmt(j.status)}</Badge></TableCell> },
+        { key: "status", label: "Status", accessor: (j) => STATUS_ORDER[normalizeSprayJobStatus(j.status) ?? ""] ?? 0, render: (j) => <TableCell><Badge variant="secondary">{sprayJobStatusLabel(j.status)}</Badge></TableCell> },
         { key: "updated", label: "Updated", accessor: (j) => (j.updated_at ? new Date(j.updated_at) : null), render: (j) => <TableCell>{fmtDate(j.updated_at)}</TableCell> },
       ];
     }
@@ -614,7 +612,7 @@ function JobsTable({
       growthCol,
       { key: "name", label: "Name", accessor: (j) => j.name ?? "", render: (j) => <TableCell className="font-medium">{fmt(j.name)}</TableCell> },
       { key: "planned", label: "Planned date", accessor: (j) => (j.planned_date ? new Date(j.planned_date) : null), render: (j) => <TableCell>{fmtDate(j.planned_date)}</TableCell> },
-      { key: "status", label: "Status", accessor: (j) => STATUS_ORDER[String(j.status ?? "").toLowerCase()] ?? 0, render: (j) => <TableCell><Badge variant="secondary">{fmt(j.status)}</Badge></TableCell> },
+      { key: "status", label: "Status", accessor: (j) => STATUS_ORDER[normalizeSprayJobStatus(j.status) ?? ""] ?? 0, render: (j) => <TableCell><Badge variant="secondary">{sprayJobStatusLabel(j.status)}</Badge></TableCell> },
       { key: "operation", label: "Operation", accessor: (j) => opTypeLabel(j.operation_type), render: (j) => <TableCell><OperationTypeBadge value={j.operation_type} /></TableCell> },
       { key: "target", label: "Target pest/disease/weed", accessor: (j) => j.target ?? "", render: (j) => <TableCell>{j.target ? j.target : "—"}</TableCell> },
       { key: "rate", label: "Rate / ha", accessor: (j) => (j.spray_rate_per_ha == null ? null : Number(j.spray_rate_per_ha)), render: (j) => <TableCell>{fmt(j.spray_rate_per_ha)}</TableCell> },
@@ -688,7 +686,7 @@ function JobsTable({
               <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
-                {STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                {SELECTABLE_SPRAY_JOB_STATUSES.map((s) => <SelectItem key={s} value={s}>{SPRAY_JOB_STATUS_LABEL[s]}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
