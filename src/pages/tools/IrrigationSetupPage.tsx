@@ -37,8 +37,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { AlertTriangle, ArrowLeft, Check, Pencil, Plus } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, CircleHelp, Pencil, Plus } from "lucide-react";
 import { HelpTip } from "@/components/spray/wizard/controls";
+import {
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import mappingGuideAsset from "@/assets/irrigation-mapping-guide.png.asset.json";
 import {
   ALLOCATION_METHOD_LABEL,
   useAvailableRows,
@@ -1757,7 +1761,35 @@ export default function IrrigationSetupPage() {
               <ArrowLeft className="mr-1.5 h-4 w-4" /> Irrigation Records
             </Link>
           </Button>
-          <h1 className="text-2xl font-semibold tracking-tight">Irrigation setup</h1>
+           <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight">Irrigation setup</h1>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" aria-label="How irrigation mapping works">
+                  <CircleHelp className="h-4 w-4" /> How mapping works
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle>How irrigation mapping works</DialogTitle>
+                  <DialogDescription>
+                    How a controller's valves connect to vineyard blocks, and the five ways to share a valve's water.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="overflow-y-auto rounded-md border border-border">
+                  <img
+                    src={mappingGuideAsset.url}
+                    alt="Diagram: a controller's valves map to blocks using one of five mapping methods — rows, manual percentage, emitter count, vine count or irrigated area."
+                    className="w-full h-auto"
+                    loading="lazy"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  VineTrack maps and records irrigation; this does not imply remote operation of physical valves.
+                </p>
+              </DialogContent>
+            </Dialog>
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Systems, valves, and valve-to-block or valve-to-row connections.
           </p>
