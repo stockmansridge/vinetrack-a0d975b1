@@ -107,7 +107,7 @@ describe("concentration factor (ticket #46)", () => {
 describe("Manual Spray label-rate reference (actuals stay explicit)", () => {
   const rates = (p100: unknown, ha: unknown) => ({ version: 1, per_100_litres: p100, per_hectare: ha });
   const sel = (basis: string, value: number | null, unit: string, min: number | null = null, max: number | null = null) => ({
-    option_key: "k", rate_ids: ["r"], basis, unit, value, min_value: min, max_value: max, source: "operator",
+    option_key: "", rate_ids: [], entry_method: "manual", basis, unit, value, min_value: min, max_value: max, source: "operator",
   });
   it("per-100 L gives a reference estimate from tank water only", () => {
     const r = labelRateReferences(rates(sel("per_100_litres", 200, "mL"), null), 330);
