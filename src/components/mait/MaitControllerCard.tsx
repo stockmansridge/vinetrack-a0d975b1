@@ -82,7 +82,7 @@ export function MaitControllerCard({ vineyardId }: { vineyardId: string }) {
     <p className="text-sm text-muted-foreground">Import MAIT controller run history and reported water volumes into VineTrack irrigation records.</p>
     {[access.error, configuration.error, mappings.error].filter(Boolean).map((e, i) => <Alert variant="destructive" key={i}><AlertDescription>{(e as Error).message}</AlertDescription></Alert>)}
     {!access.data?.manage ? <p className="text-sm text-muted-foreground">Your vineyard owner or manager manages controller setup and imports.</p> : !connected ? <>
-      <p className="text-sm text-muted-foreground">Weather stations and irrigation controllers use the same MAIT network connection.</p><Button asChild variant="outline"><Link to="/setup/weather#mait">Connect MAIT in Weather setup</Link></Button>
+      <p className="text-sm text-muted-foreground">Weather stations and irrigation controllers use the same MAIT network connection — connect once in Weather setup.</p><Button asChild variant="outline"><Link to="/setup/weather#mait">Connect MAIT in Weather setup</Link></Button>
     </> : <>
       <p className="text-sm text-muted-foreground">{connection.network_name || 'Connected MAIT network'}</p>
       {notice && <Alert><AlertDescription>{notice}</AlertDescription></Alert>}
