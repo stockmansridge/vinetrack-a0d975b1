@@ -93,7 +93,9 @@ describe('MAIT irrigation automation pilot', () => {
     const { redraw } = mount(); fireEvent.click(await screen.findByRole('switch', { name: 'Automatic retrieval' }));
     redraw('other');
     expect(await screen.findByRole('switch', { name: 'Automatic retrieval' })).not.toBeChecked();
-    fireEvent.click(screen.getByRole('button', { name: 'Save pilot preferences' }));
+    const save = screen.getByRole('button', { name: 'Save pilot preferences' });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
     await waitFor(() => expect(m.rpc).toHaveBeenCalledWith('set_mait_irrigation_automation_options', 'v', expect.objectContaining({ p_module_id: 'other', p_auto_sync_enabled: false })));
   });
 });
