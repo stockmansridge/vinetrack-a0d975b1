@@ -404,10 +404,24 @@ export function SprayJobWizard({
           {gate.canSave && resistanceBlocksSave && (
             <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-xs">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
-              <span>
-                The resistance check needs acknowledging on the Review step before this
-                application can be saved.
-              </span>
+              <button
+                type="button"
+                className="text-left underline-offset-2 hover:underline"
+                onClick={() => {
+                  // Take the operator to the control — never tick it for them.
+                  const reviewIndex = visibleSteps.findIndex((s) => s.key === "review");
+                  if (reviewIndex >= 0) setStep(reviewIndex);
+                  window.setTimeout(() => {
+                    const el = document.getElementById("resistance-ack");
+                    el?.scrollIntoView({ block: "center" });
+                    el?.focus();
+                  }, 50);
+                }}
+              >
+                The resistance check needs acknowledging before this application can be
+                saved. Go to the Review step and tick the acknowledgement checkbox at the
+                top of the resistance check.
+              </button>
             </div>
           )}
           {!gate.canSave && gate.blockingReasons.length > 0 && (
