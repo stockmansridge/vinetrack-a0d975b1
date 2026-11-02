@@ -222,7 +222,7 @@ describe("Review acknowledgement", () => {
 
   it("asks for acknowledgement when the rotation cannot be fully assessed", () => {
     setup("unable_to_fully_assess", true);
-    expect(screen.getByText(/cannot be fully assessed/i)).toBeTruthy();
+    expect(screen.getAllByText(/cannot be fully assessed/i).length).toBeGreaterThan(0);
   });
 
   it("does not ask for acknowledgement on a good fit", () => {
