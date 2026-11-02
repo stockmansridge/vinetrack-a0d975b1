@@ -36,7 +36,7 @@ function VineyardSync({ vineyardId, allowedRole }: { vineyardId: string; allowed
   if (!allowedRole || mait.access.data?.manage !== true) return <div className="space-y-2"><p className="text-sm">Your vineyard owner or manager manages MAIT irrigation syncing.</p><SetupLink /></div>;
   if (readOnly) return <div className="space-y-2"><p className="text-sm">This vineyard is read-only. MAIT sync can create records and is unavailable.</p><SetupLink /></div>;
   if (!mait.connected || !mait.config.connection.network_id) return <Button asChild variant="outline"><Link to="/setup/weather#mait">Connect MAIT in Weather setup</Link></Button>;
-  const controllers = mait.config.controllerModules.filter(c => c.module_id != null && String(c.module_id) !== '');
+  const controllers = mait.config.controllerModules.filter(c => c.is_active === true && c.module_id != null && String(c.module_id) !== '' && (c.vineyard_id == null || c.vineyard_id === vineyardId));
   if (!controllers.length) return <SetupLink label="Set up MAIT irrigation controller" />;
   const controller = controllers.find(c => String(c.module_id) === moduleId);
   return <div className="space-y-3">

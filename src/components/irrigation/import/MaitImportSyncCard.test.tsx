@@ -84,4 +84,21 @@ describe('manual MAIT irrigation import', () => {
   });
   it('preserves partial 206 counts and warning', async () => { m.proxy.mockResolvedValue(maitHttpResult(206, { success: false, summary: { received: 9, committed: 3, existing: 2, needs_mapping: 1, needs_review: 3 } })); mount(); await choose(); fireEvent.click(screen.getByRole('button', { name: 'Sync MAIT irrigation now' })); fireEvent.click(screen.getByRole('button', { name: 'Confirm & sync' })); await screen.findByText('Latest MAIT sync result'); expect(screen.getByRole('status')).toHaveTextContent('partial/truncated'); expect(screen.getByRole('status')).toHaveTextContent('Needs review3'); });
   it('shows failed sync separately from success', async () => { m.proxy.mockRejectedValue(new Error('MAIT could not be reached.')); mount(); await choose(); fireEvent.click(screen.getByRole('button', { name: 'Sync MAIT irrigation now' })); fireEvent.click(screen.getByRole('button', { name: 'Confirm & sync' })); expect(await screen.findByRole('alert')).toHaveTextContent('MAIT could not be reached.'); expect(screen.queryByText('Latest MAIT sync result')).not.toBeInTheDocument(); });
+  it('blocks offline sync before any request', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try { mount(); await choose(); fireEvent.click(screen.getByRole('button', { name: 'Sync MAIT irrigation now' })); fireEvent.click(screen.getByRole('button', { name: 'Confirm & sync' })); expect(await screen.findByRole('alert')).toHaveTextContent('MAIT sync is unavailable'); expect(m.proxy).not.toHaveBeenCalled(); } finally { online.mockRestore(); }
+  });
+  it('blocks sync if the mapping read fails rather than treating it as empty', async () => {
+    m.rpc.mockRejectedValue(new Error('permission denied')); mount(); fireEvent.click(screen.getByRole('combobox')); fireEvent.click(await screen.findByRole('option', { name: 'Pump · controller' })); expect(await screen.findByRole('alert')).toHaveTextContent('Could not verify saved irrigation systems'); expect(screen.queryByRole('button', { name: 'Sync MAIT irrigation now' })).not.toBeInTheDocument(); expect(m.proxy).not.toHaveBeenCalled();
+  });
+  it('ignores a late old-controller result after changing selection', async () => {
+    let resolve: ((result: ReturnType<typeof maitHttpResult>) => void) | undefined;
+    m.proxy.mockImplementation(() => new Promise(r => { resolve = r; }));
+    m.controllers.push({ module_id: 'second', module_name: 'Second', irrigation_system_id: 'system', is_active: true });
+    mount(); await choose(); fireEvent.click(screen.getByRole('button', { name: 'Sync MAIT irrigation now' })); fireEvent.click(screen.getByRole('button', { name: 'Confirm & sync' })); await waitFor(() => expect(m.proxy).toHaveBeenCalledTimes(1));
+    await choose('Second · second');
+    if (!resolve) throw new Error('Expected a pending sync');
+    resolve(maitHttpResult(200, { summary: { committed: 4 } }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Sync MAIT irrigation now' })).toBeEnabled()); expect(screen.queryByText('Latest MAIT sync result')).not.toBeInTheDocument(); expect(m.proxy).toHaveBeenCalledTimes(1);
+  });
 });
