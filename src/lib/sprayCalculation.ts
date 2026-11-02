@@ -1,3 +1,4 @@
+import { normalizeSprayJobStatus } from "./sprayJobStatus";
 // Stage 3A — the single authoritative spray calculation pipeline.
 //
 //   row geometry → application geometry → carrier volume → product quantities → tanks
@@ -59,6 +60,14 @@ export interface CarrierResult {
   /** max(1, dilute ÷ applied), or the persisted value when one exists. */
   concentrationFactor: number | null;
   concentrationFactorSource: "persisted" | "derived" | "manual" | null;
+  /** CF stored on the job (null for manual/banded). */
+  persistedConcentrationFactor: number | null;
+  /** CF from the current dilute reference ÷ applied water, when both are known. */
+  derivedConcentrationFactor: number | null;
+  /** Exact inputs behind derivedConcentrationFactor. */
+  concentrationFactorInputs: { diluteReference: number; applied: number; unit: "L/ha" | "L/100 m" } | null;
+  /** Persisted and derived CF differ (shown explicitly; never silently resolved). */
+  concentrationFactorMismatch: boolean;
   /**
    * The hectares the carrier rate was applied to. For an L/ha carrier this is
    * ALWAYS the gross application hectares — including banded applications.
@@ -66,6 +75,10 @@ export interface CarrierResult {
   carrierAreaHa: number | null;
   diagnostics: SprayDiagnostic[];
 }
+
+export const CONCENTRATION_FACTOR_MISMATCH = "concentration_factor_mismatch";
+const sameCf = (a: number, b: number) => Math.abs(a - b) < 0.005;
+const fmtCf = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
 /** CF is floored at 1: applied volume above the dilute reference never dilutes. */
 export function concentrationFactorFrom(
@@ -93,6 +106,8 @@ export function calculateCarrier(args: {
   templateMode?: boolean;
   /** Message used for deferred values (Program Step vs Planned Spray without blocks). */
   deferredMessage?: string;
+  /** Completed/archived history: a recorded CF is kept, never re-derived. */
+  preserveRecordedConcentrationFactor?: boolean;
 }): CarrierResult {
   const { geometry, mode, carrier } = args;
   const templateMode = !!args.templateMode;
@@ -274,22 +289,68 @@ export function calculateCarrier(args: {
     }
   }
 
-  // Concentration factor: a persisted value is authoritative history.
+  // Concentration factor (CF = dilute reference ÷ applied water, floored at 1).
   // Manual is always 1.00 — there is no dilute reference to concentrate from.
-  let concentrationFactor = banded ? null : basis === "manual" ? 1 : pos(carrier.concentrationFactor);
-  let concentrationFactorSource: CarrierResult["concentrationFactorSource"] =
-    basis === "manual" ? "manual" : concentrationFactor != null ? "persisted" : null;
-  if (concentrationFactor == null && !banded) {
-    const derived =
-      basis === "l_per_ha"
-        // The canopy answer IS the dilute reference. An explicitly stored
-        // dilute figure (historical rows) still wins.
-        ? concentrationFactorFrom(diluteLPerHa ?? recommendedPerHa, appliedPerHa)
-        : concentrationFactorFrom(dilute100m ?? recommendedPer100m, appliedPer100m);
+  // When current carrier inputs give a CF, that is shown. A different
+  // persisted CF never silently prevails on an editable job: the operator
+  // must choose; completed/archived history keeps its recorded CF untouched.
+  const persistedCf = banded || basis === "manual" ? null : pos(carrier.concentrationFactor);
+  const cfDilute = banded || basis === "manual"
+    ? null
+    : basis === "l_per_ha"
+      // The canopy answer IS the dilute reference; a stored dilute figure wins.
+      ? pos(diluteLPerHa ?? recommendedPerHa)
+      : pos(dilute100m ?? recommendedPer100m);
+  const cfApplied = banded || basis === "manual"
+    ? null
+    : basis === "l_per_ha" ? pos(appliedPerHa) : pos(appliedPer100m);
+  const derivedCf = concentrationFactorFrom(cfDilute, cfApplied);
+  const concentrationFactorInputs =
+    derivedCf != null && cfDilute != null && cfApplied != null
+      ? { diluteReference: cfDilute, applied: cfApplied, unit: (basis === "l_per_ha" ? "L/ha" : "L/100 m") as "L/ha" | "L/100 m" }
+      : null;
+  const mismatch =
+    persistedCf != null && derivedCf != null && !sameCf(persistedCf, derivedCf);
 
-    if (derived != null) {
-      concentrationFactor = derived;
+  let concentrationFactor: number | null = null;
+  let concentrationFactorSource: CarrierResult["concentrationFactorSource"] = null;
+  if (banded) {
+    // Ground spray — CF not used.
+  } else if (basis === "manual") {
+    concentrationFactor = 1;
+    concentrationFactorSource = "manual";
+  } else if (!mismatch) {
+    if (derivedCf != null) {
+      concentrationFactor = derivedCf;
       concentrationFactorSource = "derived";
+    } else if (persistedCf != null) {
+      concentrationFactor = persistedCf;
+      concentrationFactorSource = "persisted";
+    }
+  } else {
+    // Mismatch: keep the recorded CF (no silent chemistry change) and say so.
+    concentrationFactor = persistedCf;
+    concentrationFactorSource = "persisted";
+    const calc = `${fmtCf(cfDilute!)} ÷ ${fmtCf(cfApplied!)} ${concentrationFactorInputs!.unit} = ×${derivedCf!.toFixed(2)}`;
+    const kept = pos(carrier.concentrationFactorKeptAgainst);
+    if (args.preserveRecordedConcentrationFactor) {
+      diagnostics.push({
+        code: "concentration_factor_recorded_history",
+        severity: "info",
+        message: `Recorded CF ×${persistedCf!.toFixed(2)} is kept for this completed job (current water rates give ${calc}).`,
+      });
+    } else if (kept != null && sameCf(kept, derivedCf!)) {
+      diagnostics.push({
+        code: "concentration_factor_kept_recorded",
+        severity: "info",
+        message: `You chose to keep the recorded CF ×${persistedCf!.toFixed(2)} (water rates give ${calc}).`,
+      });
+    } else {
+      diagnostics.push({
+        code: CONCENTRATION_FACTOR_MISMATCH,
+        severity: "error",
+        message: `Recorded CF ×${persistedCf!.toFixed(2)} differs from the water rates (${calc}). Choose which to use before saving.`,
+      });
     }
   }
 
@@ -307,6 +368,10 @@ export function calculateCarrier(args: {
     recommendedDiluteLitresPerHectare: recommendedPerHa,
     concentrationFactor,
     concentrationFactorSource,
+    persistedConcentrationFactor: persistedCf,
+    derivedConcentrationFactor: derivedCf,
+    concentrationFactorInputs,
+    concentrationFactorMismatch: mismatch,
     carrierAreaHa,
     diagnostics,
   };
@@ -648,6 +713,9 @@ export function calculateSprayApplication(args: {
     mode: application.mode,
     operationType: application.operationType,
     carrier: application.carrier,
+    preserveRecordedConcentrationFactor: ["completed", "archived"].includes(
+      normalizeSprayJobStatus(application.status) ?? "",
+    ),
     templateMode: templateMode || blocksDeferred,
     deferredMessage: templateMode
       ? "Calculated when blocks are selected."

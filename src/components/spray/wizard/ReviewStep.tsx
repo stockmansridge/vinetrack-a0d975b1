@@ -270,6 +270,10 @@ export function ReviewStep({
                   : ""}
                 {" = "}
                 {fmtQuantity(p.totalQuantity, p.unit)}
+                {p.concentrationFactorApplied == null &&
+                  p.rateBasis !== "per_100_litres" &&
+                  (calc.carrier.concentrationFactor ?? 1) > 1 &&
+                  " · CF not applied (area/row rate)"}
               </div>
             )}
           </div>

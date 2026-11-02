@@ -327,7 +327,7 @@ export function applyTemplate(
  * a planned job may legitimately still be missing detail that only a completed
  * record requires.
  */
-const FATAL_CODES = new Set(["missing_application_mode"]);
+const FATAL_CODES = new Set(["missing_application_mode", "concentration_factor_mismatch"]);
 
 export interface SaveGate {
   fatal: SprayDiagnostic[];
