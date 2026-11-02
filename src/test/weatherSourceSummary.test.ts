@@ -59,7 +59,7 @@ describe("providerUsedFor", () => {
       rainfallSource: "Open-Meteo Archive (fallback)",
     });
     expect(used.mait).toEqual([]);
-    expect(PROVIDER_PROVIDES.mait).toEqual(["Live observations", "Rainfall actuals"]);
+    expect(PROVIDER_PROVIDES.mait).toEqual(["Live observations", "Rainfall actuals", "Irrigation run history (if configured)"]);
     expect(PROVIDER_PROVIDES.wunderground).toContain("Rainfall actuals");
   });
 
@@ -89,5 +89,19 @@ describe("providerUsedFor", () => {
       rainfallSource: "Weather Underground",
     });
     expect(used.open_meteo).toEqual(["Historical rainfall fallback"]);
+  });
+});
+
+describe("PROVIDER_PROVIDES", () => {
+  it("qualifies MAIT's controller run-history capability without implying flow measurement or control", () => {
+    expect(PROVIDER_PROVIDES.mait).toContain("Irrigation run history (if configured)");
+    expect(PROVIDER_PROVIDES.mait.join(" ")).not.toMatch(/live flow|remote (start|stop)|valve control|scheduler/i);
+  });
+
+  it("leaves the other providers' capability lists unchanged", () => {
+    expect(PROVIDER_PROVIDES.open_meteo).toEqual(["Forecasts", "Historical rainfall archive"]);
+    expect(PROVIDER_PROVIDES.willyweather).toEqual(["Forecasts"]);
+    expect(PROVIDER_PROVIDES.davis).toEqual(["Live observations", "Rainfall actuals"]);
+    expect(PROVIDER_PROVIDES.wunderground).toEqual(["Live observations", "Rainfall actuals"]);
   });
 });

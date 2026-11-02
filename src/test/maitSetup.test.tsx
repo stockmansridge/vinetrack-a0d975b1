@@ -54,6 +54,25 @@ describe('MAIT setup actions', () => {
   });
   it('does not expose controller management for view-only members', async () => { mocks.manage=false; mount(<MaitControllerCard vineyardId="v" />); await screen.findByText('Your vineyard owner or manager manages controller setup and imports.'); expect(screen.queryByRole('button',{name:'Sync now'})).not.toBeInTheDocument(); });
   it('links controller connection to shared Weather setup', async () => { mount(<MaitControllerCard vineyardId="v" />); expect(await screen.findByRole('link',{name:'Connect MAIT in Weather setup'})).toHaveAttribute('href','/setup/weather#mait'); });
+  it('explains MAIT irrigation value before connection and opens the about popover without setup calls', async () => {
+    mocks.manage=true; mocks.connected=false;
+    mount(<MaitControllerCard vineyardId="v" />);
+    expect(await screen.findByText('Import MAIT controller run history and reported water volumes into VineTrack irrigation records.')).toBeVisible();
+    expect(screen.getByRole('link',{name:'Connect MAIT in Weather setup'})).toBeVisible();
+    const calls=mocks.rpc.mock.calls.length;
+    fireEvent.click(screen.getByRole('button',{name:'About MAIT irrigation integration'}));
+    expect(screen.getByText('What MAIT adds to irrigation')).toBeVisible();
+    expect(screen.getByText(/does not currently provide live flow monitoring, remote start\/stop valve control, or an automatic scheduler/)).toBeVisible();
+    expect(mocks.rpc.mock.calls.length).toBe(calls);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it('keeps the MAIT explanation available after connection', async () => {
+    mocks.manage=true; mocks.connected=true;
+    mount(<MaitControllerCard vineyardId="v" />);
+    expect(await screen.findByText('Import MAIT controller run history and reported water volumes into VineTrack irrigation records.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button',{name:'About MAIT irrigation integration'}));
+    expect(screen.getByText('What MAIT adds to irrigation')).toBeVisible();
+  });
   it('requires explicit conflict confirmation before retrying a valve mapping', async () => {
     mocks.connected=true; mocks.conflict=true; mount(<MaitControllerCard vineyardId="v" />);
     const chooser = await screen.findByRole('combobox',{name:'Choose controller module'}); fireEvent.click(chooser); fireEvent.click(await screen.findByRole('option',{name:'controller · Pump'}));

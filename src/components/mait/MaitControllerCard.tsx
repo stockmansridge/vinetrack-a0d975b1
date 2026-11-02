@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Info } from 'lucide-react';
 import { useIrrigationSystems, useIrrigationValves } from '@/lib/irrigationQuery';
 import { maitRpc, maitProxy, maitModules, maitOutputs, maitRows, maitDateWindow, maitSyncCounts, maitControllerSyncState, MAIT_PROVIDER, MAIT_PARTIAL_WARNING, type MaitResult } from '@/lib/maitIntelliwebQuery';
 import { MaitChoice, useMait } from './MaitWeatherCard';
@@ -55,10 +57,32 @@ export function MaitControllerCard({ vineyardId }: { vineyardId: string }) {
   const mapRows = mappings.data ?? [];
   const ready = !!controller && !!connection.network_id && mapRows.some(m => m.irrigation_valve_id && m.ignore !== true && m.is_ignored !== true && (valves.data ?? []).some(v => v.id === m.irrigation_valve_id && v.irrigation_system_id === controller.irrigation_system_id));
   if (access.isPending) return <Card className="p-4">Checking MAIT access…</Card>;
-  return <Card className="p-4 space-y-4"><h2 className="font-semibold">MAIT iNTELLiWeb controller</h2>
+  return <Card className="p-4 space-y-4">
+    <div className="flex items-center gap-1.5">
+      <h2 className="font-semibold">MAIT iNTELLiWeb controller</h2>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button type="button" aria-label="About MAIT irrigation integration" className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Info className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-80 space-y-2">
+          <p className="text-sm font-semibold">What MAIT adds to irrigation</p>
+          <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+            <li>MAIT can report each controller output's irrigation run history: output/valve number, dates and times, run durations and the reported total water volume.</li>
+            <li>VineTrack maps MAIT controller outputs to your saved valves, then uses the valve-to-block, row or area allocation to attribute that water to blocks.</li>
+            <li>You can manually sync recent usage and view the imported records in Irrigation Records and Reports.</li>
+            <li>The MAIT connection is shared with the Weather setup area.</li>
+            <li>Only available when the MAIT network has compatible controller modules and MAIT getdata access.</li>
+          </ul>
+          <p className="text-xs text-muted-foreground">MAIT does not currently provide live flow monitoring, remote start/stop valve control, or an automatic scheduler.</p>
+        </PopoverContent>
+      </Popover>
+    </div>
+    <p className="text-sm text-muted-foreground">Import MAIT controller run history and reported water volumes into VineTrack irrigation records.</p>
     {[access.error, configuration.error, mappings.error].filter(Boolean).map((e, i) => <Alert variant="destructive" key={i}><AlertDescription>{(e as Error).message}</AlertDescription></Alert>)}
     {!access.data?.manage ? <p className="text-sm text-muted-foreground">Your vineyard owner or manager manages controller setup and imports.</p> : !connected ? <>
-      <p className="text-sm text-muted-foreground">Weather stations and irrigation controllers use the same MAIT network connection.</p><Button asChild variant="outline"><Link to="/setup/weather#mait">Connect MAIT in Weather setup</Link></Button>
+      <p className="text-sm text-muted-foreground">Weather stations and irrigation controllers use the same MAIT network connection — connect once in Weather setup.</p><Button asChild variant="outline"><Link to="/setup/weather#mait">Connect MAIT in Weather setup</Link></Button>
     </> : <>
       <p className="text-sm text-muted-foreground">{connection.network_name || 'Connected MAIT network'}</p>
       {notice && <Alert><AlertDescription>{notice}</AlertDescription></Alert>}
