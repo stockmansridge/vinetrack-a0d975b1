@@ -16,11 +16,11 @@ import { guardMutation, readOnlyStore } from '@/lib/vineyardWriteAccess';
 const setup = '/irrigation/setup#mait-controller';
 const explanation = 'Import recent irrigation run history and controller-reported water volumes directly from a connected MAIT system. No file upload needed. Sync is manual; scheduled syncing is not currently enabled.';
 
-export default function MaitImportSyncCard() {
+export default function MaitImportSyncCard({ className = '' }: { className?: string }) {
   const { selectedVineyardId, currentRole, loading } = useVineyard();
-  return <Card className="border-task-water/40 bg-task-water/5">
+  return <Card className={`flex h-full flex-col border-task-water/40 bg-task-water/5 ${className}`}>
     <CardHeader><CardTitle className="text-base">MAIT iNTELLiWeb — API sync</CardTitle></CardHeader>
-    <CardContent className="space-y-3">
+    <CardContent className="flex flex-1 flex-col space-y-3">
       <p className="text-sm text-muted-foreground">{explanation}</p>
       {selectedVineyardId ? <VineyardSync key={selectedVineyardId} vineyardId={selectedVineyardId} allowedRole={!loading && ['owner', 'manager'].includes(currentRole ?? '')} /> : <p className="text-sm">Select a vineyard to configure or sync MAIT irrigation.</p>}
     </CardContent>

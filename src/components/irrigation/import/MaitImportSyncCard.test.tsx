@@ -46,6 +46,25 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); readOnlyStore.setReadOnly(false); vi.useRealTimers(); });
 describe('manual MAIT irrigation import', () => {
+  it('lays out the source step as a responsive three-card grid with all actions retained', () => {
+    mount(true);
+    const grid = screen.getByTestId('import-source-grid');
+    expect(grid.className).toContain('grid');
+    expect(grid.className).toContain('md:grid-cols-2');
+    expect(grid.className).toContain('xl:grid-cols-3');
+    expect(grid.className).toContain('gap-4');
+    for (const child of Array.from(grid.children)) expect(child.className).toContain('min-w-0');
+    expect(grid.children).toHaveLength(3);
+    expect(screen.getByText('Import from a file')).toBeVisible();
+    expect(screen.getByRole('button', { name: /Galcon GSI/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeVisible();
+    expect(screen.getByText('MAIT iNTELLiWeb — API sync')).toBeVisible();
+    expect(screen.getByText(/No file upload needed/)).toBeVisible();
+    expect(screen.getByText("Can't see your irrigation controller?")).toBeVisible();
+    expect(screen.getByRole('button', { name: /Contact support/ })).toBeVisible();
+    expect(screen.getByText('File import history')).toBeVisible();
+    expect(m.proxy).not.toHaveBeenCalled();
+  });
   it('keeps Galcon file selection and upload step separate, with MAIT on the source step only', async () => {
     mount(true);
     expect(screen.getByText(/No file upload needed/)).toBeVisible();
