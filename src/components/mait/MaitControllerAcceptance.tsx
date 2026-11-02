@@ -3,15 +3,15 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useSetupStatus, useValveBlocks } from '@/lib/irrigationQuery';
 import { MAIT_PARTIAL_WARNING, maitRows, type MaitResult } from '@/lib/maitIntelliwebQuery';
 
-export function MaitControllerAcceptance({ vineyardId, linked, mappingsChecked, mappingCount, mappedValveIds, preview }: {
-  vineyardId: string; linked: boolean; mappingsChecked: boolean; mappingCount: number; mappedValveIds: string[]; preview: MaitResult | null;
+export function MaitControllerAcceptance({ vineyardId, linked, mappingsChecked, mappingsValid, mappingCount, mappedValveIds, preview }: {
+  vineyardId: string; linked: boolean; mappingsChecked: boolean; mappingsValid: boolean; mappingCount: number; mappedValveIds: string[]; preview: MaitResult | null;
 }) {
   return <section className="space-y-2 border-t pt-3" aria-label="Controller acceptance checklist">
     <h3 className="text-sm font-semibold">Controller acceptance checklist</h3>
     <dl className="space-y-2 text-sm">
       <Check label="MAIT network connected (saved configuration; not a connection test)" state="Ready" />
       <Check label="Confirmed controller linked to an active VineTrack irrigation system" state={linked ? 'Ready' : 'Not configured'} />
-      <Check label={`Saved output mappings: ${mappedValveIds.length} active target valves from ${mappingCount} outputs`} state={!mappingsChecked ? 'Not checked' : mappingCount > 0 && mappedValveIds.length > 0 ? 'Ready' : 'Not configured'} />
+      <Check label={`Saved output mappings: ${mappedValveIds.length} active target valves from ${mappingCount} outputs`} state={!mappingsChecked ? 'Not checked' : mappingsValid ? 'Ready' : 'Not configured'} />
       <Check label="Read-only usage preview" state={!preview ? 'Not checked' : preview.partial || preview.empty ? 'Checked — incomplete or empty' : 'Checked — compare with MAIT'} />
     </dl>
     <p className="text-xs text-muted-foreground">Ready describes this check only. One mapped output does not verify every controller output or enable automation. Compare the preview with MAIT records and review every relevant output.</p>

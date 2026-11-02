@@ -112,6 +112,16 @@ describe('safe MAIT controller acceptance', () => {
     m.blockError = true; mount(); await choose(); expect(screen.getByText('Confirm in setup')).toBeVisible();
     expect(screen.getByText(/does not verify every controller output/)).toBeVisible();
   });
+  it('does not mark all saved mappings ready when only one output has a valid active target', async () => {
+    m.mappings.push({ external_valve_number: 2, irrigation_valve_id: 'missing-valve' });
+    mount(); await choose();
+    const checklist = within(screen.getByRole('region', { name: 'Controller acceptance checklist' }));
+    expect(checklist.getByText('Saved output mappings: 1 active target valves from 2 outputs').parentElement).toHaveTextContent('Not configured');
+  });
+  it('does not mark saved allocations ready without the server allocation check', async () => {
+    m.allocationOk = false; mount(); await choose();
+    expect(screen.getByText('Test valve block / row / area allocations').parentElement).toHaveTextContent('Not configured');
+  });
   it('shows preview failure without success evidence', async () => {
     m.proxy.mockRejectedValue(new Error('Read failed')); mount(); await choose(); fireEvent.click(screen.getByRole('button', { name: 'Preview MAIT usage (read-only)' }));
     expect(await screen.findByText('Read failed')).toBeVisible(); expect(screen.queryByRole('region', { name: 'Read-only MAIT usage preview' })).not.toBeInTheDocument();

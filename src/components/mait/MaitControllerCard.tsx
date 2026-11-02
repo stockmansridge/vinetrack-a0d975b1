@@ -79,6 +79,7 @@ function ControllerCard({ vineyardId }: { vineyardId: string }) {
   const linked = !!controller && (systems.data ?? []).some(s => s.id === controller.irrigation_system_id && s.vineyard_id === vineyardId && s.is_active === true);
   const relevantMappings = mapRows.filter(m => m.ignore !== true && m.is_ignored !== true && m.is_active !== false && (m.vineyard_id == null || m.vineyard_id === vineyardId) && (m.module_id == null || String(m.module_id) === moduleId));
   const mappedValveIds = [...new Set(relevantMappings.flatMap(m => (valves.data ?? []).filter(v => v.id === m.irrigation_valve_id && v.vineyard_id === vineyardId && v.is_active === true && v.irrigation_system_id === controller?.irrigation_system_id).map(v => v.id)))];
+  const mappingsValid = relevantMappings.length > 0 && relevantMappings.every(m => mappedValveIds.includes(m.irrigation_valve_id));
   const ready = allowed && !readOnly && connected && !!connection.network_id && linked && mappedValveIds.length > 0 && ![access, configuration, systems, valves, mappings].some(q => q.isPending || q.isFetching || q.error);
   if (access.isPending) return <Card id="mait-controller" className="p-4 scroll-mt-6">Checking MAIT access…</Card>;
   return <Card id="mait-controller" className="p-4 space-y-4 scroll-mt-6">
@@ -109,7 +110,7 @@ function ControllerCard({ vineyardId }: { vineyardId: string }) {
       <p className="text-sm text-muted-foreground">Weather stations and irrigation controllers use the same MAIT network connection — connect once in Weather setup.</p><Button asChild variant="outline"><Link to="/setup/weather#mait">Connect MAIT in Weather setup</Link></Button>
     </> : <>
       <p className="text-sm text-muted-foreground">{connection.network_name || 'Connected MAIT network'}</p>
-      <MaitControllerAcceptance vineyardId={vineyardId} linked={linked} mappingsChecked={!!mappings.data && ![mappings, valves, systems].some(q => q.error || q.isPending || q.isFetching)} mappingCount={relevantMappings.length} mappedValveIds={mappedValveIds} preview={preview} />
+      <MaitControllerAcceptance vineyardId={vineyardId} linked={linked} mappingsChecked={!!mappings.data && ![mappings, valves, systems].some(q => q.error || q.isPending || q.isFetching)} mappingsValid={mappingsValid} mappingCount={relevantMappings.length} mappedValveIds={mappedValveIds} preview={preview} />
       {readOnly && <p className="text-sm text-muted-foreground">This vineyard is read-only. Module discovery and usage preview do not import records; saving and syncing are unavailable.</p>}
       {notice && <Alert variant={run.isError ? 'destructive' : 'default'}><AlertDescription>{notice}</AlertDescription></Alert>}
       <p className="text-xs text-muted-foreground">Load controller modules reads available modules only. It does not save, import or operate equipment. Weather and soil sensor modules are not irrigation controllers; confirm the controller identity with MAIT before saving.</p>
