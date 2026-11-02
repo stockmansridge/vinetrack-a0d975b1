@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import MaitImportSyncCard from './MaitImportSyncCard';
@@ -7,6 +7,7 @@ import IrrigationImportPage from '@/pages/tools/IrrigationImportPage';
 import { maitHttpResult } from '@/lib/maitIntelliwebQuery';
 import { readOnlyStore } from '@/lib/vineyardWriteAccess';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import maitSetupGuide from '@/assets/mait-irrigation-setup-guide.png.asset.json';
 
 const m = vi.hoisted(() => ({ vineyard: 'v' as string | null, role: 'owner', manage: true, connected: true, controllers: [] as Record<string, unknown>[], mappings: [] as Record<string, unknown>[], valves: [] as Record<string, unknown>[], rpc: vi.fn(), proxy: vi.fn(), error: false }));
 vi.mock('@/context/VineyardContext', () => ({ useVineyard: () => ({ selectedVineyardId: m.vineyard, currentRole: m.role, memberships: [], loading: false }) }));
@@ -46,6 +47,17 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); readOnlyStore.setReadOnly(false); vi.useRealTimers(); });
 describe('manual MAIT irrigation import', () => {
+  it('keeps the original diagram and explains first-import acceptance and the paused scheduler without requests', () => {
+    mount(); fireEvent.click(screen.getByRole('button', { name: 'How MAIT irrigation sync works' }));
+    const dialog = within(screen.getByRole('dialog'));
+    expect(dialog.getByRole('heading', { name: 'Before the first import' })).toBeVisible();
+    expect(dialog.getByRole('link', { name: 'Review controller setup and preview usage' })).toHaveAttribute('href', '/irrigation/setup#mait-controller');
+    expect(dialog.getByText(/Identify a confirmed irrigation controller/)).toHaveTextContent('preview MAIT usage read-only (no records)');
+    expect(dialog.getByText(/Identify a confirmed irrigation controller/)).toHaveTextContent('can immediately create records');
+    expect(dialog.getByText(/The original picture below/)).toHaveTextContent('scheduler is installed but PAUSED and does not automatically import');
+    expect(dialog.getByRole('img')).toHaveAttribute('src', maitSetupGuide.url);
+    expect(m.rpc).not.toHaveBeenCalled(); expect(m.proxy).not.toHaveBeenCalled();
+  });
   it('lays out the source step as a responsive three-card grid with all actions retained', () => {
     mount(true);
     const grid = screen.getByTestId('import-source-grid');
