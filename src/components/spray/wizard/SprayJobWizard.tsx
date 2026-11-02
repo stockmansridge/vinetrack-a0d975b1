@@ -393,7 +393,16 @@ export function SprayJobWizard({
                       frozen={provenanceFrozen}
                     />
                   )}
-                  {chemicalReadError || chemicalReading ? <p role="alert" className="text-sm text-muted-foreground">{chemicalReadError ? "Live chemical information could not be loaded. Refresh before selecting chemicals." : "Loading live catalogue…"}</p> : renderStep()}
+                  {(chemicalReadError || chemicalReading) && (
+                    <p role={chemicalReadError ? "alert" : "status"} className="text-sm text-muted-foreground">
+                      {chemicalReadError ? "Live chemical information could not be loaded. Refresh before selecting chemicals." : "Loading live catalogue…"}
+                    </p>
+                  )}
+                  {/* Keep the step and its nested forms mounted during refetches.
+                      Fresh catalogue evidence is still required for edits and save. */}
+                  <fieldset disabled={chemicalReadError || chemicalReading} aria-busy={chemicalReading} className="m-0 min-w-0 border-0 p-0">
+                    {renderStep()}
+                  </fieldset>
                 </div>
               )}
             </div>
