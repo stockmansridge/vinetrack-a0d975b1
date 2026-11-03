@@ -33,7 +33,7 @@ export function ActionParticipantsDialog({ selection, onClose, soil }: { selecti
     <DialogContent className="max-w-2xl">
       <DialogHeader>
         <DialogTitle>{selection.label} · {selection.kind === "users" ? "Users" : "Vineyards"}</DialogTitle>
-        <DialogDescription>{selection.period} · Records added in this period{selection.kind === "users" ? "; attributed to their recorded creator, not the person who edited or deleted them." : "."}</DialogDescription>
+        <DialogDescription>{selection.period} · Records added in this period{selection.kind === "users" ? "; attributed to their recorded creator." : "."}</DialogDescription>
       </DialogHeader>
       <div className="max-h-[60vh] overflow-auto">
         {(loading || names.isLoading) && <p className="text-sm text-muted-foreground">Loading details…</p>}
