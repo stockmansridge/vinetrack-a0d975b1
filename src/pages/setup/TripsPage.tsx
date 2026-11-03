@@ -64,6 +64,8 @@ import {
 import { isSprayingTrip } from "@/lib/sprayReportV1";
 import SprayTripWorksheet from "@/components/spray/SprayTripWorksheet";
 import EditTripDetailsDialog from "@/components/trips/EditTripDetailsDialog";
+import WorkflowDiagramDialog from "@/components/help/WorkflowDiagramDialog";
+import tripsSprayRecordsAsset from "@/assets/trips-spray-records-guide.png.asset.json";
 
 import { downloadSprayReport } from "@/lib/sprayReportExport";
 import { useSprayLinkedTripIds } from "@/lib/sprayLinkedTrips";
@@ -338,7 +340,18 @@ export default function TripsPage() {
     <div className="space-y-6">
       <div className="flex flex-col items-start gap-4">
         <div className="min-w-0 space-y-1.5">
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Trips</h1>
+          <div className="flex items-center gap-1.5">
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Trips</h1>
+            <WorkflowDiagramDialog
+              triggerLabel="Workflow diagram"
+              ariaLabel="How trips and spray records fit together"
+              title="Trips & spray records"
+              description="How a Trip captures field activity, tank actuals and the completed spray record."
+              imageUrl={tripsSprayRecordsAsset.url}
+              imageAlt="Diagram: begin a Trip by choosing the trip type, operator, machine and vineyard; set up the spray job from a Program spray or one-off; record tank fills, actual chemical use and the GPS route in the field; then end the Trip, complete the spray record, sync and review reports."
+              footnote="Program Steps and Planned Sprays prepare the work. Trips and spray records capture what actually happened in the field."
+            />
+          </div>
           <p className="text-sm text-muted-foreground">
             Review vineyard work completed using a tractor, vehicle or other machinery during a tracked trip. Field trips record where equipment travelled, the blocks and rows worked, operating time, distance, operator and associated job details.
           </p>
