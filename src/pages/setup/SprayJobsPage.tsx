@@ -12,6 +12,8 @@ import { ProgramStepDetailDialog } from "@/components/spray/ProgramStepDetailDia
 import { ProgramStepPickerDialog } from "@/components/spray/ProgramStepPickerDialog";
 import { PlanSprayFromProgramStep } from "@/components/spray/PlanSprayFromProgramStep";
 import ProgramHelpDialog from "@/components/spray/ProgramHelpDialog";
+import WorkflowDiagramDialog from "@/components/help/WorkflowDiagramDialog";
+import sprayProgramWorkflowAsset from "@/assets/spray-program-workflow-guide.png.asset.json";
 import { growthStageOrder, chemicalLineRateText, programLines } from "@/lib/sprayProgramStep";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -213,6 +215,15 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
         <div className="flex items-center gap-1.5">
           <h1 className="text-2xl font-semibold">Spray Program</h1>
           <ProgramHelpDialog />
+          <WorkflowDiagramDialog
+            triggerLabel="Workflow diagram"
+            ariaLabel="How the spray program workflow fits together"
+            title="Spray program workflow"
+            description="How reusable Program Steps guide planned sprays and seasonal application records."
+            imageUrl={sprayProgramWorkflowAsset.url}
+            imageAlt="Diagram: build the vineyard program from reusable Program Steps, turn a Program Step into planned work by selecting blocks and confirming equipment and water, then track upcoming, in-progress and completed spray records and reports."
+            footnote="Program = what you plan to do. Planned Sprays and spray records = what you are doing or have done."
+          />
         </div>
           <p className="text-sm text-muted-foreground">
             Build your vineyard spray program, maintain reusable Program Steps, and plan
