@@ -52,6 +52,9 @@ import {
   useAdminEndTripTank,
   useAdminEndTripAfterTanks,
   type AdminLifecycleResult,
+  validateLifecycleEndTime,
+  deviceTimezoneLabel,
+  MIN_SUPPORT_REASON_LENGTH,
   type TankSessionSummary,
   type AdminTripDetail,
   type AdminTripRow,
@@ -589,17 +592,28 @@ export function EndLifecycleDialog({
   const endTripM = useAdminEndTripAfterTanks();
   const pending = endTankM.isPending || endTripM.isPending;
   const [reason, setReason] = useState("");
-  const [when, setWhen] = useState(() => toLocalInput(new Date()));
+  const [when, setWhen] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AdminLifecycleResult | null>(null);
+  const [submittedIso, setSubmittedIso] = useState<string | null>(null);
   const title = kind === "tank" ? `End Tank ${session?.tankNumber ?? "?"}` : "End Trip";
+  const timeLabel = kind === "tank" ? "Actual Tank End date & time (required)" : "Actual Trip End date & time (required)";
+  const check = validateLifecycleEndTime(kind, when, {
+    tripStart: trip.start_time,
+    sessionStart: (session?.startTime as any) ?? null,
+    sessions: trip.tank_sessions,
+  });
+  const reasonOk = reason.trim().length >= MIN_SUPPORT_REASON_LENGTH;
+  const canSubmit = check.ok && reasonOk && !pending;
+  const tzLabel = deviceTimezoneLabel(check.ok ? check.date : new Date());
 
   const submit = async () => {
     setError(null);
-    if (!reason.trim()) return setError("A support reason is required.");
-    const d = when ? new Date(when) : null;
-    if (!d || isNaN(d.getTime())) return setError("Enter the actual end date and time.");
-    const endTime = d.toISOString();
+    if (!reasonOk) return setError(`A support reason of at least ${MIN_SUPPORT_REASON_LENGTH} characters is required.`);
+    const fresh = validateLifecycleEndTime(kind, when, { tripStart: trip.start_time, sessionStart: (session?.startTime as any) ?? null, sessions: trip.tank_sessions });
+    if (!fresh.ok) return setError(fresh.error ?? "Enter the actual end date and time.");
+    const endTime = fresh.iso;
+    setSubmittedIso(endTime);
     try {
       const r =
         kind === "tank"
@@ -621,7 +635,8 @@ export function EndLifecycleDialog({
         {result ? (
           <div className="text-sm space-y-1" data-testid="lifecycle-result">
             <div><span className="text-muted-foreground">Server status:</span> {String(result.status ?? "—")}</div>
-            {result.end_time && <div><span className="text-muted-foreground">End time:</span> {fmt(result.end_time)}</div>}
+            {submittedIso && <div data-testid="lifecycle-chosen-time"><span className="text-muted-foreground">Chosen end time:</span> {new Date(submittedIso).toLocaleString()} · <span className="font-mono text-xs">{submittedIso}</span></div>}
+            {result.end_time && <div><span className="text-muted-foreground">Server end time:</span> {fmt(result.end_time)} · <span className="font-mono text-xs">{String(result.end_time)}</span></div>}
             {result.audit_event_id && <div><span className="text-muted-foreground">Audit event:</span> <span className="font-mono text-xs">{result.audit_event_id}</span></div>}
             <div className="text-xs text-muted-foreground">Trip details have been reloaded from the server.</div>
           </div>
@@ -635,12 +650,19 @@ export function EndLifecycleDialog({
               )}
             </div>
             <div>
-              <Label htmlFor="lc-time">Actual end date and time</Label>
-              <Input id="lc-time" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
+              <Label htmlFor="lc-time">{timeLabel}</Label>
+              <Input id="lc-time" type="datetime-local" step={60} value={when} onChange={(e) => setWhen(e.target.value)} aria-invalid={!check.ok && !!check.error} />
+              <p className="text-xs text-muted-foreground mt-1" data-testid="lifecycle-tz">Time zone: {tzLabel} (this device)</p>
+              {!check.ok && check.error && <p className="text-xs text-destructive mt-1" data-testid="lifecycle-time-error">{check.error}</p>}
+              {check.ok && (
+                <p className="text-xs mt-1" data-testid="lifecycle-converted">
+                  Will be recorded as {check.date.toLocaleString()} ({tzLabel}) = <span className="font-mono">{check.iso}</span>
+                </p>
+              )}
               <p className="text-xs text-muted-foreground mt-1">Enter the real time the {kind === "tank" ? "tank finished" : "Trip finished"}, confirmed with the customer. Do not guess.</p>
             </div>
             <div>
-              <Label htmlFor="lc-reason">Support reason (required)</Label>
+              <Label htmlFor="lc-reason">Support reason (required, at least {MIN_SUPPORT_REASON_LENGTH} characters)</Label>
               <Textarea id="lc-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
             </div>
             <div className="rounded border border-destructive/40 p-2 text-xs text-destructive">
@@ -655,7 +677,7 @@ export function EndLifecycleDialog({
           ) : (
             <>
               <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancel</Button>
-              <Button variant="destructive" onClick={submit} disabled={pending}>
+              <Button variant="destructive" onClick={submit} disabled={!canSubmit}>
                 {pending ? "Working…" : `Confirm ${title}`}
               </Button>
             </>

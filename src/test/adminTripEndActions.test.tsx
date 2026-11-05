@@ -7,7 +7,7 @@ vi.mock("@/integrations/ios-supabase/client", () => ({
   iosSupabase: { rpc: (...a: any[]) => rpcMock(...a), from: vi.fn() },
 }));
 
-import { canEndTripAfterTanks, endTankState, type AdminTripRow } from "@/lib/adminTrips";
+import { canEndTripAfterTanks, endTankState, validateLifecycleEndTime, type AdminTripRow } from "@/lib/adminTrips";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { TripDetail, EndLifecycleDialog } from "@/pages/admin/AdminTripsPage";
 
@@ -92,28 +92,77 @@ describe("End Tank / End Trip visibility", () => {
   });
 });
 
-describe("End Tank dialog", () => {
-  it("requires reason, calls only the RPC with UTC time, and shows server error without success", async () => {
+const TANK_LABEL = "Actual Tank End date & time (required)";
+const TRIP_LABEL = "Actual Trip End date & time (required)";
+const REASON_LABEL = /Support reason \(required/;
+const confirmBtn = (n: string) => screen.getByRole("button", { name: n }) as HTMLButtonElement;
+
+describe("End Tank / End Trip dialog: mandatory actual end time", () => {
+  it("opens with a blank time input, shows the time zone, and keeps Confirm disabled", () => {
+    wrap(<EndLifecycleDialog kind="tank" trip={trip} session={t2} vineyardName="Estellar" onOpenChange={() => {}} />);
+    expect((screen.getByLabelText(TANK_LABEL) as HTMLInputElement).value).toBe("");
+    expect(screen.getByTestId("lifecycle-tz").textContent).toMatch(/UTC[+-]\d{2}:\d{2}/);
+    fireEvent.change(screen.getByLabelText(REASON_LABEL), { target: { value: "Operator confirmed" } });
+    expect(confirmBtn("Confirm End Tank 2").disabled).toBe(true);
+    fireEvent.click(confirmBtn("Confirm End Tank 2"));
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+  it("rejects a tank end earlier than the tank session start", () => {
+    expect(validateLifecycleEndTime("tank", "2026-09-22T10:00", { tripStart: trip.start_time, sessionStart: t2.startTime }).ok).toBe(false);
+    wrap(<EndLifecycleDialog kind="tank" trip={trip} session={t2} vineyardName="Estellar" onOpenChange={() => {}} />);
+    fireEvent.change(screen.getByLabelText(TANK_LABEL), { target: { value: "2026-09-22T10:00" } });
+    fireEvent.change(screen.getByLabelText(REASON_LABEL), { target: { value: "Operator confirmed" } });
+    expect(screen.getByTestId("lifecycle-time-error")).toBeTruthy();
+    expect(confirmBtn("Confirm End Tank 2").disabled).toBe(true);
+  });
+  it("rejects a trip end earlier than the latest ended tank, and future times", () => {
+    const r = validateLifecycleEndTime("trip", "x", {});
+    expect(r.ok).toBe(false);
+    const latest = new Date("2026-09-23T02:00:00Z");
+    const before = new Date(latest.getTime() - 60_000);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const local = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    expect(validateLifecycleEndTime("trip", local(before), { tripStart: t2Ended.start_time, sessions: t2Ended.tank_sessions }).ok).toBe(false);
+    expect(validateLifecycleEndTime("trip", local(latest), { tripStart: t2Ended.start_time, sessions: t2Ended.tank_sessions }).ok).toBe(true);
+    expect(validateLifecycleEndTime("trip", "2026-09-24T10:00", { now: new Date("2026-09-23T00:00:00Z") }).ok).toBe(false);
+  });
+  it("requires a reason of at least 8 characters", () => {
+    wrap(<EndLifecycleDialog kind="trip" trip={t2Ended} vineyardName="Estellar" onOpenChange={() => {}} />);
+    fireEvent.change(screen.getByLabelText(TRIP_LABEL), { target: { value: "2026-09-23T23:30" } });
+    fireEvent.change(screen.getByLabelText(REASON_LABEL), { target: { value: "short" } });
+    expect(confirmBtn("Confirm End Trip").disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText(REASON_LABEL), { target: { value: "Operator confirmed" } });
+    expect(confirmBtn("Confirm End Trip").disabled).toBe(false);
+  });
+  it("converts the entered local time to the exact UTC instant shown and sent", () => {
+    const r = validateLifecycleEndTime("tank", "2026-09-23T23:30", { tripStart: trip.start_time, sessionStart: t2.startTime });
+    expect(r.ok && r.iso).toBe(new Date(2026, 8, 23, 23, 30).toISOString());
+    wrap(<EndLifecycleDialog kind="tank" trip={trip} session={t2} vineyardName="Estellar" onOpenChange={() => {}} />);
+    fireEvent.change(screen.getByLabelText(TANK_LABEL), { target: { value: "2026-09-23T23:30" } });
+    expect(screen.getByTestId("lifecycle-converted").textContent).toContain(new Date(2026, 8, 23, 23, 30).toISOString());
+  });
+  it("valid End Tank: sends chosen UTC time and propagates server error without success", async () => {
     rpcMock.mockResolvedValue({ data: null, error: { message: "Tank session is not open" } });
     wrap(<EndLifecycleDialog kind="tank" trip={trip} session={t2} vineyardName="Estellar" onOpenChange={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: "Confirm End Tank 2" }));
-    expect(rpcMock).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText("Actual end date and time"), { target: { value: "2026-09-23T12:30" } });
-    fireEvent.change(screen.getByLabelText("Support reason (required)"), { target: { value: "Operator confirmed" } });
-    fireEvent.click(screen.getByRole("button", { name: "Confirm End Tank 2" }));
+    fireEvent.change(screen.getByLabelText(TANK_LABEL), { target: { value: "2026-09-23T23:30" } });
+    fireEvent.change(screen.getByLabelText(REASON_LABEL), { target: { value: "Operator confirmed" } });
+    fireEvent.click(confirmBtn("Confirm End Tank 2"));
     await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Tank session is not open"));
     expect(rpcMock).toHaveBeenCalledWith("admin_end_trip_tank", {
       p_trip_id: "trip-1", p_tank_session_id: "s2", p_reason: "Operator confirmed",
-      p_end_time: new Date("2026-09-23T12:30").toISOString(),
+      p_end_time: new Date(2026, 8, 23, 23, 30).toISOString(),
     });
     expect(screen.queryByTestId("lifecycle-result")).toBeNull();
   });
-  it("End Trip success shows returned status and audit", async () => {
+  it("valid End Trip success shows chosen time, status and audit", async () => {
     rpcMock.mockResolvedValue({ data: { status: "ended", audit_event_id: "aud-9" }, error: null });
     wrap(<EndLifecycleDialog kind="trip" trip={t2Ended} vineyardName="Estellar" onOpenChange={() => {}} />);
-    fireEvent.change(screen.getByLabelText("Support reason (required)"), { target: { value: "x" } });
-    fireEvent.click(screen.getByRole("button", { name: "Confirm End Trip" }));
+    fireEvent.change(screen.getByLabelText(TRIP_LABEL), { target: { value: "2026-09-23T23:30" } });
+    fireEvent.change(screen.getByLabelText(REASON_LABEL), { target: { value: "Operator confirmed" } });
+    fireEvent.click(confirmBtn("Confirm End Trip"));
     await waitFor(() => expect(screen.getByTestId("lifecycle-result").textContent).toContain("aud-9"));
+    expect(screen.getByTestId("lifecycle-chosen-time").textContent).toContain(new Date(2026, 8, 23, 23, 30).toISOString());
     expect(rpcMock.mock.calls[0][0]).toBe("admin_end_trip_after_tanks");
+    expect(rpcMock.mock.calls[0][1].p_end_time).toBe(new Date(2026, 8, 23, 23, 30).toISOString());
   });
 });
