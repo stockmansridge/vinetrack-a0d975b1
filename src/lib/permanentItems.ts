@@ -3,7 +3,7 @@ import { guardMutation } from '@/lib/vineyardWriteAccess';
 
 export const PERMANENT_ITEM_TYPES = ['irrigation_valve', 'flush_valve', 'pump', 'filter', 'tank', 'gate', 'water_point', 'other'] as const;
 export type PermanentItemType = typeof PERMANENT_ITEM_TYPES[number];
-export const permanentItemTypeLabel = (type: PermanentItemType) => type.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase());
+export const permanentItemTypeLabel = (type: PermanentItemType) => type.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
 export interface PermanentItem {
   id: string; vineyard_id: string; paddock_id: string | null; name: string; item_type: PermanentItemType;
   latitude: number; longitude: number; notes: string | null; photo_path: string | null;
@@ -90,12 +90,18 @@ export class PermanentSaveSession {
   private base: PermanentItem | null = null;
   private photoOperation: PermanentOperation | null = null;
   private uploaded = false;
+  private inFlight: Promise<PermanentItem> | null = null;
   private readonly photoPath: string | null;
   constructor(operation: PermanentOperation, private readonly photo: File | null = null) {
     this.operation = operation;
     this.photoPath = photo ? `${operation.p_vineyard_id}/${operation.p_item_id}/${crypto.randomUUID()}.${permanentPhotoExtension(photo)}` : null;
   }
-  async run(assertAccess: () => void): Promise<PermanentItem> {
+  run(assertAccess: () => void): Promise<PermanentItem> {
+    if (this.inFlight) return this.inFlight;
+    this.inFlight = this.execute(assertAccess).finally(() => { this.inFlight = null; });
+    return this.inFlight;
+  }
+  private async execute(assertAccess: () => void): Promise<PermanentItem> {
     assertAccess(); guardMutation(undefined);
     if (!this.base) this.base = await applyPermanentOperation(this.operation, assertAccess);
     if (!this.photo || !this.photoPath || this.operation.p_action === 'archive') return this.base;
