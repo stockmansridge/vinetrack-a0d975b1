@@ -78,6 +78,7 @@ import BunchCountTripsPanel from "@/components/yield/BunchCountTripsPanel";
 import PanelCountObservations from '@/components/yield/PanelCountObservations';
 import { yieldCountMethodLabel } from '@/lib/yieldCountMethod';
 import YieldSampleSitesPanel from "@/components/yield/YieldSampleSitesPanel";
+import { canHardDeleteYieldSession, hardDeleteYieldSession } from "@/lib/yieldHardDelete";
 import {
   aggregatePickingRecordsByPlanting,
   detailedActualsFromPlantingTotals,
@@ -224,6 +225,23 @@ export default function YieldReportsPage() {
   const { data: grapeVarieties } = useGrapeVarieties(selectedVineyardId);
   const varietyMap = useMemo(() => buildVarietyMap(grapeVarieties ?? []), [grapeVarieties]);
 
+  const hardDel = useMutation({
+    mutationFn: async (row: YieldEstimationSession) => {
+      if (!selectedVineyardId) throw new Error("Select a vineyard.");
+      if (!canHardDeleteYieldSession(currentRole, !!row.is_completed)) throw new Error("Only Owner, Manager or Supervisor may delete completed trips.");
+      await hardDeleteYieldSession(row.id, selectedVineyardId, !!row.is_completed);
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["yield_reports"] });
+      await qc.refetchQueries({ queryKey: ["yield_reports", selectedVineyardId] });
+      setSelected(null);
+      toast({ title: "Trip permanently deleted" });
+    },
+    onError: (e: any) => {
+      qc.invalidateQueries({ queryKey: ["yield_reports"] });
+      toast({ title: "Could not delete trip", description: e?.message ?? String(e), variant: "destructive" });
+    },
+  });
   const del = useMutation({
     mutationFn: async (row: AnyRow) =>
       row.__kind === "picked"
@@ -973,10 +991,11 @@ export default function YieldReportsPage() {
               const s = sessions.find((x) => x.id === id);
               if (s) setSelected({ ...s, __kind: "session" });
             }}
-            canDelete={canManageYields}
+            canDeleteTrip={(t) => canHardDeleteYieldSession(currentRole, t.isCompleted)}
+            deletingTripId={hardDel.isPending ? hardDel.variables?.id ?? null : null}
             onDeleteTrip={(id) => {
               const s = sessions.find((x) => x.id === id);
-              if (s) del.mutate({ ...s, __kind: "session" } as AnyRow);
+              if (s) hardDel.mutate(s);
             }}
           />
 
@@ -1099,9 +1118,9 @@ export default function YieldReportsPage() {
         blocks={blocksQ.data ?? []}
         open={!!selected}
         onOpenChange={(o) => !o && setSelected(null)}
-        onDelete={(r) => del.mutate(r)}
-        deleting={del.isPending}
-        canDelete={canManageYields}
+        onDelete={(r) => (r.__kind === "session" ? hardDel.mutate(r as YieldEstimationSession) : del.mutate(r))}
+        deleting={del.isPending || hardDel.isPending}
+        canDelete={selected?.__kind === "session" ? canHardDeleteYieldSession(currentRole, !!(selected as YieldEstimationSession).is_completed) : canManageYields}
         bunchWeightFor={bunchWeightFor}
       />
 
@@ -1545,7 +1564,7 @@ function YieldSheet({
         {row?.__kind === "session" && (
           <SessionDetail row={row as YieldEstimationSession} blocks={blocks} bunchWeightFor={bunchWeightFor} />
         )}
-        {row && canDelete && !isPanel && (
+        {row && canDelete && (
           <div className="mt-6 border-t pt-4">
             <AlertDialog>
               <AlertDialogTrigger asChild>
@@ -1560,8 +1579,9 @@ function YieldSheet({
                     Delete this {isHistorical ? "yield record" : "estimation session"}?
                   </AlertDialogTitle>
                   <AlertDialogDescription>
-                    The record is archived (soft deleted) and removed from the portal and the mobile
-                    app. It is not permanently erased and can be restored by support if needed.
+                    {isHistorical
+                      ? "The record is archived (soft deleted) and removed from the portal and the mobile app. It can be restored by support if needed."
+                      : "This trip is permanently deleted on the server and cannot be restored. History reloads after the server confirms the deletion receipt."}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

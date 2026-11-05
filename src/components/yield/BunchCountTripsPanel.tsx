@@ -49,6 +49,8 @@ export default function BunchCountTripsPanel({
   error,
   onOpenTrip,
   canDelete = false,
+  canDeleteTrip,
+  deletingTripId = null,
   onDeleteTrip,
 }: {
   trips: BunchCountTrip[];
@@ -58,6 +60,9 @@ export default function BunchCountTripsPanel({
   error?: string | null;
   onOpenTrip: (tripId: string) => void;
   canDelete?: boolean;
+  /** Per-trip client gate (server remains authoritative). Overrides canDelete. */
+  canDeleteTrip?: (trip: BunchCountTrip) => boolean;
+  deletingTripId?: string | null;
   onDeleteTrip?: (tripId: string) => void;
 }) {
   const rf = useRegionFormatters();
@@ -271,17 +276,18 @@ export default function BunchCountTripsPanel({
                             >
                               View full trip detail
                             </Button>
-                            {!t.summary.isPanelCount && canDelete && onDeleteTrip && (
+                            {(canDeleteTrip ? canDeleteTrip(t) : canDelete && !t.summary.isPanelCount) && onDeleteTrip && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button
                                     size="sm"
                                     variant="destructive"
                                     data-testid={`trip-delete-${t.id}`}
+                                    disabled={deletingTripId === t.id}
                                     onClick={(e) => e.stopPropagation()}
                                   >
                                     <Trash2 className="mr-1 h-3.5 w-3.5" />
-                                    Delete trip
+                                    {deletingTripId === t.id ? "Deleting…" : "Delete trip"}
                                   </Button>
                                 </AlertDialogTrigger>
                                 <AlertDialogContent onClick={(e) => e.stopPropagation()}>
@@ -291,7 +297,9 @@ export default function BunchCountTripsPanel({
                                       {isCurrent
                                         ? "This trip currently supplies the estimate for one or more blocks. Deleting it will fall back to the previous completed trip."
                                         : "This dated observation will be removed from the trip history."}{" "}
-                                      The trip is soft-deleted and can be restored by support.
+                                      {canDeleteTrip
+                                        ? "It is permanently deleted on the server and cannot be restored."
+                                        : "The trip is soft-deleted and can be restored by support."}
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
