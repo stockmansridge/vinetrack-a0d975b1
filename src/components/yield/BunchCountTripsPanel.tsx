@@ -111,7 +111,6 @@ export default function BunchCountTripsPanel({
               <TableHead>Completed</TableHead>
               <TableHead>Vintage</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Count method</TableHead>
               <TableHead>Blocks</TableHead>
               <TableHead className="text-right">Estimated (t)</TableHead>
               <TableHead className="text-right">Per {rf.areaUnitLabel}</TableHead>
@@ -124,19 +123,19 @@ export default function BunchCountTripsPanel({
           <TableBody>
             {loading && (
               <TableRow>
-                <TableCell colSpan={12} className="text-center text-muted-foreground py-6">
+                <TableCell colSpan={11} className="text-center text-muted-foreground py-6">
                   Loading…
                 </TableCell>
               </TableRow>
             )}
             {error && (
               <TableRow>
-                <TableCell colSpan={12} className="text-center text-destructive py-6">{error}</TableCell>
+                <TableCell colSpan={11} className="text-center text-destructive py-6">{error}</TableCell>
               </TableRow>
             )}
             {!loading && !error && trips.length === 0 && (
               <TableRow>
-                <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                   No Yield Estimate Trips recorded for this vintage.
                 </TableCell>
               </TableRow>
@@ -165,7 +164,6 @@ export default function BunchCountTripsPanel({
                     </TableCell>
                     <TableCell>{fmtDate(t.completedAt ?? t.createdAt)}</TableCell>
                     <TableCell>{t.vintage ?? "—"}</TableCell>
-                    <TableCell>{t.countMethodLabel ?? 'Bunches Per Vine Count (legacy)'}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap items-center gap-1">
                         {t.isCompleted ? (
@@ -219,8 +217,9 @@ export default function BunchCountTripsPanel({
                   </TableRow>
                   {open && (
                     <TableRow className="bg-muted/30 hover:bg-muted/30">
-                      <TableCell colSpan={12}>
+                      <TableCell colSpan={11}>
                         <div className="space-y-2 py-1 text-xs">
+                          <div>{t.countMethodLabel ?? 'Bunches Per Vine Count (legacy)'}</div>
                           <div className="flex flex-wrap gap-x-6 gap-y-1">
                             <span>
                               <span className="text-muted-foreground">Sampling density: </span>
