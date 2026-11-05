@@ -1,17 +1,25 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { useVineyard } from '@/context/VineyardContext';
-import { useFeatureFlag, useIsSystemAdmin } from '@/lib/systemAdmin';
-import { listPermanentItems, permanentItemsAllowed, permanentItemsKey } from '@/lib/permanentItems';
+import { listPermanentItems, permanentItemsKey } from '@/lib/permanentItems';
+import { getPermanentPermissions, permanentPermissionsKey } from '@/lib/permanentItemDeletion';
 
 export function usePermanentItemsAccess() {
   const { user, loading: authLoading } = useAuth();
-  const { selectedVineyardId, memberships, loading: membershipsLoading } = useVineyard();
-  const { isAdmin, loading } = useIsSystemAdmin();
-  const flag = useFeatureFlag('permanent_items_admin_preview');
-  const member = memberships.some(m => m.vineyard_id === selectedVineyardId);
-  const allowed = !loading && !authLoading && !membershipsLoading && permanentItemsAllowed(isAdmin, flag, user?.id, selectedVineyardId, member);
-  return { allowed, vineyardId: selectedVineyardId, userId: user?.id };
+  const { selectedVineyardId, loading: membershipsLoading } = useVineyard();
+  const ready = !authLoading && !membershipsLoading && !!user?.id && !!selectedVineyardId;
+  const permissions = useQuery({
+    queryKey: permanentPermissionsKey(selectedVineyardId, user?.id),
+    enabled: ready, retry: false, staleTime: 0,
+    queryFn: () => {
+      if (!selectedVineyardId) throw new Error('Select a vineyard.');
+      return getPermanentPermissions(selectedVineyardId);
+    },
+  });
+  const allowed = ready && permissions.isSuccess && permissions.data?.can_read === true;
+  return { allowed, canManage: allowed && permissions.data?.can_manage === true,
+    canHardDelete: allowed && permissions.data?.can_hard_delete === true,
+    vineyardId: selectedVineyardId, userId: user?.id };
 }
 export function usePermanentItems() {
   const access = usePermanentItemsAccess();

@@ -1,2 +1,3 @@
-- Permanent Items require System Admin, the existing enabled pilot flag and selected-vineyard membership at rendering and each write boundary; why: no support-session or hidden-button bypass.
+- Permanent Items use permanent_item_permissions_v1 keyed by account and selected vineyard as the definitive read/manage/hard-delete gate; why: owner/manager deletion permissions differ from System Admin management and the server owns pilot eligibility.
 - Keep permanentItems.ts immutable save sessions and independent MapKit annotation ownership; why: CAS/idempotency retries and private photo sequencing must not change existing Pins or counts.
+- Hard deletion uses permanentItemDeletion.ts and the deployed Edge Function only, with scoped durable immutable intents and exact cleanup-complete receipts; why: uncertain deletion/photo cleanup retries must never become new operations or client storage deletes.

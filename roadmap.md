@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Issue #53 Permanent Items admin pilot
+- [ ] Implement authoritative read/manage/delete permissions and durable confirmed hard-delete flow, with focused regressions; no publication or pilot flag change.
 - [x] Add fail-closed System Admin + enabled flag + vineyard-member gate; separate list, editor and map layer.
 - [x] RPC-only revision-checked writes, same-operation retries, verified read-back and private optional photo flow.
 - [x] 122 tests across 10 pilot/Pins suites passed; automatic compilation build OK. Feature flag untouched; no publication, DDL or live data writes.
