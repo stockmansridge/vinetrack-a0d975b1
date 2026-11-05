@@ -40,3 +40,16 @@ it('accepts strict custom keys without weakening location/name validation',()=>{
   expect(()=>validatePermanentDraft(draft)).not.toThrow();expect(()=>validatePermanentDraft({...draft,name:''})).toThrow();expect(()=>validatePermanentDraft({...draft,latitude:NaN})).toThrow();
 });
 it.each(['custom_a',`custom_${'A'.repeat(32)}`,`custom_${'a'.repeat(33)}`,'invalid'])('rejects malformed type %s',item_type=>{expect(()=>validatePermanentDraft({name:'Station',item_type:item_type as any,latitude:-34,longitude:138,notes:null,paddock_id:null})).toThrow('valid item type');});
+it('returns the exact authoritative mobile colour for every standard type', () => {
+  expect(PERMANENT_ITEM_TYPE_COLORS).toEqual({ irrigation_valve: '#2D6CDF', flush_valve: '#00A3B8', pump: '#7856D8', filter: '#0D9488', tank: '#249B58', gate: '#D97706', water_point: '#1F82C7', other: '#A8559A' });
+  for (const t of PERMANENT_ITEM_TYPES) expect(permanentItemTypeColor(t)).toBe(PERMANENT_ITEM_TYPE_COLORS[t]);
+});
+it('custom vineyard type colour overrides only its exact type_key', () => {
+  const custom = { id: 't1', vineyard_id: 'v', type_key: key, name: 'Weather station', color_hex: '#2478C4' } as const;
+  expect(permanentItemTypeColor(key, [custom as any])).toBe('#2478C4');
+  expect(permanentItemTypeColor('pump', [custom as any])).toBe('#7856D8');
+  const otherVineyard = { ...custom, id: 't2', vineyard_id: 'other', type_key: `custom_${'b'.repeat(32)}`, color_hex: '#FF0000' };
+  expect(permanentItemTypeColor(key, [otherVineyard as any])).toBe(PERMANENT_ITEM_TYPE_COLORS.other);
+  expect(permanentItemTypeColor(key, [{ ...custom, color_hex: 'red' } as any])).toBe(PERMANENT_ITEM_TYPE_COLORS.other);
+  expect(permanentItemTypeColor(key)).toBe(PERMANENT_ITEM_TYPE_COLORS.other);
+});
