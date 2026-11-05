@@ -180,3 +180,41 @@ describe("End Tank / End Trip dialog: mandatory actual end time", () => {
     expect(rpcMock.mock.calls[0][1].p_end_time).toBe(new Date(2026, 8, 23, 23, 30).toISOString());
   });
 });
+
+import { zonedLocalToUtc, lifecycleTimezoneLabel } from "@/lib/adminTrips";
+
+describe("End Tank / End Trip: vineyard IANA timezone", () => {
+  const SYD = "Australia/Sydney";
+  const now = new Date("2026-11-05T11:02:00Z");
+  it("converts Sydney AEDT 2026-11-05 17:30 to 2026-11-05T06:30:00Z", () => {
+    const r = validateLifecycleEndTime("tank", "2026-11-05T17:30", { timeZone: SYD, tripStart: trip.start_time, sessionStart: t2.startTime, now });
+    expect(r.ok && r.iso).toBe("2026-11-05T06:30:00.000Z");
+    expect(lifecycleTimezoneLabel(SYD, new Date("2026-11-05T06:30:00Z"))).toBe("Vineyard time: Australia/Sydney (UTC+11:00 at chosen instant)");
+  });
+  it("blank input stays not ok with no error and no default", () => {
+    expect(validateLifecycleEndTime("trip", "", { timeZone: SYD, now })).toEqual({ ok: false, error: null });
+  });
+  it("accepts a chosen past time and rejects a future one using UTC instants", () => {
+    expect(validateLifecycleEndTime("trip", "2026-11-05T21:59", { timeZone: SYD, now }).ok).toBe(true); // 10:59Z
+    expect(validateLifecycleEndTime("trip", "2026-11-05T22:05", { timeZone: SYD, now }).ok).toBe(false); // 11:05Z
+  });
+  it("rejects nonexistent and ambiguous DST times instead of guessing", () => {
+    expect(zonedLocalToUtc("2026-10-04T02:30", SYD).ok).toBe(false);
+    expect(zonedLocalToUtc("2026-04-05T02:30", SYD).ok).toBe(false);
+    const r = validateLifecycleEndTime("trip", "2026-10-04T02:30", { timeZone: SYD, now });
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.error).toMatch(/does not exist/);
+  });
+  it("dialog shows vineyard time and exact UTC; falls back to labelled computer time", async () => {
+    rpcMock.mockReset();
+    const { unmount } = wrap(<EndLifecycleDialog kind="tank" trip={trip} session={t2} vineyardName="Printhie" vineyardTimeZone={SYD} onOpenChange={() => {}} />);
+    expect((screen.getByLabelText(TANK_LABEL) as HTMLInputElement).value).toBe("");
+    fireEvent.change(screen.getByLabelText(TANK_LABEL), { target: { value: "2026-11-05T17:30" } });
+    expect(screen.getByTestId("lifecycle-tz").textContent).toBe("Vineyard time: Australia/Sydney (UTC+11:00 at chosen instant)");
+    expect(screen.getByTestId("lifecycle-converted").textContent).toContain("2026-11-05T06:30:00.000Z");
+    unmount();
+    wrap(<EndLifecycleDialog kind="tank" trip={trip} session={t2} vineyardName="X" onOpenChange={() => {}} />);
+    expect(screen.getByTestId("lifecycle-tz").textContent).toMatch(/^Your computer's local timezone/);
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+});
