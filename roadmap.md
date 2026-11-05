@@ -1,6 +1,8 @@
 # Roadmap
 
 ## Issue #53 Permanent Items admin pilot
+- [ ] Add shared vineyard custom types, scoped verified creation, palette, labels and focused permission/regression tests (Portal only; no publish or backend changes).
+- [ ] General release is blocked on explicit owner approval of testing: separately remove TEMPORARY System Admin testing gate only after approval, retaining server-managed Supervisor/Manager/Owner hard-delete roles; never infer deletion from System Admin alone. Create/edit/archive/type creation stay can_manage-gated during pilot; Demo Mode denied; pilot switch unchanged.
 - [x] Implement authoritative read/manage/delete permissions and durable confirmed hard-delete flow; 108 tests across nine Permanent Items/Pins suites passed; automatic typecheck/build OK. No publication or pilot flag change.
 - [ ] Signed-in hard-delete acceptance: shared-vineyard session unavailable (/pins redirects to /login); no real deletions or photo cleanup calls attempted. Verify deployed receipts and owner/manager flows with authorised test items before release.
 - [x] Add fail-closed System Admin + enabled flag + vineyard-member gate; separate list, editor and map layer.
