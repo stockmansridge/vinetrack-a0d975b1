@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Issue #54 fixed yield sampling sites
+- [ ] Parse and display dated raw Panel Count observations and ratios, exclude panel sessions from automatic estimates, and run focused history/source regressions; no publication or live writes.
 - [x] Correct nullable-text row/panel models, draft editors and validation; reproduced text loss before correction, then verified alphanumeric/blank writes, exact read-back, safe retry and revision copying. 337 tests across 25 sampling/yield/Permanent Items suites passed; automatic compilation build OK. Portal setup only, not mobile trip source selection; no publication or live writes.
 - [x] Implement separate vineyard/block site manager, draft placement/editing, revision copying and RPC confirmation with verified read-back.
 - [x] Add count-method reporting labels without changing estimate selection, and focused frontend regression tests; 151 tests across 12 sampling/yield/Permanent Items suites passed, automatic compilation OK.
