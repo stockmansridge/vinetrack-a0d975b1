@@ -8,8 +8,8 @@ vi.mock('@/integrations/ios-supabase/client', () => ({ supabase: { rpc: m.rpc, f
 const item = { id:'item', vineyard_id:'v', name:'Pump', server_revision:4, archived_at:null } as PermanentItem;
 beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); readOnlyStore.setReadOnly(false); });
 it.each([
-  ['owner',true,false,true], ['manager',true,false,true], ['admin-only',true,true,false],
-  ['operator',false,false,false], ['supervisor',true,false,true], ['wrong vineyard',false,false,false], ['flag off',false,false,false],
+  ['owner',true,true,true], ['manager',true,true,true], ['admin-only',true,true,false],
+  ['operator',true,true,false], ['supervisor',true,true,true], ['member',true,true,false], ['wrong vineyard',false,false,false], ['no membership',false,false,false],
 ])('uses authoritative %s permissions without client role assumptions',async(_role,read,manage,del)=>{
   m.rpc.mockResolvedValue({data:[{can_read:read,can_manage:manage,can_hard_delete:del}],error:null});
   expect(await getPermanentPermissions('v')).toEqual({can_read:read,can_manage:manage,can_hard_delete:del});
