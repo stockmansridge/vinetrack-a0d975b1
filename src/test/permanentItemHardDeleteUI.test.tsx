@@ -20,16 +20,16 @@ beforeEach(()=>{vi.clearAllMocks();localStorage.clear();readOnlyStore.setReadOnl
   m.invoke.mockImplementation(async(_:string,{body}:any)=>({data:{deleted:true,photo_cleanup_pending:false,item_id:body.p_item_id,operation_id:body.p_operation_id},error:null}));
 });
 afterEach(()=>cleanup());
-async function confirm(){fireEvent.click(await screen.findByRole('button',{name:'Hard Delete',exact:true}));fireEvent.click(screen.getByRole('button',{name:'Continue to final confirmation'}));
+async function confirm(){fireEvent.click(await screen.findByRole('button',{name:'Hard Delete'}));fireEvent.click(screen.getByRole('button',{name:'Continue to final confirmation'}));
   const button=screen.getByRole('button',{name:'Permanently delete item and all photos'});expect(button).toBeDisabled();
   fireEvent.change(screen.getByLabelText('Type DELETE to permanently remove Pump'),{target:{value:'DELETE'}});fireEvent.click(button);}
 it.each(['owner','manager'])('%s can read/delete but cannot create/edit/archive',async()=>{
-  mount();await screen.findByRole('button',{name:'Hard Delete',exact:true});expect(screen.getByLabelText('Name')).toBeDisabled();
-  expect(screen.queryByRole('button',{name:'Archive',exact:true})).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:'Save changes / move marker'})).not.toBeInTheDocument();
+  mount();await screen.findByRole('button',{name:'Hard Delete'});expect(screen.getByLabelText('Name')).toBeDisabled();
+  expect(screen.queryByRole('button',{name:'Archive'})).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:'Save changes / move marker'})).not.toBeInTheDocument();
   expect(m.rpc).not.toHaveBeenCalledWith('apply_permanent_item_v1',expect.anything());
 });
 it('admin-only can manage but never sees hard deletion',async()=>{
-  m.manage=true;m.del=false;mount();await screen.findByRole('button',{name:'Save changes / move marker'});expect(screen.queryByRole('button',{name:'Hard Delete',exact:true})).not.toBeInTheDocument();
+  m.manage=true;m.del=false;mount();await screen.findByRole('button',{name:'Save changes / move marker'});expect(screen.queryByRole('button',{name:'Hard Delete'})).not.toBeInTheDocument();
 });
 it.each(['operator','supervisor'])('%s cannot enter details or list',async()=>{
   m.read=false;m.del=false;mount();await waitFor(()=>expect(m.rpc).toHaveBeenCalled());expect(screen.queryByRole('dialog')).not.toBeInTheDocument();expect(m.from).not.toHaveBeenCalled();
