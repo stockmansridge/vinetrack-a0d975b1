@@ -1,10 +1,10 @@
 # Roadmap
 
 ## Issue #53 Permanent Items admin pilot
-- [ ] Add fail-closed System Admin + enabled flag + vineyard-member gate; separate list, editor and map layer.
-- [ ] RPC-only revision-checked writes, same-operation retries, verified read-back and private optional photo flow.
-- [ ] Run isolated safety/UI and existing Pins regressions; leave flag disabled and do not publish.
-- [ ] Signed-in shared-backend acceptance requires the owner to enable the pilot and verify it; no live writes here.
+- [x] Add fail-closed System Admin + enabled flag + vineyard-member gate; separate list, editor and map layer.
+- [x] RPC-only revision-checked writes, same-operation retries, verified read-back and private optional photo flow.
+- [x] 122 tests across 10 pilot/Pins suites passed; automatic compilation build OK. Feature flag untouched; no publication, DDL or live data writes.
+- [ ] Signed-in shared-backend acceptance requires authorised pilot access: actual RPC receipt envelope, RLS/storage upload and create/edit/archive/photo read-back remain unverified. Browser /pins redirects to /login with no pilot action or runtime errors. The disabled flag was not enabled.
 
 ## MAIT read-only controller acceptance
 - [x] Updated the seven-stage editable path and original-image import help with read-only preview, explicit manual confirmation and paused pilot guidance. 197 mocked tests pass across eight MAIT/import files; automatic compilation OK. Presentation-only; no live operations or publication.
