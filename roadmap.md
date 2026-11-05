@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Issue #54 fixed yield sampling sites
+- [ ] Correct nullable-text row/panel models, draft editors and validation; verify alphanumeric writes and retained sampling/yield regressions. Portal setup only, not mobile trip source selection; no publication.
 - [x] Implement separate vineyard/block site manager, draft placement/editing, revision copying and RPC confirmation with verified read-back.
 - [x] Add count-method reporting labels without changing estimate selection, and focused frontend regression tests; 151 tests across 12 sampling/yield/Permanent Items suites passed, automatic compilation OK.
 - [ ] Signed-in live acceptance requires access to the shared VineTrack session; preview /yield?tab=sampling-sites redirects to /login. Real save/confirm and responsive signed-in map rendering unverified. No production publication or customer-data edits.
