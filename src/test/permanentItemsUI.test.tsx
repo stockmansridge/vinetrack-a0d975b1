@@ -27,7 +27,7 @@ it('honours disabled flag in the action gate', () => {
   m.flag=false;mount(<Gate/>);expect(screen.queryByRole('button')).not.toBeInTheDocument();
 });
 it('creates with explicit map coordinates and shows Synced only after read-back',async()=>{
-  m.rpc.mockImplementation(async (_:string,op:any)=> {m.rows=[{ id:op.p_item_id,vineyard_id:'v',name:op.p_name,item_type:op.p_item_type,latitude:op.p_latitude,longitude:op.p_longitude,notes:null,paddock_id:null,photo_path:null,server_revision:1,archived_at:null }];return {data:m.rows[0],error:null};});
+  m.rpc.mockImplementation(async (_:string,op:any)=> {m.rows=[{ id:op.p_item_id,vineyard_id:'v',name:op.p_name,item_type:op.p_item_type,latitude:op.p_latitude,longitude:op.p_longitude,notes:null,paddock_id:null,photo_path:null,server_revision:1,archived_at:null }];return {data:[{ item_id:op.p_item_id,server_revision:1,archived_at:null,operation_id:op.p_operation_id }],error:null};});
   mount(<PermanentItemEditor item={null} onClose={()=>{}}/>);
   fireEvent.change(screen.getByLabelText('Name'),{target:{value:'Pump'}});fireEvent.click(screen.getByText('Choose map location'));fireEvent.click(screen.getByRole('button',{name:'Create item'}));
   expect(await screen.findByText('Synced · revision 1')).toBeInTheDocument();expect(m.rpc).toHaveBeenCalledWith('apply_permanent_item_v1',expect.objectContaining({p_expected_revision:null,p_latitude:-34,p_longitude:138}));
@@ -50,7 +50,7 @@ it('revokes an open editor when vineyard changes and never submits old scope',()
 });
 it('requires archive confirmation and preserves current revision',async()=>{
   const item:any={id:'i',vineyard_id:'v',name:'Pump',item_type:'pump',latitude:-34,longitude:138,notes:null,paddock_id:null,photo_path:null,server_revision:4,archived_at:null};
-  m.rpc.mockImplementation(async()=>{m.rows=[{...item,server_revision:5,archived_at:'now'}];return {data:m.rows[0],error:null};});
+  m.rpc.mockImplementation(async(_:string,op:any)=>{m.rows=[{...item,server_revision:5,archived_at:'now'}];return {data:[{ item_id:'i',server_revision:5,archived_at:'now',operation_id:op.p_operation_id }],error:null};});
   mount(<PermanentItemEditor item={item} onClose={()=>{}}/>);fireEvent.click(screen.getByRole('button',{name:'Archive'}));expect(m.rpc).not.toHaveBeenCalled();fireEvent.click(screen.getByRole('button',{name:'Confirm archive'}));
   await screen.findByText('Synced · revision 5 · Archived');expect(m.rpc).toHaveBeenCalledWith('apply_permanent_item_v1',expect.objectContaining({p_action:'archive',p_item_id:'i',p_expected_revision:4}));
 });

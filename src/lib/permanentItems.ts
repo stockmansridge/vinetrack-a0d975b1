@@ -48,10 +48,12 @@ export async function applyPermanentOperation(operation: PermanentOperation, ass
   assertAccess(); guardMutation(undefined);
   const { data, error } = await db.rpc('apply_permanent_item_v1', operation);
   if (error) throw error;
-  // Accept a returned row or the explicit id/revision receipt, never infer a revision from a later read.
-  const receipt = Array.isArray(data) && data.length === 1 ? data[0] : data;
+  // The RPC returns a SETOF receipt with exact columns item_id, server_revision, archived_at, operation_id.
+  // Accept only that shape and exact values; never infer a revision from a later read.
+  const rows = Array.isArray(data) ? data : [];
+  const receipt = rows.length === 1 ? rows[0] : null;
   const revision = receipt?.server_revision;
-  if ((receipt?.id ?? receipt?.item_id) !== operation.p_item_id || !Number.isSafeInteger(revision)) {
+  if (receipt?.item_id !== operation.p_item_id || receipt?.operation_id !== operation.p_operation_id || !Number.isSafeInteger(revision)) {
     throw new Error('Save receipt could not be verified. Retry this same operation; do not create another item.');
   }
   assertAccess();
@@ -68,9 +70,11 @@ export async function applyPermanentOperation(operation: PermanentOperation, ass
   assertAccess();
   return row;
 }
+/** Shared bucket permanent-item-photos allows at most 5 MiB (5,242,880 bytes) per file. */
+export const PERMANENT_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 export function permanentPhotoExtension(file: File) {
   const ext = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' } as Record<string, string>)[file.type];
-  if (!ext || file.size === 0 || file.size > 10 * 1024 * 1024) throw new Error('Choose one JPG, PNG or WebP photo up to 10 MB.');
+  if (!ext || file.size === 0 || file.size > PERMANENT_PHOTO_MAX_BYTES) throw new Error('Choose one JPG, PNG or WebP photo up to 5 MiB.');
   return ext;
 }
 export function permanentPhotoPathAllowed(path: string, vineyardId: string, itemId: string) {
