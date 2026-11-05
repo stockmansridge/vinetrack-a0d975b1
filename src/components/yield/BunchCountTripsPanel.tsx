@@ -30,6 +30,7 @@ import {
 import { ChevronDown, ChevronRight, Eye, Trash2 } from "lucide-react";
 import type { BunchCountTrip, CurrentBlockEstimate } from "@/lib/bunchCountTrips";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import PanelCountObservations from './PanelCountObservations';
 
 const HA_PER_AC = 0.40468564224;
 
@@ -166,6 +167,7 @@ export default function BunchCountTripsPanel({
                     <TableCell>{t.vintage ?? "—"}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap items-center gap-1">
+                        {t.summary.isPanelCount && <Badge variant="outline">Panel Count · Raw</Badge>}
                         {t.isCompleted ? (
                           <Badge>Completed</Badge>
                         ) : (
@@ -195,7 +197,7 @@ export default function BunchCountTripsPanel({
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{tripSampleCount(t)}</TableCell>
                     <TableCell className="text-xs">
-                      {t.applyDamage ? "Damage adjustment applied" : "Base estimate"}
+                      {t.summary.isPanelCount ? 'Not applicable' : t.applyDamage ? "Damage adjustment applied" : "Base estimate"}
                     </TableCell>
                     <TableCell className="text-xs">
                       {t.routeReused ? "Route reused" : "New route"}
@@ -220,6 +222,7 @@ export default function BunchCountTripsPanel({
                       <TableCell colSpan={11}>
                         <div className="space-y-2 py-1 text-xs">
                           <div>{t.countMethodLabel ?? 'Bunches Per Vine Count (legacy)'}</div>
+                          {t.summary.isPanelCount ? <PanelCountObservations blocks={t.summary.blocks} /> : <>
                           <div className="flex flex-wrap gap-x-6 gap-y-1">
                             <span>
                               <span className="text-muted-foreground">Sampling density: </span>
@@ -256,6 +259,7 @@ export default function BunchCountTripsPanel({
                               <span className="text-muted-foreground">No blocks sampled.</span>
                             )}
                           </div>
+                          </>}
                           <div className="flex flex-wrap items-center gap-2">
                             <Button
                               size="sm"
@@ -267,7 +271,7 @@ export default function BunchCountTripsPanel({
                             >
                               View full trip detail
                             </Button>
-                            {canDelete && onDeleteTrip && (
+                            {!t.summary.isPanelCount && canDelete && onDeleteTrip && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button

@@ -9,7 +9,8 @@
 //   the LATEST COMPLETED session (by completedAt, falling back to createdAt)
 //   that has at least one RECORDED sample site in that block.
 //
-// Sessions are NEVER summed and NEVER averaged. Drafts never participate.
+// Sessions are NEVER summed and NEVER averaged. Drafts and raw Panel Count
+// sessions never participate in automatic current estimate selection.
 // A newer completed trip supersedes the previous estimate; older completed
 // trips remain history.
 import {
@@ -139,7 +140,7 @@ export function currentEstimatesByBlock(
   // Trips arrive newest-first, so the FIRST completed trip that sampled a
   // block wins and later (older) trips are skipped for that block.
   for (const trip of trips) {
-    if (!trip.isCompleted) continue;
+    if (!trip.isCompleted || trip.summary.isPanelCount) continue;
     if (vintage != null && trip.vintage !== vintage) continue;
     for (const b of trip.sampledBlocks) {
       if (!b.blockId) continue;

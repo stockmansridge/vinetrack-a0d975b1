@@ -75,6 +75,8 @@ import {
 import PickingLogPanel from "@/components/yield/PickingLogPanel";
 import BunchCountSamplingCard from "@/components/yield/BunchCountSamplingCard";
 import BunchCountTripsPanel from "@/components/yield/BunchCountTripsPanel";
+import PanelCountObservations from '@/components/yield/PanelCountObservations';
+import { yieldCountMethodLabel } from '@/lib/yieldCountMethod';
 import YieldSampleSitesPanel from "@/components/yield/YieldSampleSitesPanel";
 import {
   aggregatePickingRecordsByPlanting,
@@ -1527,6 +1529,7 @@ function YieldSheet({
   const rf = useRegionFormatters();
   const fmtDate = mkFmtDate(rf);
   const isHistorical = row?.__kind === "historical";
+  const isPanel = row?.__kind === 'session' && summariseYieldSession((row as YieldEstimationSession).payload).isPanelCount;
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl lg:w-[40vw] lg:max-w-[40vw] overflow-y-auto">
@@ -1542,7 +1545,7 @@ function YieldSheet({
         {row?.__kind === "session" && (
           <SessionDetail row={row as YieldEstimationSession} blocks={blocks} bunchWeightFor={bunchWeightFor} />
         )}
-        {row && canDelete && (
+        {row && canDelete && !isPanel && (
           <div className="mt-6 border-t pt-4">
             <AlertDialog>
               <AlertDialogTrigger asChild>
@@ -1631,13 +1634,13 @@ export function sessionSampleMapData(
 ) {
   const markers = summary.blocks.flatMap((b) =>
     b.sites
-      .filter((s) => s.lat != null && s.lon != null && s.bunchesPerVine != null)
+      .filter((s) => s.lat != null && s.lon != null && (summary.isPanelCount ? s.panelMeasurement?.totalBunches != null : s.bunchesPerVine != null))
       .map((s, i) => ({
         id: `${b.blockId ?? "unknown"}-${s.siteIndex ?? i}-${i}`,
         lat: s.lat as number,
         lng: s.lon as number,
         title: `${b.blockName ?? "Block"}${s.rowNumber != null ? ` · Row ${s.rowNumber}` : ""}${
-          s.bunchesPerVine != null ? ` · ${s.bunchesPerVine} bunches/vine` : ""
+          summary.isPanelCount ? ` · Panel ${s.panelNumber ?? s.siteIndex ?? i + 1} · ${s.panelMeasurement?.totalBunches} bunches` : s.bunchesPerVine != null ? ` · ${s.bunchesPerVine} bunches/vine` : ""
         }`,
         colour: "hsl(var(--primary))",
       })),
@@ -1679,6 +1682,7 @@ function SessionDetail({
   return (
     <div className="mt-4 space-y-4 text-sm">
       <Section title="Session">
+        <Field label="Count method" value={yieldCountMethodLabel(row.payload)} />
         <Field label="Created" value={fmtDate(row.session_created_at ?? row.created_at)} />
         <Field label="Completed" value={row.is_completed ? "Yes" : "No"} />
         <Field label="Completed at" value={fmtDate(row.completed_at)} />
@@ -1703,7 +1707,7 @@ function SessionDetail({
         />
       </Section>
 
-      {summary.blocks.length > 0 ? (
+      {summary.isPanelCount ? <PanelCountObservations blocks={summary.blocks} /> : summary.blocks.length > 0 ? (
         <Section title={`Blocks sampled (${summary.blocks.length})`}>
           <div className="space-y-3">
             {summary.blocks.map((b, i) => (
@@ -1802,7 +1806,7 @@ function SessionDetail({
       )}
 
       <Section title="Yield estimate">
-        {summary.totalEstTonnes != null ? (
+        {summary.isPanelCount ? <p className="text-xs text-muted-foreground">Raw Panel Count only — no tonnage estimate or automatic source selection. Validated nominal block planting positions, master bunch weight and an explicit source-selection policy are required before estimating yield.</p> : summary.totalEstTonnes != null ? (
           <div className="space-y-1.5">
             <Field label="Estimated total (t)" value={fmtNum(summary.totalEstTonnes)} />
             <Field label="Total area" value={areaVal(summary.totalAreaHa)} />

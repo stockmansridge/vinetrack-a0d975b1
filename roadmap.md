@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Issue #54 fixed yield sampling sites
+- [x] Parse and display dated raw Panel Count observations, complete-coverage sums and explicit ratios; missing/skipped measurements remain unknown, no tonnes inferred. Panel history/detail is read-only and excluded from automatic latest-completed selection per block/vintage. 240 tests across 20 yield suites passed; automatic compilation build OK. No publication, backend changes or live writes; authenticated mobile-produced records remain unverified without shared-vineyard access.
 - [x] Correct nullable-text row/panel models, draft editors and validation; reproduced text loss before correction, then verified alphanumeric/blank writes, exact read-back, safe retry and revision copying. 337 tests across 25 sampling/yield/Permanent Items suites passed; automatic compilation build OK. Portal setup only, not mobile trip source selection; no publication or live writes.
 - [x] Implement separate vineyard/block site manager, draft placement/editing, revision copying and RPC confirmation with verified read-back.
 - [x] Add count-method reporting labels without changing estimate selection, and focused frontend regression tests; 151 tests across 12 sampling/yield/Permanent Items suites passed, automatic compilation OK.

@@ -9,6 +9,7 @@ import YieldReportsPage from "@/pages/setup/YieldReportsPage";
 const BLOCK = "11111111-1111-1111-1111-111111111111";
 
 let role = "owner";
+let panelHistory = false;
 vi.mock("@/context/VineyardContext", () => ({
   useVineyard: () => ({ selectedVineyardId: "v1", currentRole: role }),
 }));
@@ -36,10 +37,11 @@ vi.mock("@/lib/yieldReportsQuery", async () => {
           session_created_at: "2026-01-05T00:00:00Z",
           completed_at: "2026-01-05T00:00:00Z",
           payload: {
+            ...(panelHistory ? { countMethod: 'panel' } : {}),
             selectedPaddockIds: [BLOCK],
             blockBunchWeightsKg: { [BLOCK]: 0.2 },
             sampleSites: [
-              { paddockId: BLOCK, siteIndex: 1, bunchCountEntry: { bunchesPerVine: 20 } },
+              { paddockId: BLOCK, siteIndex: 1, ...(panelHistory ? { panelCountEntry: { measurement: { totalBunches: 120, plantedPositions: 10, fruitingVines: 8, missingPositions: 1, nonproductiveVines: 1, panelLengthMetres: 20, calculationVersion: '1' }, recordedAt: '2026-01-05T00:00:00Z', recordedBy: 'worker' } } : { bunchCountEntry: { bunchesPerVine: 20 } }) },
               { paddockId: BLOCK, siteIndex: 2, bunchCountEntry: { bunchesPerVine: 30 } },
             ],
           },
@@ -130,6 +132,7 @@ const openEstimations = async () => {
 describe("Yields page", () => {
   beforeEach(() => {
     role = "owner";
+    panelHistory = false;
   });
 
   it("uses Vintage terminology instead of Season / year", async () => {
@@ -185,6 +188,20 @@ describe("Yields page", () => {
     await openEstimations();
     fireEvent.click(await screen.findByRole("button", { name: "View full trip details" }));
     expect(await screen.findByRole("button", { name: /delete session/i })).toBeInTheDocument();
+  });
+
+  it('opens raw Panel Count details read-only with no current-estimate badge or delete action', async () => {
+    panelHistory = true;
+    renderPage();
+    await openEstimations();
+    const row = await screen.findByTestId('trip-row-s1');
+    expect(screen.queryByText('CURRENT ESTIMATE')).toBeNull();
+    fireEvent.click(row);
+    expect(await screen.findByText('Not recorded')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'View full trip details' }));
+    await screen.findByRole('dialog');
+    expect(screen.getByText(/Validated nominal block planting positions/)).toBeVisible();
+    expect(screen.queryByRole('button', { name: /delete session/i })).toBeNull();
   });
 
   it("hides the delete action from members who cannot manage yields", async () => {
