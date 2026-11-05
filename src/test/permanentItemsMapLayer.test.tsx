@@ -1,7 +1,7 @@
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import PermanentItemsMapLayer from '@/components/permanent-items/PermanentItemsMapLayer';
-const m = vi.hoisted(() => ({ allowed:true, items:[] as any[], annotations:[] as any[] }));
+const m = vi.hoisted(() => ({ allowed:true, items:[] as any[], annotations:[] as any[], types:[] as any[] }));
 vi.mock('@/components/permanent-items/usePermanentItems',()=>({usePermanentItems:()=>({allowed:m.allowed,items:m.items,query:{isError:false}}),usePermanentItemTypes:()=>({types:m.types??[]})}));
 beforeEach(()=>{m.allowed=true;m.annotations=[];m.items=[{id:'i',name:'Pump',latitude:-34,longitude:138,archived_at:null}];vi.stubGlobal('mapkit',{
   Coordinate:class {constructor(public latitude:number,public longitude:number){}},
