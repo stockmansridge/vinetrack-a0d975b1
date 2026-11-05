@@ -8,6 +8,7 @@ vi.mock("@/integrations/ios-supabase/client", () => ({
 }));
 
 import { canEndTripAfterTanks, endTankState, type AdminTripRow } from "@/lib/adminTrips";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { TripDetail, EndLifecycleDialog } from "@/pages/admin/AdminTripsPage";
 
 const t1 = { id: "s1", tankNumber: 1, startTime: "2026-09-23T00:10:00Z", endTime: "2026-09-23T01:10:00Z", fillStartTime: null, fillEndTime: null };
@@ -33,7 +34,7 @@ const wrap = (ui: React.ReactNode) =>
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{ui}</QueryClientProvider>);
 const renderDetail = async (t: AdminTripRow) => {
   rpcMock.mockImplementation((name: string) => Promise.resolve({ data: name === "admin_get_trip" ? detailFor(t) : [], error: null }));
-  wrap(<TripDetail tripId={t.id} row={t} />);
+  wrap(<Sheet open><SheetContent><TripDetail tripId={t.id} row={t} /></SheetContent></Sheet>);
   await waitFor(() => expect(rpcMock).toHaveBeenCalledWith("admin_get_trip", { p_trip_id: t.id }));
 };
 
