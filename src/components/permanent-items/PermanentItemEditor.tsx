@@ -11,7 +11,7 @@ import ManualIssuesAppleMap from '@/components/manual-issues/ManualIssuesAppleMa
 import { fetchList } from '@/lib/queries';
 import { parsePolygonPoints } from '@/lib/paddockGeometry';
 import { guardMutation, readOnlyStore } from '@/lib/vineyardWriteAccess';
-import { createPermanentOperation, getPermanentPhoto, PERMANENT_ITEM_TYPES, permanentItemTypeLabel, permanentItemsKey, permanentPhotoExtension, PermanentSaveSession, validPermanentLocation, type PermanentItem, type PermanentItemDraft } from '@/lib/permanentItems';
+import { createPermanentOperation, getPermanentPhoto, PERMANENT_ITEM_TYPES, permanentItemTypeColor, permanentItemTypeLabel, permanentItemsKey, permanentPhotoExtension, PermanentSaveSession, validPermanentLocation, type PermanentItem, type PermanentItemDraft } from '@/lib/permanentItems';
 import { usePermanentItemsAccess, usePermanentItemTypes } from './usePermanentItems';
 import PermanentTypeDialog from './PermanentTypeDialog';
 import PermanentTypeSwatch from './PermanentTypeSwatch';

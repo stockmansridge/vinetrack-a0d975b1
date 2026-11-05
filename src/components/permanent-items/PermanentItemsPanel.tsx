@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PERMANENT_ITEM_TYPES, permanentItemTypeLabel, permanentItemsKey, permanentTypesKey, type PermanentItem } from '@/lib/permanentItems';
+import { PERMANENT_ITEM_TYPES, permanentItemTypeColor, permanentItemTypeLabel, permanentItemsKey, permanentTypesKey, type PermanentItem } from '@/lib/permanentItems';
 import { usePermanentItems, usePermanentItemTypes } from './usePermanentItems';
 import PermanentTypeSwatch from './PermanentTypeSwatch';
 import { pendingPermanentDeleteItems } from '@/lib/permanentItemDeletion';
@@ -29,6 +29,6 @@ export default function PermanentItemsPanel({ onSelect }: { onSelect: (item: Per
     {query.isError && <p role="alert" className="text-destructive">Unable to read Permanent Items. Refresh to retry.</p>}
     {pendingItems.length > 0 && <div className="space-y-2 border-t pt-3"><h3 className="font-semibold">Pending Permanent Item deletions</h3>{pendingItems.map(item => <Button key={item.id} variant="outline" className="h-auto whitespace-normal" onClick={() => onSelect(item)}>Review pending deletion: {item.name}</Button>)}</div>}
     {!query.isLoading && !query.isError && filtered.length === 0 && <p className="text-sm text-muted-foreground">No Permanent Items match.</p>}
-    <ul className="divide-y">{filtered.map(item => <li key={item.id}><Button variant="ghost" className="h-auto w-full justify-start whitespace-normal py-3 text-left" onClick={() => onSelect(item)}><span className="min-w-0 break-words">{item.name}<span className="block text-xs text-muted-foreground"><PermanentTypeSwatch color={catalogue.types.find(t => t.type_key === item.item_type)?.color_hex} /> {permanentItemTypeLabel(item.item_type, catalogue.types)} · {item.latitude}, {item.longitude} · revision {item.server_revision}</span></span></Button></li>)}</ul>
+    <ul className="divide-y">{filtered.map(item => <li key={item.id}><Button variant="ghost" className="h-auto w-full justify-start whitespace-normal py-3 text-left" onClick={() => onSelect(item)}><span className="min-w-0 break-words">{item.name}<span className="block text-xs text-muted-foreground"><PermanentTypeSwatch color={permanentItemTypeColor(item.item_type, catalogue.types)} /> {permanentItemTypeLabel(item.item_type, catalogue.types)} · {item.latitude}, {item.longitude} · revision {item.server_revision}</span></span></Button></li>)}</ul>
   </section>;
 }
