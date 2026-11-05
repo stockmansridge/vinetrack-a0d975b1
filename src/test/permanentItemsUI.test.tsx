@@ -5,15 +5,16 @@ import PermanentItemEditor from '@/components/permanent-items/PermanentItemEdito
 import PermanentItemsPanel from '@/components/permanent-items/PermanentItemsPanel';
 import { usePermanentItemsAccess } from '@/components/permanent-items/usePermanentItems';
 import { readOnlyStore } from '@/lib/vineyardWriteAccess';
-const m = vi.hoisted(() => ({ admin:true, flag:true, member:true, vineyard:'v', rpc:vi.fn(), from:vi.fn(), rows:[] as any[], manage:true, hardDelete:false }));
+const m = vi.hoisted(() => ({ admin:true, flag:true, member:true, vineyard:'v', rpc:vi.fn(), from:vi.fn(), rows:[] as any[], manage:true, hardDelete:false, demo:false }));
 vi.mock('@/lib/systemAdmin', () => ({ useIsSystemAdmin: () => ({ isAdmin:m.admin,loading:false }), useFeatureFlag: (key:string) => key === 'permanent_items_admin_preview' && m.flag }));
+vi.mock('@/context/DemoModeContext', () => ({ useDemoMode: () => ({ demoMode:m.demo, setDemoMode:()=>{}, toggleDemoMode:()=>{} }) }));
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user:{ id:'u' },loading:false }) }));
 vi.mock('@/context/VineyardContext', () => ({ useVineyard: () => ({ selectedVineyardId:m.vineyard,memberships:m.member ? [{ vineyard_id:m.vineyard }] : [],loading:false }) }));
 vi.mock('@/integrations/ios-supabase/client', () => ({ supabase:{ rpc:m.rpc,from:m.from } }));
 vi.mock('@/lib/queries', () => ({ fetchList:async () => [] }));
 vi.mock('@/components/manual-issues/ManualIssuesAppleMap', () => ({ default: ({ onPick }:any) => <button onClick={() => onPick?.(-34,138)}>Choose map location</button> }));
 function mount(ui:React.ReactNode) { const qc = new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}}); return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>); }
-beforeEach(() => { vi.clearAllMocks(); m.admin=true;m.flag=true;m.member=true;m.vineyard='v';m.rows=[];m.manage=true;m.hardDelete=false;readOnlyStore.setReadOnly(false);
+beforeEach(() => { vi.clearAllMocks(); m.admin=true;m.flag=true;m.member=true;m.vineyard='v';m.rows=[];m.manage=true;m.hardDelete=false;m.demo=false;readOnlyStore.setReadOnly(false);
   m.rpc.mockImplementation(async () => ({data:[{can_read:m.flag && m.member && (m.admin || m.hardDelete),can_manage:m.flag && m.member && m.admin && m.manage,can_hard_delete:m.flag && m.member && m.hardDelete}],error:null}));
   const chain:any = {select:()=>chain,eq:()=>chain,order:async()=>({ data:m.rows,error:null }),single:async()=>({ data:m.rows[0],error:null })};m.from.mockReturnValue(chain);
 });
@@ -22,6 +23,23 @@ it.each(['flag off','normal user','nonmember'])('direct editor and list are gate
   if(kind==='flag off')m.flag=false;if(kind==='normal user')m.admin=false;if(kind==='nonmember')m.member=false;
   mount(<><PermanentItemEditor item={null} onClose={() => {}} /><PermanentItemsPanel onSelect={() => {}} /></>);
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();expect(m.from).not.toHaveBeenCalled();await waitFor(()=>expect(m.rpc).toHaveBeenCalledWith('permanent_item_permissions_v1',{p_vineyard_id:'v'}));
+});
+it('fails closed in Demo Mode: no permissions RPC, no list query, no editor, no delete', async () => {
+  m.demo=true;m.hardDelete=true;
+  function Gate(){ const a=usePermanentItemsAccess();return a.allowed ? <button>Permanent Item</button> : <span>hidden</span>; }
+  mount(<><Gate/><PermanentItemEditor item={null} onClose={() => {}} /><PermanentItemsPanel onSelect={() => {}} /></>);
+  expect(screen.getByText('hidden')).toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Permanent Item'})).not.toBeInTheDocument();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  await new Promise(r=>setTimeout(r,50));
+  expect(m.rpc).not.toHaveBeenCalled();expect(m.from).not.toHaveBeenCalled();
+});
+it('recovers access when Demo Mode is turned off', async () => {
+  m.demo=true;
+  function Gate(){ const {allowed}=usePermanentItemsAccess();return allowed ? <button>Permanent Item</button> : null; }
+  const view=mount(<Gate/>);expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  m.demo=false;view.rerender(<QueryClientProvider client={new QueryClient()}><Gate/></QueryClientProvider>);
+  expect(await screen.findByRole('button',{name:'Permanent Item'})).toBeInTheDocument();
 });
 it('honours disabled flag in the action gate', () => {
   function Gate(){ const {allowed}=usePermanentItemsAccess();return allowed ? <button>Permanent Item</button> : null; }
