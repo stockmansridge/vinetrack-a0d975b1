@@ -93,13 +93,14 @@ export default function PermanentItemEditor({ item, onClose }: { item: Permanent
   const coordsValid = lat.trim() !== '' && lng.trim() !== '' && validPermanentLocation(Number(lat), Number(lng));
   const pick = (latitude: number, longitude: number) => { if (!locked) { setLat(String(latitude)); setLng(String(longitude)); } };
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}>
-    <DialogContent className="w-[96vw] max-w-3xl max-h-[90dvh] overflow-y-auto" onInteractOutside={e => busy && e.preventDefault()} onEscapeKeyDown={e => busy && e.preventDefault()}>
+    <DialogContent className="w-[96vw] max-w-5xl max-h-[92dvh] overflow-y-auto" onInteractOutside={e => busy && e.preventDefault()} onEscapeKeyDown={e => busy && e.preventDefault()}>
       <DialogHeader><DialogTitle>{item ? 'Permanent Item details' : 'Create Permanent Item'}</DialogTitle><DialogDescription>Permanent infrastructure pilot, separate from field Pins.</DialogDescription></DialogHeader>
       {item && <p className="text-xs text-muted-foreground break-all">Revision {item.server_revision} · Created {item.created_at} · Updated {item.updated_at}{item.archived_at ? ` · Archived ${item.archived_at}` : ''}</p>}
       {readOnly && <p role="status" className="text-destructive">This vineyard is read-only.</p>}
       {error && <p role="alert" className="text-destructive break-words">{error}</p>}
       {synced && <p role="status">Synced · revision {synced.server_revision}{synced.archived_at ? ' · Archived' : ''}</p>}
-      <fieldset disabled={locked} className="grid min-w-0 gap-4 sm:grid-cols-2">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <fieldset disabled={locked} className="grid min-w-0 content-start gap-3 sm:grid-cols-2">
         <div className="space-y-1"><Label htmlFor="permanent-name">Name</Label><Input id="permanent-name" value={name} onChange={e => setName(e.target.value)} /></div>
         <div className="min-w-0 space-y-1"><Label htmlFor="permanent-type">Type</Label><Select value={type} onValueChange={value => setType(value as typeof type)} disabled={locked}><SelectTrigger id="permanent-type"><SelectValue placeholder={permanentItemTypeLabel(type, catalogue.types)} /></SelectTrigger><SelectContent>{PERMANENT_ITEM_TYPES.map(t => <SelectItem key={t} value={t}><span className="flex items-center gap-2"><PermanentTypeSwatch color={permanentItemTypeColor(t)} />{permanentItemTypeLabel(t)}</span></SelectItem>)}{catalogue.types.map(t => <SelectItem key={t.type_key} value={t.type_key}><span className="flex items-center gap-2"><PermanentTypeSwatch color={t.color_hex} />{t.name}</span></SelectItem>)}</SelectContent></Select>
           {access.canManage && !item?.archived_at && <Button type="button" variant="outline" size="sm" disabled={locked} onClick={() => { try { assertAccess(); setAddingType(true); } catch (e) { setError((e as Error).message); } }}><Plus className="mr-1 h-4 w-4" />Add Vineyard Type</Button>}
@@ -112,14 +113,17 @@ export default function PermanentItemEditor({ item, onClose }: { item: Permanent
           if (!navigator.geolocation) { setError('GPS is unavailable. Enter coordinates or choose on the map.'); return; }
           navigator.geolocation.getCurrentPosition(position => { try { assertAccess(); pick(position.coords.latitude, position.coords.longitude); } catch { /* scope changed */ } }, () => mounted.current && setError('Location unavailable. Enter coordinates or choose on the map.'));
         }}><LocateFixed className="mr-2 h-4 w-4" />Current GPS</Button></div>
-        <div className="space-y-1 sm:col-span-2"><Label htmlFor="permanent-notes">Notes</Label><Textarea id="permanent-notes" value={notes} onChange={e => setNotes(e.target.value)} /></div>
+        <div className="space-y-1 sm:col-span-2"><Label htmlFor="permanent-notes">Notes</Label><Textarea id="permanent-notes" rows={3} value={notes} onChange={e => setNotes(e.target.value)} /></div>
         <div className="space-y-1 sm:col-span-2"><Label htmlFor="permanent-photo">Photo (optional, one image, up to 5 MiB)</Label><Input id="permanent-photo" type="file" accept="image/jpeg,image/png,image/webp" onChange={e => {
           const file = e.target.files?.[0] ?? null;
           try { if (file) permanentPhotoExtension(file); setPhoto(file); setError(null); } catch (failure) { e.target.value = ''; setPhoto(null); setError((failure as Error).message); }
         }} /></div>
       </fieldset>
-      {photoUrl && <img src={photoUrl} alt={item?.name ?? 'Permanent Item photo'} className="max-h-48 max-w-full object-contain" />}
-      <div className="h-64 overflow-hidden rounded-md border" aria-label="Permanent Item location preview"><ManualIssuesAppleMap fitKey={scope.vineyardId ?? ''} polygons={(blocks.data ?? []).map(b => ({ id: b.id, pts: parsePolygonPoints(b.polygon_points) }))} markers={coordsValid ? [{ id: 'preview', lat: Number(lat), lng: Number(lng), colour: 'hsl(var(--primary))', title: name }] : []} onPick={locked ? undefined : pick} /></div>
+      <div className="flex min-w-0 flex-col gap-3">
+        {photoUrl && <img src={photoUrl} alt={item?.name ?? 'Permanent Item photo'} className="max-h-36 max-w-full object-contain" />}
+        <div className="h-64 overflow-hidden rounded-md border lg:h-full lg:min-h-72" aria-label="Permanent Item location preview"><ManualIssuesAppleMap fitKey={scope.vineyardId ?? ''} polygons={(blocks.data ?? []).map(b => ({ id: b.id, pts: parsePolygonPoints(b.polygon_points) }))} markers={coordsValid ? [{ id: 'preview', lat: Number(lat), lng: Number(lng), colour: 'hsl(var(--primary))', title: name }] : []} onPick={locked ? undefined : pick} /></div>
+      </div>
+      </div>
       {access.canManage && archiveConfirm && !hasIntent && <div role="alert" className="space-y-2 border-t pt-3"><p>Archive this Permanent Item? It will be removed from active markers, not deleted.</p><Button variant="destructive" disabled={locked} onClick={() => mutation.mutate('archive')}>Confirm archive</Button><Button variant="ghost" onClick={() => setArchiveConfirm(false)}>Cancel archive</Button></div>}
       <div className="flex flex-wrap gap-2">
         {access.canManage && !synced && !item?.archived_at && <Button disabled={readOnly || busy || deleteIntent || archiveConfirm && !hasIntent} onClick={() => mutation.mutate(item ? 'update' : 'create')}><MapPin className="mr-2 h-4 w-4" />{mutation.isPending ? 'Saving…' : hasIntent ? 'Retry same operation' : item ? 'Save changes / move marker' : 'Create item'}</Button>}
