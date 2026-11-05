@@ -32,7 +32,7 @@ beforeEach(() => rpcMock.mockReset());
 
 describe("Trip repair actions (UI rules)", () => {
   it("stale ended Tank 1 → Repair Tank State (preferred) + Force Stop + Compare Blocks", () => {
-    expect(tripActions(base)).toEqual(["repair_tank", "compare_blocks", "force_stop"]);
+    expect(tripActions(base)).toEqual(["repair_tank", "compare_blocks"]);
   });
   it("genuinely open Tank 1 gets no repair option", () => {
     const t = { ...base, tank_sessions: [{ ...base.tank_sessions![0], endTime: null }] };
@@ -64,14 +64,14 @@ describe("Trip repair actions (UI rules)", () => {
   it("block scope difference gets Compare Blocks only, stays visible", () => {
     const t = { ...base, active_tank_number: null };
     expect(detectTripIssues(t).map((i) => i.code)).toEqual(["block_scope_difference"]);
-    expect(tripActions(t)).toEqual(["compare_blocks", "force_stop"]);
+    expect(tripActions(t)).toEqual(["compare_blocks"]);
     const page = readFileSync("src/pages/admin/AdminTripsPage.tsx", "utf8");
     expect(page).not.toMatch(/Sync Blocks|Fix Blocks|Replace Spray Record Blocks|Make Matches/);
   });
-  it("Force Stop remains for genuinely active and paused Trips", () => {
+  it("Force Stop is no longer offered for active or paused Trips", () => {
     const t = { ...base, active_tank_number: null, spray_application_block_ids: null };
-    expect(tripActions(t)).toEqual(["force_stop"]);
-    expect(tripActions({ ...t, is_paused: true })).toEqual(["force_stop"]);
+    expect(tripActions(t)).toEqual([]);
+    expect(tripActions({ ...t, is_paused: true })).toEqual([]);
   });
   it("tank confirmation copy matches the contract", () => {
     expect(repairCopy("repair_tank", base)).toBe(
