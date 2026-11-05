@@ -45,7 +45,7 @@ export interface AdminTripRow {
 
 export interface AdminTripDetail {
   trip: Record<string, any>;
-  vineyard: { id: string; name: string } | null;
+  vineyard: { id: string; name: string; timezone?: string | null } | null;
   operator: { id: string; full_name: string | null; email: string | null } | null;
   tractor: { id: string; name: string | null } | null;
   blocks: { id: string; name: string | null }[];
@@ -521,12 +521,19 @@ export type LifecycleTimeCheck = { ok: true; iso: string; date: Date; error?: un
 export function validateLifecycleEndTime(
   kind: "tank" | "trip",
   localValue: string,
-  ctx: { tripStart?: string | null; sessionStart?: string | null; sessions?: TankSessionSummary[] | null; now?: Date },
+  ctx: { tripStart?: string | null; sessionStart?: string | null; sessions?: TankSessionSummary[] | null; now?: Date; timeZone?: string | null },
 ): LifecycleTimeCheck {
   const v = (localValue ?? "").trim();
   if (!v) return { ok: false, error: null };
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(v)) return { ok: false, error: "Enter both a date and a time." };
-  const d = new Date(v);
+  let d: Date;
+  if (ctx.timeZone) {
+    const z = zonedLocalToUtc(v, ctx.timeZone);
+    if (!z.ok) return { ok: false, error: z.error };
+    d = z.date;
+  } else {
+    d = new Date(v);
+  }
   if (isNaN(d.getTime())) return { ok: false, error: "Enter a valid date and time." };
   const now = ctx.now ?? new Date();
   if (d.getTime() > now.getTime()) return { ok: false, error: "The end time cannot be in the future." };
@@ -551,4 +558,58 @@ export function deviceTimezoneLabel(at: Date = new Date()): string {
   const sign = off >= 0 ? "+" : "-";
   const a = Math.abs(off);
   return `${tz} (UTC${sign}${String(Math.floor(a / 60)).padStart(2, "0")}:${String(a % 60).padStart(2, "0")})`;
+}
+
+/* ---------------- IANA vineyard timezone conversion ---------------- */
+
+export function isValidTimeZone(tz: string | null | undefined): tz is string {
+  if (!tz || typeof tz !== "string" || !tz.includes("/") && tz !== "UTC") return false;
+  try { new Intl.DateTimeFormat("en-US", { timeZone: tz }); return true; } catch { return false; }
+}
+
+function zonedParts(ms: number, tz: string) {
+  const f = new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const p: Record<string, number> = {};
+  for (const x of f.formatToParts(new Date(ms))) if (x.type !== "literal") p[x.type] = Number(x.value);
+  return p;
+}
+
+/** Offset in minutes (local − UTC) of `tz` at the UTC instant `ms`. */
+export function timeZoneOffsetMinutes(ms: number, tz: string): number {
+  const p = zonedParts(ms, tz);
+  const asUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second);
+  return Math.round((asUtc - Math.floor(ms / 1000) * 1000) / 60000);
+}
+
+export function formatUtcOffset(min: number): string {
+  const sign = min >= 0 ? "+" : "-";
+  const a = Math.abs(min);
+  return `UTC${sign}${String(Math.floor(a / 60)).padStart(2, "0")}:${String(a % 60).padStart(2, "0")}`;
+}
+
+/** Converts a wall-clock "YYYY-MM-DDTHH:mm[:ss]" in an IANA zone to a UTC instant.
+ *  Rejects nonexistent (DST gap) and ambiguous (DST overlap) times instead of guessing. */
+export function zonedLocalToUtc(local: string, tz: string): { ok: true; date: Date; offsetMinutes: number } | { ok: false; error: string } {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(local.trim());
+  if (!m) return { ok: false, error: "Enter both a date and a time." };
+  const [Y, Mo, D, H, Mi, S] = [+m[1], +m[2], +m[3], +m[4], +m[5], +(m[6] ?? 0)];
+  const guess = Date.UTC(Y, Mo - 1, D, H, Mi, S);
+  if (isNaN(guess)) return { ok: false, error: "Enter a valid date and time." };
+  const offsets = new Set([-36, -12, 0, 12, 36].map((h) => timeZoneOffsetMinutes(guess + h * 3600000, tz)));
+  const hits = new Set<number>();
+  for (const o of offsets) {
+    const cand = guess - o * 60000;
+    const p = zonedParts(cand, tz);
+    if (p.year === Y && p.month === Mo && p.day === D && p.hour % 24 === H && p.minute === Mi && p.second === S) hits.add(cand);
+  }
+  if (hits.size === 0) return { ok: false, error: `This time does not exist in ${tz} (daylight-saving change). Enter a valid local time.` };
+  if (hits.size > 1) return { ok: false, error: `This time occurs twice in ${tz} (daylight-saving change) and is ambiguous. Confirm the exact time with the customer and enter a time outside the repeated hour.` };
+  const ms = [...hits][0];
+  return { ok: true, date: new Date(ms), offsetMinutes: timeZoneOffsetMinutes(ms, tz) };
+}
+
+/** Label for the chosen instant: vineyard zone when trustworthy, else explicitly the device. */
+export function lifecycleTimezoneLabel(tz: string | null | undefined, at: Date): string {
+  if (isValidTimeZone(tz)) return `Vineyard time: ${tz} (${formatUtcOffset(timeZoneOffsetMinutes(at.getTime(), tz))} at chosen instant)`;
+  return `Your computer's local timezone: ${deviceTimezoneLabel(at)}`;
 }

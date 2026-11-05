@@ -54,6 +54,8 @@ import {
   type AdminLifecycleResult,
   validateLifecycleEndTime,
   deviceTimezoneLabel,
+  lifecycleTimezoneLabel,
+  isValidTimeZone,
   MIN_SUPPORT_REASON_LENGTH,
   type TankSessionSummary,
   type AdminTripDetail,
@@ -563,10 +565,10 @@ export function TripDetail({
       </Section>
 
       {endTank && (
-        <EndLifecycleDialog kind="tank" session={endTank} trip={base} vineyardName={d?.vineyard?.name ?? row?.vineyard_name ?? null} onOpenChange={(o) => !o && setEndTank(null)} />
+        <EndLifecycleDialog kind="tank" session={endTank} trip={base} vineyardName={d?.vineyard?.name ?? row?.vineyard_name ?? null} vineyardTimeZone={d?.vineyard?.timezone ?? null} onOpenChange={(o) => !o && setEndTank(null)} />
       )}
       {endTripOpen && (
-        <EndLifecycleDialog kind="trip" trip={base} vineyardName={d?.vineyard?.name ?? row?.vineyard_name ?? null} onOpenChange={(o) => !o && setEndTripOpen(false)} />
+        <EndLifecycleDialog kind="trip" trip={base} vineyardName={d?.vineyard?.name ?? row?.vineyard_name ?? null} vineyardTimeZone={d?.vineyard?.timezone ?? null} onOpenChange={(o) => !o && setEndTripOpen(false)} />
       )}
       {repair && (
         <RepairDialog action={repair} trip={base} onOpenChange={(o) => !o && setRepair(null)} />
@@ -580,12 +582,14 @@ export function EndLifecycleDialog({
   trip,
   session,
   vineyardName,
+  vineyardTimeZone,
   onOpenChange,
 }: {
   kind: "tank" | "trip";
   trip: AdminTripRow;
   session?: TankSessionSummary;
   vineyardName: string | null;
+  vineyardTimeZone?: string | null;
   onOpenChange: (o: boolean) => void;
 }) {
   const endTankM = useAdminEndTripTank();
@@ -598,19 +602,21 @@ export function EndLifecycleDialog({
   const [submittedIso, setSubmittedIso] = useState<string | null>(null);
   const title = kind === "tank" ? `End Tank ${session?.tankNumber ?? "?"}` : "End Trip";
   const timeLabel = kind === "tank" ? "Actual Tank End date & time (required)" : "Actual Trip End date & time (required)";
+  const tz = isValidTimeZone(vineyardTimeZone) ? vineyardTimeZone : null;
   const check = validateLifecycleEndTime(kind, when, {
+    timeZone: tz,
     tripStart: trip.start_time,
     sessionStart: (session?.startTime as any) ?? null,
     sessions: trip.tank_sessions,
   });
   const reasonOk = reason.trim().length >= MIN_SUPPORT_REASON_LENGTH;
   const canSubmit = check.ok && reasonOk && !pending;
-  const tzLabel = deviceTimezoneLabel(check.ok ? check.date : new Date());
+  const tzLabel = lifecycleTimezoneLabel(tz, check.ok ? check.date : new Date());
 
   const submit = async () => {
     setError(null);
     if (!reasonOk) return setError(`A support reason of at least ${MIN_SUPPORT_REASON_LENGTH} characters is required.`);
-    const fresh = validateLifecycleEndTime(kind, when, { tripStart: trip.start_time, sessionStart: (session?.startTime as any) ?? null, sessions: trip.tank_sessions });
+    const fresh = validateLifecycleEndTime(kind, when, { timeZone: tz, tripStart: trip.start_time, sessionStart: (session?.startTime as any) ?? null, sessions: trip.tank_sessions });
     if (!fresh.ok) return setError(fresh.error ?? "Enter the actual end date and time.");
     const endTime = fresh.iso;
     setSubmittedIso(endTime);
@@ -652,11 +658,11 @@ export function EndLifecycleDialog({
             <div>
               <Label htmlFor="lc-time">{timeLabel}</Label>
               <Input id="lc-time" type="datetime-local" step={60} value={when} onChange={(e) => setWhen(e.target.value)} aria-invalid={!check.ok && !!check.error} />
-              <p className="text-xs text-muted-foreground mt-1" data-testid="lifecycle-tz">Time zone: {tzLabel} (this device)</p>
+              <p className="text-xs text-muted-foreground mt-1" data-testid="lifecycle-tz">{tzLabel}</p>
               {!check.ok && check.error && <p className="text-xs text-destructive mt-1" data-testid="lifecycle-time-error">{check.error}</p>}
               {check.ok && (
                 <p className="text-xs mt-1" data-testid="lifecycle-converted">
-                  Will be recorded as {check.date.toLocaleString()} ({tzLabel}) = <span className="font-mono">{check.iso}</span>
+                  Will be recorded as {when.replace("T", " ")} ({tz ?? "this computer"}) = UTC <span className="font-mono">{check.iso}</span>
                 </p>
               )}
               <p className="text-xs text-muted-foreground mt-1">Enter the real time the {kind === "tank" ? "tank finished" : "Trip finished"}, confirmed with the customer. Do not guess.</p>
