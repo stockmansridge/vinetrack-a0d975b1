@@ -78,6 +78,18 @@ describe("End Tank / End Trip visibility", () => {
   it("fill-only session never gets End Tank", () => {
     expect(endTankState(trip, { ...t2, startTime: null, fillStartTime: "x" })).toBe("hidden");
   });
+  it("active spraying Trip with planned tanks but zero tank_sessions: never End Trip", async () => {
+    const noSessions = { ...trip, trip_function: "spraying", total_tanks: 1, active_tank_number: null, tank_sessions: [] };
+    expect(canEndTripAfterTanks(noSessions)).toBe(false);
+    await renderDetail(noSessions);
+    expect(screen.queryByRole("button", { name: "End Trip" })).toBeNull();
+  });
+  it("active spraying Trip with only an open tank session: never End Trip", async () => {
+    const onlyOpen = { ...trip, trip_function: "spraying", total_tanks: 1, active_tank_number: 1, tank_sessions: [t2] };
+    expect(canEndTripAfterTanks(onlyOpen)).toBe(false);
+    await renderDetail(onlyOpen);
+    expect(screen.queryByRole("button", { name: "End Trip" })).toBeNull();
+  });
 });
 
 describe("End Tank dialog", () => {

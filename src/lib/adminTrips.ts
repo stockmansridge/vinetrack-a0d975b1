@@ -449,12 +449,15 @@ export function endTankState(t: LifecycleInput, s: TankSessionSummary): EndTankS
   return "available";
 }
 
-/** End Trip is offered only once every started Tank Session is closed and no tank/fill is running. */
+/** End Trip is offered only once every started Tank Session is closed, at least one has actually ended, and no tank/fill is running.
+ *  Mirrors admin_end_trip_after_tanks: it rejects Trips with zero or only-open Tank Sessions. */
 export function canEndTripAfterTanks(t: LifecycleInput): boolean {
   if (t.is_active !== true || hasValue(t.end_time)) return false;
   if (t.active_tank_number != null) return false;
   if (hasOpenFill(t)) return false;
-  return (t.tank_sessions ?? []).every((s) => !hasValue(s.startTime) || hasValue(s.endTime));
+  const sessions = t.tank_sessions ?? [];
+  if (!sessions.some((s) => hasValue(s.endTime))) return false;
+  return sessions.every((s) => !hasValue(s.startTime) || hasValue(s.endTime));
 }
 
 export interface AdminLifecycleResult {
