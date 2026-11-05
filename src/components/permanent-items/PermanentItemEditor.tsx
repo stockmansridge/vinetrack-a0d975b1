@@ -99,7 +99,8 @@ export default function PermanentItemEditor({ item, onClose }: { item: Permanent
       {readOnly && <p role="status" className="text-destructive">This vineyard is read-only.</p>}
       {error && <p role="alert" className="text-destructive break-words">{error}</p>}
       {synced && <p role="status">Synced · revision {synced.server_revision}{synced.archived_at ? ' · Archived' : ''}</p>}
-      <fieldset disabled={locked} className="grid min-w-0 gap-4 sm:grid-cols-2">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <fieldset disabled={locked} className="grid min-w-0 content-start gap-3 sm:grid-cols-2">
         <div className="space-y-1"><Label htmlFor="permanent-name">Name</Label><Input id="permanent-name" value={name} onChange={e => setName(e.target.value)} /></div>
         <div className="min-w-0 space-y-1"><Label htmlFor="permanent-type">Type</Label><Select value={type} onValueChange={value => setType(value as typeof type)} disabled={locked}><SelectTrigger id="permanent-type"><SelectValue placeholder={permanentItemTypeLabel(type, catalogue.types)} /></SelectTrigger><SelectContent>{PERMANENT_ITEM_TYPES.map(t => <SelectItem key={t} value={t}><span className="flex items-center gap-2"><PermanentTypeSwatch color={permanentItemTypeColor(t)} />{permanentItemTypeLabel(t)}</span></SelectItem>)}{catalogue.types.map(t => <SelectItem key={t.type_key} value={t.type_key}><span className="flex items-center gap-2"><PermanentTypeSwatch color={t.color_hex} />{t.name}</span></SelectItem>)}</SelectContent></Select>
           {access.canManage && !item?.archived_at && <Button type="button" variant="outline" size="sm" disabled={locked} onClick={() => { try { assertAccess(); setAddingType(true); } catch (e) { setError((e as Error).message); } }}><Plus className="mr-1 h-4 w-4" />Add Vineyard Type</Button>}
