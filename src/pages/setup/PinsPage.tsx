@@ -93,7 +93,7 @@ export default function PinsPage() {
   const queryClient = useQueryClient();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
-  const [tab, setTab] = useState("table");
+  const [tab, setTab] = useState("map");
   const [addOpen, setAddOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [rowFrom, setRowFrom] = useState("");
@@ -395,9 +395,9 @@ export default function PinsPage() {
         </div>
       </div>
 
-      <TabsList className="h-10 w-full sm:w-auto">
-        <TabsTrigger value="table" className="flex-1 px-6 text-sm sm:flex-none">Table</TabsTrigger>
-        <TabsTrigger value="map" className="flex-1 px-6 text-sm sm:flex-none">Map</TabsTrigger>
+      <TabsList className="h-10 w-full sm:w-80">
+        <TabsTrigger value="map" className="flex-1 px-6 text-sm">Map</TabsTrigger>
+        <TabsTrigger value="table" className="flex-1 px-6 text-sm">Table</TabsTrigger>
       </TabsList>
 
       <UnifiedPinDialog
