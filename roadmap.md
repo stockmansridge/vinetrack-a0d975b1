@@ -1,5 +1,10 @@
 # Roadmap
 
+## Issue #54 fixed yield sampling sites
+- [ ] Implement separate vineyard/block site manager, draft placement/editing, revision copying and RPC confirmation with verified read-back.
+- [ ] Add count-method reporting labels without changing estimate selection, and focused frontend regression tests.
+- [ ] Signed-in live acceptance requires access to the shared VineTrack schema/session; managed-backend read returns no Issue #54 tables. No production publication.
+
 ## Issue #53 Permanent Items admin pilot
 - [x] Add shared vineyard custom types, scoped verified creation, palette, labels and focused permission/regression tests (Portal only; no publish or backend changes).
 - [ ] General release is blocked on explicit owner approval of testing: separately remove TEMPORARY System Admin testing gate only after approval, retaining server-managed Supervisor/Manager/Owner hard-delete roles; never infer deletion from System Admin alone. Create/edit/archive/type creation stay can_manage-gated during pilot; Demo Mode denied; pilot switch unchanged.
