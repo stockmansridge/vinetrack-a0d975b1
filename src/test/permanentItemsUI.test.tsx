@@ -41,11 +41,25 @@ it('recovers access when Demo Mode is turned off', async () => {
   m.demo=false;view.rerender(<QueryClientProvider client={new QueryClient()}><Gate/></QueryClientProvider>);
   expect(await screen.findByRole('button',{name:'Permanent Item'})).toBeInTheDocument();
 });
-it('creates with explicit map coordinates and shows Synced only after read-back',async()=>{
+it.each(['owner','manager','supervisor','operator','member'])('%s creates with explicit map coordinates and shows Synced only after read-back',async()=>{
   m.rpc.mockImplementation(async (rpc:string,op:any)=> {if(rpc==='permanent_item_permissions_v1')return {data:[{can_read:true,can_manage:true,can_hard_delete:false}],error:null};m.rows=[{ id:op.p_item_id,vineyard_id:'v',name:op.p_name,item_type:op.p_item_type,latitude:op.p_latitude,longitude:op.p_longitude,notes:null,paddock_id:null,photo_path:null,server_revision:1,archived_at:null }];return {data:[{ item_id:op.p_item_id,server_revision:1,archived_at:null,operation_id:op.p_operation_id }],error:null};});
   mount(<PermanentItemEditor item={null} onClose={()=>{}}/>);
   fireEvent.change(await screen.findByLabelText('Name'),{target:{value:'Pump'}});fireEvent.click(screen.getByText('Choose map location'));fireEvent.click(screen.getByRole('button',{name:'Create item'}));
   expect(await screen.findByText('Synced · revision 1')).toBeInTheDocument();expect(m.rpc).toHaveBeenCalledWith('apply_permanent_item_v1',expect.objectContaining({p_expected_revision:null,p_latitude:-34,p_longitude:138}));
+});
+it.each(['owner','manager','supervisor','operator','member'])('%s saves edits and moves with the exact existing revision',async()=>{
+  const item:any={id:'i',vineyard_id:'v',name:'Pump',item_type:'pump',latitude:-34,longitude:138,notes:null,paddock_id:null,photo_path:null,server_revision:4,archived_at:null};
+  m.rpc.mockImplementation(async(rpc:string,op:any)=>{
+    if(rpc==='permanent_item_permissions_v1')return {data:[{can_read:true,can_manage:true,can_hard_delete:false}],error:null};
+    m.rows=[{...item,name:op.p_name,latitude:op.p_latitude,longitude:op.p_longitude,server_revision:5}];
+    return {data:[{item_id:'i',server_revision:5,archived_at:null,operation_id:op.p_operation_id}],error:null};
+  });
+  mount(<PermanentItemEditor item={item} onClose={()=>{}}/>);
+  fireEvent.change(await screen.findByLabelText('Name'),{target:{value:'Moved pump'}});
+  fireEvent.change(screen.getByLabelText('Latitude'),{target:{value:'-35'}});
+  fireEvent.click(screen.getByRole('button',{name:'Save changes / move marker'}));
+  await screen.findByText('Synced · revision 5');
+  expect(m.rpc).toHaveBeenCalledWith('apply_permanent_item_v1',expect.objectContaining({p_action:'update',p_item_id:'i',p_vineyard_id:'v',p_expected_revision:4,p_name:'Moved pump',p_latitude:-35}));
 });
 it('blocks read-only saves and stale vineyard access',async()=>{
   readOnlyStore.setReadOnly(true);mount(<PermanentItemEditor item={null} onClose={()=>{}}/>);expect(await screen.findByRole('button',{name:'Create item'})).toBeDisabled();fireEvent.click(screen.getByRole('button',{name:'Create item'}));expect(m.rpc).not.toHaveBeenCalledWith('apply_permanent_item_v1',expect.anything());
