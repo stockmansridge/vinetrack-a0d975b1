@@ -1,8 +1,9 @@
 # Roadmap
 
 ## Contour draft member access release
-- [ ] Remove contour-only System Admin gates for signed-in selected-active-vineyard members; preserve Owner/Manager block creation, draft-only operational separation and scope/CAS safety.
-- [ ] Run contour access, handoff, conflict and scope regressions and check automatic compilation; no backend changes or publication.
+- [x] Remove contour-only System Admin gates for signed-in selected-active-vineyard members; shared membership hook excludes anonymous/non-member/support-only/cross-vineyard access. Keep Owner/Manager block creation, mandatory straight rows, draft-only operational separation and scope/CAS safety.
+- [x] 152 tests across 12 contour/block/membership suites passed; automatic typecheck/build OK. No backend changes, SQL, mobile changes or publication.
+- [ ] Signed-in shared-backend member load/save/discard acceptance: requires owner's separate private-authoriser update and authorised shared-vineyard session; not verified against customer records here.
 
 ## Issue #54 fixed yield sampling sites
 - [x] Parse and display dated raw Panel Count observations, complete-coverage sums and explicit ratios; missing/skipped measurements remain unknown, no tonnes inferred. Panel history/detail is read-only and excluded from automatic latest-completed selection per block/vintage. 240 tests across 20 yield suites passed; automatic compilation build OK. No publication, backend changes or live writes; authenticated mobile-produced records remain unverified without shared-vineyard access.
