@@ -90,6 +90,20 @@ describe("End Tank / End Trip visibility", () => {
     await renderDetail(onlyOpen);
     expect(screen.queryByRole("button", { name: "End Trip" })).toBeNull();
   });
+  it("active non-spraying Trip with zero tank sessions: End Trip allowed", async () => {
+    const scouting = { ...trip, trip_function: "scouting", total_tanks: 0, active_tank_number: null, tank_sessions: [] };
+    expect(canEndTripAfterTanks(scouting)).toBe(true);
+    await renderDetail(scouting);
+    expect(screen.getByRole("button", { name: "End Trip" })).toBeTruthy();
+  });
+  it("active non-spraying Trip with an ended tank session: End Trip allowed", async () => {
+    const bunchCount = { ...trip, trip_function: "bunch_count", total_tanks: 0, active_tank_number: null, tank_sessions: [t1] };
+    expect(canEndTripAfterTanks(bunchCount)).toBe(true);
+  });
+  it("active spraying Trip with total_tanks 0 and no sessions: End Trip allowed", async () => {
+    const noPlannedTanks = { ...trip, trip_function: "spraying", total_tanks: 0, active_tank_number: null, tank_sessions: [] };
+    expect(canEndTripAfterTanks(noPlannedTanks)).toBe(true);
+  });
 });
 
 const TANK_LABEL = "Actual Tank End date & time (required)";
