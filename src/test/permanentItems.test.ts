@@ -67,7 +67,8 @@ describe('Permanent Items pilot contract', () => {
   it('uploads only after create read-back and retries photo update with its original operation and revision', async () => {
     const op = createPermanentOperation('v',draft,null,'create');
     const chain: any = { select: () => chain, eq: () => chain, single: async () => ({ data: m.rpc.mock.calls.length === 1 ? row(op.p_item_id,1) : { ...row(op.p_item_id,2), photo_path: m.rpc.mock.calls.at(-1)?.[1].p_photo_path }, error: null }) }; m.from.mockReturnValue(chain);
-    m.rpc.mockResolvedValueOnce({ data: receipt(op, 1), error: null }).mockRejectedValueOnce(new Error('uncertain photo')).mockResolvedValue({ data: receipt(op, 2), error: null });
+    m.rpc.mockResolvedValueOnce({ data: receipt(op, 1), error: null }).mockRejectedValueOnce(new Error('uncertain photo'))
+      .mockImplementation(async (_: string, photoOp: PermanentOperation) => ({ data: receipt(photoOp, 2), error: null }));
     const session = new PermanentSaveSession(op,new File(['x'],'x.jpg',{ type:'image/jpeg' }));
     await expect(session.run(() => {})).rejects.toThrow('uncertain photo'); await session.run(() => {});
     expect(m.rpc.mock.calls[1][1]).toBe(m.rpc.mock.calls[2][1]); expect(m.rpc.mock.calls[1][1].p_expected_revision).toBe(1);
