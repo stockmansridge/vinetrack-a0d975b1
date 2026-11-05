@@ -529,7 +529,7 @@ export function validateLifecycleEndTime(
   let d: Date;
   if (ctx.timeZone) {
     const z = zonedLocalToUtc(v, ctx.timeZone);
-    if (!z.ok) return { ok: false, error: z.error };
+    if (z.ok === false) return { ok: false, error: z.error };
     d = z.date;
   } else {
     d = new Date(v);
