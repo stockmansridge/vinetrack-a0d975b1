@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState, Fragment } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { Download, Plus, RefreshCw, TriangleAlert, X } from "lucide-react";
-import { Checkbox } from '@/components/ui/checkbox';
 import { usePermanentItemsAccess } from '@/components/permanent-items/usePermanentItems';
 import PermanentItemEditor from '@/components/permanent-items/PermanentItemEditor';
 import PermanentItemsPanel from '@/components/permanent-items/PermanentItemsPanel';
@@ -593,6 +592,17 @@ export default function PinsPage() {
             </Button>
           ))}
         </div>
+        {permanentAccess.allowed && (
+          <Button
+            size="sm"
+            variant={showPermanentItems ? "secondary" : "outline"}
+            className="h-8 px-3 text-xs"
+            aria-pressed={showPermanentItems}
+            onClick={() => setShowPermanentItems((v) => !v)}
+          >
+            Permanent Items: {showPermanentItems ? "On" : "Off"}
+          </Button>
+        )}
         <Button
           size="sm"
           variant={showGrowthStages ? "secondary" : "outline"}
@@ -821,7 +831,6 @@ export default function PinsPage() {
       </TabsContent>
 
       <TabsContent value="map" className="mt-0">
-        {permanentAccess.allowed && <div className="mb-3 flex items-center gap-2"><Checkbox id="show-permanent-items" checked={showPermanentItems} onCheckedChange={checked => setShowPermanentItems(checked === true)} /><Label htmlFor="show-permanent-items">Show Permanent Items (separate layer)</Label></div>}
         <PinsMapView statusFilter={statusFilter} hideGrowthStages={!showGrowthStages} showPermanentItems={permanentAccess.allowed && showPermanentItems} onPermanentItemSelect={item => setPermanentEditor({ item })} />
       </TabsContent>
       {permanentAccess.allowed && <PermanentItemsPanel key={selectedVineyardId} onSelect={item => setPermanentEditor({ item })} />}
