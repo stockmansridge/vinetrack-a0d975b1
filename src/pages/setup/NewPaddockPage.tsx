@@ -1,13 +1,12 @@
 import { validateRowNumbering, assertValidRowsPayload } from "@/lib/physicalRowNumbers";
 // New Paddock wizard. Production save inserts into the shared `paddocks`
-// table. System Admins may opt to open the Contour Row Mapping (Beta) draft
+// table. Block creators may opt to open the Contour Row Mapping draft
 // editor for the newly saved block after a successful insert.
 //
 // Spec: docs/paddock-geometry-writer-spec.md
 
 import { generateUuid } from "@/lib/uuid";
 import { useMemo, useRef, useState } from "react";
-import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import BoundaryDrawMap from "@/components/paddocks/BoundaryDrawMap";
@@ -103,16 +102,15 @@ export default function NewPaddockPage() {
   const canEdit = currentRole === "owner" || currentRole === "manager";
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
-  const { isAdmin: isSystemAdmin, loading: adminLoading } = useIsSystemAdmin();
-  const contourAdmin = isSystemAdmin && !adminLoading;
+  const contourAllowed = canEdit;
   const scopeKey = `${user?.id ?? ""}:${selectedVineyardId ?? ""}`;
   const scopeRef = useRef(scopeKey);
   scopeRef.current = scopeKey;
-  const adminRef = useRef(contourAdmin);
-  adminRef.current = contourAdmin;
+  const contourAccessRef = useRef(contourAllowed);
+  contourAccessRef.current = contourAllowed;
   // Choice is bound to the auth user + vineyard it was made in.
   const [contourChoiceScope, setContourChoiceScope] = useState<string | null>(null);
-  const openContourAfterSave = contourAdmin && contourChoiceScope === scopeKey;
+  const openContourAfterSave = contourAllowed && contourChoiceScope === scopeKey;
   const rf = useRegionFormatters();
 
   const [step, setStep] = useState<Step>("details");
@@ -336,7 +334,7 @@ export default function NewPaddockPage() {
     const submitted = payload;
     const submittedId = submitted.id as string;
     const submittedScope = scopeKey;
-    const wantContour = openContourAfterSave && adminRef.current;
+    const wantContour = openContourAfterSave && contourAccessRef.current;
     try {
       assertValidRowsPayload(submitted as any);
       const { error } = await supabase.from("paddocks").insert(submitted as any);
@@ -349,7 +347,7 @@ export default function NewPaddockPage() {
         navigate("/setup/paddocks");
         return;
       }
-      if (wantContour && adminRef.current) {
+      if (wantContour && contourAccessRef.current) {
         navigate(`/setup/paddocks/${submittedId}/contour-rows`);
       } else {
         navigate("/setup/paddocks");
@@ -396,7 +394,7 @@ export default function NewPaddockPage() {
             <CardDescription>Give the block a name. Planting year is optional.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
-            {contourAdmin && (
+            {contourAllowed && (
               <fieldset className="sm:col-span-2 space-y-2 rounded-md border p-3" aria-label="Row layout">
                 <legend className="px-1 text-sm font-medium">Does this block use straight rows or contour rows?</legend>
                 <label className="flex items-start gap-2 text-sm">
@@ -405,7 +403,7 @@ export default function NewPaddockPage() {
                 </label>
                 <label className="flex items-start gap-2 text-sm">
                   <input type="radio" name="row-layout" aria-label="Contour rows" checked={openContourAfterSave} onChange={() => setContourChoiceScope(scopeKey)} />
-                  <span><b>Contour rows</b> <Badge variant="outline" className="ml-1">Beta · System Admin only</Badge>
+                  <span><b>Contour rows</b> <Badge variant="outline" className="ml-1">Draft mapping</Badge>
                     <span className="block text-muted-foreground">Rows follow the land. You'll trace, generate or import curved rows in the Contour Row Mapping editor.</span></span>
                 </label>
               </fieldset>
@@ -472,20 +470,20 @@ export default function NewPaddockPage() {
                   <Button type="button" size="sm" variant="outline" disabled className="w-full">Finish as contour block (no straight rows) — needs a VineTrack update, coming later</Button>
                 </div>
               )}
-              {contourAdmin && (
+              {contourAllowed && (
                 <div className="rounded-md border border-orange-500 p-3 text-sm space-y-2">
                   <label className="flex items-center gap-2 font-medium text-orange-600 dark:text-orange-400">
                     <input
                       type="checkbox"
-                      aria-label="Open Contour Row Mapping (Beta) after saving"
+                      aria-label="Open Contour Row Mapping after saving"
                       checked={openContourAfterSave}
                       onChange={(e) => setContourChoiceScope(e.target.checked ? scopeKey : null)}
                     />
-                    Contour Row Mapping (Beta)
+                    Contour Row Mapping
                   </label>
                   <p className="text-xs text-muted-foreground">
                     Open the contour mapper after saving. The block is saved first, then the mapper opens.
-                    Contour mappings stay separate draft mappings during this pilot — the row setup above
+                    Contour mappings stay separate draft mappings — the row setup above
                     remains this block's saved operational rows and is not changed.
                   </p>
                 </div>

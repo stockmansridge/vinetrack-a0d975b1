@@ -212,9 +212,7 @@ const App = () => (
                       path="/setup/paddocks/:id"
                       element={<PaddockDetailPage />}
                     />
-                    <Route element={<RequireSystemAdmin />}>
-                      <Route path="/setup/paddocks/:id/contour-rows" element={<ContourRowMappingPage />} />
-                    </Route>
+                    <Route path="/setup/paddocks/:id/contour-rows" element={<ContourRowMappingPage />} />
 
                     <Route
                       path="/setup/tractors"

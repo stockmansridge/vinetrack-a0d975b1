@@ -1,4 +1,4 @@
-// Contour Row Mapping (Beta) — System Admin pilot. Draft mapping only:
+// Contour Row Mapping — selected-vineyard member draft mapping only:
 // never writes paddocks.rows or any operational block input.
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -12,7 +12,7 @@ import { fetchOne } from "@/lib/queries";
 import { parsePolygonPoints, parseRows } from "@/lib/paddockGeometry";
 import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
-import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import { useContourMemberAccess } from '@/lib/contourRows/access';
 import { generateUuid } from "@/lib/uuid";
 import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -50,10 +50,10 @@ const SELECTED_COLOUR = "#FACC15";
 const EXISTING_COLOUR = "#E5E7EB";
 
 export default function ContourRowMappingPage() {
-  const { isAdmin, loading } = useIsSystemAdmin();
+  const { allowed, loading, userId, vineyardId } = useContourMemberAccess();
   if (loading) return <div className="p-8 text-muted-foreground">Loading…</div>;
-  if (!isAdmin) return <NotFound />;
-  return <ContourRowMappingInner />;
+  if (!allowed) return <NotFound />;
+  return <ContourRowMappingInner key={`${userId}:${vineyardId}`} />;
 }
 
 function ContourRowMappingInner() {
@@ -65,7 +65,7 @@ function ContourRowMappingInner() {
   const scopeReady = !!id && !!userId && !!selectedVineyardId;
   const paddockQ = useQuery({
     queryKey: ["contour-paddock", userId, selectedVineyardId, id], enabled: scopeReady, retry: false,
-    queryFn: () => fetchOne("paddocks", id!),
+    queryFn: () => { if (!id) throw new Error('Block required'); return fetchOne("paddocks", id); },
   });
   const paddock: any = paddockQ.data;
   const inScope = !!paddock && paddock.vineyard_id === selectedVineyardId && paddock.id === id && !paddock.deleted_at;
@@ -73,7 +73,7 @@ function ContourRowMappingInner() {
   const draftKey = ["contour-draft", userId, selectedVineyardId, id];
   const draftQ = useQuery({
     queryKey: draftKey, enabled: inScope, retry: false, refetchOnWindowFocus: false, staleTime: Infinity,
-    queryFn: () => loadDraft({ vineyardId: selectedVineyardId!, paddockId: id! }),
+    queryFn: () => { if (!selectedVineyardId || !id) throw new Error('Vineyard and block required'); return loadDraft({ vineyardId: selectedVineyardId, paddockId: id }); },
   });
   const [nonce, setNonce] = useState(0);
   // Account change: drop other users' unsaved working copies.
@@ -103,12 +103,13 @@ function ContourRowMappingInner() {
     );
   }
   const load = draftQ.data;
+  if (!userId || !selectedVineyardId || !id) return <NotFound />;
   return (
     <Editor
       key={`${userId}:${selectedVineyardId}:${id}:${nonce}`}
       paddock={paddock}
-      copyKey={workingCopyKey(userId!, selectedVineyardId!, id!)}
-      scope={{ vineyardId: selectedVineyardId!, paddockId: id!, canonicalRowIds }}
+      copyKey={workingCopyKey(userId, selectedVineyardId, id)}
+      scope={{ vineyardId: selectedVineyardId, paddockId: id, canonicalRowIds }}
       load={load}
       onSaved={(s) => qc.setQueryData(draftKey, { status: "loaded", draft: s } satisfies DraftLoad)}
       onReload={async () => { await draftQ.refetch(); setNonce((n) => n + 1); }}
@@ -534,7 +535,7 @@ export function Editor({ paddock: initialPaddock, scope: scopeProp, load, copyKe
       <RowMapWorkspace title="Contour mapping" revealKey={revealNonce ? String(revealNonce) : null} onFit={() => setFitNonce((n) => n + 1)} settings={<>
       <PanelTabs label="Contour mapping" value={panelTab} onValueChange={setPanelTab}
         header={<div className="space-y-2">
-                <h1 className="text-lg font-semibold tracking-tight text-orange-600 dark:text-orange-400">Contour Row Mapping (Beta)</h1>
+                <h1 className="text-lg font-semibold tracking-tight text-orange-600 dark:text-orange-400">Contour Row Mapping</h1>
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span>{paddock.name}</span>
           <Badge variant="outline">Draft mapping — not active</Badge>
