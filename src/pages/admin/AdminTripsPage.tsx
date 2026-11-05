@@ -559,9 +559,6 @@ export function TripDetail({
         )}
       </Section>
 
-      {base.is_active === true && !t.end_time && (base.tank_sessions ?? []).some((s) => s.startTime && !s.endTime) && base.active_tank_number == null && (
-        <div className="hidden" />
-      )}
       {endTank && (
         <EndLifecycleDialog kind="tank" session={endTank} trip={base} vineyardName={d?.vineyard?.name ?? row?.vineyard_name ?? null} onOpenChange={(o) => !o && setEndTank(null)} />
       )}
