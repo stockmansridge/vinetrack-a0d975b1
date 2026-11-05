@@ -1,5 +1,9 @@
 # Roadmap
 
+## Contour draft member access release
+- [ ] Remove contour-only System Admin gates for signed-in selected-active-vineyard members; preserve Owner/Manager block creation, draft-only operational separation and scope/CAS safety.
+- [ ] Run contour access, handoff, conflict and scope regressions and check automatic compilation; no backend changes or publication.
+
 ## Issue #54 fixed yield sampling sites
 - [x] Parse and display dated raw Panel Count observations, complete-coverage sums and explicit ratios; missing/skipped measurements remain unknown, no tonnes inferred. Panel history/detail is read-only and excluded from automatic latest-completed selection per block/vintage. 240 tests across 20 yield suites passed; automatic compilation build OK. No publication, backend changes or live writes; authenticated mobile-produced records remain unverified without shared-vineyard access.
 - [x] Correct nullable-text row/panel models, draft editors and validation; reproduced text loss before correction, then verified alphanumeric/blank writes, exact read-back, safe retry and revision copying. 337 tests across 25 sampling/yield/Permanent Items suites passed; automatic compilation build OK. Portal setup only, not mobile trip source selection; no publication or live writes.
