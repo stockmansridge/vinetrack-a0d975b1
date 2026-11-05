@@ -26,6 +26,6 @@ export default function PermanentItemsMapLayer({ map, visible, onSelect }: { map
     }
     if (annotations.length) map.addAnnotations(annotations);
     return () => { try { if (annotations.length) map.removeAnnotations(annotations); } catch { /* map destroyed */ } };
-  }, [map, visible, allowed, items, query.isError, onSelect]);
+  }, [map, visible, allowed, items, query.isError, onSelect, catalogue.types]);
   return null;
 }

@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import { createPermanentType, listPermanentTypes, permanentItemTypeLabel, permanentTypesKey, validatePermanentDraft, validatePermanentTypeInput } from '@/lib/permanentItems';
+import { createPermanentType, listPermanentTypes, PERMANENT_ITEM_TYPE_COLORS, PERMANENT_ITEM_TYPES, permanentItemTypeColor, permanentItemTypeLabel, permanentTypesKey, validatePermanentDraft, validatePermanentTypeInput } from '@/lib/permanentItems';
 import { readOnlyStore } from '@/lib/vineyardWriteAccess';
 const m = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn(), eq: vi.fn(), order: vi.fn() }));
 vi.mock('@/integrations/ios-supabase/client', () => ({ supabase: { rpc: m.rpc, from: m.from } }));
