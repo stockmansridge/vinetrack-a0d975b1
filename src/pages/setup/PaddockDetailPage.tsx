@@ -20,7 +20,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Save, AlertTriangle, Trash2, Pencil, Info, Archive, LayoutDashboard, Map as MapIcon, Table, Grape, Fence, Droplets, Shovel } from "lucide-react";
 
 import { fetchOne } from "@/lib/queries";
-import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import { useContourMemberAccess } from '@/lib/contourRows/access';
 import { loadDraft as loadContourDraft } from "@/lib/contourRows/draftApi";
 import { operationalLayoutFor, OPERATIONAL_LAYOUT_LABEL } from "@/lib/rowLayoutMode";
 import {
@@ -440,7 +440,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
           </p>
         </div>
         {!canEdit && <Badge variant="secondary">Read-only</Badge>}
-        <ContourRowMappingLink paddockId={paddock.id} />
+        <ContourRowMappingLink paddock={paddock} />
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
@@ -997,52 +997,53 @@ function CountLine({ label, n }: { label: string; n: number }) {
 }
 
 
-/** Operational layout (from block data only) + System Admin-only contour draft status. */
+/** Operational layout + account/vineyard-scoped draft status for members. */
 export function RowLayoutStatus({ paddock }: { paddock: any }) {
-  const { isAdmin } = useIsSystemAdmin();
+  const access = useContourMemberAccess(paddock.vineyard_id);
+  const allowed = access.allowed && !!paddock.id && !!paddock.vineyard_id && !paddock.deleted_at;
   const op = operationalLayoutFor(paddock);
   const q = useQuery({
-    queryKey: ["contour-draft-exists", paddock.vineyard_id, paddock.id], enabled: isAdmin && !!paddock.vineyard_id, retry: false,
+    queryKey: ["contour-draft-exists", access.userId, paddock.vineyard_id, paddock.id], enabled: allowed, retry: false,
     queryFn: () => loadContourDraft({ vineyardId: paddock.vineyard_id, paddockId: paddock.id }),
   });
   const d = q.data;
   return (
     <div className="rounded-md border p-2 text-xs space-y-1" data-testid="row-layout-status">
       <div>Operational row layout: <b>{OPERATIONAL_LAYOUT_LABEL[op.layout]}</b> · {op.rowCount} rows</div>
-      {isAdmin && (
+      {allowed && (
         <div className="flex flex-wrap items-center gap-2">
           <span>Contour draft: <b>{q.isLoading ? "Checking…" : q.error ? "Couldn't check" : d?.status === "loaded" ? `Saved · revision ${d.draft.revision} (not active)` : "None"}</b></span>
-          <Link className="underline text-orange-600 dark:text-orange-400" to={`/setup/paddocks/${paddock.id}/contour-rows`}>Open contour mapping (Beta)</Link>
+          <Link className="underline text-orange-600 dark:text-orange-400" to={`/setup/paddocks/${paddock.id}/contour-rows`}>Open contour draft mapping</Link>
         </div>
       )}
     </div>
   );
 }
 
-/** System Admin-only notice: straight saves don't touch a saved contour draft. Read-only. */
+/** Member-scoped read-only notice: straight saves don't touch contour drafts. */
 export function ContourDraftRegenNotice({ paddockId, vineyardId }: { paddockId: string; vineyardId: string }) {
-  const { isAdmin } = useIsSystemAdmin();
+  const { allowed, userId } = useContourMemberAccess(vineyardId);
   const q = useQuery({
-    queryKey: ["contour-draft-exists", vineyardId, paddockId], enabled: isAdmin && !!vineyardId, retry: false,
+    queryKey: ["contour-draft-exists", userId, vineyardId, paddockId], enabled: allowed && !!vineyardId && !!paddockId, retry: false,
     queryFn: () => loadContourDraft({ vineyardId, paddockId }),
   });
-  if (!isAdmin || q.data?.status !== "loaded") return null;
+  if (!allowed || !vineyardId || !paddockId || q.data?.status !== "loaded") return null;
   return (
     <p className="mt-2 rounded-md border border-orange-500/50 p-2 text-xs text-orange-700 dark:text-orange-400" data-testid="contour-regen-notice">
-      This block has a saved Contour Row Mapping (Beta) draft. Save boundary and Save rows regenerate the block's straight
+      This block has a saved Contour Row Mapping draft. Save boundary and Save rows regenerate the block's straight
       operational rows as usual — they don't change the contour draft, and the draft doesn't change these rows.
     </p>
   );
 }
 
-/** System Admin-only entry to the Contour Row Mapping (Beta) draft pilot. */
-function ContourRowMappingLink({ paddockId }: { paddockId: string }) {
-  const { isAdmin } = useIsSystemAdmin();
-  if (!isAdmin) return null;
+/** Entry for authenticated members of this block's selected vineyard. */
+function ContourRowMappingLink({ paddock }: { paddock: any }) {
+  const { allowed } = useContourMemberAccess(paddock.vineyard_id);
+  if (!allowed || !paddock.vineyard_id || !paddock.id || paddock.deleted_at) return null;
   return (
     <Button asChild size="sm" variant="outline" className="gap-1 border-orange-500 text-orange-600 dark:text-orange-400">
-      <Link to={`/setup/paddocks/${paddockId}/contour-rows`}>
-        <MapIcon className="h-4 w-4" /> Contour Row Mapping (Beta)
+      <Link to={`/setup/paddocks/${paddock.id}/contour-rows`}>
+        <MapIcon className="h-4 w-4" /> Contour Row Mapping · Draft
       </Link>
     </Button>
   );

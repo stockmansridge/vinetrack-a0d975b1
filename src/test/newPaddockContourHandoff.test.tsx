@@ -1,4 +1,4 @@
-// New Block wizard → System Admin Contour Row Mapping (Beta) handoff.
+// New Block wizard → Owner/Manager Contour Row Mapping handoff.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const h = vi.hoisted(() => ({
   admin: { isAdmin: true, loading: false },
+  role: "owner",
   vineyard: "v1",
   user: "u1",
   insert: vi.fn(),
@@ -14,7 +15,7 @@ const h = vi.hoisted(() => ({
 vi.mock("@/lib/systemAdmin", () => ({ useIsSystemAdmin: () => h.admin }));
 vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ user: { id: h.user } }) }));
 vi.mock("@/context/VineyardContext", () => ({
-  useVineyard: () => ({ selectedVineyardId: h.vineyard, currentRole: "owner", memberships: [] }),
+  useVineyard: () => ({ selectedVineyardId: h.vineyard, currentRole: h.role, memberships: [] }),
 }));
 vi.mock("@/integrations/ios-supabase/client", () => ({
   supabase: { from: () => ({ insert: h.insert }) },
@@ -85,6 +86,7 @@ function toRows() {
 
 beforeEach(() => {
   h.admin = { isAdmin: true, loading: false };
+  h.role = "owner";
   h.vineyard = "v1";
   h.user = "u1";
   h.insert.mockReset().mockResolvedValue({ error: null });
@@ -92,7 +94,7 @@ beforeEach(() => {
 });
 
 describe("New Block contour handoff", () => {
-  it("admin option persists through steps and labels the save action", () => {
+  it("member block-creator option persists through steps and labels the save action", () => {
     renderPage(); toRows();
     fireEvent.click(toggle()!);
     goStep(/^4\./); goStep(/^3\./);
@@ -102,14 +104,14 @@ describe("New Block contour handoff", () => {
     expect(h.insert).not.toHaveBeenCalled();
   });
 
-  it("hidden for non-admins and while admin status is loading", () => {
-    h.admin = { isAdmin: false, loading: false };
-    const { unmount } = renderPage(); toRows();
-    expect(toggle()).toBeNull();
-    unmount();
-    h.admin = { isAdmin: true, loading: true };
-    renderPage(); toRows();
-    expect(toggle()).toBeNull();
+  it.each(["owner", "manager"])("%s sees contour options without System Admin", (role) => {
+    h.role = role; h.admin = { isAdmin: false, loading: false };
+    renderPage(); toRows(); expect(toggle()).not.toBeNull();
+  });
+  it.each(["operator", "supervisor", "member"])("%s cannot create blocks or choose contour handoff", (role) => {
+    h.role = role; renderPage();
+    expect(screen.getByText("Only owners and managers can create blocks.")).toBeTruthy();
+    expect(toggle()).toBeNull(); expect(h.insert).not.toHaveBeenCalled();
   });
 
   it("routes to the inserted id's contour editor", async () => {
@@ -165,7 +167,7 @@ describe("New Block contour handoff", () => {
 });
 
 describe("New Block row layout question", () => {
-  it("admins see the question; Contour persists across steps and shows the disabled contour-first finish", () => {
+  it("block creators see the question; Contour persists across steps and shows the disabled contour-first finish", () => {
     renderPage();
     expect(screen.getByText("Does this block use straight rows or contour rows?")).toBeTruthy();
     expect((screen.getByLabelText("Straight rows") as HTMLInputElement).checked).toBe(true);
@@ -178,10 +180,9 @@ describe("New Block row layout question", () => {
     expect((screen.getByLabelText("Contour rows") as HTMLInputElement).checked).toBe(true);
   });
 
-  it("non-admins never see the question", () => {
-    h.admin = { isAdmin: false, loading: false };
-    renderPage();
-    expect(screen.queryByText("Does this block use straight rows or contour rows?")).toBeNull();
+  it("non-admin owners see the draft mapping choice", () => {
+    h.admin = { isAdmin: false, loading: false }; renderPage();
+    expect(screen.getByLabelText("Contour rows")).toBeTruthy();
   });
 
   it("contour choice never inserts empty or placeholder-free rows: insert carries generated straight rows", async () => {
