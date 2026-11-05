@@ -2,7 +2,12 @@ import { isGrowthStagePin } from "@/lib/pinsFilter";
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { Download, Plus, RefreshCw, TriangleAlert, X } from "lucide-react";
+import { Download, Plus, RefreshCw, TriangleAlert, X, MapPin } from "lucide-react";
+import { Checkbox } from '@/components/ui/checkbox';
+import { usePermanentItemsAccess } from '@/components/permanent-items/usePermanentItems';
+import PermanentItemEditor from '@/components/permanent-items/PermanentItemEditor';
+import PermanentItemsPanel from '@/components/permanent-items/PermanentItemsPanel';
+import type { PermanentItem } from '@/lib/permanentItems';
 import { Button } from "@/components/ui/button";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { useVineyard } from "@/context/VineyardContext";
@@ -77,6 +82,10 @@ function useMediaQuery(query: string): boolean {
 
 export default function PinsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
+  const permanentAccess = usePermanentItemsAccess();
+  const [permanentEditor, setPermanentEditor] = useState<{ item: PermanentItem | null } | null>(null);
+  const [showPermanentItems, setShowPermanentItems] = useState(false);
+  useEffect(() => { setPermanentEditor(null); setShowPermanentItems(false); }, [selectedVineyardId, permanentAccess.allowed, permanentAccess.userId]);
   const isMobile = useIsMobile();
   // Side-by-side table + detail panel only on very wide screens so the
   // detail panel never gets squeezed on laptop widths.
@@ -373,7 +382,7 @@ export default function PinsPage() {
           <h1 className="text-2xl font-semibold">Pins</h1>
           <p className="text-sm text-muted-foreground">Record location-based repairs, hazards, observations and other field items directly on the vineyard map. Use pins for anything that needs to be found, reviewed or actioned at a specific location.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
           <Button
             size="sm"
             onClick={() => setAddOpen(true)}
@@ -381,6 +390,7 @@ export default function PinsPage() {
           >
             <Plus className="mr-1.5 h-4 w-4" /> Manual Pin / Repair / Observation
           </Button>
+          {permanentAccess.allowed && <Button size="sm" variant="outline" onClick={() => setPermanentEditor({ item: null })}><MapPin className="mr-1.5 h-4 w-4" />Permanent Item</Button>}
 
           <TabsList>
             <TabsTrigger value="table">Table</TabsTrigger>
@@ -398,6 +408,7 @@ export default function PinsPage() {
         vineyardId={selectedVineyardId}
         paddocks={paddocks as any}
       />
+      {permanentAccess.allowed && permanentEditor && <PermanentItemEditor key={`${selectedVineyardId}:${permanentAccess.userId}:${permanentEditor.item?.id ?? 'new'}`} item={permanentEditor.item} onClose={() => setPermanentEditor(null)} />}
 
 
       <PortalNotice
@@ -810,8 +821,10 @@ export default function PinsPage() {
       </TabsContent>
 
       <TabsContent value="map" className="mt-0">
-        <PinsMapView statusFilter={statusFilter} hideGrowthStages={!showGrowthStages} />
+        {permanentAccess.allowed && <div className="mb-3 flex items-center gap-2"><Checkbox id="show-permanent-items" checked={showPermanentItems} onCheckedChange={checked => setShowPermanentItems(checked === true)} /><Label htmlFor="show-permanent-items">Show Permanent Items (separate layer)</Label></div>}
+        <PinsMapView statusFilter={statusFilter} hideGrowthStages={!showGrowthStages} showPermanentItems={permanentAccess.allowed && showPermanentItems} onPermanentItemSelect={item => setPermanentEditor({ item })} />
       </TabsContent>
+      {permanentAccess.allowed && <PermanentItemsPanel key={selectedVineyardId} onSelect={item => setPermanentEditor({ item })} />}
     </Tabs>
   );
 }

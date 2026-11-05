@@ -19,7 +19,7 @@ export default function PermanentItemEditor({ item, onClose }: { item: Permanent
   const readOnly = useSyncExternalStore(readOnlyStore.subscribe, readOnlyStore.get).readOnly;
   const accessRef = useRef(access); accessRef.current = access;
   const mounted = useRef(true);
-  useEffect(() => () => { mounted.current = false; }, []);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const qc = useQueryClient();
   const [name, setName] = useState(item?.name ?? '');
   const [type, setType] = useState(item?.item_type ?? 'other');
@@ -95,7 +95,7 @@ export default function PermanentItemEditor({ item, onClose }: { item: Permanent
         }} /></div>
       </fieldset>
       {photoUrl && <img src={photoUrl} alt={item?.name ?? 'Permanent Item photo'} className="max-h-48 max-w-full object-contain" />}
-      <div className="h-64 overflow-hidden rounded-md border" aria-label="Permanent Item location preview"><ManualIssuesAppleMap fitKey={scope.vineyardId ?? ''} polygons={(blocks.data ?? []).map(b => ({ id: b.id, pts: parsePolygonPoints(b.polygon_points) }))} markers={coordsValid ? [{ id: 'preview', lat: Number(lat), lng: Number(lng), colour: 'var(--unused)', title: name }] : []} onPick={locked ? undefined : pick} /></div>
+      <div className="h-64 overflow-hidden rounded-md border" aria-label="Permanent Item location preview"><ManualIssuesAppleMap fitKey={scope.vineyardId ?? ''} polygons={(blocks.data ?? []).map(b => ({ id: b.id, pts: parsePolygonPoints(b.polygon_points) }))} markers={coordsValid ? [{ id: 'preview', lat: Number(lat), lng: Number(lng), colour: 'hsl(var(--primary))', title: name }] : []} onPick={locked ? undefined : pick} /></div>
       {archiveConfirm && !hasIntent && <div role="alert" className="space-y-2 border-t pt-3"><p>Archive this Permanent Item? It will be removed from active markers, not deleted.</p><Button variant="destructive" disabled={readOnly || mutation.isPending} onClick={() => mutation.mutate('archive')}>Confirm archive</Button><Button variant="ghost" onClick={() => setArchiveConfirm(false)}>Cancel archive</Button></div>}
       <div className="flex flex-wrap gap-2">
         {!synced && !item?.archived_at && <Button disabled={readOnly || mutation.isPending || archiveConfirm && !hasIntent} onClick={() => mutation.mutate(item ? 'update' : 'create')}><MapPin className="mr-2 h-4 w-4" />{mutation.isPending ? 'Saving…' : hasIntent ? 'Retry same operation' : item ? 'Save changes / move marker' : 'Create item'}</Button>}
