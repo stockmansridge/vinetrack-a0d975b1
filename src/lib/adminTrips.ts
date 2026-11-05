@@ -321,7 +321,8 @@ export function tripActions(t: IssueInput & Pick<AdminTripRow, "is_paused">): Tr
   }
   const order: TripActionId[] = ["repair_tank", "repair_fill", "repair_completion", "close_spray", "review_spray", "compare_blocks"];
   const sorted = order.filter((a) => out.includes(a));
-  if (canForceStop(t as AdminTripRow)) sorted.push("force_stop");
+  // Force Stop is intentionally no longer offered: it bypassed Tank Session closure.
+  // Running Trips are ended via End Tank → End Trip (admin_end_trip_tank / admin_end_trip_after_tanks).
   return sorted;
 }
 
@@ -422,4 +423,82 @@ export function formatDurationMs(ms: number | null): string {
   const m = Math.floor(ms / 60000);
   const h = Math.floor(m / 60);
   return h ? `${h}h ${m % 60}m` : `${m}m`;
+}
+
+/* ---------------- End Tank / End Trip (tank-safe admin closure) ---------------- */
+
+export type EndTankState = "hidden" | "available" | "blocked_fill" | "blocked_no_id";
+
+type LifecycleInput = Pick<
+  AdminTripRow,
+  "end_time" | "is_active" | "active_tank_number" | "is_filling_tank" | "filling_tank_number" | "tank_sessions"
+>;
+
+export function hasOpenFill(t: Pick<AdminTripRow, "is_filling_tank" | "filling_tank_number" | "tank_sessions">): boolean {
+  if (t.is_filling_tank === true || t.filling_tank_number != null) return true;
+  return (t.tank_sessions ?? []).some((s) => hasValue(s.fillStartTime) && !hasValue(s.fillEndTime));
+}
+
+/** Inline End Tank is offered only for the genuinely open, active tank of a running Trip. */
+export function endTankState(t: LifecycleInput, s: TankSessionSummary): EndTankState {
+  if (t.is_active !== true || hasValue(t.end_time)) return "hidden";
+  if (!hasValue(s.startTime) || hasValue(s.endTime)) return "hidden";
+  if (t.active_tank_number == null || s.tankNumber == null || Number(s.tankNumber) !== Number(t.active_tank_number)) return "hidden";
+  if (hasOpenFill(t)) return "blocked_fill";
+  if (!hasValue(s.id)) return "blocked_no_id";
+  return "available";
+}
+
+/** End Trip is offered only once every started Tank Session is closed and no tank/fill is running. */
+export function canEndTripAfterTanks(t: LifecycleInput): boolean {
+  if (t.is_active !== true || hasValue(t.end_time)) return false;
+  if (t.active_tank_number != null) return false;
+  if (hasOpenFill(t)) return false;
+  return (t.tank_sessions ?? []).every((s) => !hasValue(s.startTime) || hasValue(s.endTime));
+}
+
+export interface AdminLifecycleResult {
+  status?: string;
+  trip_id?: string;
+  end_time?: string;
+  audit_event_id?: string;
+  [k: string]: unknown;
+}
+
+function useLifecycleMutation<A extends { tripId: string; reason: string; endTime: string }>(
+  call: (a: A, reason: string) => Promise<AdminLifecycleResult>,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: (args: A) => {
+      const reason = args.reason.trim();
+      if (!reason) return Promise.reject(new Error("A support reason is required"));
+      if (!args.endTime || isNaN(new Date(args.endTime).getTime())) return Promise.reject(new Error("An actual end date/time is required"));
+      return call(args, reason);
+    },
+    onSuccess: async (_d, args) => {
+      await Promise.all([
+        qc.refetchQueries({ queryKey: adminTripKey(args.tripId) }),
+        qc.invalidateQueries({ queryKey: ADMIN_TRIPS_KEY }),
+      ]);
+    },
+  });
+}
+
+export function useAdminEndTripTank() {
+  return useLifecycleMutation<{ tripId: string; tankSessionId: string; reason: string; endTime: string }>((a, reason) =>
+    rpc<AdminLifecycleResult>("admin_end_trip_tank", {
+      p_trip_id: a.tripId,
+      p_tank_session_id: a.tankSessionId,
+      p_reason: reason,
+      p_end_time: a.endTime,
+    }),
+  );
+}
+
+export function useAdminEndTripAfterTanks() {
+  return useLifecycleMutation<{ tripId: string; reason: string; endTime: string }>((a, reason) =>
+    rpc<AdminLifecycleResult>("admin_end_trip_after_tanks", { p_trip_id: a.tripId, p_reason: reason, p_end_time: a.endTime }),
+  );
 }

@@ -46,6 +46,13 @@ import {
   useAdminTripDetail,
   useAdminTripsList,
   useForceStopTrip,
+  endTankState,
+  canEndTripAfterTanks,
+  hasOpenFill,
+  useAdminEndTripTank,
+  useAdminEndTripAfterTanks,
+  type AdminLifecycleResult,
+  type TankSessionSummary,
   type AdminTripDetail,
   type AdminTripRow,
   type TripStatus,
@@ -257,7 +264,7 @@ export default function AdminTripsPage() {
       )}
 
       <Sheet open={!!selected} onOpenChange={(o) => { if (!o) { setSelected(null); setPendingAction(null); } }}>
-        <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
+        <SheetContent className="w-[96vw] sm:w-[min(92vw,900px)] sm:max-w-[900px] overflow-y-auto">
           {selected && <TripDetail key={`${selected}-${pendingAction ?? ""}`} tripId={selected} row={selectedRow} initialAction={pendingAction} />}
         </SheetContent>
       </Sheet>
@@ -289,9 +296,6 @@ export function RowActions({
           <DropdownMenuItem key={a} onSelect={() => onOpen(a)}>{TRIP_ACTION_LABEL[a]}</DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
-        {actions.includes("force_stop") && (
-          <DropdownMenuItem onSelect={() => onOpen("force_stop")} className="text-destructive">Force Stop Trip</DropdownMenuItem>
-        )}
         <DropdownMenuItem onSelect={onCopy}>Copy Diagnostic JSON</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -326,7 +330,8 @@ export function TripDetail({
   initialAction?: TripActionId | null;
 }) {
   const detail = useAdminTripDetail(tripId);
-  const [stopOpen, setStopOpen] = useState(initialAction === "force_stop");
+  const [endTank, setEndTank] = useState<TankSessionSummary | null>(null);
+  const [endTripOpen, setEndTripOpen] = useState(false);
   const [repair, setRepair] = useState<TripActionId | null>(
     initialAction && ["repair_tank", "repair_fill", "repair_completion", "close_spray"].includes(initialAction) ? initialAction : null,
   );
@@ -338,7 +343,7 @@ export function TripDetail({
     if (initialAction === "review_spray") sprayRef.current?.scrollIntoView?.({ block: "start" });
   }, [initialAction]);
   const runAction = (a: TripActionId) => {
-    if (a === "force_stop") setStopOpen(true);
+    if (a === "force_stop") return;
     else if (a === "compare_blocks") {
       setBlocksOpen(true);
       blocksRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
@@ -359,6 +364,7 @@ export function TripDetail({
           endTime: s.endTime ?? s.end_time,
           fillStartTime: s.fillStartTime ?? s.fill_start_time,
           fillEndTime: s.fillEndTime ?? s.fill_end_time,
+          id: s.id ?? s.sessionId ?? s.session_id ?? null,
         }))
       : row?.tank_sessions ?? [],
     spray_record_id: d?.spray_record?.id ?? row?.spray_record_id ?? null,
@@ -398,19 +404,6 @@ export function TripDetail({
           })}
         </Card>
       )}
-      {canForceStop(base) && (
-        <Card className="p-3 flex items-center justify-between gap-3 border-destructive/40">
-          <div className="text-sm">
-            <div className="font-medium">Support recovery</div>
-            <div className="text-muted-foreground">
-              Ends a Trip that is genuinely still running. Not a customer edit.
-              {issues.some((i) => i.code === "stale_active_tank" || i.code === "fill_state_mismatch") && " Prefer the repair above — it restores normal operation without ending the Trip."}
-            </div>
-          </div>
-          <Button variant="destructive" onClick={() => setStopOpen(true)}>Force Stop Trip</Button>
-        </Card>
-      )}
-
       <Section title="Overview">
         <KV k="Trip ID" v={<span className="font-mono">{tripId}</span>} />
         <KV k="Vineyard" v={d?.vineyard?.name ?? row?.vineyard_name} />
@@ -418,7 +411,15 @@ export function TripDetail({
         <KV k="Function / title" v={[t.trip_function, t.trip_title].filter(Boolean).join(" · ")} />
         <KV k="State" v={`active=${String(!!t.is_active)} · paused=${String(!!t.is_paused)}`} />
         <KV k="Start" v={fmt(t.start_time)} />
-        <KV k="End" v={fmt(t.end_time)} />
+        <div className="flex justify-between gap-4 items-center" data-testid="trip-end-row">
+          <span className="text-muted-foreground">End</span>
+          <span className="flex items-center gap-2 text-right">
+            {fmt(t.end_time)}
+            {canEndTripAfterTanks(base) && (
+              <Button size="sm" variant="destructive" onClick={() => setEndTripOpen(true)}>End Trip</Button>
+            )}
+          </span>
+        </div>
         <KV k="Last update" v={fmt(t.client_updated_at ?? t.updated_at)} />
         <KV k="Mode" v={t.tracking_pattern} />
       </Section>
@@ -479,14 +480,30 @@ export function TripDetail({
         {(base.tank_sessions ?? []).length === 0 ? (
           <div className="text-muted-foreground">None</div>
         ) : (
-          (base.tank_sessions ?? []).map((s, i) => (
-            <div key={i} className="flex justify-between">
-              <span>Tank {s.tankNumber ?? i + 1}</span>
-              <span className="text-muted-foreground">
-                {parseTripTime(s.startTime)?.toLocaleTimeString() ?? "—"} → {parseTripTime(s.endTime)?.toLocaleTimeString() ?? "open"}
-              </span>
-            </div>
-          ))
+          (base.tank_sessions ?? []).map((s, i) => {
+            const es = endTankState(base, s);
+            return (
+              <div key={i} className="space-y-1" data-testid={`tank-session-${i}`}>
+                <div className="flex justify-between items-center gap-2">
+                  <span>Tank {s.tankNumber ?? i + 1}</span>
+                  <span className="flex items-center gap-2 text-muted-foreground">
+                    {parseTripTime(s.startTime)?.toLocaleTimeString() ?? "—"} → {parseTripTime(s.endTime)?.toLocaleTimeString() ?? "open"}
+                    {es !== "hidden" && (
+                      <Button size="sm" variant="destructive" disabled={es !== "available"} onClick={() => setEndTank(s)}>
+                        End Tank
+                      </Button>
+                    )}
+                  </span>
+                </div>
+                {es === "blocked_fill" && (
+                  <div className="text-xs text-destructive">A fill timer is still running. The fill must be stopped on the device before this tank can be ended.</div>
+                )}
+                {es === "blocked_no_id" && (
+                  <div className="text-xs text-destructive">This Tank Session has no recorded id, so it cannot be ended safely from here.</div>
+                )}
+              </div>
+            );
+          })
         )}
         <div className="pt-2 font-medium">Tank actuals</div>
         <div className="text-muted-foreground">{d ? `${d.tank_actuals.length} recorded` : "—"}</div>
@@ -542,11 +559,113 @@ export function TripDetail({
         )}
       </Section>
 
-      <ForceStopDialog open={stopOpen} onOpenChange={setStopOpen} trip={base} detail={d ?? null} />
+      {base.is_active === true && !t.end_time && (base.tank_sessions ?? []).some((s) => s.startTime && !s.endTime) && base.active_tank_number == null && (
+        <div className="hidden" />
+      )}
+      {endTank && (
+        <EndLifecycleDialog kind="tank" session={endTank} trip={base} vineyardName={d?.vineyard?.name ?? row?.vineyard_name ?? null} onOpenChange={(o) => !o && setEndTank(null)} />
+      )}
+      {endTripOpen && (
+        <EndLifecycleDialog kind="trip" trip={base} vineyardName={d?.vineyard?.name ?? row?.vineyard_name ?? null} onOpenChange={(o) => !o && setEndTripOpen(false)} />
+      )}
       {repair && (
         <RepairDialog action={repair} trip={base} onOpenChange={(o) => !o && setRepair(null)} />
       )}
     </div>
+  );
+}
+
+export function EndLifecycleDialog({
+  kind,
+  trip,
+  session,
+  vineyardName,
+  onOpenChange,
+}: {
+  kind: "tank" | "trip";
+  trip: AdminTripRow;
+  session?: TankSessionSummary;
+  vineyardName: string | null;
+  onOpenChange: (o: boolean) => void;
+}) {
+  const endTankM = useAdminEndTripTank();
+  const endTripM = useAdminEndTripAfterTanks();
+  const pending = endTankM.isPending || endTripM.isPending;
+  const [reason, setReason] = useState("");
+  const [when, setWhen] = useState(() => toLocalInput(new Date()));
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<AdminLifecycleResult | null>(null);
+  const title = kind === "tank" ? `End Tank ${session?.tankNumber ?? "?"}` : "End Trip";
+
+  const submit = async () => {
+    setError(null);
+    if (!reason.trim()) return setError("A support reason is required.");
+    const d = when ? new Date(when) : null;
+    if (!d || isNaN(d.getTime())) return setError("Enter the actual end date and time.");
+    const endTime = d.toISOString();
+    try {
+      const r =
+        kind === "tank"
+          ? await endTankM.mutateAsync({ tripId: trip.id, tankSessionId: String(session?.id ?? ""), reason, endTime })
+          : await endTripM.mutateAsync({ tripId: trip.id, reason, endTime });
+      setResult(r ?? {});
+    } catch (e: any) {
+      setError(e?.message ? `${e.message}. Nothing was changed.` : "The request failed. Nothing was changed.");
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !pending && onOpenChange(o)}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>System Admin support action. Nothing changes until you confirm.</DialogDescription>
+        </DialogHeader>
+        {result ? (
+          <div className="text-sm space-y-1" data-testid="lifecycle-result">
+            <div><span className="text-muted-foreground">Server status:</span> {String(result.status ?? "—")}</div>
+            {result.end_time && <div><span className="text-muted-foreground">End time:</span> {fmt(result.end_time)}</div>}
+            {result.audit_event_id && <div><span className="text-muted-foreground">Audit event:</span> <span className="font-mono text-xs">{result.audit_event_id}</span></div>}
+            <div className="text-xs text-muted-foreground">Trip details have been reloaded from the server.</div>
+          </div>
+        ) : (
+          <div className="space-y-3 text-sm">
+            <div>
+              <div><span className="text-muted-foreground">Trip:</span> {trip.trip_title || trip.trip_function || "Trip"} <span className="font-mono text-xs">{trip.id}</span></div>
+              <div><span className="text-muted-foreground">Vineyard:</span> {vineyardName ?? trip.vineyard_name ?? "—"}</div>
+              {kind === "tank" && (
+                <div><span className="text-muted-foreground">Tank:</span> Tank {session?.tankNumber ?? "?"} · session <span className="font-mono text-xs">{String(session?.id ?? "—")}</span> · started {fmt(session?.startTime as any)}</div>
+              )}
+            </div>
+            <div>
+              <Label htmlFor="lc-time">Actual end date and time</Label>
+              <Input id="lc-time" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
+              <p className="text-xs text-muted-foreground mt-1">Enter the real time the {kind === "tank" ? "tank finished" : "Trip finished"}, confirmed with the customer. Do not guess.</p>
+            </div>
+            <div>
+              <Label htmlFor="lc-reason">Support reason (required)</Label>
+              <Textarea id="lc-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+            </div>
+            <div className="rounded border border-destructive/40 p-2 text-xs text-destructive">
+              This will change the customer's production record. The server re-checks every condition and may reject the request.
+            </div>
+            {error && <div className="text-destructive" role="alert">{error}</div>}
+          </div>
+        )}
+        <DialogFooter>
+          {result ? (
+            <Button onClick={() => onOpenChange(false)}>Close</Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancel</Button>
+              <Button variant="destructive" onClick={submit} disabled={pending}>
+                {pending ? "Working…" : `Confirm ${title}`}
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
