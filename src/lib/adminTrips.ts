@@ -510,7 +510,7 @@ export function useAdminEndTripAfterTanks() {
 
 export const MIN_SUPPORT_REASON_LENGTH = 8;
 
-export type LifecycleTimeCheck = { ok: true; iso: string; date: Date } | { ok: false; error: string | null };
+export type LifecycleTimeCheck = { ok: true; iso: string; date: Date; error?: undefined } | { ok: false; error: string | null };
 
 /** Validates an operator-entered datetime-local value ("YYYY-MM-DDTHH:mm[:ss]").
  *  Blank → not ok (no error text). Never substitutes "now" or any inferred time. */
