@@ -431,7 +431,7 @@ export type EndTankState = "hidden" | "available" | "blocked_fill" | "blocked_no
 
 type LifecycleInput = Pick<
   AdminTripRow,
-  "end_time" | "is_active" | "active_tank_number" | "is_filling_tank" | "filling_tank_number" | "tank_sessions"
+  "end_time" | "is_active" | "active_tank_number" | "is_filling_tank" | "filling_tank_number" | "tank_sessions" | "trip_function" | "total_tanks"
 >;
 
 export function hasOpenFill(t: Pick<AdminTripRow, "is_filling_tank" | "filling_tank_number" | "tank_sessions">): boolean {
@@ -449,15 +449,19 @@ export function endTankState(t: LifecycleInput, s: TankSessionSummary): EndTankS
   return "available";
 }
 
-/** End Trip is offered only once every started Tank Session is closed, at least one has actually ended, and no tank/fill is running.
- *  Mirrors admin_end_trip_after_tanks: it rejects Trips with zero or only-open Tank Sessions. */
+/** End Trip is offered once every started Tank Session is closed, no tank/fill is running, and — for spraying
+ *  Trips with planned tanks — at least one Tank Session has actually ended. Non-spraying Trips (scouting,
+ *  bunch count, etc.) legitimately have zero Tank Sessions and are endable while running.
+ *  Mirrors admin_end_trip_after_tanks. */
 export function canEndTripAfterTanks(t: LifecycleInput): boolean {
   if (t.is_active !== true || hasValue(t.end_time)) return false;
   if (t.active_tank_number != null) return false;
   if (hasOpenFill(t)) return false;
   const sessions = t.tank_sessions ?? [];
-  if (!sessions.some((s) => hasValue(s.endTime))) return false;
-  return sessions.every((s) => !hasValue(s.startTime) || hasValue(s.endTime));
+  if (!sessions.every((s) => !hasValue(s.startTime) || hasValue(s.endTime))) return false;
+  const sprayingWithPlannedTanks = t.trip_function === "spraying" && (t.total_tanks ?? 0) > 0;
+  if (sprayingWithPlannedTanks && !sessions.some((s) => hasValue(s.endTime))) return false;
+  return true;
 }
 
 export interface AdminLifecycleResult {
