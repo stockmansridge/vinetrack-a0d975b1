@@ -1564,7 +1564,7 @@ function YieldSheet({
         {row?.__kind === "session" && (
           <SessionDetail row={row as YieldEstimationSession} blocks={blocks} bunchWeightFor={bunchWeightFor} />
         )}
-        {row && canDelete && (!isPanel || !isHistorical) && (
+        {row && canDelete && (
           <div className="mt-6 border-t pt-4">
             <AlertDialog>
               <AlertDialogTrigger asChild>
