@@ -14,6 +14,7 @@ vi.mock('@/components/paddocks/ContourAppleMap', () => ({ default: () => <div>ma
 
 import ContourRowMappingPage from "@/pages/setup/ContourRowMappingPage";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { RoleRoute } from '@/components/PermissionGate';
 
 describe("Contour Row Mapping access", () => {
   beforeEach(() => {
@@ -24,7 +25,7 @@ describe("Contour Row Mapping access", () => {
   const mount = (qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })) => {
     const ui = () => <QueryClientProvider client={qc}>
         <MemoryRouter initialEntries={["/setup/paddocks/p1/contour-rows"]}>
-          <Routes><Route path="/setup/paddocks/:id/contour-rows" element={<ContourRowMappingPage />} /></Routes>
+          <Routes><Route element={<RoleRoute />}><Route path="/setup/paddocks/:id/contour-rows" element={<ContourRowMappingPage />} /></Route></Routes>
         </MemoryRouter>
       </QueryClientProvider>;
     const utils = render(ui());

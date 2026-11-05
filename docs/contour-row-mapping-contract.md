@@ -1,6 +1,6 @@
 # Contour Row Mapping (Beta) — Round 1 contract (revision 2)
 
-Status: Portal pilot, System Admin only. Drafts are **review-only** and never
+Status: Owner-approved Portal member access (5 November 2026), unpublished. All signed-in members of the selected active vineyard may map existing live blocks; backend authorisation removal of the old admin guard is managed separately by the owner and is not verified here. Drafts are **review-only** and never
 write `paddocks.rows`, `row_direction`, `row_width`, `row_count`,
 `polygon_points`, `row_length_override`, vine overrides or any operational input.
 Activation into real rows is a later phase.
@@ -41,10 +41,11 @@ Public API = `SECURITY INVOKER` wrappers over narrowly granted
 | `discard_contour_row_mapping_draft(p_paddock_id, p_draft_id, p_expected_revision)` | `{revision, already_discarded}` |
 
 ### Authorisation
-`auth.uid()` not null AND `is_system_admin()` AND `is_vineyard_member(vineyard)`
+Approved release contract: `auth.uid()` not null AND `is_vineyard_member(vineyard)`
 (owner-of-record OR member row) for the block's vineyard, derived server-side;
 block and vineyard must have `deleted_at IS NULL`. `get_my_vineyard_access` is
 not used (it is an operational entitlement decision).
+The original October migration additionally required `is_system_admin()`; the owner is updating that private authoriser separately. Portal no longer uses a System Admin gate. Shared account/vineyard/block-scoped queries are enabled only for a selected-vineyard membership; support-session role fallback is not membership evidence.
 
 ### Save rules
 - Non-null `p_expected_revision >= 0` and non-null `p_client_save_id` required.
@@ -146,7 +147,7 @@ explicit `canonicalRowId`, coordinated with iOS/Android and SQL row-identity gua
 
 ## Contour-first block setup (Portal, Phase 1)
 
-- New Block asks System Admins "Does this block use straight rows or contour rows?" (Straight is the default; non-admins see today's flow). The choice is kept across steps and reset on user/vineyard change.
+- New Block asks authorised Owner/Manager block creators "Does this block use straight rows or contour rows?" (Straight is the default). System Admin is not required. Other vineyard members may map existing blocks, not create blocks. The choice is kept across steps and reset on user/vineyard change.
 - Contour in Phase 1 still saves the generated straight rows (the block's active rows), then opens the draft editor. "Finish as contour block (no straight rows)" is shown disabled: no empty `rows`, no placeholder rows, no draft polylines in `paddocks.rows`.
 - Operational row layout is derived only from block data (`src/lib/rowLayoutMode.ts`, always "straight" today); a saved draft never changes it.
 - Phase 2 (Rork, blocked): a pending-configuration lifecycle (e.g. `paddocks.configuration_status` 'active' | 'pending_rows', excluded server-side from operational reads and mobile sync; sql/253 allowing empty rows only while pending) before a true contour-first save is enabled.

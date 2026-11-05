@@ -9,12 +9,23 @@ vi.mock('@/context/VineyardContext', () => ({ useVineyard: () => ({ selectedVine
 const loadDraft = vi.fn(async () => ({ status: "loaded", draft: { draftId: "d", revision: 1, payload: {} } }));
 vi.mock("@/lib/contourRows/draftApi", async (o) => ({ ...(await o<any>()), loadDraft: (...a: any[]) => (loadDraft as any)(...a) }));
 
-import { ContourDraftRegenNotice } from "@/pages/setup/PaddockDetailPage";
+import { ContourDraftRegenNotice, RowLayoutStatus } from "@/pages/setup/PaddockDetailPage";
 
 const mount = () => render(<QueryClientProvider client={new QueryClient()}><MemoryRouter><ContourDraftRegenNotice paddockId="p" vineyardId="v" /></MemoryRouter></QueryClientProvider>);
 beforeEach(() => { cleanup(); loadDraft.mockClear(); member = true; selected = 'v'; user = 'u1'; });
 
 describe("straight-row regeneration notice (F4)", () => {
+  it('shows a member draft link without changing operational straight-row status', async () => {
+    render(<QueryClientProvider client={new QueryClient()}><MemoryRouter><RowLayoutStatus paddock={{ id: 'p', vineyard_id: 'v', rows: [] }} /></MemoryRouter></QueryClientProvider>);
+    expect(await screen.findByText(/Saved · revision 1/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Open contour draft mapping/ }).getAttribute('href')).toBe('/setup/paddocks/p/contour-rows');
+    expect(screen.getByTestId('row-layout-status').textContent).toContain('Straight');
+  });
+  it('does not expose contour links or draft data for a deleted block', () => {
+    render(<QueryClientProvider client={new QueryClient()}><MemoryRouter><RowLayoutStatus paddock={{ id: 'p', vineyard_id: 'v', deleted_at: '2026-11-05', rows: [] }} /></MemoryRouter></QueryClientProvider>);
+    expect(screen.queryByRole('link', { name: /contour/ })).toBeNull();
+    expect(loadDraft).not.toHaveBeenCalled();
+  });
   it("shows for members when a saved draft exists", async () => {
     mount();
     expect(await screen.findByTestId("contour-regen-notice")).toBeTruthy();
