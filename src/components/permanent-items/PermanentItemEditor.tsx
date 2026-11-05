@@ -13,6 +13,8 @@ import { parsePolygonPoints } from '@/lib/paddockGeometry';
 import { guardMutation, readOnlyStore } from '@/lib/vineyardWriteAccess';
 import { createPermanentOperation, getPermanentPhoto, PERMANENT_ITEM_TYPES, permanentItemTypeLabel, permanentItemsKey, permanentPhotoExtension, PermanentSaveSession, validPermanentLocation, type PermanentItem, type PermanentItemDraft } from '@/lib/permanentItems';
 import { usePermanentItemsAccess } from './usePermanentItems';
+import PermanentItemHardDelete from './PermanentItemHardDelete';
+import { loadPermanentDeleteIntent, permanentDeleteKey } from '@/lib/permanentItemDeletion';
 
 export default function PermanentItemEditor({ item, onClose }: { item: PermanentItem | null; onClose: () => void }) {
   const access = usePermanentItemsAccess();
@@ -34,11 +36,25 @@ export default function PermanentItemEditor({ item, onClose }: { item: Permanent
   const [archiveConfirm, setArchiveConfirm] = useState(false);
   const session = useRef<PermanentSaveSession | null>(null);
   const [hasIntent, setHasIntent] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteIntent, setDeleteIntent] = useState(() => {
+    if (!item || !access.userId) return false;
+    try { return !!loadPermanentDeleteIntent(permanentDeleteKey(access.userId, item.vineyard_id, item.id), item); }
+    catch { return true; }
+  });
   const scope = useRef({ vineyardId: access.vineyardId, userId: access.userId }).current;
-  function assertAccess() {
+  function assertScope() {
     const current = accessRef.current;
     if (!mounted.current || !current.allowed || current.vineyardId !== scope.vineyardId || current.userId !== scope.userId || (item && item.vineyard_id !== scope.vineyardId)) throw new Error('Pilot access changed. Reopen this item in the selected vineyard.');
     guardMutation(undefined);
+  }
+  function assertAccess() {
+    assertScope();
+    if (!accessRef.current.canManage || deleteIntent || deleteBusy) throw new Error('Permanent Item management is unavailable.');
+  }
+  function assertDeleteAccess() {
+    assertScope();
+    if (!accessRef.current.canHardDelete || mutation.isPending || hasIntent) throw new Error('Hard Delete is unavailable while access is denied or a save is pending.');
   }
   const blocks = useQuery({ queryKey: ['paddocks', access.vineyardId], enabled: access.allowed, queryFn: () => {
     if (!access.vineyardId) throw new Error('Select a vineyard.');
@@ -67,13 +83,14 @@ export default function PermanentItemEditor({ item, onClose }: { item: Permanent
     setError(e instanceof Error ? e.message : 'Save failed. Retry the same operation or reload to review.');
     qc.invalidateQueries({ queryKey: permanentItemsKey(scope.vineyardId, scope.userId) });
   } });
-  if (!access.allowed || access.vineyardId !== scope.vineyardId || access.userId !== scope.userId || (item && item.vineyard_id !== access.vineyardId)) return null;
-  const locked = readOnly || mutation.isPending || hasIntent || !!synced || !!item?.archived_at;
+  if (!access.allowed || (!item && !access.canManage) || access.vineyardId !== scope.vineyardId || access.userId !== scope.userId || (item && item.vineyard_id !== access.vineyardId)) return null;
+  const busy = mutation.isPending || deleteBusy;
+  const locked = !access.canManage || readOnly || busy || hasIntent || deleteIntent || !!synced || !!item?.archived_at;
   const coordsValid = lat.trim() !== '' && lng.trim() !== '' && validPermanentLocation(Number(lat), Number(lng));
   const pick = (latitude: number, longitude: number) => { if (!locked) { setLat(String(latitude)); setLng(String(longitude)); } };
-  return <Dialog open onOpenChange={open => { if (!open && !mutation.isPending) onClose(); }}>
-    <DialogContent className="w-[96vw] max-w-3xl max-h-[90dvh] overflow-y-auto" onInteractOutside={e => mutation.isPending && e.preventDefault()} onEscapeKeyDown={e => mutation.isPending && e.preventDefault()}>
-      <DialogHeader><DialogTitle>{item ? 'Permanent Item details' : 'Create Permanent Item'}</DialogTitle><DialogDescription>System Admin pilot · permanent infrastructure, separate from field Pins.</DialogDescription></DialogHeader>
+  return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}>
+    <DialogContent className="w-[96vw] max-w-3xl max-h-[90dvh] overflow-y-auto" onInteractOutside={e => busy && e.preventDefault()} onEscapeKeyDown={e => busy && e.preventDefault()}>
+      <DialogHeader><DialogTitle>{item ? 'Permanent Item details' : 'Create Permanent Item'}</DialogTitle><DialogDescription>Permanent infrastructure pilot, separate from field Pins.</DialogDescription></DialogHeader>
       {item && <p className="text-xs text-muted-foreground break-all">Revision {item.server_revision} · Created {item.created_at} · Updated {item.updated_at}{item.archived_at ? ` · Archived ${item.archived_at}` : ''}</p>}
       {readOnly && <p role="status" className="text-destructive">This vineyard is read-only.</p>}
       {error && <p role="alert" className="text-destructive break-words">{error}</p>}
@@ -96,13 +113,14 @@ export default function PermanentItemEditor({ item, onClose }: { item: Permanent
       </fieldset>
       {photoUrl && <img src={photoUrl} alt={item?.name ?? 'Permanent Item photo'} className="max-h-48 max-w-full object-contain" />}
       <div className="h-64 overflow-hidden rounded-md border" aria-label="Permanent Item location preview"><ManualIssuesAppleMap fitKey={scope.vineyardId ?? ''} polygons={(blocks.data ?? []).map(b => ({ id: b.id, pts: parsePolygonPoints(b.polygon_points) }))} markers={coordsValid ? [{ id: 'preview', lat: Number(lat), lng: Number(lng), colour: 'hsl(var(--primary))', title: name }] : []} onPick={locked ? undefined : pick} /></div>
-      {archiveConfirm && !hasIntent && <div role="alert" className="space-y-2 border-t pt-3"><p>Archive this Permanent Item? It will be removed from active markers, not deleted.</p><Button variant="destructive" disabled={readOnly || mutation.isPending} onClick={() => mutation.mutate('archive')}>Confirm archive</Button><Button variant="ghost" onClick={() => setArchiveConfirm(false)}>Cancel archive</Button></div>}
+      {access.canManage && archiveConfirm && !hasIntent && <div role="alert" className="space-y-2 border-t pt-3"><p>Archive this Permanent Item? It will be removed from active markers, not deleted.</p><Button variant="destructive" disabled={locked} onClick={() => mutation.mutate('archive')}>Confirm archive</Button><Button variant="ghost" onClick={() => setArchiveConfirm(false)}>Cancel archive</Button></div>}
       <div className="flex flex-wrap gap-2">
-        {!synced && !item?.archived_at && <Button disabled={readOnly || mutation.isPending || archiveConfirm && !hasIntent} onClick={() => mutation.mutate(item ? 'update' : 'create')}><MapPin className="mr-2 h-4 w-4" />{mutation.isPending ? 'Saving…' : hasIntent ? 'Retry same operation' : item ? 'Save changes / move marker' : 'Create item'}</Button>}
-        {item && !item.archived_at && !hasIntent && <Button variant="outline" disabled={locked} onClick={() => setArchiveConfirm(true)}><Archive className="mr-2 h-4 w-4" />Archive</Button>}
-        <Button variant="ghost" disabled={mutation.isPending} onClick={onClose}>Close</Button>
+        {access.canManage && !synced && !item?.archived_at && <Button disabled={readOnly || busy || deleteIntent || archiveConfirm && !hasIntent} onClick={() => mutation.mutate(item ? 'update' : 'create')}><MapPin className="mr-2 h-4 w-4" />{mutation.isPending ? 'Saving…' : hasIntent ? 'Retry same operation' : item ? 'Save changes / move marker' : 'Create item'}</Button>}
+        {access.canManage && item && !item.archived_at && !hasIntent && <Button variant="outline" disabled={locked} onClick={() => setArchiveConfirm(true)}><Archive className="mr-2 h-4 w-4" />Archive</Button>}
+        <Button variant="ghost" disabled={busy} onClick={onClose}>Close</Button>
       </div>
       {hasIntent && !synced && <p className="text-sm text-muted-foreground">This save may already have reached the server. Retry keeps the same operation; closing does not undo it. Reload the list before creating another item.</p>}
+      {item && access.userId && access.canHardDelete && <PermanentItemHardDelete item={synced ?? item} userId={access.userId} disabled={readOnly || mutation.isPending || hasIntent || archiveConfirm} assertAccess={assertDeleteAccess} onClose={onClose} onBusyChange={setDeleteBusy} onIntentChange={setDeleteIntent} />}
     </DialogContent>
   </Dialog>;
 }

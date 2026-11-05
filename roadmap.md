@@ -1,6 +1,8 @@
 # Roadmap
 
 ## Issue #53 Permanent Items admin pilot
+- [x] Implement authoritative read/manage/delete permissions and durable confirmed hard-delete flow; 108 tests across nine Permanent Items/Pins suites passed; automatic typecheck/build OK. No publication or pilot flag change.
+- [ ] Signed-in hard-delete acceptance: shared-vineyard session unavailable (/pins redirects to /login); no real deletions or photo cleanup calls attempted. Verify deployed receipts and owner/manager flows with authorised test items before release.
 - [x] Add fail-closed System Admin + enabled flag + vineyard-member gate; separate list, editor and map layer.
 - [x] RPC-only revision-checked writes, same-operation retries, verified read-back and private optional photo flow.
 - [x] 122 tests across 10 pilot/Pins suites passed; automatic compilation build OK. Feature flag untouched; no publication, DDL or live data writes.
