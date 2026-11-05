@@ -4,6 +4,7 @@ import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 import { permanentItemsKey, type PermanentItem } from '@/lib/permanentItems';
 import { createPermanentDeleteIntent, invokePermanentHardDelete, loadPermanentDeleteIntent, permanentDeleteKey,
   permanentPermissionsKey, PermanentDeleteFailure, persistPermanentDeleteIntent, type PermanentDeleteIntent } from '@/lib/permanentItemDeletion';
@@ -37,6 +38,7 @@ export default function PermanentItemHardDelete({ item, userId, disabled, assert
   }, onSuccess: async () => {
     localStorage.removeItem(key);
     await qc.invalidateQueries({ queryKey: permanentItemsKey(item.vineyard_id, userId) });
+    toast.success('Permanent Item and all photos permanently deleted.');
     onClose();
   }, onError: e => {
     if (intent.current && e instanceof PermanentDeleteFailure) {
@@ -63,6 +65,9 @@ export default function PermanentItemHardDelete({ item, userId, disabled, assert
     {pending && <p role="status" className="text-sm">{cleanupPending ? 'Item deletion happened; ALL photo cleanup is not yet confirmed.' : 'A deletion request is pending. Retrying preserves the same operation and revision.'}</p>}
     {error && <p role="alert" className="text-destructive break-words">{error}</p>}
     {pending && !blocked && <Button variant="destructive" disabled={disabled || mutation.isPending} onClick={() => mutation.mutate()}>{mutation.isPending ? 'Deleting / cleaning photos…' : 'Retry same deletion operation'}</Button>}
-    {blocked && <Button variant="outline" disabled={mutation.isPending} onClick={() => { void qc.invalidateQueries({ queryKey: permanentItemsKey(item.vineyard_id, userId) }); onClose(); }}>Reload list and review</Button>}
+    {blocked && <Button variant="outline" disabled={mutation.isPending} onClick={() => {
+      if (blocked === 'stale') localStorage.removeItem(key); // Definitive 409: operator must reopen and explicitly confirm a fresh intent.
+      void qc.invalidateQueries({ queryKey: permanentItemsKey(item.vineyard_id, userId) }); onClose();
+    }}>Reload list and review</Button>}
   </section>;
 }

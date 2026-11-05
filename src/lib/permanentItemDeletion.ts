@@ -17,7 +17,7 @@ export interface PermanentDeletePayload {
   p_operation_id: string; p_item_id: string; p_vineyard_id: string; p_expected_revision: number;
 }
 export interface PermanentDeleteIntent {
-  payload: PermanentDeletePayload; cleanupPending: boolean; blocked: 'stale' | 'revoked' | null;
+  payload: PermanentDeletePayload; item: PermanentItem; cleanupPending: boolean; blocked: 'stale' | 'revoked' | null;
 }
 export const permanentDeleteKey = (userId: string, vineyardId: string, itemId: string) =>
   `vinetrack:permanent-delete:v1:${encodeURIComponent(userId)}:${encodeURIComponent(vineyardId)}:${encodeURIComponent(itemId)}`;
@@ -27,7 +27,7 @@ export function loadPermanentDeleteIntent(key: string, item: PermanentItem): Per
   let value: PermanentDeleteIntent;
   try { value = JSON.parse(raw); } catch { throw new Error('Pending deletion is unreadable. Do not start another deletion.'); }
   const p = value?.payload;
-  if (!p || p.p_item_id !== item.id || p.p_vineyard_id !== item.vineyard_id || typeof p.p_operation_id !== 'string' ||
+  if (!p || value.item?.id !== item.id || value.item?.vineyard_id !== item.vineyard_id || p.p_item_id !== item.id || p.p_vineyard_id !== item.vineyard_id || typeof p.p_operation_id !== 'string' ||
       !p.p_operation_id || !Number.isSafeInteger(p.p_expected_revision) || typeof value.cleanupPending !== 'boolean' ||
       ![null, 'stale', 'revoked'].includes(value.blocked)) throw new Error('Pending deletion scope could not be verified.');
   return value;
@@ -37,8 +37,22 @@ export function persistPermanentDeleteIntent(key: string, intent: PermanentDelet
 }
 export function createPermanentDeleteIntent(userId: string, vineyardId: string, item: PermanentItem): PermanentDeleteIntent {
   if (!userId || item.vineyard_id !== vineyardId || !Number.isSafeInteger(item.server_revision)) throw new Error('Reload this item in the selected vineyard.');
-  return { payload: { p_operation_id: crypto.randomUUID(), p_item_id: item.id, p_vineyard_id: vineyardId,
+  return { item, payload: { p_operation_id: crypto.randomUUID(), p_item_id: item.id, p_vineyard_id: vineyardId,
     p_expected_revision: item.server_revision }, cleanupPending: false, blocked: null };
+}
+export function pendingPermanentDeleteItems(userId: string, vineyardId: string): PermanentItem[] {
+  const prefix = permanentDeleteKey(userId, vineyardId, '');
+  const items: PermanentItem[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key?.startsWith(prefix)) continue;
+    try {
+      const raw = localStorage.getItem(key);
+      const item = raw ? JSON.parse(raw).item as PermanentItem : null;
+      if (item && key === permanentDeleteKey(userId, vineyardId, item.id) && loadPermanentDeleteIntent(key, item)) items.push(item);
+    } catch { /* Malformed intent is never sent to the server. */ }
+  }
+  return items;
 }
 export class PermanentDeleteFailure extends Error {
   constructor(message: string, readonly status: number | undefined, readonly cleanupPending: boolean) { super(message); }
