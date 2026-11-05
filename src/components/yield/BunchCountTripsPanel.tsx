@@ -219,7 +219,7 @@ export default function BunchCountTripsPanel({
                   </TableRow>
                   {open && (
                     <TableRow className="bg-muted/30 hover:bg-muted/30">
-                      <TableCell colSpan={11}>
+                      <TableCell colSpan={12}>
                         <div className="space-y-2 py-1 text-xs">
                           <div className="flex flex-wrap gap-x-6 gap-y-1">
                             <span>

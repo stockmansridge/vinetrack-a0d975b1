@@ -19,7 +19,7 @@ const num = (v: unknown, digits = 2): string =>
 
 const SOURCE_LABELS: Record<string, string> = {
   pruning_calculator: "Pruning Yield Calculator (shared with the mobile apps)",
-  bunch_count: "Bunch Count sampling",
+  bunch_count: "Bunches Per Vine Count",
 };
 
 const PRUNING_FIELDS: { key: string; label: string; digits?: number }[] = [
@@ -74,7 +74,7 @@ export default function BlockEstimateInfo({
           <div className="text-sm font-medium">{block.blockName ?? "Block"}</div>
           <div className="text-muted-foreground">
             {supersededByBunchCount
-              ? "Bunch Count Trip estimate (supersedes the base estimate)"
+              ? "Yield Estimate Trip estimate (supersedes the base estimate)"
               : SOURCE_LABELS[block.estimateSource ?? ""] ??
                 block.estimateSource ??
                 "No estimate source"}

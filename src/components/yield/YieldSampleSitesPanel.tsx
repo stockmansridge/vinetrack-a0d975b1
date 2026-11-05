@@ -41,13 +41,16 @@ export default function YieldSampleSitesPanel() {
 function VineyardSites({ vineyard, user, role, assertAccess }: { vineyard: string; user: string; role: string; assertAccess: () => void }) {
   const blocks = useQuery({ queryKey: ['yield-site-blocks', vineyard, user], queryFn: () => fetchYieldBlocks(vineyard) });
   const [blockId, setBlockId] = useState('');
+  const scope = useRef(blockId);
+  scope.current = blockId;
+  const assertBlock = () => { assertAccess(); if (scope.current !== blockId) throw new Error('Selected block changed. Reopen sampling sites.'); };
   const block = blocks.data?.find(b => b.id === blockId);
   return <section className="min-w-0 space-y-4">
     <div><h2 className="text-lg font-semibold">Fixed yield sampling sites</h2><p className="text-sm text-muted-foreground">Confirmed locations are kept by block and revision. Survey history and current yield estimates remain unchanged.</p></div>
     <div className="max-w-sm space-y-1"><Label>Block</Label><Select value={blockId} onValueChange={setBlockId}><SelectTrigger aria-label="Sampling block"><SelectValue placeholder="Select block" /></SelectTrigger><SelectContent>{blocks.data?.map(b => <SelectItem key={b.id} value={b.id}>{b.name ?? 'Unnamed block'}</SelectItem>)}</SelectContent></Select></div>
     {blocks.isLoading && <p role="status">Loading blocks…</p>}
     {blocks.error && <ErrorMessage error={blocks.error} />}
-    {block && !blocks.isError && <BlockSites key={block.id} block={block} vineyard={vineyard} user={user} role={role} assertAccess={assertAccess} />}
+    {block && !blocks.isError && <BlockSites key={block.id} block={block} vineyard={vineyard} user={user} role={role} assertAccess={assertBlock} />}
   </section>;
 }
 function ErrorMessage({ error }: { error: unknown }) { return <p role="alert" className="text-sm text-destructive">{error instanceof Error ? error.message : (error as { message?: string })?.message ?? 'The request failed. Reload before continuing.'}</p>; }

@@ -19,7 +19,7 @@ import {
   type SessionSummary,
   type SummariseOptions,
 } from "@/lib/yieldSessionSummary";
-import { yieldCountMethodLabel } from "@/lib/yieldSampleSites";
+import { yieldCountMethodLabel } from "@/lib/yieldCountMethod";
 
 export interface TripSessionInput {
   id: string;

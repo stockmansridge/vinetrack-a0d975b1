@@ -142,13 +142,3 @@ export async function confirmYieldSiteSet(set: YieldSiteSet, role: string | null
   if (!result || result.status !== 'confirmed' || result.version !== set.version || !result.confirmed_at || sets.filter(s => s.status === 'confirmed').length !== 1) throw new Error('Confirmation not verified. Reload; do not assume the block is confirmed.');
   return result;
 }
-
-/** Presentation only: unknown methods stay explicitly identified, never treated as legacy. */
-export function yieldCountMethodLabel(payload: unknown): string {
-  let doc = payload;
-  if (typeof doc === 'string') { try { doc = JSON.parse(doc); } catch { return 'Count method unavailable'; } }
-  const value = doc && typeof doc === 'object' ? (doc as Record<string, unknown>).countMethod : undefined;
-  if (value == null || value === '') return 'Bunches Per Vine Count (legacy)';
-  if (typeof value !== 'string') return 'Count method unavailable';
-  return value === 'bunchesPerVine' ? 'Bunches Per Vine Count' : `Count method: ${value}`;
-}
