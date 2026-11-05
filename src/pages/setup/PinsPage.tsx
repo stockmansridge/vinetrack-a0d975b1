@@ -2,7 +2,7 @@ import { isGrowthStagePin } from "@/lib/pinsFilter";
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { Download, Plus, RefreshCw, TriangleAlert, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Download, Plus, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { usePermanentItemsAccess } from '@/components/permanent-items/usePermanentItems';
 import PermanentItemEditor from '@/components/permanent-items/PermanentItemEditor';
 import PermanentItemsPanel from '@/components/permanent-items/PermanentItemsPanel';
@@ -668,6 +668,8 @@ export default function PinsPage() {
           );
         })}
       </div>
+        </>
+        )}
       </Card>
 
 
