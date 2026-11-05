@@ -5,15 +5,16 @@
 - [x] Add count-method reporting labels without changing estimate selection, and focused frontend regression tests; 151 tests across 12 sampling/yield/Permanent Items suites passed, automatic compilation OK.
 - [ ] Signed-in live acceptance requires access to the shared VineTrack session; preview /yield?tab=sampling-sites redirects to /login. Real save/confirm and responsive signed-in map rendering unverified. No production publication or customer-data edits.
 
-## Issue #53 Permanent Items admin pilot
+## Issue #53 Permanent Items general access
+- [x] Remove owner-approved temporary admin/flag gates, unused pilot helper and obsolete component wording; preserve server permissions, Demo Mode denial and all deletion safety.
+- [x] 208 tests across 14 member-role, scope, shared-type/colour, deletion and ordinary Pins suites passed; automatic compilation build OK. No publication, flag change or backend changes.
 - [x] Add shared vineyard custom types, scoped verified creation, palette, labels and focused permission/regression tests (Portal only; no publish or backend changes).
-- [ ] General release is blocked on explicit owner approval of testing: separately remove TEMPORARY System Admin testing gate only after approval, retaining server-managed Supervisor/Manager/Owner hard-delete roles; never infer deletion from System Admin alone. Create/edit/archive/type creation stay can_manage-gated during pilot; Demo Mode denied; pilot switch unchanged.
+- [x] Owner explicitly approved general member access on 5 November 2026; server-managed read/manage and Supervisor/Manager/Owner deletion remain authoritative. Backend GA migration is applied separately by the owner.
 - [x] Implement authoritative read/manage/delete permissions and durable confirmed hard-delete flow; 108 tests across nine Permanent Items/Pins suites passed; automatic typecheck/build OK. No publication or pilot flag change.
-- [ ] Signed-in hard-delete and custom-type acceptance: shared-vineyard session unavailable (preview session mint has no auth users); no real type saves, deletions or photo cleanup calls attempted. Verify deployed receipts and Supervisor/Manager/Owner functional roles beneath the temporary System Admin testing gate with authorised test items before release.
-- [x] Add fail-closed System Admin + enabled flag + vineyard-member gate; separate list, editor and map layer.
+- [ ] Signed-in GA acceptance waits on the owner's separate backend migration and authorised shared-vineyard session; no real type saves, deletions or photo cleanup calls attempted.
+- [x] Separate list, editor and map layer preserved; initial System Admin/flag testing barrier superseded by owner-approved server-only GA access above.
 - [x] RPC-only revision-checked writes, same-operation retries, verified read-back and private optional photo flow.
 - [x] 122 tests across 10 pilot/Pins suites passed; automatic compilation build OK. Feature flag untouched; no publication, DDL or live data writes.
-- [ ] Signed-in shared-backend acceptance requires authorised pilot access: actual RPC receipt envelope, RLS/storage upload and create/edit/archive/photo read-back remain unverified. Browser /pins redirects to /login with no pilot action or runtime errors. The disabled flag was not enabled.
 
 ## MAIT read-only controller acceptance
 - [x] Updated the seven-stage editable path and original-image import help with read-only preview, explicit manual confirmation and paused pilot guidance. 197 mocked tests pass across eight MAIT/import files; automatic compilation OK. Presentation-only; no live operations or publication.

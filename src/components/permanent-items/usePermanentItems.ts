@@ -3,17 +3,13 @@ import { useAuth } from '@/context/AuthContext';
 import { useDemoMode } from '@/context/DemoModeContext';
 import { useVineyard } from '@/context/VineyardContext';
 import { listPermanentItems, permanentItemsKey, listPermanentTypes, permanentTypesKey } from '@/lib/permanentItems';
-import { useIsSystemAdmin, useFeatureFlag } from '@/lib/systemAdmin';
 import { getPermanentPermissions, permanentPermissionsKey } from '@/lib/permanentItemDeletion';
 
 export function usePermanentItemsAccess() {
   const { user, loading: authLoading } = useAuth();
   const { selectedVineyardId, loading: membershipsLoading } = useVineyard();
   const { demoMode } = useDemoMode();
-  // Temporary testing barrier only: remove separately after explicit owner release approval.
-  const { isAdmin, loading: adminLoading } = useIsSystemAdmin();
-  const pilotEnabled = useFeatureFlag('permanent_items_admin_preview');
-  const ready = !demoMode && isAdmin && !adminLoading && pilotEnabled && !authLoading && !membershipsLoading && !!user?.id && !!selectedVineyardId;
+  const ready = !demoMode && !authLoading && !membershipsLoading && !!user?.id && !!selectedVineyardId;
   const permissions = useQuery({
     queryKey: permanentPermissionsKey(selectedVineyardId, user?.id),
     enabled: ready, retry: false, staleTime: 0,
@@ -30,7 +26,7 @@ export function usePermanentItemsAccess() {
 export function usePermanentItemTypes(access: ReturnType<typeof usePermanentItemsAccess>) {
   const query = useQuery({ queryKey: permanentTypesKey(access.vineyardId, access.userId), enabled: access.allowed,
     retry: false, staleTime: 0, queryFn: () => {
-      if (!access.allowed || !access.vineyardId) throw new Error('Permanent Items pilot access is unavailable.');
+      if (!access.allowed || !access.vineyardId) throw new Error('Permanent Items access is unavailable.');
       return listPermanentTypes(access.vineyardId);
     } });
   return { ...query, types: access.allowed && !query.isError ? query.data ?? [] : [] };
@@ -40,7 +36,7 @@ export function usePermanentItems() {
   const query = useQuery({
     queryKey: permanentItemsKey(access.vineyardId, access.userId), enabled: access.allowed,
     queryFn: () => {
-      if (!access.allowed || !access.vineyardId) throw new Error('Permanent Items pilot access is unavailable.');
+      if (!access.allowed || !access.vineyardId) throw new Error('Permanent Items access is unavailable.');
       return listPermanentItems(access.vineyardId);
     },
   });

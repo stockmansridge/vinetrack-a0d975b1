@@ -5,8 +5,7 @@ import PermanentItemEditor from '@/components/permanent-items/PermanentItemEdito
 import PermanentItemsPanel from '@/components/permanent-items/PermanentItemsPanel';
 import { usePermanentItemsAccess } from '@/components/permanent-items/usePermanentItems';
 import { readOnlyStore } from '@/lib/vineyardWriteAccess';
-const m = vi.hoisted(() => ({ admin:true, flag:true, member:true, vineyard:'v', user:'u', rpc:vi.fn(), from:vi.fn(), rows:[] as any[], types:[] as any[], manage:true, hardDelete:false, demo:false }));
-vi.mock('@/lib/systemAdmin', () => ({ useIsSystemAdmin: () => ({ isAdmin:m.admin,loading:false }), useFeatureFlag: (key:string) => key === 'permanent_items_admin_preview' && m.flag }));
+const m = vi.hoisted(() => ({ member:true, vineyard:'v', user:'u', rpc:vi.fn(), from:vi.fn(), rows:[] as any[], types:[] as any[], manage:true, hardDelete:false, demo:false }));
 vi.mock('@/context/DemoModeContext', () => ({ useDemoMode: () => ({ demoMode:m.demo, setDemoMode:()=>{}, toggleDemoMode:()=>{} }) }));
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user:{ id:m.user },loading:false }) }));
 vi.mock('@/context/VineyardContext', () => ({ useVineyard: () => ({ selectedVineyardId:m.vineyard,memberships:m.member ? [{ vineyard_id:m.vineyard }] : [],loading:false }) }));
@@ -14,16 +13,16 @@ vi.mock('@/integrations/ios-supabase/client', () => ({ supabase:{ rpc:m.rpc,from
 vi.mock('@/lib/queries', () => ({ fetchList:async () => [] }));
 vi.mock('@/components/manual-issues/ManualIssuesAppleMap', () => ({ default: ({ onPick }:any) => <button onClick={() => onPick?.(-34,138)}>Choose map location</button> }));
 function mount(ui:React.ReactNode) { const qc = new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}}); return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>); }
-beforeEach(() => { vi.clearAllMocks(); m.admin=true;m.flag=true;m.member=true;m.vineyard='v';m.user='u';m.rows=[];m.types=[];m.manage=true;m.hardDelete=false;m.demo=false;readOnlyStore.setReadOnly(false);
-  m.rpc.mockImplementation(async () => ({data:[{can_read:m.flag && m.member && (m.admin || m.hardDelete),can_manage:m.flag && m.member && m.admin && m.manage,can_hard_delete:m.flag && m.member && m.hardDelete}],error:null}));
+beforeEach(() => { vi.clearAllMocks(); m.member=true;m.vineyard='v';m.user='u';m.rows=[];m.types=[];m.manage=true;m.hardDelete=false;m.demo=false;readOnlyStore.setReadOnly(false);
+  m.rpc.mockImplementation(async () => ({data:[{can_read:m.member,can_manage:m.member && m.manage,can_hard_delete:m.member && m.hardDelete}],error:null}));
   m.from.mockImplementation((table:string)=>{const chain:any = {select:()=>chain,eq:()=>chain,order:async()=>({ data:table==='permanent_item_types'?m.types:m.rows,error:null }),single:async()=>({ data:m.rows[0],error:null })};return chain;});
 });
 afterEach(() => { cleanup();readOnlyStore.setReadOnly(false); });
-it.each(['flag off','normal user','nonmember'])('direct editor and list are gated for %s', async kind => {
-  if(kind==='flag off')m.flag=false;if(kind==='normal user')m.admin=false;if(kind==='nonmember')m.member=false;
+it('direct editor and list are denied for a nonmember by server permissions', async () => {
+  m.member=false;
   mount(<><PermanentItemEditor item={null} onClose={() => {}} /><PermanentItemsPanel onSelect={() => {}} /></>);
+  await waitFor(()=>expect(m.rpc).toHaveBeenCalledWith('permanent_item_permissions_v1',{p_vineyard_id:'v'}));
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();expect(m.from).not.toHaveBeenCalled();
-  if(kind==='nonmember')await waitFor(()=>expect(m.rpc).toHaveBeenCalledWith('permanent_item_permissions_v1',{p_vineyard_id:'v'}));else expect(m.rpc).not.toHaveBeenCalled();
 });
 it('fails closed in Demo Mode: no permissions RPC, no list query, no editor, no delete', async () => {
   m.demo=true;m.hardDelete=true;
@@ -42,15 +41,25 @@ it('recovers access when Demo Mode is turned off', async () => {
   m.demo=false;view.rerender(<QueryClientProvider client={new QueryClient()}><Gate/></QueryClientProvider>);
   expect(await screen.findByRole('button',{name:'Permanent Item'})).toBeInTheDocument();
 });
-it('honours disabled flag in the action gate', () => {
-  function Gate(){ const {allowed}=usePermanentItemsAccess();return allowed ? <button>Permanent Item</button> : null; }
-  m.flag=false;mount(<Gate/>);expect(screen.queryByRole('button')).not.toBeInTheDocument();
-});
-it('creates with explicit map coordinates and shows Synced only after read-back',async()=>{
+it.each(['owner','manager','supervisor','operator','member'])('%s creates with explicit map coordinates and shows Synced only after read-back',async()=>{
   m.rpc.mockImplementation(async (rpc:string,op:any)=> {if(rpc==='permanent_item_permissions_v1')return {data:[{can_read:true,can_manage:true,can_hard_delete:false}],error:null};m.rows=[{ id:op.p_item_id,vineyard_id:'v',name:op.p_name,item_type:op.p_item_type,latitude:op.p_latitude,longitude:op.p_longitude,notes:null,paddock_id:null,photo_path:null,server_revision:1,archived_at:null }];return {data:[{ item_id:op.p_item_id,server_revision:1,archived_at:null,operation_id:op.p_operation_id }],error:null};});
   mount(<PermanentItemEditor item={null} onClose={()=>{}}/>);
   fireEvent.change(await screen.findByLabelText('Name'),{target:{value:'Pump'}});fireEvent.click(screen.getByText('Choose map location'));fireEvent.click(screen.getByRole('button',{name:'Create item'}));
   expect(await screen.findByText('Synced · revision 1')).toBeInTheDocument();expect(m.rpc).toHaveBeenCalledWith('apply_permanent_item_v1',expect.objectContaining({p_expected_revision:null,p_latitude:-34,p_longitude:138}));
+});
+it.each(['owner','manager','supervisor','operator','member'])('%s saves edits and moves with the exact existing revision',async()=>{
+  const item:any={id:'i',vineyard_id:'v',name:'Pump',item_type:'pump',latitude:-34,longitude:138,notes:null,paddock_id:null,photo_path:null,server_revision:4,archived_at:null};
+  m.rpc.mockImplementation(async(rpc:string,op:any)=>{
+    if(rpc==='permanent_item_permissions_v1')return {data:[{can_read:true,can_manage:true,can_hard_delete:false}],error:null};
+    m.rows=[{...item,name:op.p_name,latitude:op.p_latitude,longitude:op.p_longitude,server_revision:5}];
+    return {data:[{item_id:'i',server_revision:5,archived_at:null,operation_id:op.p_operation_id}],error:null};
+  });
+  mount(<PermanentItemEditor item={item} onClose={()=>{}}/>);
+  fireEvent.change(await screen.findByLabelText('Name'),{target:{value:'Moved pump'}});
+  fireEvent.change(screen.getByLabelText('Latitude'),{target:{value:'-35'}});
+  fireEvent.click(screen.getByRole('button',{name:'Save changes / move marker'}));
+  await screen.findByText('Synced · revision 5');
+  expect(m.rpc).toHaveBeenCalledWith('apply_permanent_item_v1',expect.objectContaining({p_action:'update',p_item_id:'i',p_vineyard_id:'v',p_expected_revision:4,p_name:'Moved pump',p_latitude:-35}));
 });
 it('blocks read-only saves and stale vineyard access',async()=>{
   readOnlyStore.setReadOnly(true);mount(<PermanentItemEditor item={null} onClose={()=>{}}/>);expect(await screen.findByRole('button',{name:'Create item'})).toBeDisabled();fireEvent.click(screen.getByRole('button',{name:'Create item'}));expect(m.rpc).not.toHaveBeenCalledWith('apply_permanent_item_v1',expect.anything());
@@ -114,7 +123,12 @@ it('looks up a shared custom type for list and existing pin editor',async()=>{
   await waitFor(()=>expect(screen.getByLabelText('Permanent Items list')).toHaveTextContent('Weather station'));
   await waitFor(()=>expect(screen.getByLabelText('Type')).toHaveTextContent('Weather station'));expect(m.from).toHaveBeenCalledWith('permanent_item_types');expect(m.from).not.toHaveBeenCalledWith('pins');
 });
-it('retains temporary System Admin testing gate even when server returns Supervisor deletion permission',async()=>{
-  m.admin=false;m.hardDelete=true;
-  mount(<PermanentItemsPanel onSelect={()=>{}}/>);await new Promise(r=>setTimeout(r,25));expect(m.rpc).not.toHaveBeenCalled();expect(m.from).not.toHaveBeenCalled();
+it.each(['owner','manager','supervisor','operator','member'])('%s can open create and edit controls and shared type catalogue under server GA permissions',async()=>{
+  m.types=[custom];
+  mount(<PermanentItemEditor item={null} onClose={()=>{}}/>);
+  expect(await screen.findByRole('button',{name:'Create item'})).toBeEnabled();
+  expect(screen.getByLabelText('Name')).toBeEnabled();
+  expect(screen.getByLabelText('Photo (optional, one image, up to 5 MiB)')).toBeEnabled();
+  expect(screen.getByRole('button',{name:'Add Vineyard Type'})).toBeEnabled();
+  expect(m.from).toHaveBeenCalledWith('permanent_item_types');
 });

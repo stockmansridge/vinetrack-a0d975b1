@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { applyPermanentOperation, createPermanentOperation, PERMANENT_PHOTO_MAX_BYTES, permanentItemsAllowed, permanentPhotoExtension, permanentPhotoPathAllowed, PermanentSaveSession, validPermanentLocation, type PermanentItem, type PermanentItemDraft, type PermanentOperation } from '@/lib/permanentItems';
+import { applyPermanentOperation, createPermanentOperation, PERMANENT_PHOTO_MAX_BYTES, permanentPhotoExtension, permanentPhotoPathAllowed, PermanentSaveSession, validPermanentLocation, type PermanentItem, type PermanentItemDraft, type PermanentOperation } from '@/lib/permanentItems';
 import { readOnlyStore } from '@/lib/vineyardWriteAccess';
 const m = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn(), upload: vi.fn() }));
 vi.mock('@/integrations/ios-supabase/client', () => ({ supabase: { rpc: m.rpc, from: m.from, storage: { from: () => ({ upload: m.upload }) } } }));
@@ -9,11 +9,7 @@ const row = (id: string, revision = 1): PermanentItem => ({ ...draft, id, vineya
 const receipt = (op: PermanentOperation, revision: number, archived_at: string | null = null) => [{ item_id: op.p_item_id, server_revision: revision, archived_at, operation_id: op.p_operation_id }];
 function readBack(value: unknown) { const chain: any = { select: vi.fn(() => chain), eq: vi.fn(() => chain), single: vi.fn(async () => ({ data: value, error: null })) }; m.from.mockReturnValue(chain); return chain; }
 beforeEach(() => { vi.clearAllMocks(); readOnlyStore.setReadOnly(false); m.upload.mockResolvedValue({ error: null }); });
-describe('Permanent Items pilot contract', () => {
-  it.each([[false,true,true,'u','v'],[true,false,true,'u','v'],[true,true,false,'u','v'],[true,true,true,undefined,'v'],[true,true,true,'u',null]])('fails closed for missing gate %j', (admin, flag, member, user, vineyard) => {
-    expect(permanentItemsAllowed(admin as boolean, flag as boolean, user as string | undefined, vineyard as string | null, member as boolean)).toBe(false);
-  });
-  it('permits only all verified gates', () => expect(permanentItemsAllowed(true,true,'u','v',true)).toBe(true));
+describe('Permanent Items contract', () => {
   it.each([[NaN,1],[91,1],[1,181],[Infinity,1]])('rejects invalid coordinates %j', (lat,lng) => expect(validPermanentLocation(lat,lng)).toBe(false));
   it('requires name and uses exact CAS for update/archive and null for create', () => {
     expect(() => createPermanentOperation('v', { ...draft, name: '' },null,'create')).toThrow();

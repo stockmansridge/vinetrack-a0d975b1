@@ -52,9 +52,6 @@ export interface PermanentItem {
   archived_at: string | null; archived_by: string | null;
 }
 export type PermanentItemDraft = Pick<PermanentItem, 'name' | 'item_type' | 'latitude' | 'longitude' | 'paddock_id' | 'notes'>;
-export function permanentItemsAllowed(admin: boolean, enabled: boolean, userId: string | undefined, vineyardId: string | null, member: boolean) {
-  return admin === true && enabled === true && !!userId && !!vineyardId && member;
-}
 export function validPermanentLocation(lat: number, lng: number) {
   return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
 }
