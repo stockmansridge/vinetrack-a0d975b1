@@ -98,7 +98,7 @@ export default function BunchCountTripsPanel({
           </div>
         ) : (
           <p className="mt-1 text-sm text-muted-foreground">
-            No completed Bunch Count Trip for this vintage yet.
+            No completed Yield Estimate Trip for this vintage yet.
           </p>
         )}
       </Card>
@@ -136,7 +136,7 @@ export default function BunchCountTripsPanel({
             {!loading && !error && trips.length === 0 && (
               <TableRow>
                 <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
-                  No Bunch Count Trips recorded for this vintage.
+                  No Yield Estimate Trips recorded for this vintage.
                 </TableCell>
               </TableRow>
             )}
@@ -219,6 +219,7 @@ export default function BunchCountTripsPanel({
                     <TableRow className="bg-muted/30 hover:bg-muted/30">
                       <TableCell colSpan={11}>
                         <div className="space-y-2 py-1 text-xs">
+                          <div>{t.countMethodLabel ?? 'Bunches Per Vine Count (legacy)'}</div>
                           <div className="flex flex-wrap gap-x-6 gap-y-1">
                             <span>
                               <span className="text-muted-foreground">Sampling density: </span>
@@ -281,7 +282,7 @@ export default function BunchCountTripsPanel({
                                 </AlertDialogTrigger>
                                 <AlertDialogContent onClick={(e) => e.stopPropagation()}>
                                   <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete this Bunch Count Trip?</AlertDialogTitle>
+                                    <AlertDialogTitle>Delete this Yield Estimate Trip?</AlertDialogTitle>
                                     <AlertDialogDescription>
                                       {isCurrent
                                         ? "This trip currently supplies the estimate for one or more blocks. Deleting it will fall back to the previous completed trip."

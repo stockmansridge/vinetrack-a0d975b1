@@ -75,6 +75,7 @@ import {
 import PickingLogPanel from "@/components/yield/PickingLogPanel";
 import BunchCountSamplingCard from "@/components/yield/BunchCountSamplingCard";
 import BunchCountTripsPanel from "@/components/yield/BunchCountTripsPanel";
+import YieldSampleSitesPanel from "@/components/yield/YieldSampleSitesPanel";
 import {
   aggregatePickingRecordsByPlanting,
   detailedActualsFromPlantingTotals,
@@ -816,6 +817,7 @@ export default function YieldReportsPage() {
             Yield Estimate Trips ({sessions.length})
           </TabsTrigger>
           <TabsTrigger value="bunch-weights">Bunch Weights</TabsTrigger>
+          <TabsTrigger value="sampling-sites">Sampling Sites</TabsTrigger>
           <TabsTrigger
             value="historical"
           >
@@ -924,6 +926,10 @@ export default function YieldReportsPage() {
             loading={bunchWeightsQ.isLoading}
             error={bunchWeightsQ.error as Error | null}
           />
+        </TabsContent>
+
+        <TabsContent value="sampling-sites" className="mt-4">
+          <YieldSampleSitesPanel />
         </TabsContent>
 
         <TabsContent value="overview" className="mt-4 space-y-3">

@@ -19,6 +19,7 @@ import {
   type SessionSummary,
   type SummariseOptions,
 } from "@/lib/yieldSessionSummary";
+import { yieldCountMethodLabel } from "@/lib/yieldCountMethod";
 
 export interface TripSessionInput {
   id: string;
@@ -32,6 +33,8 @@ export interface TripSessionInput {
 
 export interface BunchCountTrip {
   id: string;
+  /** Reporting metadata only; never participates in estimate selection. */
+  countMethodLabel?: string;
   isCompleted: boolean;
   completedAt: string | null;
   createdAt: string | null;
@@ -77,6 +80,7 @@ export function buildBunchCountTrips(
     const sampledBlocks = summary.blocks.filter((b) => b.recordedCount > 0);
     return {
       id: s.id,
+      countMethodLabel: yieldCountMethodLabel(s.payload),
       isCompleted: !!s.is_completed,
       completedAt,
       createdAt,

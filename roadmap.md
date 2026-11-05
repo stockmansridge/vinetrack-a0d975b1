@@ -1,5 +1,10 @@
 # Roadmap
 
+## Issue #54 fixed yield sampling sites
+- [x] Implement separate vineyard/block site manager, draft placement/editing, revision copying and RPC confirmation with verified read-back.
+- [x] Add count-method reporting labels without changing estimate selection, and focused frontend regression tests; 151 tests across 12 sampling/yield/Permanent Items suites passed, automatic compilation OK.
+- [ ] Signed-in live acceptance requires access to the shared VineTrack session; preview /yield?tab=sampling-sites redirects to /login. Real save/confirm and responsive signed-in map rendering unverified. No production publication or customer-data edits.
+
 ## Issue #53 Permanent Items admin pilot
 - [x] Add shared vineyard custom types, scoped verified creation, palette, labels and focused permission/regression tests (Portal only; no publish or backend changes).
 - [ ] General release is blocked on explicit owner approval of testing: separately remove TEMPORARY System Admin testing gate only after approval, retaining server-managed Supervisor/Manager/Owner hard-delete roles; never infer deletion from System Admin alone. Create/edit/archive/type creation stay can_manage-gated during pilot; Demo Mode denied; pilot switch unchanged.
