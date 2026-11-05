@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { summariseYieldSession } from '@/lib/yieldSessionSummary';
 import { buildBunchCountTrips, currentEstimatesByBlock } from '@/lib/bunchCountTrips';
 import BunchCountTripsPanel from '@/components/yield/BunchCountTripsPanel';
+import { parsePanelMeasurement, summarisePanelMeasurements } from '@/lib/yieldPanelObservations';
 
 vi.mock('@/lib/useRegionFormatters', () => ({ useRegionFormatters: () => ({ areaUnitLabel: 'ha', date: (v: string) => v.slice(0, 10) }) }));
 const measurement = { totalBunches: 120, plantedPositions: 10, fruitingVines: 8, missingPositions: 1, nonproductiveVines: 1, panelLengthMetres: 20, calculationVersion: '1' };
@@ -16,6 +17,36 @@ const blocks = [{ id: 'a', name: 'North', areaHa: 2, vineCount: 1000 }, { id: 'b
 const options = { blocks, vintageOf: (date: string) => Number(date.slice(0, 4)) };
 
 describe('Panel Count raw history', () => {
+  it('sums raw counts and computes ratios from combined denominators, retaining provenance and text references', () => {
+    const summary = summariseYieldSession(payload);
+    const sites = summary.blocks.flatMap(b => b.sites);
+    const totals = summarisePanelMeasurements(sites.map(s => s.panelMeasurement));
+    expect(totals).toEqual({ recordedCount: 2, totalBunches: 200, plantedPositions: 20, fruitingVines: 16, missingPositions: 2, nonproductiveVines: 2, panelLengthMetres: 40, bunchesPerPlantedPosition: 10, bunchesPerFruitingVine: 12.5, fruitingRatio: 0.8, missingRatio: 0.1, nonproductiveRatio: 0.1 });
+    expect(sites[0]).toMatchObject({ rowNumber: '12A', panelNumber: 'E-4', recordedAt: '2026-11-05T07:00:00Z', recordedBy: 'worker-1' });
+    expect(sites[2]?.panelMeasurement).toBeNull();
+  });
+  it('keeps missing fields and invalid denominators unknown, but accepts genuine recorded zero', () => {
+    const incomplete = parsePanelMeasurement({ measurement: { totalBunches: 0, plantedPositions: 0, fruitingVines: null, missingPositions: -1, nonproductiveVines: '0' } });
+    const totals = summarisePanelMeasurements([incomplete, null]);
+    expect(totals.recordedCount).toBe(1);
+    expect(totals.totalBunches).toBe(0);
+    expect(totals.fruitingVines).toBeNull();
+    expect(totals.missingPositions).toBeNull();
+    expect(totals.nonproductiveVines).toBeNull();
+    expect(totals.bunchesPerPlantedPosition).toBeNull();
+    expect(summarisePanelMeasurements([null]).totalBunches).toBeNull();
+  });
+  it('never treats a missing total as recorded and accepts serialized panel history', () => {
+    const summary = summariseYieldSession(JSON.stringify({ countMethod: 'panel', sampleSites: [{ paddockId: 'a', panelCountEntry: { measurement: { plantedPositions: 10 } } }] }));
+    expect(summary.isPanelCount).toBe(true);
+    expect(summary.blocks[0]?.recordedCount).toBe(0);
+    expect(summary.totalEstTonnes).toBeNull();
+  });
+  it('keeps raw totals separate for different blocks', () => {
+    const summary = summariseYieldSession({ ...payload, sampleSites: [...payload.sampleSites, { paddockId: 'b', panelCountEntry: entry({ ...measurement, totalBunches: 50 }) }] });
+    expect(summarisePanelMeasurements(summary.blocks.find(b => b.blockId === 'a')?.sites.map(s => s.panelMeasurement) ?? []).totalBunches).toBe(200);
+    expect(summarisePanelMeasurements(summary.blocks.find(b => b.blockId === 'b')?.sites.map(s => s.panelMeasurement) ?? []).totalBunches).toBe(50);
+  });
   it('counts panel observations rather than legacy entries and never invents tonnes', () => {
     const summary = summariseYieldSession({ ...payload, blockBunchWeightsKg: { a: 0.2 } }, { blocks });
     const block = summary.blocks[0];

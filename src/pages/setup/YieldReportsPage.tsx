@@ -1529,6 +1529,7 @@ function YieldSheet({
   const rf = useRegionFormatters();
   const fmtDate = mkFmtDate(rf);
   const isHistorical = row?.__kind === "historical";
+  const isPanel = row?.__kind === 'session' && summariseYieldSession((row as YieldEstimationSession).payload).isPanelCount;
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl lg:w-[40vw] lg:max-w-[40vw] overflow-y-auto">
@@ -1544,7 +1545,7 @@ function YieldSheet({
         {row?.__kind === "session" && (
           <SessionDetail row={row as YieldEstimationSession} blocks={blocks} bunchWeightFor={bunchWeightFor} />
         )}
-        {row && canDelete && (
+        {row && canDelete && !isPanel && (
           <div className="mt-6 border-t pt-4">
             <AlertDialog>
               <AlertDialogTrigger asChild>
