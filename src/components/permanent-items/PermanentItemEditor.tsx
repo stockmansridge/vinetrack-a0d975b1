@@ -89,7 +89,7 @@ export default function PermanentItemEditor({ item, onClose }: { item: Permanent
           navigator.geolocation.getCurrentPosition(position => { try { assertAccess(); pick(position.coords.latitude, position.coords.longitude); } catch { /* scope changed */ } }, () => mounted.current && setError('Location unavailable. Enter coordinates or choose on the map.'));
         }}><LocateFixed className="mr-2 h-4 w-4" />Current GPS</Button></div>
         <div className="space-y-1 sm:col-span-2"><Label htmlFor="permanent-notes">Notes</Label><Textarea id="permanent-notes" value={notes} onChange={e => setNotes(e.target.value)} /></div>
-        <div className="space-y-1 sm:col-span-2"><Label htmlFor="permanent-photo">Photo (optional, one image, up to 10 MB)</Label><Input id="permanent-photo" type="file" accept="image/jpeg,image/png,image/webp" onChange={e => {
+        <div className="space-y-1 sm:col-span-2"><Label htmlFor="permanent-photo">Photo (optional, one image, up to 5 MiB)</Label><Input id="permanent-photo" type="file" accept="image/jpeg,image/png,image/webp" onChange={e => {
           const file = e.target.files?.[0] ?? null;
           try { if (file) permanentPhotoExtension(file); setPhoto(file); setError(null); } catch (failure) { e.target.value = ''; setPhoto(null); setError((failure as Error).message); }
         }} /></div>
