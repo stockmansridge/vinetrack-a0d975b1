@@ -600,7 +600,7 @@ export default function PinsPage() {
             aria-pressed={showPermanentItems}
             onClick={() => setShowPermanentItems((v) => !v)}
           >
-            Permanent Items: {showPermanentItems ? "On" : "Off"}
+            Permanent Pins: {showPermanentItems ? "On" : "Off"}
           </Button>
         )}
         <Button
