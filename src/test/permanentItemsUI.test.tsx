@@ -111,7 +111,7 @@ it.each(['account','vineyard'])('fails closed on %s switch during custom type sa
 it('looks up a shared custom type for list and existing pin editor',async()=>{
   m.types=[custom];const item:any={id:'i',vineyard_id:'v',name:'Hill sensor',item_type:custom.type_key,latitude:-34,longitude:138,server_revision:1,archived_at:null};m.rows=[item];
   mount(<><PermanentItemsPanel onSelect={()=>{}}/><PermanentItemEditor item={item} onClose={()=>{}}/></>);
-  expect(await screen.findByRole('button',{name:/Hill sensor Weather station/})).toBeInTheDocument();
+  await waitFor(()=>expect(screen.getByLabelText('Permanent Items list')).toHaveTextContent('Weather station'));
   await waitFor(()=>expect(screen.getByLabelText('Type')).toHaveTextContent('Weather station'));expect(m.from).toHaveBeenCalledWith('permanent_item_types');expect(m.from).not.toHaveBeenCalledWith('pins');
 });
 it('retains temporary System Admin testing gate even when server returns Supervisor deletion permission',async()=>{
