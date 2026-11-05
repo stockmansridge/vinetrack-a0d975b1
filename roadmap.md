@@ -6,16 +6,15 @@
 - [ ] Signed-in live acceptance requires access to the shared VineTrack session; preview /yield?tab=sampling-sites redirects to /login. Real save/confirm and responsive signed-in map rendering unverified. No production publication or customer-data edits.
 
 ## Issue #53 Permanent Items general access
-- [ ] Remove owner-approved temporary admin/flag gates and obsolete wording; preserve server permissions, Demo Mode denial and all deletion safety.
-- [ ] Run member-role, scope and ordinary Pins regressions; automatic compilation; no publication or backend changes.
+- [x] Remove owner-approved temporary admin/flag gates, unused pilot helper and obsolete component wording; preserve server permissions, Demo Mode denial and all deletion safety.
+- [x] 208 tests across 14 member-role, scope, shared-type/colour, deletion and ordinary Pins suites passed; automatic compilation build OK. No publication, flag change or backend changes.
 - [x] Add shared vineyard custom types, scoped verified creation, palette, labels and focused permission/regression tests (Portal only; no publish or backend changes).
 - [x] Owner explicitly approved general member access on 5 November 2026; server-managed read/manage and Supervisor/Manager/Owner deletion remain authoritative. Backend GA migration is applied separately by the owner.
 - [x] Implement authoritative read/manage/delete permissions and durable confirmed hard-delete flow; 108 tests across nine Permanent Items/Pins suites passed; automatic typecheck/build OK. No publication or pilot flag change.
 - [ ] Signed-in GA acceptance waits on the owner's separate backend migration and authorised shared-vineyard session; no real type saves, deletions or photo cleanup calls attempted.
-- [x] Add fail-closed System Admin + enabled flag + vineyard-member gate; separate list, editor and map layer.
+- [x] Separate list, editor and map layer preserved; initial System Admin/flag testing barrier superseded by owner-approved server-only GA access above.
 - [x] RPC-only revision-checked writes, same-operation retries, verified read-back and private optional photo flow.
 - [x] 122 tests across 10 pilot/Pins suites passed; automatic compilation build OK. Feature flag untouched; no publication, DDL or live data writes.
-- [ ] Signed-in shared-backend acceptance requires authorised pilot access: actual RPC receipt envelope, RLS/storage upload and create/edit/archive/photo read-back remain unverified. Browser /pins redirects to /login with no pilot action or runtime errors. The disabled flag was not enabled.
 
 ## MAIT read-only controller acceptance
 - [x] Updated the seven-stage editable path and original-image import help with read-only preview, explicit manual confirmation and paused pilot guidance. 197 mocked tests pass across eight MAIT/import files; automatic compilation OK. Presentation-only; no live operations or publication.
