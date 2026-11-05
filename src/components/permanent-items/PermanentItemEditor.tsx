@@ -93,7 +93,7 @@ export default function PermanentItemEditor({ item, onClose }: { item: Permanent
   const coordsValid = lat.trim() !== '' && lng.trim() !== '' && validPermanentLocation(Number(lat), Number(lng));
   const pick = (latitude: number, longitude: number) => { if (!locked) { setLat(String(latitude)); setLng(String(longitude)); } };
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}>
-    <DialogContent className="w-[96vw] max-w-3xl max-h-[90dvh] overflow-y-auto" onInteractOutside={e => busy && e.preventDefault()} onEscapeKeyDown={e => busy && e.preventDefault()}>
+    <DialogContent className="w-[96vw] max-w-5xl max-h-[92dvh] overflow-y-auto" onInteractOutside={e => busy && e.preventDefault()} onEscapeKeyDown={e => busy && e.preventDefault()}>
       <DialogHeader><DialogTitle>{item ? 'Permanent Item details' : 'Create Permanent Item'}</DialogTitle><DialogDescription>Permanent infrastructure pilot, separate from field Pins.</DialogDescription></DialogHeader>
       {item && <p className="text-xs text-muted-foreground break-all">Revision {item.server_revision} · Created {item.created_at} · Updated {item.updated_at}{item.archived_at ? ` · Archived ${item.archived_at}` : ''}</p>}
       {readOnly && <p role="status" className="text-destructive">This vineyard is read-only.</p>}
