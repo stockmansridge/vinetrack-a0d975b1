@@ -49,7 +49,7 @@ export default function PermanentItemEditor({ item, onClose }: { item: Permanent
   const scope = useRef({ vineyardId: access.vineyardId, userId: access.userId }).current;
   function assertScope() {
     const current = accessRef.current;
-    if (!mounted.current || !current.allowed || current.vineyardId !== scope.vineyardId || current.userId !== scope.userId || (item && item.vineyard_id !== scope.vineyardId)) throw new Error('Pilot access changed. Reopen this item in the selected vineyard.');
+    if (!mounted.current || !current.allowed || current.vineyardId !== scope.vineyardId || current.userId !== scope.userId || (item && item.vineyard_id !== scope.vineyardId)) throw new Error('Access changed. Reopen this item in the selected vineyard.');
     guardMutation(undefined);
   }
   function assertAccess() {
@@ -94,7 +94,7 @@ export default function PermanentItemEditor({ item, onClose }: { item: Permanent
   const pick = (latitude: number, longitude: number) => { if (!locked) { setLat(String(latitude)); setLng(String(longitude)); } };
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}>
     <DialogContent className="w-[96vw] max-w-5xl max-h-[92dvh] overflow-y-auto" onInteractOutside={e => busy && e.preventDefault()} onEscapeKeyDown={e => busy && e.preventDefault()}>
-      <DialogHeader><DialogTitle>{item ? 'Permanent Item details' : 'Create Permanent Item'}</DialogTitle><DialogDescription>Permanent infrastructure pilot, separate from field Pins.</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>{item ? 'Permanent Item details' : 'Create Permanent Item'}</DialogTitle><DialogDescription>Permanent infrastructure, separate from field Pins.</DialogDescription></DialogHeader>
       {item && <p className="text-xs text-muted-foreground break-all">Revision {item.server_revision} · Created {item.created_at} · Updated {item.updated_at}{item.archived_at ? ` · Archived ${item.archived_at}` : ''}</p>}
       {readOnly && <p role="status" className="text-destructive">This vineyard is read-only.</p>}
       {error && <p role="alert" className="text-destructive break-words">{error}</p>}
