@@ -9,7 +9,7 @@ const item = { id:'item', vineyard_id:'v', name:'Pump', server_revision:4, archi
 beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); readOnlyStore.setReadOnly(false); });
 it.each([
   ['owner',true,false,true], ['manager',true,false,true], ['admin-only',true,true,false],
-  ['operator',false,false,false], ['supervisor',false,false,false], ['wrong vineyard',false,false,false], ['flag off',false,false,false],
+  ['operator',false,false,false], ['supervisor',true,false,true], ['wrong vineyard',false,false,false], ['flag off',false,false,false],
 ])('uses authoritative %s permissions without client role assumptions',async(_role,read,manage,del)=>{
   m.rpc.mockResolvedValue({data:[{can_read:read,can_manage:manage,can_hard_delete:del}],error:null});
   expect(await getPermanentPermissions('v')).toEqual({can_read:read,can_manage:manage,can_hard_delete:del});

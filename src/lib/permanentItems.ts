@@ -2,8 +2,39 @@ import { supabase } from '@/integrations/ios-supabase/client';
 import { guardMutation } from '@/lib/vineyardWriteAccess';
 
 export const PERMANENT_ITEM_TYPES = ['irrigation_valve', 'flush_valve', 'pump', 'filter', 'tank', 'gate', 'water_point', 'other'] as const;
-export type PermanentItemType = typeof PERMANENT_ITEM_TYPES[number];
-export const permanentItemTypeLabel = (type: PermanentItemType) => type.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+export type PermanentItemType = typeof PERMANENT_ITEM_TYPES[number] | `custom_${string}`;
+export const CUSTOM_PERMANENT_TYPE_KEY = /^custom_[0-9a-f]{32}$/;
+export interface PermanentVineyardType { id: string; vineyard_id: string; type_key: PermanentItemType; name: string; color_hex: string }
+export const permanentItemTypeLabel = (type: PermanentItemType, types: PermanentVineyardType[] = []) =>
+  types.find(t => t.type_key === type)?.name ?? (CUSTOM_PERMANENT_TYPE_KEY.test(type) ? 'Custom vineyard type (unavailable)' : type.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase()));
+export const validPermanentItemType = (type: string): type is PermanentItemType =>
+  (PERMANENT_ITEM_TYPES as readonly string[]).includes(type) || CUSTOM_PERMANENT_TYPE_KEY.test(type);
+export const permanentTypesKey = (vineyardId: string | null, userId?: string) => ['permanent-item-types', vineyardId, userId] as const;
+export function validatePermanentTypeInput(name: string, color: string) {
+  if (!name.trim() || name.trim().length > 60) throw new Error('Enter a type name between 1 and 60 characters.');
+  if (!/^#[0-9a-fA-F]{6}$/.test(color)) throw new Error('Choose a colour in #RRGGBB format.');
+}
+function verifiedPermanentType(row: PermanentVineyardType, vineyardId: string) {
+  if (!row || typeof row.id !== 'string' || !row.id || row.vineyard_id !== vineyardId || !CUSTOM_PERMANENT_TYPE_KEY.test(row.type_key) || typeof row.name !== 'string' || row.name !== row.name.trim()) throw new Error('Vineyard type could not be verified. Refresh the type list.');
+  validatePermanentTypeInput(row.name, row.color_hex);
+  return row;
+}
+export async function listPermanentTypes(vineyardId: string): Promise<PermanentVineyardType[]> {
+  const { data, error } = await db.from('permanent_item_types').select('id,vineyard_id,type_key,name,color_hex').eq('vineyard_id', vineyardId).order('name');
+  if (error) throw error;
+  return (data ?? []).map((row: PermanentVineyardType) => verifiedPermanentType(row, vineyardId)).filter((row: PermanentVineyardType, index: number, rows: PermanentVineyardType[]) => rows.findIndex(t => t.type_key === row.type_key) === index);
+}
+export async function createPermanentType(vineyardId: string, name: string, color: string, assertAccess: () => void): Promise<PermanentVineyardType> {
+  validatePermanentTypeInput(name, color);
+  assertAccess(); guardMutation(undefined);
+  const { data, error } = await db.rpc('create_permanent_item_type_v1', { p_vineyard_id: vineyardId, p_name: name.trim(), p_color_hex: color });
+  if (error) throw error;
+  assertAccess();
+  if (!Array.isArray(data) || data.length !== 1) throw new Error('Vineyard type save could not be verified. Refresh before trying again.');
+  const row = verifiedPermanentType(data[0], vineyardId);
+  if (row.name !== name.trim() || row.color_hex.toLowerCase() !== color.toLowerCase()) throw new Error('Saved vineyard type differs. Refresh before trying again.');
+  return row;
+}
 export interface PermanentItem {
   id: string; vineyard_id: string; paddock_id: string | null; name: string; item_type: PermanentItemType;
   latitude: number; longitude: number; notes: string | null; photo_path: string | null;
@@ -19,7 +50,7 @@ export function validPermanentLocation(lat: number, lng: number) {
 }
 export function validatePermanentDraft(draft: PermanentItemDraft) {
   if (!draft.name.trim()) throw new Error('Enter an item name.');
-  if (!PERMANENT_ITEM_TYPES.includes(draft.item_type)) throw new Error('Choose a valid item type.');
+  if (!validPermanentItemType(draft.item_type)) throw new Error('Choose a valid item type.');
   if (!validPermanentLocation(draft.latitude, draft.longitude)) throw new Error('Enter valid latitude and longitude.');
 }
 export const permanentItemsKey = (vineyardId: string | null, userId?: string) => ['permanent-items', vineyardId, userId] as const;

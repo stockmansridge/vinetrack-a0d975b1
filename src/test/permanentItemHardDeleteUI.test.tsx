@@ -7,6 +7,7 @@ import { readOnlyStore } from '@/lib/vineyardWriteAccess';
 import { permanentDeleteKey, createPermanentDeleteIntent, persistPermanentDeleteIntent } from '@/lib/permanentItemDeletion';
 import type { PermanentItem } from '@/lib/permanentItems';
 const m=vi.hoisted(()=>({read:true,manage:false,del:true,user:'u',vineyard:'v',rpc:vi.fn(),invoke:vi.fn(),from:vi.fn()}));
+vi.mock('@/lib/systemAdmin',()=>({useIsSystemAdmin:()=>({isAdmin:true,loading:false}),useFeatureFlag:()=>true}));
 vi.mock('@/context/AuthContext',()=>({useAuth:()=>({user:{id:m.user},loading:false})}));
 vi.mock('@/context/VineyardContext',()=>({useVineyard:()=>({selectedVineyardId:m.vineyard,loading:false})}));
 vi.mock('@/integrations/ios-supabase/client',()=>({supabase:{rpc:m.rpc,from:m.from,functions:{invoke:m.invoke}}}));
@@ -23,15 +24,16 @@ afterEach(()=>cleanup());
 async function confirm(){fireEvent.click(await screen.findByRole('button',{name:'Hard Delete'}));fireEvent.click(screen.getByRole('button',{name:'Continue to final confirmation'}));
   const button=screen.getByRole('button',{name:'Permanently delete item and all photos'});expect(button).toBeDisabled();
   fireEvent.change(screen.getByLabelText('Type DELETE to permanently remove Pump'),{target:{value:'DELETE'}});fireEvent.click(button);}
-it.each(['owner','manager'])('%s can read/delete but cannot create/edit/archive',async()=>{
+it.each(['owner','manager','supervisor'])('%s functional permissions can read/delete but cannot create/edit/archive/types inside the System Admin testing gate',async()=>{
   mount();await screen.findByRole('button',{name:'Hard Delete'});expect(screen.getByLabelText('Name')).toBeDisabled();
   expect(screen.queryByRole('button',{name:'Archive'})).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:'Save changes / move marker'})).not.toBeInTheDocument();
   expect(m.rpc).not.toHaveBeenCalledWith('apply_permanent_item_v1',expect.anything());
+  expect(screen.queryByRole('button',{name:'Add Vineyard Type'})).not.toBeInTheDocument();
 });
 it('admin-only can manage but never sees hard deletion',async()=>{
   m.manage=true;m.del=false;mount();await screen.findByRole('button',{name:'Save changes / move marker'});expect(screen.queryByRole('button',{name:'Hard Delete'})).not.toBeInTheDocument();
 });
-it.each(['operator','supervisor'])('%s cannot enter details or list',async()=>{
+it.each(['operator','unrecognised role'])('%s cannot enter details or list',async()=>{
   m.read=false;m.del=false;mount();await waitFor(()=>expect(m.rpc).toHaveBeenCalled());expect(screen.queryByRole('dialog')).not.toBeInTheDocument();expect(m.from).not.toHaveBeenCalled();
 });
 it('owner-only cannot open the create editor',async()=>{mount(null);await waitFor(()=>expect(m.rpc).toHaveBeenCalled());expect(screen.queryByRole('dialog')).not.toBeInTheDocument();});
