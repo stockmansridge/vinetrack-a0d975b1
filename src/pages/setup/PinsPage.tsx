@@ -2,7 +2,7 @@ import { isGrowthStagePin } from "@/lib/pinsFilter";
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { Download, Plus, RefreshCw, TriangleAlert, X, MapPin } from "lucide-react";
+import { Download, Plus, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { Checkbox } from '@/components/ui/checkbox';
 import { usePermanentItemsAccess } from '@/components/permanent-items/usePermanentItems';
 import PermanentItemEditor from '@/components/permanent-items/PermanentItemEditor';
@@ -390,7 +390,7 @@ export default function PinsPage() {
           >
             <Plus className="mr-1.5 h-4 w-4" /> Manual Pin / Repair / Observation
           </Button>
-          {permanentAccess.canManage && <Button size="sm" variant="outline" onClick={() => setPermanentEditor({ item: null })}><MapPin className="mr-1.5 h-4 w-4" />Permanent Item</Button>}
+          {permanentAccess.canManage && <Button size="sm" variant="outline" onClick={() => setPermanentEditor({ item: null })}><Plus className="mr-1.5 h-4 w-4" />Add Permanent Pin</Button>}
 
           <TabsList>
             <TabsTrigger value="table">Table</TabsTrigger>
