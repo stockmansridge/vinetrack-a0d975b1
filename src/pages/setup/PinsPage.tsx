@@ -2,7 +2,7 @@ import { isGrowthStagePin } from "@/lib/pinsFilter";
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { Download, Plus, RefreshCw, TriangleAlert, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Download, Plus, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { usePermanentItemsAccess } from '@/components/permanent-items/usePermanentItems';
 import PermanentItemEditor from '@/components/permanent-items/PermanentItemEditor';
 import PermanentItemsPanel from '@/components/permanent-items/PermanentItemsPanel';
@@ -103,6 +103,8 @@ export default function PinsPage() {
   const [exporting, setExporting] = useState(false);
   const [showGrowthStages, setShowGrowthStages] = useState(false);
   const [locationFilter, setLocationFilter] = useState<"all" | "assigned" | "unassigned">("all");
+  const [noticeDismissed, setNoticeDismissed] = useState(false);
+  const [filtersMinimised, setFiltersMinimised] = useState(false);
   const catColours = usePinCategoryColours();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { resolve } = useTeamLookup(selectedVineyardId);
@@ -390,16 +392,13 @@ export default function PinsPage() {
             <Plus className="mr-1.5 h-4 w-4" /> Manual Pin / Repair / Observation
           </Button>
           {permanentAccess.canManage && <Button size="sm" variant="outline" onClick={() => setPermanentEditor({ item: null })}><Plus className="mr-1.5 h-4 w-4" />Add Permanent Pin</Button>}
-
-          <TabsList>
-            <TabsTrigger value="table">Table</TabsTrigger>
-            <TabsTrigger value="map">Map</TabsTrigger>
-          </TabsList>
         </div>
       </div>
-      <p className="-mt-2 text-xs text-muted-foreground">
-        Drop a pin, select a row or select a block.
-      </p>
+
+      <TabsList className="h-10 w-full sm:w-auto">
+        <TabsTrigger value="table" className="flex-1 px-6 text-sm sm:flex-none">Table</TabsTrigger>
+        <TabsTrigger value="map" className="flex-1 px-6 text-sm sm:flex-none">Map</TabsTrigger>
+      </TabsList>
 
       <UnifiedPinDialog
         open={addOpen}
@@ -410,11 +409,15 @@ export default function PinsPage() {
       {permanentAccess.allowed && permanentEditor && <PermanentItemEditor key={`${selectedVineyardId}:${permanentAccess.userId}:${permanentEditor.item?.id ?? 'new'}`} item={permanentEditor.item} onClose={() => setPermanentEditor(null)} />}
 
 
-      <PortalNotice
-        variant="info"
-        compact
-        description="Pins can only be closed while in the field or through the VineTrack mobile app. This ensures VineTrack records when the pin was completed and who completed it."
-      />
+      {!noticeDismissed && (
+        <PortalNotice
+          variant="info"
+          compact
+          dismissible
+          onDismiss={() => setNoticeDismissed(true)}
+          description="Pins can only be closed while in the field or through the VineTrack mobile app. This ensures VineTrack records when the pin was completed and who completed it."
+        />
+      )}
 
 
       {paddockFilter && (
@@ -468,13 +471,30 @@ export default function PinsPage() {
           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Filters
           </div>
-          {hasActiveFilters && (
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={clearAllFilters}>
-              <X className="mr-1 h-3 w-3" /> Clear filters
+          <div className="flex items-center gap-1">
+            {hasActiveFilters && !filtersMinimised && (
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={clearAllFilters}>
+                <X className="mr-1 h-3 w-3" /> Clear filters
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              aria-expanded={!filtersMinimised}
+              onClick={() => setFiltersMinimised((v) => !v)}
+            >
+              {filtersMinimised ? (
+                <><ChevronDown className="mr-1 h-3 w-3" /> Show filters</>
+              ) : (
+                <><ChevronUp className="mr-1 h-3 w-3" /> Minimise filters</>
+              )}
             </Button>
-          )}
+          </div>
         </div>
 
+        {!filtersMinimised && (
+        <>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <VintageSelect
             vintage={vintageFilter.vintage}
@@ -648,6 +668,8 @@ export default function PinsPage() {
           );
         })}
       </div>
+        </>
+        )}
       </Card>
 
 
