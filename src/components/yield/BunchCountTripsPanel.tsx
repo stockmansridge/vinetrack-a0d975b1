@@ -259,7 +259,6 @@ export default function BunchCountTripsPanel({
                               <span className="text-muted-foreground">No blocks sampled.</span>
                             )}
                           </div>
-                          <div className="flex flex-wrap items-center gap-2">
                           </>}
                           <div className="flex flex-wrap items-center gap-2">
                             <Button
