@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
+import { useDemoMode } from '@/context/DemoModeContext';
 import { useVineyard } from '@/context/VineyardContext';
 import { listPermanentItems, permanentItemsKey } from '@/lib/permanentItems';
 import { getPermanentPermissions, permanentPermissionsKey } from '@/lib/permanentItemDeletion';
@@ -7,7 +8,8 @@ import { getPermanentPermissions, permanentPermissionsKey } from '@/lib/permanen
 export function usePermanentItemsAccess() {
   const { user, loading: authLoading } = useAuth();
   const { selectedVineyardId, loading: membershipsLoading } = useVineyard();
-  const ready = !authLoading && !membershipsLoading && !!user?.id && !!selectedVineyardId;
+  const { demoMode } = useDemoMode();
+  const ready = !demoMode && !authLoading && !membershipsLoading && !!user?.id && !!selectedVineyardId;
   const permissions = useQuery({
     queryKey: permanentPermissionsKey(selectedVineyardId, user?.id),
     enabled: ready, retry: false, staleTime: 0,
