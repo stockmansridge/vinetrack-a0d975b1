@@ -19,11 +19,15 @@ import { parsePolygonPoints, LatLng } from "@/lib/paddockGeometry";
 import { validCoord } from "@/lib/pinsDiagnostics";
 import { useDiagnosticPanel } from "@/lib/systemAdmin";
 import { useIsMobile } from "@/hooks/use-mobile";
+import PermanentItemsMapLayer from '@/components/permanent-items/PermanentItemsMapLayer';
+import type { PermanentItem } from '@/lib/permanentItems';
 
 interface Props {
   onUnavailable: (reason: string) => void;
   statusFilter?: "active" | "completed" | "all";
   hideGrowthStages?: boolean;
+  showPermanentItems?: boolean;
+  onPermanentItemSelect?: (item: PermanentItem) => void;
 }
 
 interface Paddock {
@@ -44,7 +48,7 @@ function makePinElement(hex: string) {
   return el;
 }
 
-export default function ApplePinsMap({ onUnavailable, statusFilter = "active", hideGrowthStages = false }: Props) {
+export default function ApplePinsMap({ onUnavailable, statusFilter = "active", hideGrowthStages = false, showPermanentItems = false, onPermanentItemSelect }: Props) {
   const { selectedVineyardId } = useVineyard();
   const catColours = usePinCategoryColours();
   const isMobile = useIsMobile();
@@ -363,6 +367,7 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active", h
         paddockRowDirection={selected?.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
         placement={selected ? placements.get(selected.id) ?? null : null}
       />
+      {mapReady && showPermanentItems && <PermanentItemsMapLayer map={mapRef.current} visible={showPermanentItems} onSelect={onPermanentItemSelect} />}
     </div>
   );
 }

@@ -1,0 +1,2 @@
+- Permanent Items require System Admin, the existing enabled pilot flag and selected-vineyard membership at rendering and each write boundary; why: no support-session or hidden-button bypass.
+- Keep permanentItems.ts immutable save sessions and independent MapKit annotation ownership; why: CAS/idempotency retries and private photo sequencing must not change existing Pins or counts.
