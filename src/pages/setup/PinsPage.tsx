@@ -495,12 +495,12 @@ export default function PinsPage() {
 
         {!filtersMinimised && (
         <>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 [&_label]:mb-0 [&_label]:block">
           <VintageSelect
             vintage={vintageFilter.vintage}
             options={vintageFilter.options}
             onChange={vintageFilter.setVintage}
-            className="space-y-1"
+            className="min-w-0 space-y-1 [&_button[role=combobox]]:w-full"
           />
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Search title, notes, {rf.blockLabel.toLowerCase()}</Label>
