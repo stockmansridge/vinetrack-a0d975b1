@@ -505,3 +505,46 @@ export function useAdminEndTripAfterTanks() {
     rpc<AdminLifecycleResult>("admin_end_trip_after_tanks", { p_trip_id: a.tripId, p_reason: reason, p_end_time: a.endTime }),
   );
 }
+
+/* ---------------- Mandatory actual end time validation ---------------- */
+
+export const MIN_SUPPORT_REASON_LENGTH = 8;
+
+export type LifecycleTimeCheck = { ok: true; iso: string; date: Date } | { ok: false; error: string | null };
+
+/** Validates an operator-entered datetime-local value ("YYYY-MM-DDTHH:mm[:ss]").
+ *  Blank → not ok (no error text). Never substitutes "now" or any inferred time. */
+export function validateLifecycleEndTime(
+  kind: "tank" | "trip",
+  localValue: string,
+  ctx: { tripStart?: string | null; sessionStart?: string | null; sessions?: TankSessionSummary[] | null; now?: Date },
+): LifecycleTimeCheck {
+  const v = (localValue ?? "").trim();
+  if (!v) return { ok: false, error: null };
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(v)) return { ok: false, error: "Enter both a date and a time." };
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return { ok: false, error: "Enter a valid date and time." };
+  const now = ctx.now ?? new Date();
+  if (d.getTime() > now.getTime()) return { ok: false, error: "The end time cannot be in the future." };
+  const tripStart = parseTripTime(ctx.tripStart);
+  if (tripStart && d.getTime() < tripStart.getTime()) return { ok: false, error: `The end time is before the Trip started (${tripStart.toLocaleString()}).` };
+  if (kind === "tank") {
+    const ss = parseTripTime(ctx.sessionStart);
+    if (ss && d.getTime() < ss.getTime()) return { ok: false, error: `The end time is before this tank started (${ss.toLocaleString()}).` };
+  } else {
+    const ends = (ctx.sessions ?? []).map((s) => parseTripTime(s.endTime as any)).filter((x): x is Date => !!x && !isNaN(x.getTime()));
+    if (ends.length) {
+      const latest = new Date(Math.max(...ends.map((x) => x.getTime())));
+      if (d.getTime() < latest.getTime()) return { ok: false, error: `The end time is before the latest ended tank (${latest.toLocaleString()}).` };
+    }
+  }
+  return { ok: true, iso: d.toISOString(), date: d };
+}
+
+export function deviceTimezoneLabel(at: Date = new Date()): string {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Local time";
+  const off = -at.getTimezoneOffset();
+  const sign = off >= 0 ? "+" : "-";
+  const a = Math.abs(off);
+  return `${tz} (UTC${sign}${String(Math.floor(a / 60)).padStart(2, "0")}:${String(a % 60).padStart(2, "0")})`;
+}
