@@ -1,9 +1,9 @@
 # Roadmap
 
 ## Issue #54 fixed yield sampling sites
-- [ ] Implement separate vineyard/block site manager, draft placement/editing, revision copying and RPC confirmation with verified read-back.
-- [ ] Add count-method reporting labels without changing estimate selection, and focused frontend regression tests.
-- [ ] Signed-in live acceptance requires access to the shared VineTrack schema/session; managed-backend read returns no Issue #54 tables. No production publication.
+- [x] Implement separate vineyard/block site manager, draft placement/editing, revision copying and RPC confirmation with verified read-back.
+- [x] Add count-method reporting labels without changing estimate selection, and focused frontend regression tests; 151 tests across 12 sampling/yield/Permanent Items suites passed, automatic compilation OK.
+- [ ] Signed-in live acceptance requires access to the shared VineTrack session; preview /yield?tab=sampling-sites redirects to /login. Real save/confirm and responsive signed-in map rendering unverified. No production publication or customer-data edits.
 
 ## Issue #53 Permanent Items admin pilot
 - [x] Add shared vineyard custom types, scoped verified creation, palette, labels and focused permission/regression tests (Portal only; no publish or backend changes).

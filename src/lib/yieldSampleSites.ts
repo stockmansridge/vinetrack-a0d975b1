@@ -75,6 +75,8 @@ export function copyYieldSites(source: YieldSampleSite[], from: YieldSiteSet, to
 // Retain these generated IDs in the UI on uncertain saves. Never upsert a confirmed row.
 export async function createYieldDraft(draft: YieldSiteSet, sites: YieldSampleSite[], assertAccess: () => void): Promise<YieldSiteSet> {
   guardMutation(undefined); assertAccess();
+  checkSet(draft, draft.vineyard_id, draft.paddock_id);
+  if (draft.status !== 'draft' || sites.some(s => s.site_set_id !== draft.id || s.vineyard_id !== draft.vineyard_id || s.paddock_id !== draft.paddock_id || !s.site_id)) throw new Error('Invalid draft or copied site scope.');
   const existing = (await listYieldSiteSets(draft.vineyard_id, draft.paddock_id)).find(s => s.id === draft.id);
   assertAccess();
   if (!existing) {
@@ -138,7 +140,8 @@ export async function confirmYieldSiteSet(set: YieldSiteSet, role: string | null
   if (error) throw error;
   const sets = await listYieldSiteSets(set.vineyard_id, set.paddock_id);
   const result = sets.find(s => s.id === set.id);
+  const confirmedSites = result ? await listYieldSites(result) : [];
   assertAccess();
-  if (!result || result.status !== 'confirmed' || result.version !== set.version || !result.confirmed_at || sets.filter(s => s.status === 'confirmed').length !== 1) throw new Error('Confirmation not verified. Reload; do not assume the block is confirmed.');
+  if (!result || result.status !== 'confirmed' || result.version !== set.version || !result.confirmed_at || sets.filter(s => s.status === 'confirmed').length !== 1 || confirmedSites.length !== sites.length || sites.some(s => !confirmedSites.some(c => sameSite(c, s)))) throw new Error('Confirmation not verified. Reload; do not assume the block is confirmed.');
   return result;
 }
