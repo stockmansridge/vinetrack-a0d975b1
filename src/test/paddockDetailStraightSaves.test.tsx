@@ -12,7 +12,7 @@ let admin = true;
 vi.mock("@/lib/systemAdmin", () => ({ useIsSystemAdmin: () => ({ isAdmin: admin, loading: false }) }));
 vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn() }));
 vi.mock("@/lib/queries", async (o) => ({ ...(await o<any>()), fetchOne: async () => paddock }));
-vi.mock("@/context/VineyardContext", () => ({ useVineyard: () => ({ selectedVineyardId: V, currentRole: "owner" }) }));
+vi.mock("@/context/VineyardContext", () => ({ useVineyard: () => ({ selectedVineyardId: V, currentRole: "owner", memberships: [{ vineyard_id: V, role: "owner" }], loading: false }) }));
 vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 const updatePaddock = vi.fn(async () => {});
 vi.mock("@/lib/paddockMutations", async (o) => ({ ...(await o<any>()), updatePaddock: (...a: any[]) => (updatePaddock as any)(...a) }));
