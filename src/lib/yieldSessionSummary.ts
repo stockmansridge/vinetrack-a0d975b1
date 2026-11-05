@@ -23,6 +23,7 @@
 // is used for tonnes only when no master resolver is supplied.
 import { blockEstimate } from "@/lib/pruningYieldFormula";
 import type { ResolvedBlockBunchWeight, BlockBunchWeightSource } from "@/lib/yieldBunchWeights";
+import { parsePanelMeasurement, type PanelMeasurement } from '@/lib/yieldPanelObservations';
 
 export interface SessionBlockInfo {
   id: string;
@@ -33,7 +34,9 @@ export interface SessionBlockInfo {
 
 export interface SessionSite {
   paddockId: string | null;
-  rowNumber: number | null;
+  rowNumber: string | number | null;
+  panelNumber: string | number | null;
+  panelMeasurement: PanelMeasurement | null;
   siteIndex: number | null;
   bunchesPerVine: number | null;
   lat: number | null;
@@ -74,6 +77,7 @@ export interface SessionBlockSummary {
 }
 
 export interface SessionSummary {
+  isPanelCount: boolean;
   season: string | number | null;
   notes: string | null;
   samplesPerHectare: number | null;
@@ -113,9 +117,9 @@ function num(v: any): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function normaliseSite(raw: any, fallbackPaddockId?: string | null): SessionSite {
-  const entry = raw?.bunchCountEntry ?? raw?.bunch_count_entry ?? null;
-  const bunches =
+function normaliseSite(raw: any, fallbackPaddockId?: string | null, isPanel = false): SessionSite {
+  const entry = isPanel ? raw?.panelCountEntry : raw?.bunchCountEntry ?? raw?.bunch_count_entry ?? null;
+  const bunches = isPanel ? null :
     num(pickFirst(entry ?? {}, ["bunchesPerVine", "bunches_per_vine"])) ??
     num(pickFirst(raw, ["bunchesPerVine", "bunches_per_vine", "bunchCount", "bunch_count", "bunches", "count"]));
   return {
@@ -123,7 +127,9 @@ function normaliseSite(raw: any, fallbackPaddockId?: string | null): SessionSite
       (pickFirst(raw, ["paddockId", "paddock_id", "blockId", "block_id"]) as string | undefined) ??
       fallbackPaddockId ??
       null,
-    rowNumber: num(pickFirst(raw, ["rowNumber", "row_number", "row"])),
+    rowNumber: pickFirst(raw, ["rowNumber", "row_number", "row"]) ?? null,
+    panelNumber: pickFirst(raw, ['panelNumber', 'panel_number']) ?? null,
+    panelMeasurement: isPanel ? parsePanelMeasurement(entry) : null,
     siteIndex: num(pickFirst(raw, ["siteIndex", "site_index", "vineNumber", "vine_number", "vine"])),
     bunchesPerVine: bunches,
     lat: num(pickFirst(raw, ["latitude", "lat"])),
@@ -166,7 +172,10 @@ export interface SummariseOptions {
 }
 
 export function summariseYieldSession(payload: any, opts: SummariseOptions = {}): SessionSummary {
-  const p = payload && typeof payload === "object" ? payload : {};
+  let doc = payload;
+  if (typeof doc === 'string') { try { doc = JSON.parse(doc); } catch { doc = {}; } }
+  const p = doc && typeof doc === "object" ? doc : {};
+  const isPanelCount = p.countMethod === 'panel';
   const season = (pickFirst(p, ["season", "year", "vintage"]) as string | number | undefined) ?? null;
   const notes = (pickFirst(p, ["notes", "note", "comment"]) as string | undefined) ?? null;
   const samplesPerHectare = num(pickFirst(p, ["samplesPerHectare", "samples_per_hectare"]));
@@ -205,7 +214,7 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
   // Canonical flat shape.
   const flatSites = asArray(pickFirst(p, ["sampleSites", "sample_sites"]));
   for (const raw of flatSites) {
-    const site = normaliseSite(raw);
+    const site = normaliseSite(raw, null, isPanelCount);
     const key = site.paddockId ?? "unknown";
     const g = ensure(key, pickFirst(raw, ["paddockName", "paddock_name", "blockName", "block_name"]) ?? null);
     g.sites.push(site);
@@ -237,7 +246,7 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
       );
       if (legacyWeight != null && legacyWeight > 0 && blockId) weights[blockId.toLowerCase()] = legacyWeight;
       for (const raw of asArray(pickFirst(set, ["sites", "sampleSites", "sample_sites", "samples", "vines"]))) {
-        g.sites.push(normaliseSite(raw, blockId));
+        g.sites.push(normaliseSite(raw, blockId, isPanelCount));
       }
     }
   }
@@ -251,9 +260,9 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
   for (const [key, g] of grouped) {
     const info = blockInfo.get(key);
     const blockId = key === "unknown" ? null : key;
-    const recorded = g.sites.filter((s) => s.bunchesPerVine != null);
+    const recorded = g.sites.filter((s) => isPanelCount ? s.panelMeasurement?.totalBunches != null : s.bunchesPerVine != null);
     const totalBunchesSampled = recorded.reduce((a, s) => a + (s.bunchesPerVine ?? 0), 0);
-    const avgRaw = recorded.length ? totalBunchesSampled / recorded.length : null;
+    const avgRaw = !isPanelCount && recorded.length ? totalBunchesSampled / recorded.length : null;
     const avg = avgRaw == null ? null : Math.round(avgRaw * 100) / 100;
 
     const recordedWeight = (blockId ? weights[blockId] : undefined) ?? flatWeight ?? null;
@@ -339,6 +348,7 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
     .filter((v): v is number => v != null);
 
   return {
+    isPanelCount,
     season,
     notes,
     samplesPerHectare,
@@ -353,7 +363,7 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
 
     missing: {
       sampleSites: blocks.every((b) => b.siteCount === 0),
-      bunchWeight: blocks.some((b) => b.recordedCount > 0 && b.bunchWeightKg == null),
+      bunchWeight: !isPanelCount && blocks.some((b) => b.recordedCount > 0 && b.bunchWeightKg == null),
       area: blocks.some((b) => b.areaHa == null),
       vines: blocks.some((b) => !b.vineCountKnown),
     },

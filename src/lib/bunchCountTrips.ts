@@ -139,7 +139,7 @@ export function currentEstimatesByBlock(
   // Trips arrive newest-first, so the FIRST completed trip that sampled a
   // block wins and later (older) trips are skipped for that block.
   for (const trip of trips) {
-    if (!trip.isCompleted) continue;
+    if (!trip.isCompleted || trip.summary.isPanelCount) continue;
     if (vintage != null && trip.vintage !== vintage) continue;
     for (const b of trip.sampledBlocks) {
       if (!b.blockId) continue;
