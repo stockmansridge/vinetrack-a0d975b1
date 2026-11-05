@@ -190,7 +190,7 @@ describe("Yields page", () => {
     expect(await screen.findByRole("button", { name: /delete session/i })).toBeInTheDocument();
   });
 
-  it('opens raw Panel Count details read-only with no current-estimate badge or delete action', async () => {
+  it('opens raw Panel Count details read-only with no current-estimate badge (permanent delete still offered per Issue #54)', async () => {
     panelHistory = true;
     renderPage();
     await openEstimations();
@@ -201,7 +201,7 @@ describe("Yields page", () => {
     fireEvent.click(screen.getByRole('button', { name: 'View full trip details' }));
     await screen.findByRole('dialog');
     expect(screen.getByText(/Validated nominal block planting positions/)).toBeVisible();
-    expect(screen.queryByRole('button', { name: /delete session/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /delete session/i })).toBeTruthy();
   });
 
   it("hides the delete action from members who cannot manage yields", async () => {
