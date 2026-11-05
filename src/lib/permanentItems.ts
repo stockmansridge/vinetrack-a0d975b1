@@ -7,6 +7,16 @@ export const CUSTOM_PERMANENT_TYPE_KEY = /^custom_[0-9a-f]{32}$/;
 export interface PermanentVineyardType { id: string; vineyard_id: string; type_key: PermanentItemType; name: string; color_hex: string }
 export const permanentItemTypeLabel = (type: PermanentItemType, types: PermanentVineyardType[] = []) =>
   types.find(t => t.type_key === type)?.name ?? (CUSTOM_PERMANENT_TYPE_KEY.test(type) ? 'Custom vineyard type (unavailable)' : type.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase()));
+// Authoritative fixed category colours shared with iOS/Android; custom vineyard types override by exact type_key.
+export const PERMANENT_ITEM_TYPE_COLORS: Record<typeof PERMANENT_ITEM_TYPES[number], string> = {
+  irrigation_valve: '#2D6CDF', flush_valve: '#00A3B8', pump: '#7856D8', filter: '#0D9488',
+  tank: '#249B58', gate: '#D97706', water_point: '#1F82C7', other: '#A8559A',
+};
+export function permanentItemTypeColor(type: PermanentItemType, customTypes: PermanentVineyardType[] = []): string {
+  const custom = customTypes.find(t => t.type_key === type);
+  if (custom && /^#[0-9a-fA-F]{6}$/.test(custom.color_hex)) return custom.color_hex;
+  return PERMANENT_ITEM_TYPE_COLORS[type as typeof PERMANENT_ITEM_TYPES[number]] ?? PERMANENT_ITEM_TYPE_COLORS.other;
+}
 export const validPermanentItemType = (type: string): type is PermanentItemType =>
   (PERMANENT_ITEM_TYPES as readonly string[]).includes(type) || CUSTOM_PERMANENT_TYPE_KEY.test(type);
 export const permanentTypesKey = (vineyardId: string | null, userId?: string) => ['permanent-item-types', vineyardId, userId] as const;
