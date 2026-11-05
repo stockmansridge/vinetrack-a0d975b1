@@ -44,3 +44,13 @@ it('filters separate items by search without querying pins',async()=>{
   m.rows=[{id:'i',name:'Pump',item_type:'pump',latitude:-34,longitude:138,server_revision:1,archived_at:null}];mount(<PermanentItemsPanel onSelect={()=>{}}/>);
   await screen.findByRole('button',{name:/Pump/});fireEvent.change(screen.getByLabelText('Search Permanent Items'),{target:{value:'gate'}});expect(screen.queryByRole('button',{name:/Pump/})).not.toBeInTheDocument();expect(m.from).toHaveBeenCalledWith('permanent_items');expect(m.from).not.toHaveBeenCalledWith('pins');
 });
+it('revokes an open editor when vineyard changes and never submits old scope',()=>{
+  const editor=<PermanentItemEditor item={null} onClose={()=>{}}/>;const view=mount(editor);expect(screen.getByRole('dialog')).toBeInTheDocument();
+  m.vineyard='other';view.rerender(<QueryClientProvider client={new QueryClient()}>{editor}</QueryClientProvider>);expect(screen.queryByRole('dialog')).not.toBeInTheDocument();expect(m.rpc).not.toHaveBeenCalled();
+});
+it('requires archive confirmation and preserves current revision',async()=>{
+  const item:any={id:'i',vineyard_id:'v',name:'Pump',item_type:'pump',latitude:-34,longitude:138,notes:null,paddock_id:null,photo_path:null,server_revision:4,archived_at:null};
+  m.rpc.mockImplementation(async()=>{m.rows=[{...item,server_revision:5,archived_at:'now'}];return {data:m.rows[0],error:null};});
+  mount(<PermanentItemEditor item={item} onClose={()=>{}}/>);fireEvent.click(screen.getByRole('button',{name:'Archive'}));expect(m.rpc).not.toHaveBeenCalled();fireEvent.click(screen.getByRole('button',{name:'Confirm archive'}));
+  await screen.findByText('Synced · revision 5 · Archived');expect(m.rpc).toHaveBeenCalledWith('apply_permanent_item_v1',expect.objectContaining({p_action:'archive',p_item_id:'i',p_expected_revision:4}));
+});
