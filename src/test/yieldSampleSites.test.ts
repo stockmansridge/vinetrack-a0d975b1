@@ -42,7 +42,36 @@ describe('fixed yield sampling contract', () => {
   it('accepts inside and edge but rejects outside points', () => { expect(siteLocationError({ lat: 1, lng: 1 }, polygon, false)).toBeNull(); expect(siteLocationError({ lat: 0, lng: 1 }, polygon, false)).toBeNull(); expect(siteLocationError({ lat: 3, lng: 1 }, polygon, true)).toMatch(/outside/); });
   it('requires explicit block confirmation without geometry', () => { expect(siteLocationError({ lat: 1, lng: 1 }, [], false)).toMatch(/Explicitly/); expect(siteLocationError({ lat: 1, lng: 1 }, [], true)).toBeNull(); });
   it.each([NaN, Infinity, 91])('rejects invalid latitude %s', latitude => expect(() => validateYieldSite({ ...site, latitude }, polygon, true)).toThrow());
-  it('rejects nonpositive row/panel and blank names', () => { expect(() => validateYieldSite({ ...site, row_number: 0 }, polygon, true)).toThrow(); expect(() => validateYieldSite({ ...site, panel_number: 1.2 }, polygon, true)).toThrow(); expect(() => validateYieldSite({ ...site, name: '' }, polygon, true)).toThrow(); });
+  it('rejects non-text row/panel payloads and blank names', () => { expect(() => validateYieldSite({ ...site, row_number: 0 as unknown as string }, polygon, true)).toThrow(/text/); expect(() => validateYieldSite({ ...site, panel_number: 1.2 as unknown as string }, polygon, true)).toThrow(/text/); expect(() => validateYieldSite({ ...site, name: '' }, polygon, true)).toThrow(); });
+  it.each([{ row_number: '12A', panel_number: 'E-4' }, { row_number: '0012', panel_number: '04' }, { row_number: null, panel_number: null }])('accepts nullable text references %j', references => {
+    expect(() => validateYieldSite({ ...site, ...references }, polygon, false)).not.toThrow();
+  });
+  it('inserts and edits text references with exact verified readback and safe retry', async () => {
+    const textSite = { ...site, row_number: '12A', panel_number: 'E-4' };
+    expect(await saveYieldSite(draft, textSite, true, polygon, false, () => {})).toEqual(textSite);
+    await saveYieldSite(draft, textSite, true, polygon, false, () => {});
+    expect(db.sites).toHaveLength(1);
+    expect(db.calls.find(c => c.action === 'insert').values).toMatchObject({ row_number: '12A', panel_number: 'E-4' });
+    await saveYieldSite(draft, { ...textSite, row_number: '0012', panel_number: null }, false, polygon, false, () => {});
+    expect(db.calls.find(c => c.action === 'update').values).toMatchObject({ row_number: '0012', panel_number: null });
+  });
+  it('retains text references and physical identity when copying a confirmed revision', async () => {
+    const from = { ...draft, id: 'old', version: 1, status: 'confirmed' as const };
+    const original = { ...site, site_set_id: 'old', row_number: '12A', panel_number: 'E-4' };
+    const [copied] = copyYieldSites([original], from, draft);
+    expect(copied).toMatchObject({ site_id: 'physical', row_number: '12A', panel_number: 'E-4' });
+    await createYieldDraft(draft, [copied], () => {});
+    expect(db.sites[0]).toEqual(copied); expect(original.site_set_id).toBe('old');
+  });
+  it('rejects numeric copied references before any draft writes', async () => {
+    await expect(createYieldDraft(draft, [{ ...site, row_number: 12 as unknown as string }], () => {})).rejects.toThrow(/text/);
+    expect(db.calls).toHaveLength(0);
+  });
+  it('confirms text references without altering them', async () => {
+    db.sites = [{ ...site, row_number: '12A', panel_number: 'E-4' }];
+    await confirmYieldSiteSet(draft, 'supervisor', polygon, false, () => {});
+    expect(db.sites[0]).toMatchObject({ row_number: '12A', panel_number: 'E-4', site_id: 'physical' });
+  });
   it('copies stable site IDs but regenerates row IDs and increments version', () => {
     const from = { ...draft, id: 'old', version: 1, status: 'confirmed' as const };
     const next = nextYieldDraft(from, [from, draft], 'v', 'b', 'u', 'Sites');

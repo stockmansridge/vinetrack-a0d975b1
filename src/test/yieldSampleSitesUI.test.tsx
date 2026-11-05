@@ -34,6 +34,25 @@ beforeEach(() => {
 function mount() { const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); const wrapper = ({ children }: any) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>; return { qc, ...render(<YieldSampleSitesPanel />, { wrapper }) }; }
 async function block() { await waitFor(() => expect(screen.getByRole('option', { name: 'North' })).toBeInTheDocument()); fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'b' } }); await screen.findByRole('button', { name: 'Add site coordinates' }); await waitFor(() => expect(screen.getByRole('button', { name: 'Add site coordinates' })).toBeEnabled()); }
 describe('yield sample manager', () => {
+  it('saves alphanumeric row and panel references as trimmed text', async () => {
+    mount(); await block(); fireEvent.click(screen.getByRole('button', { name: /^1\. North site/ }));
+    fireEvent.change(screen.getByLabelText('Row (optional)'), { target: { value: ' 12A ' } });
+    fireEvent.change(screen.getByLabelText('Panel (optional)'), { target: { value: ' E-4 ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save site' }));
+    await waitFor(() => expect(state.save).toHaveBeenCalledOnce());
+    expect(state.save.mock.calls[0][1]).toMatchObject({ row_number: '12A', panel_number: 'E-4' });
+  });
+  it('loads saved text references and saves blank references as null', async () => {
+    state.sites = [{ ...sample, row_number: '12A', panel_number: 'E-4' }];
+    mount(); await block(); fireEvent.click(screen.getByRole('button', { name: /^1\. North site/ }));
+    expect(screen.getByLabelText('Row (optional)')).toHaveValue('12A');
+    expect(screen.getByLabelText('Panel (optional)')).toHaveValue('E-4');
+    fireEvent.change(screen.getByLabelText('Row (optional)'), { target: { value: ' ' } });
+    fireEvent.change(screen.getByLabelText('Panel (optional)'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save site' }));
+    await waitFor(() => expect(state.save).toHaveBeenCalledOnce());
+    expect(state.save.mock.calls[0][1]).toMatchObject({ row_number: null, panel_number: null });
+  });
   it('supervisor explicitly confirms one block and refetches authoritative state', async () => {
     const { qc } = mount(); const invalidate = vi.spyOn(qc, 'invalidateQueries'); await block();
     fireEvent.click(screen.getByRole('button', { name: 'Review & confirm block' })); expect(state.confirm).not.toHaveBeenCalled();

@@ -9,8 +9,8 @@ export interface YieldSiteSet {
 }
 export interface YieldSampleSite {
   id: string; site_set_id: string; vineyard_id: string; paddock_id: string;
-  site_id: string; site_number: number; name: string; row_number: number | null;
-  panel_number: number | null; latitude: number; longitude: number; notes: string | null;
+  site_id: string; site_number: number; name: string; row_number: string | null;
+  panel_number: string | null; latitude: number; longitude: number; notes: string | null;
 }
 export type YieldSiteFields = Pick<YieldSampleSite, 'site_number' | 'name' | 'row_number' | 'panel_number' | 'latitude' | 'longitude' | 'notes'>;
 export const yieldSitesKey = (vineyard: string, user: string, block: string) => ['yield-sample-sites', vineyard, user, block] as const;
@@ -30,10 +30,15 @@ export function siteLocationError(point: LatLng, polygon: LatLng[], blockConfirm
   }
   return inside ? null : 'The sample location is outside the selected block.';
 }
+function validateSiteReferences(fields: Pick<YieldSiteFields, 'row_number' | 'panel_number'>) {
+  for (const reference of [fields.row_number, fields.panel_number]) {
+    if (reference !== null && typeof reference !== 'string') throw new Error('Row and panel references must be text or blank.');
+  }
+}
 export function validateYieldSite(fields: YieldSiteFields, polygon: LatLng[], blockConfirmed: boolean) {
   if (!fields.name.trim()) throw new Error('A site name is required.');
   if (!Number.isInteger(fields.site_number) || fields.site_number < 1) throw new Error('Site number must be a positive whole number.');
-  for (const n of [fields.row_number, fields.panel_number]) if (n !== null && (!Number.isInteger(n) || n < 1)) throw new Error('Row and panel must be positive whole numbers or blank.');
+  validateSiteReferences(fields);
   const error = siteLocationError({ lat: fields.latitude, lng: fields.longitude }, polygon, blockConfirmed);
   if (error) throw new Error(error);
 }
@@ -77,6 +82,7 @@ export async function createYieldDraft(draft: YieldSiteSet, sites: YieldSampleSi
   guardMutation(undefined); assertAccess();
   checkSet(draft, draft.vineyard_id, draft.paddock_id);
   if (draft.status !== 'draft' || sites.some(s => s.site_set_id !== draft.id || s.vineyard_id !== draft.vineyard_id || s.paddock_id !== draft.paddock_id || !s.site_id)) throw new Error('Invalid draft or copied site scope.');
+  sites.forEach(validateSiteReferences);
   const existing = (await listYieldSiteSets(draft.vineyard_id, draft.paddock_id)).find(s => s.id === draft.id);
   assertAccess();
   if (!existing) {

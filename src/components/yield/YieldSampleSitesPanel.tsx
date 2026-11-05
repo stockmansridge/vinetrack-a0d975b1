@@ -143,18 +143,18 @@ function BlockSites({ block, vineyard, user, role, assertAccess }: { block: Yiel
 function SiteEditor({ set, site, isNew, editable, polygon, blockConfirmed, assertAccess, onClose, onSaved }: { set: YieldSiteSet; site: YieldSampleSite; isNew: boolean; editable: boolean; polygon: { lat: number; lng: number }[]; blockConfirmed: boolean; assertAccess: () => void; onClose: () => void; onSaved: () => Promise<unknown> }) {
   const [name, setName] = useState(site.name), [number, setNumber] = useState(String(site.site_number));
   const [lat, setLat] = useState(Number.isFinite(site.latitude) ? String(site.latitude) : ''), [lng, setLng] = useState(Number.isFinite(site.longitude) ? String(site.longitude) : '');
-  const [row, setRow] = useState(site.row_number == null ? '' : String(site.row_number)), [panel, setPanel] = useState(site.panel_number == null ? '' : String(site.panel_number));
+  const [row, setRow] = useState(site.row_number ?? ''), [panel, setPanel] = useState(site.panel_number ?? '');
   const [notes, setNotes] = useState(site.notes ?? ''), [remove, setRemove] = useState(false);
   const save = useMutation({ mutationFn: () => {
     if (!editable) throw new Error('This revision is read-only.');
-    return saveYieldSite(set, { ...site, name: name.trim(), site_number: number.trim() ? Number(number) : NaN, latitude: lat.trim() ? Number(lat) : NaN, longitude: lng.trim() ? Number(lng) : NaN, row_number: row.trim() ? Number(row) : null, panel_number: panel.trim() ? Number(panel) : null, notes: notes || null }, isNew, polygon, blockConfirmed, assertAccess);
+    return saveYieldSite(set, { ...site, name: name.trim(), site_number: number.trim() ? Number(number) : NaN, latitude: lat.trim() ? Number(lat) : NaN, longitude: lng.trim() ? Number(lng) : NaN, row_number: row.trim() || null, panel_number: panel.trim() || null, notes: notes || null }, isNew, polygon, blockConfirmed, assertAccess);
   }, onSuccess: async () => { await onSaved(); onClose(); } });
   const deletion = useMutation({ mutationFn: () => { if (!editable) throw new Error('This revision is read-only.'); return deleteYieldDraftSite(set, site, assertAccess); }, onSuccess: async () => { await onSaved(); onClose(); } });
   const busy = save.isPending || deletion.isPending;
   const locked = !editable || busy;
   return <Dialog open onOpenChange={o => { if (!o && !busy) onClose(); }}><DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>{isNew ? 'New sampling site' : site.name}</DialogTitle><DialogDescription>{set.status === 'draft' ? 'Draft location — saved only for this block revision.' : 'Confirmed and archived locations cannot be edited.'}</DialogDescription></DialogHeader>
     <div className="grid grid-cols-2 gap-3">{[
-      ['Name', name, setName, 'text'], ['Site number', number, setNumber, 'number'], ['Latitude', lat, setLat, 'number'], ['Longitude', lng, setLng, 'number'], ['Row (optional)', row, setRow, 'number'], ['Panel (optional)', panel, setPanel, 'number'],
+      ['Name', name, setName, 'text'], ['Site number', number, setNumber, 'number'], ['Latitude', lat, setLat, 'number'], ['Longitude', lng, setLng, 'number'], ['Row (optional)', row, setRow, 'text'], ['Panel (optional)', panel, setPanel, 'text'],
     ].map(([label, value, update, type]) => <div key={String(label)} className="space-y-1"><Label htmlFor={`yield-site-${label}`}>{String(label)}</Label><Input id={`yield-site-${label}`} type={String(type)} step="any" disabled={locked} value={String(value)} onChange={e => { if (typeof update === 'function') update(e.target.value); }} /></div>)}</div>
     <Label htmlFor="yield-site-notes">Note (optional)</Label><Textarea id="yield-site-notes" disabled={locked} value={notes} onChange={e => setNotes(e.target.value)} rows={3} />
     <p className="text-xs text-muted-foreground break-all">Physical site ID: {site.site_id}</p>
