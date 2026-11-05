@@ -1,5 +1,11 @@
 # Roadmap
 
+## Issue #53 Permanent Items admin pilot
+- [ ] Add fail-closed System Admin + enabled flag + vineyard-member gate; separate list, editor and map layer.
+- [ ] RPC-only revision-checked writes, same-operation retries, verified read-back and private optional photo flow.
+- [ ] Run isolated safety/UI and existing Pins regressions; leave flag disabled and do not publish.
+- [ ] Signed-in shared-backend acceptance requires the owner to enable the pilot and verify it; no live writes here.
+
 ## MAIT read-only controller acceptance
 - [x] Updated the seven-stage editable path and original-image import help with read-only preview, explicit manual confirmation and paused pilot guidance. 197 mocked tests pass across eight MAIT/import files; automatic compilation OK. Presentation-only; no live operations or publication.
 - [x] Final safety correction: nested output mapping guards reject read-only/access/tenant changes, zero-event previews are not acceptance evidence, and partial module lists are labelled incomplete. 195 mocked tests pass across eight MAIT/import files; automatic compilation OK. No live operations or publication.
