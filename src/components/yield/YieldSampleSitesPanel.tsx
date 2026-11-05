@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Plus, MapPin, Check, Copy, Trash2 } from 'lucide-react';
+import { canHardDeleteYieldSite, hardDeleteYieldSite } from '@/lib/yieldHardDelete';
 
 export default function YieldSampleSitesPanel() {
   const { user, loading: authLoading } = useAuth();
@@ -90,7 +91,12 @@ function BlockSites({ block, vineyard, user, role, assertAccess }: { block: Yiel
     if (!selected) throw new Error('Select a draft.');
     return confirmYieldSiteSet(selected, role, polygon, blockConfirmed, assertAccess);
   }, onSuccess: async () => { setReview(false); await refresh(); }, onError: refresh });
-  const busy = create.isPending || confirm.isPending;
+  const [deleting, setDeleting] = useState<YieldSampleSite | null>(null);
+  const removeSite = useMutation({ mutationFn: async (site: YieldSampleSite) => {
+    if (!selected) throw new Error('Select a site set.');
+    return hardDeleteYieldSite(selected, site, role, assertAccess);
+  }, onSuccess: async () => { await refresh(); setDeleting(null); }, onError: refresh });
+  const busy = create.isPending || confirm.isPending || removeSite.isPending;
   const ready = sets.isSuccess && !sets.isError && !sets.isFetching && (!selected || sites.isSuccess && !sites.isError && !sites.isFetching);
   const locked = readOnly || busy || !ready || !!pendingDraft.current;
   const editable = selected?.status === 'draft' && !locked;
@@ -127,10 +133,14 @@ function BlockSites({ block, vineyard, user, role, assertAccess }: { block: Yiel
       <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <ManualIssuesAppleMap className="h-[380px] min-w-0 rounded-md overflow-hidden" fitKey={block.id} markers={markers} polygons={polygon.length >= 3 ? [{ id: block.id, pts: polygon }] : []} onSelect={id => { const s = sites.data?.find(s => s.id === id); if (s) openSite(s); }} onPick={placing && editable ? (lat, lng) => { const error = siteLocationError({ lat, lng }, polygon, blockConfirmed); setPlacementError(error); if (!error) add(lat, lng); } : undefined} />
         <div className="min-w-0 max-h-[380px] overflow-auto divide-y border-y">
-          {(sites.isError ? [] : sites.data ?? []).map(s => <Button key={s.id} variant="ghost" className="h-auto w-full justify-start rounded-none px-2 py-3 text-left whitespace-normal" onClick={() => openSite(s)}><div className="min-w-0"><div className="font-medium">{s.site_number}. {s.name}</div><div className="text-xs text-muted-foreground">{s.latitude}, {s.longitude} · Row {s.row_number ?? '—'} / panel {s.panel_number ?? '—'}</div></div></Button>)}
+          {(sites.isError ? [] : sites.data ?? []).map(s => <div key={s.id} className="flex items-center"><Button variant="ghost" className="h-auto min-w-0 flex-1 justify-start rounded-none px-2 py-3 text-left whitespace-normal" onClick={() => openSite(s)}><div className="min-w-0"><div className="font-medium">{s.site_number}. {s.name}</div><div className="text-xs text-muted-foreground">{s.latitude}, {s.longitude} · Row {s.row_number ?? '—'} / panel {s.panel_number ?? '—'}</div></div></Button>{canHardDeleteYieldSite(role, selected.status) && <Button size="icon" variant="ghost" aria-label={`Delete site ${s.name}`} disabled={locked} onClick={() => { removeSite.reset(); setDeleting(s); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</div>)}
           {sites.isSuccess && !sites.data?.length && <p className="p-3 text-sm text-muted-foreground">No saved locations in this revision.</p>}
         </div>
       </div>
+      <Dialog open={!!deleting} onOpenChange={open => { if (!open && !removeSite.isPending) setDeleting(null); }}><DialogContent><DialogHeader><DialogTitle>Permanently delete {deleting?.name}?</DialogTitle><DialogDescription>{selected.status === 'confirmed' ? 'This removes the site from the CONFIRMED revision for this block. ' : 'This removes the site from this draft revision. '}This cannot be undone. Revision history and previously recorded trip snapshots are retained.</DialogDescription></DialogHeader>
+        {removeSite.error && <ErrorMessage error={removeSite.error} />}
+        <div className="flex gap-2"><Button variant="destructive" disabled={removeSite.isPending || readOnly || !deleting} onClick={() => deleting && removeSite.mutate(deleting)}>{removeSite.isPending ? 'Deleting…' : 'Delete permanently'}</Button><Button variant="outline" disabled={removeSite.isPending} onClick={() => setDeleting(null)}>Cancel</Button></div>
+      </DialogContent></Dialog>
       {editor && <SiteEditor key={editor.site.id} set={selected} site={editor.site} isNew={editor.isNew} editable={!!editable} polygon={polygon} blockConfirmed={blockConfirmed} assertAccess={assertAccess} onClose={() => { setEditor(null); refresh(); }} onSaved={refresh} />}
       <Dialog open={review} onOpenChange={open => { if (!confirm.isPending) setReview(open); }}><DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Confirm sites for {block.name}</DialogTitle><DialogDescription>Confirm only this block, revision {selected.version}. Sites become read-only and any previous confirmed set for this block is archived atomically. Survey history is retained.</DialogDescription></DialogHeader>
         <ul className="space-y-2 text-sm">{sites.data?.map(s => <li key={s.id}>{s.site_number}. {s.name} — {s.latitude}, {s.longitude} · Row {s.row_number ?? '—'}, panel {s.panel_number ?? '—'}</li>)}</ul>
