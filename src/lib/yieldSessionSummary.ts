@@ -261,7 +261,7 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
     const info = blockInfo.get(key);
     const blockId = key === "unknown" ? null : key;
     const recorded = g.sites.filter((s) => isPanelCount ? s.panelMeasurement?.totalBunches != null : s.bunchesPerVine != null);
-    const totalBunchesSampled = recorded.reduce((a, s) => a + (s.bunchesPerVine ?? 0), 0);
+    const totalBunchesSampled = recorded.reduce((a, s) => a + (isPanelCount ? s.panelMeasurement?.totalBunches ?? 0 : s.bunchesPerVine ?? 0), 0);
     const avgRaw = !isPanelCount && recorded.length ? totalBunchesSampled / recorded.length : null;
     const avg = avgRaw == null ? null : Math.round(avgRaw * 100) / 100;
 

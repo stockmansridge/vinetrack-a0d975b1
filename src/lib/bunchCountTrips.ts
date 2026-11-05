@@ -9,7 +9,8 @@
 //   the LATEST COMPLETED session (by completedAt, falling back to createdAt)
 //   that has at least one RECORDED sample site in that block.
 //
-// Sessions are NEVER summed and NEVER averaged. Drafts never participate.
+// Sessions are NEVER summed and NEVER averaged. Drafts and raw Panel Count
+// sessions never participate in automatic current estimate selection.
 // A newer completed trip supersedes the previous estimate; older completed
 // trips remain history.
 import {
