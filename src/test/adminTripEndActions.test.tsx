@@ -104,7 +104,7 @@ describe("End Tank / End Trip visibility", () => {
     const noPlannedTanks = { ...trip, trip_function: "spraying", total_tanks: 0, active_tank_number: null, tank_sessions: [] };
     expect(canEndTripAfterTanks(noPlannedTanks)).toBe(true);
   });
-  it("completed Trip: neither action", async () => {
+});
 
 const TANK_LABEL = "Actual Tank End date & time (required)";
 const TRIP_LABEL = "Actual Trip End date & time (required)";
