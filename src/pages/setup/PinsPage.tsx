@@ -390,7 +390,7 @@ export default function PinsPage() {
           >
             <Plus className="mr-1.5 h-4 w-4" /> Manual Pin / Repair / Observation
           </Button>
-          {permanentAccess.allowed && <Button size="sm" variant="outline" onClick={() => setPermanentEditor({ item: null })}><MapPin className="mr-1.5 h-4 w-4" />Permanent Item</Button>}
+          {permanentAccess.canManage && <Button size="sm" variant="outline" onClick={() => setPermanentEditor({ item: null })}><MapPin className="mr-1.5 h-4 w-4" />Permanent Item</Button>}
 
           <TabsList>
             <TabsTrigger value="table">Table</TabsTrigger>
