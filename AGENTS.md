@@ -39,4 +39,4 @@
 
 - Chemical V3 hints save only via chemical_v3_set_research_hints then retryChemicalDiscovery on the same job (src/lib/chemicalV3ResearchHints.ts); catalogue match is disabled on known registration mismatch pending server checks; why: hints never change identity.
 - AxisStream Exchange is a System Admin-only, test-only card (src/components/weather/AxisStreamCard.tsx, src/lib/axisstreamExchange.ts) using only its config RPCs and the axisstream-exchange-preview function; never a selectable weather/rainfall source and the token is write-only; why: staged evaluation without touching live weather pipelines.
-- Brighter icons preview: src/lib/brightIcons.ts + BrightIconsContext only; on = loaded System Admin && per-user bit; why: fail-closed, one resolver.
+- Brighter icons: src/lib/brightIcons.ts + BrightIconsContext only; on = signed in && per-user v2 bit (default off, no role gate); why: local view pref.

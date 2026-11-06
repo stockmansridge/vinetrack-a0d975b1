@@ -1,23 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, act } from "@testing-library/react";
+import { render, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 const state = vi.hoisted(() => ({
-  user: { id: "admin-1" } as { id: string } | null,
-  admin: { isAdmin: true, loading: false },
-  raw: { isAdmin: true, loading: false },
-  demo: false,
-  setDemo: (v: boolean) => { state.demo = v; },
+  user: { id: "user-1" } as { id: string } | null,
 }));
 
 vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ user: state.user, loading: false }) }));
+// If anything starts gating on admin/demo again these mocks would make it obvious.
 vi.mock("@/lib/systemAdmin", () => ({
-  useIsSystemAdmin: () => (state.demo ? { ...state.raw, isAdmin: false } : state.admin),
-  useIsSystemAdminRaw: () => state.raw,
+  useIsSystemAdmin: () => ({ isAdmin: false, loading: false }),
+  useIsSystemAdminRaw: () => ({ isAdmin: false, loading: false }),
 }));
-vi.mock("@/context/DemoModeContext", () => ({
-  useDemoMode: () => ({ demoMode: state.demo, setDemoMode: (v: boolean) => state.setDemo(v) }),
-}));
+vi.mock("@/context/DemoModeContext", () => ({ useDemoMode: () => ({ demoMode: true, setDemoMode: () => {} }) }));
 
 import { BrightIconsProvider, useBrightIcons } from "@/context/BrightIconsContext";
 import { MetricCard } from "@/components/ui/metric-card";
@@ -37,65 +32,66 @@ const ui = () => (
   </MemoryRouter>
 );
 const badge = (c: HTMLElement) => c.querySelector("[data-icon-badge]")!.className;
+const brightStop = BRIGHT_BADGE_CLASSES.growth.split(" ")[1];
 
 beforeEach(() => {
   localStorage.clear();
-  state.user = { id: "admin-1" };
-  state.admin = { isAdmin: true, loading: false };
-  state.raw = { isAdmin: true, loading: false };
-  state.demo = false;
+  state.user = { id: "user-1" };
 });
 
-describe("Brighter icons preview", () => {
-  it("defaults OFF with the existing style, even for a System Admin", () => {
+describe("Brighter icons (all users)", () => {
+  it("is off by default and ignores a legacy v1 admin preview bit", () => {
+    localStorage.setItem("vt.brightIcons.v1:user-1", "1");
     const { container } = render(ui());
+    expect(brightPrefKey("user-1")).toBe("vt.brightIcons.v2:user-1");
     expect(api.bright).toBe(false);
-    expect(api.canPreview).toBe(true);
+    expect(api.prefOn).toBe(false);
     expect(badge(container)).toContain("bg-primary/10");
   });
 
-  it("applies the gradient style when an admin turns it on, and persists per user", () => {
+  it.each(["owner", "manager", "supervisor", "employee", "operator"])(
+    "a signed-in %s (not System Admin) can use the toggle",
+    (role) => {
+      state.user = { id: `u-${role}` };
+      render(ui());
+      expect(api.canToggle).toBe(true);
+    },
+  );
+
+  it("opt-in applies the bright style immediately, persists, and opt-out restores normal", () => {
     const { container, unmount } = render(ui());
     act(() => api.setPrefOn(true));
     expect(api.bright).toBe(true);
-    expect(badge(container)).toContain(BRIGHT_BADGE_CLASSES.growth.split(" ")[1]);
+    expect(badge(container)).toContain(brightStop);
     expect(badge(container)).toContain("text-white");
-    expect(localStorage.getItem(brightPrefKey("admin-1"))).toBe("1");
+    expect(localStorage.getItem(brightPrefKey("user-1"))).toBe("1");
     unmount();
+    const r = render(ui());
+    expect(api.bright).toBe(true);
+    act(() => api.setPrefOn(false));
+    expect(api.bright).toBe(false);
+    expect(badge(r.container)).toContain("bg-primary/10");
+    expect(localStorage.getItem(brightPrefKey("user-1"))).toBeNull();
+  });
+
+  it("works in Demo Mode (demo mocked on throughout)", () => {
     render(ui());
+    act(() => api.setPrefOn(true));
     expect(api.bright).toBe(true);
   });
 
-  it("never activates for non-admins even with a stored bit", () => {
-    localStorage.setItem(brightPrefKey("admin-1"), "1");
-    state.admin = { isAdmin: false, loading: false };
-    state.raw = { isAdmin: false, loading: false };
-    const { container } = render(ui());
-    expect(api.bright).toBe(false);
-    expect(api.canPreview).toBe(false);
-    expect(badge(container)).toContain("bg-primary/10");
-  });
-
-  it("fails closed while the admin check is loading (and when demo mode reports not-admin)", () => {
-    localStorage.setItem(brightPrefKey("admin-1"), "1");
-    state.admin = { isAdmin: true, loading: true };
-    state.raw = { isAdmin: true, loading: true };
-    render(ui());
-    expect(api.bright).toBe(false);
-    expect(api.canPreview).toBe(false);
-    expect(resolveBrightIcons({ isSystemAdmin: false, adminLoading: false, prefOn: true })).toBe(false);
-  });
-
-  it("does not carry one user's preference to another account or after sign-out", () => {
-    localStorage.setItem(brightPrefKey("admin-1"), "1");
+  it("isolates users and hides/turns off when signed out", () => {
+    localStorage.setItem(brightPrefKey("user-1"), "1");
     const { rerender } = render(ui());
     expect(api.bright).toBe(true);
-    state.user = { id: "admin-2" };
+    state.user = { id: "user-2" };
     rerender(ui());
     expect(api.bright).toBe(false);
     state.user = null;
     rerender(ui());
     expect(api.bright).toBe(false);
+    expect(api.canToggle).toBe(false);
+    expect(resolveBrightIcons({ signedIn: false, prefOn: true })).toBe(false);
   });
 
   it("uses normal icons when no provider is mounted", () => {
@@ -105,31 +101,5 @@ describe("Brighter icons preview", () => {
       </MemoryRouter>,
     );
     expect(badge(container)).toContain("bg-amber-100");
-  });
-
-  it("raw admin in Demo Mode: option visible but blocked, styling off, saved pref untouched", () => {
-    localStorage.setItem(brightPrefKey("admin-1"), "1");
-    state.demo = true;
-    const { container, rerender } = render(ui());
-    expect(api.canPreview).toBe(true);
-    expect(api.blockedByDemo).toBe(true);
-    expect(api.bright).toBe(false);
-    expect(badge(container)).toContain("bg-primary/10");
-    act(() => api.setPrefOn(false));
-    expect(localStorage.getItem(brightPrefKey("admin-1"))).toBe("1");
-    act(() => api.exitDemoMode());
-    expect(state.demo).toBe(false);
-    rerender(ui());
-    expect(api.blockedByDemo).toBe(false);
-    expect(api.bright).toBe(true);
-    expect(badge(container)).toContain("text-white");
-  });
-
-  it("Demo Mode does not let a non-admin see the option", () => {
-    state.demo = true;
-    state.raw = { isAdmin: false, loading: false };
-    render(ui());
-    expect(api.canPreview).toBe(false);
-    expect(api.blockedByDemo).toBe(false);
   });
 });
