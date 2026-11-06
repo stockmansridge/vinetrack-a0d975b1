@@ -24,6 +24,8 @@ import {
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/integrations/ios-supabase/client";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   updateTripDetails,
   describeTripDetailsError,
