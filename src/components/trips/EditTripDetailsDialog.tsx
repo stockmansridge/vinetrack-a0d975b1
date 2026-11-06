@@ -41,6 +41,31 @@ import {
 
 const NONE = "__none__";
 
+interface VineyardBlock {
+  id: string;
+  name: string | null;
+}
+
+async function fetchVineyardBlocks(vineyardId: string): Promise<VineyardBlock[]> {
+  const { data, error } = await supabase
+    .from("paddocks")
+    .select("id, name")
+    .eq("vineyard_id", vineyardId)
+    .is("deleted_at", null)
+    .order("name", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as VineyardBlock[];
+}
+
+/** Current block selection for a trip: the jsonb list, else the legacy scalar. */
+export function tripBlockIds(trip: Trip): string[] {
+  const ids = Array.isArray(trip.paddock_ids)
+    ? (trip.paddock_ids as unknown[]).filter((v): v is string => typeof v === "string")
+    : [];
+  if (ids.length) return ids;
+  return trip.paddock_id ? [trip.paddock_id] : [];
+}
+
 function numOrNull(v: string): number | null {
   const t = v.trim();
   if (!t) return null;
@@ -72,12 +97,19 @@ export default function EditTripDetailsDialog({
   const [personName, setPersonName] = useState("");
   const [startHours, setStartHours] = useState("");
   const [endHours, setEndHours] = useState("");
+  const [blockIds, setBlockIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const { data: machines = [], isLoading: machinesLoading } = useQuery<VineyardMachine[]>({
     queryKey: ["edit-trip-machines", vineyardId],
     enabled: open && !!vineyardId,
     queryFn: () => fetchAllVineyardMachines(vineyardId!),
+  });
+
+  const { data: blocks = [], isLoading: blocksLoading } = useQuery<VineyardBlock[]>({
+    queryKey: ["edit-trip-blocks", vineyardId],
+    enabled: open && !!vineyardId,
+    queryFn: () => fetchVineyardBlocks(vineyardId!),
   });
 
   // Hydrate from the trip only when the dialog opens, so typing is never
@@ -88,9 +120,16 @@ export default function EditTripDetailsDialog({
     setPersonName(trip.person_name ?? "");
     setStartHours(trip.start_engine_hours != null ? String(trip.start_engine_hours) : "");
     setEndHours(trip.end_engine_hours != null ? String(trip.end_engine_hours) : "");
+    setBlockIds(tripBlockIds(trip));
     setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, trip?.id]);
+
+  const toggleBlock = (id: string, checked: boolean) => {
+    setBlockIds((prev) =>
+      checked ? (prev.includes(id) ? prev : [...prev, id]) : prev.filter((b) => b !== id),
+    );
+  };
 
   const selectedMachine = useMemo(
     () => machines.find((m) => m.id === machineId) ?? null,
