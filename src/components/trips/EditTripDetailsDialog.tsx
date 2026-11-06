@@ -24,6 +24,8 @@ import {
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/integrations/ios-supabase/client";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   updateTripDetails,
   describeTripDetailsError,
@@ -38,6 +40,31 @@ import {
 } from "@/lib/vineyardMachinesQuery";
 
 const NONE = "__none__";
+
+interface VineyardBlock {
+  id: string;
+  name: string | null;
+}
+
+async function fetchVineyardBlocks(vineyardId: string): Promise<VineyardBlock[]> {
+  const { data, error } = await supabase
+    .from("paddocks")
+    .select("id, name")
+    .eq("vineyard_id", vineyardId)
+    .is("deleted_at", null)
+    .order("name", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as VineyardBlock[];
+}
+
+/** Current block selection for a trip: the jsonb list, else the legacy scalar. */
+export function tripBlockIds(trip: Trip): string[] {
+  const ids = Array.isArray(trip.paddock_ids)
+    ? (trip.paddock_ids as unknown[]).filter((v): v is string => typeof v === "string")
+    : [];
+  if (ids.length) return ids;
+  return trip.paddock_id ? [trip.paddock_id] : [];
+}
 
 function numOrNull(v: string): number | null {
   const t = v.trim();
@@ -70,12 +97,19 @@ export default function EditTripDetailsDialog({
   const [personName, setPersonName] = useState("");
   const [startHours, setStartHours] = useState("");
   const [endHours, setEndHours] = useState("");
+  const [blockIds, setBlockIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const { data: machines = [], isLoading: machinesLoading } = useQuery<VineyardMachine[]>({
     queryKey: ["edit-trip-machines", vineyardId],
     enabled: open && !!vineyardId,
     queryFn: () => fetchAllVineyardMachines(vineyardId!),
+  });
+
+  const { data: blocks = [], isLoading: blocksLoading } = useQuery<VineyardBlock[]>({
+    queryKey: ["edit-trip-blocks", vineyardId],
+    enabled: open && !!vineyardId,
+    queryFn: () => fetchVineyardBlocks(vineyardId!),
   });
 
   // Hydrate from the trip only when the dialog opens, so typing is never
@@ -86,9 +120,16 @@ export default function EditTripDetailsDialog({
     setPersonName(trip.person_name ?? "");
     setStartHours(trip.start_engine_hours != null ? String(trip.start_engine_hours) : "");
     setEndHours(trip.end_engine_hours != null ? String(trip.end_engine_hours) : "");
+    setBlockIds(tripBlockIds(trip));
     setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, trip?.id]);
+
+  const toggleBlock = (id: string, checked: boolean) => {
+    setBlockIds((prev) =>
+      checked ? (prev.includes(id) ? prev : [...prev, id]) : prev.filter((b) => b !== id),
+    );
+  };
 
   const selectedMachine = useMemo(
     () => machines.find((m) => m.id === machineId) ?? null,
@@ -105,6 +146,8 @@ export default function EditTripDetailsDialog({
       }
       const invalid = validateTripEngineHours(start, end);
       if (invalid) throw new Error(invalid);
+      if (blockIds.length === 0) throw new Error("Select at least one block for this trip.");
+      const firstBlockName = blocks.find((b) => b.id === blockIds[0])?.name ?? null;
       await updateTripDetails({
         tripId: trip.id,
         currentSyncVersion: trip.sync_version ?? null,
@@ -118,6 +161,8 @@ export default function EditTripDetailsDialog({
           personName: personName.trim() || null,
           startEngineHours: start,
           endEngineHours: end,
+          paddockIds: blockIds,
+          paddockName: firstBlockName,
         },
       });
     },
@@ -137,12 +182,46 @@ export default function EditTripDetailsDialog({
         <DialogHeader>
           <DialogTitle>Edit trip details</DialogTitle>
           <DialogDescription>
-            Corrections apply to this trip only. Recorded spray quantities and the
-            machine's saved default fuel rate are not changed.
+            Corrections apply to this trip only. Recorded spray quantities, tracking
+            data and the machine's saved default fuel rate are not changed.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label>Blocks covered by this trip</Label>
+            <div className="max-h-44 overflow-y-auto rounded-md border p-3">
+              {blocksLoading ? (
+                <p className="text-sm text-muted-foreground">Loading blocks…</p>
+              ) : blocks.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No blocks found for this vineyard.</p>
+              ) : (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {blocks.map((b) => {
+                    const checked = blockIds.includes(b.id);
+                    return (
+                      <label
+                        key={b.id}
+                        className="flex items-center gap-2 text-sm"
+                        htmlFor={`trip-block-${b.id}`}
+                      >
+                        <Checkbox
+                          id={`trip-block-${b.id}`}
+                          checked={checked}
+                          onCheckedChange={(v) => toggleBlock(b.id, v === true)}
+                        />
+                        <span>{b.name ?? "Unnamed block"}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Tick every block this trip worked in. At least one block is required.
+            </p>
+          </div>
+
           <div className="space-y-1.5">
             <Label htmlFor="trip-machine">Tractor or machine</Label>
             <Select value={machineId} onValueChange={setMachineId} disabled={machinesLoading}>

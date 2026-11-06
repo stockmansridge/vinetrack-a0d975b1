@@ -59,6 +59,24 @@ describe("edit trip details", () => {
     await updateTripDetails({ tripId: "t1", edits: { personName: "Sam" } });
     expect(Object.keys(state.patch)).not.toContain("machine_id");
     expect(Object.keys(state.patch)).not.toContain("start_engine_hours");
+    expect(Object.keys(state.patch)).not.toContain("paddock_ids");
+  });
+
+  it("writes the block list, primary block and name together", async () => {
+    await updateTripDetails({
+      tripId: "t1",
+      edits: { paddockIds: ["b1", "b2"], paddockName: "North Block" },
+    });
+    expect(state.patch.paddock_ids).toEqual(["b1", "b2"]);
+    expect(state.patch.paddock_id).toBe("b1");
+    expect(state.patch.paddock_name).toBe("North Block");
+  });
+
+  it("rejects an empty block selection", async () => {
+    await expect(
+      updateTripDetails({ tripId: "t1", edits: { paddockIds: [] } }),
+    ).rejects.toThrow(/at least one block/i);
+    expect(state.patch).toBeNull();
   });
 
   it("reports a concurrent mobile sync instead of overwriting it", async () => {

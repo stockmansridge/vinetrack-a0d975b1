@@ -249,6 +249,10 @@ export interface TripDetailEdits {
   personName?: string | null;
   startEngineHours?: number | null;
   endEngineHours?: number | null;
+  /** Replacement block selection. Writes paddock_ids, paddock_id and
+   *  paddock_name together so list, map and report stay consistent. */
+  paddockIds?: string[];
+  paddockName?: string | null;
 }
 
 export class TripDetailsConflictError extends Error {
@@ -295,6 +299,13 @@ export async function updateTripDetails(params: {
   if ("personName" in edits) patch.person_name = edits.personName ?? null;
   if ("startEngineHours" in edits) patch.start_engine_hours = edits.startEngineHours ?? null;
   if ("endEngineHours" in edits) patch.end_engine_hours = edits.endEngineHours ?? null;
+  if ("paddockIds" in edits) {
+    const ids = (edits.paddockIds ?? []).filter((id) => typeof id === "string" && id.length > 0);
+    if (ids.length === 0) throw new Error("Select at least one block for this trip.");
+    patch.paddock_ids = ids;
+    patch.paddock_id = ids[0];
+    patch.paddock_name = edits.paddockName ?? null;
+  }
 
   let q = supabase.from("trips").update(patch).eq("id", tripId).is("deleted_at", null);
   if (currentSyncVersion != null) q = q.eq("sync_version", currentSyncVersion);
