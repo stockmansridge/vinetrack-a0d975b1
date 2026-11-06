@@ -182,8 +182,8 @@ export default function EditTripDetailsDialog({
         <DialogHeader>
           <DialogTitle>Edit trip details</DialogTitle>
           <DialogDescription>
-            Corrections apply to this trip only. Recorded spray quantities and the
-            machine's saved default fuel rate are not changed.
+            Corrections apply to this trip only. Recorded spray quantities, tracking
+            data and the machine's saved default fuel rate are not changed.
           </DialogDescription>
         </DialogHeader>
 
