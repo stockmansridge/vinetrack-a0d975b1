@@ -5,10 +5,19 @@ import { MemoryRouter } from "react-router-dom";
 const state = vi.hoisted(() => ({
   user: { id: "admin-1" } as { id: string } | null,
   admin: { isAdmin: true, loading: false },
+  raw: { isAdmin: true, loading: false },
+  demo: false,
+  setDemo: (v: boolean) => { state.demo = v; },
 }));
 
 vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ user: state.user, loading: false }) }));
-vi.mock("@/lib/systemAdmin", () => ({ useIsSystemAdmin: () => state.admin }));
+vi.mock("@/lib/systemAdmin", () => ({
+  useIsSystemAdmin: () => (state.demo ? { ...state.raw, isAdmin: false } : state.admin),
+  useIsSystemAdminRaw: () => state.raw,
+}));
+vi.mock("@/context/DemoModeContext", () => ({
+  useDemoMode: () => ({ demoMode: state.demo, setDemoMode: (v: boolean) => state.setDemo(v) }),
+}));
 
 import { BrightIconsProvider, useBrightIcons } from "@/context/BrightIconsContext";
 import { MetricCard } from "@/components/ui/metric-card";
@@ -33,6 +42,8 @@ beforeEach(() => {
   localStorage.clear();
   state.user = { id: "admin-1" };
   state.admin = { isAdmin: true, loading: false };
+  state.raw = { isAdmin: true, loading: false };
+  state.demo = false;
 });
 
 describe("Brighter icons preview", () => {
@@ -58,6 +69,7 @@ describe("Brighter icons preview", () => {
   it("never activates for non-admins even with a stored bit", () => {
     localStorage.setItem(brightPrefKey("admin-1"), "1");
     state.admin = { isAdmin: false, loading: false };
+    state.raw = { isAdmin: false, loading: false };
     const { container } = render(ui());
     expect(api.bright).toBe(false);
     expect(api.canPreview).toBe(false);
@@ -67,6 +79,7 @@ describe("Brighter icons preview", () => {
   it("fails closed while the admin check is loading (and when demo mode reports not-admin)", () => {
     localStorage.setItem(brightPrefKey("admin-1"), "1");
     state.admin = { isAdmin: true, loading: true };
+    state.raw = { isAdmin: true, loading: true };
     render(ui());
     expect(api.bright).toBe(false);
     expect(api.canPreview).toBe(false);
@@ -92,5 +105,31 @@ describe("Brighter icons preview", () => {
       </MemoryRouter>,
     );
     expect(badge(container)).toContain("bg-amber-100");
+  });
+
+  it("raw admin in Demo Mode: option visible but blocked, styling off, saved pref untouched", () => {
+    localStorage.setItem(brightPrefKey("admin-1"), "1");
+    state.demo = true;
+    const { container, rerender } = render(ui());
+    expect(api.canPreview).toBe(true);
+    expect(api.blockedByDemo).toBe(true);
+    expect(api.bright).toBe(false);
+    expect(badge(container)).toContain("bg-primary/10");
+    act(() => api.setPrefOn(false));
+    expect(localStorage.getItem(brightPrefKey("admin-1"))).toBe("1");
+    act(() => api.exitDemoMode());
+    expect(state.demo).toBe(false);
+    rerender(ui());
+    expect(api.blockedByDemo).toBe(false);
+    expect(api.bright).toBe(true);
+    expect(badge(container)).toContain("text-white");
+  });
+
+  it("Demo Mode does not let a non-admin see the option", () => {
+    state.demo = true;
+    state.raw = { isAdmin: false, loading: false };
+    render(ui());
+    expect(api.canPreview).toBe(false);
+    expect(api.blockedByDemo).toBe(false);
   });
 });
