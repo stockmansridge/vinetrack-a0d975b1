@@ -146,6 +146,8 @@ export default function EditTripDetailsDialog({
       }
       const invalid = validateTripEngineHours(start, end);
       if (invalid) throw new Error(invalid);
+      if (blockIds.length === 0) throw new Error("Select at least one block for this trip.");
+      const firstBlockName = blocks.find((b) => b.id === blockIds[0])?.name ?? null;
       await updateTripDetails({
         tripId: trip.id,
         currentSyncVersion: trip.sync_version ?? null,
@@ -159,6 +161,8 @@ export default function EditTripDetailsDialog({
           personName: personName.trim() || null,
           startEngineHours: start,
           endEngineHours: end,
+          paddockIds: blockIds,
+          paddockName: firstBlockName,
         },
       });
     },
@@ -184,6 +188,40 @@ export default function EditTripDetailsDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label>Blocks covered by this trip</Label>
+            <div className="max-h-44 overflow-y-auto rounded-md border p-3">
+              {blocksLoading ? (
+                <p className="text-sm text-muted-foreground">Loading blocks…</p>
+              ) : blocks.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No blocks found for this vineyard.</p>
+              ) : (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {blocks.map((b) => {
+                    const checked = blockIds.includes(b.id);
+                    return (
+                      <label
+                        key={b.id}
+                        className="flex items-center gap-2 text-sm"
+                        htmlFor={`trip-block-${b.id}`}
+                      >
+                        <Checkbox
+                          id={`trip-block-${b.id}`}
+                          checked={checked}
+                          onCheckedChange={(v) => toggleBlock(b.id, v === true)}
+                        />
+                        <span>{b.name ?? "Unnamed block"}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Tick every block this trip worked in. At least one block is required.
+            </p>
+          </div>
+
           <div className="space-y-1.5">
             <Label htmlFor="trip-machine">Tractor or machine</Label>
             <Select value={machineId} onValueChange={setMachineId} disabled={machinesLoading}>
