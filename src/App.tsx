@@ -6,6 +6,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/context/AuthContext";
+import { BrightIconsProvider } from "@/context/BrightIconsContext";
 import { VineyardProvider } from "@/context/VineyardContext";
 import { PortalActivityTracker } from "@/components/PortalActivityTracker";
 import { RequireAuth, RequireVineyard } from "@/components/guards";
@@ -165,6 +166,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <BrightIconsProvider>
           <VineyardProvider>
             <PortalActivityTracker />
             <TrialEndedDialog />
@@ -367,6 +369,7 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
           </VineyardProvider>
+          </BrightIconsProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

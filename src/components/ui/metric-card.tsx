@@ -3,6 +3,8 @@
 import { Link } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useBrightIcons } from "@/context/BrightIconsContext";
+import { brightBadgeClass, TONE_TO_BRIGHT, type BrightCategory } from "@/lib/brightIcons";
 import { Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -18,6 +20,8 @@ export interface MetricCardProps {
   to?: string;
   /** Tone of the icon badge. Defaults to primary green. */
   tone?: MetricTone;
+  /** Category used only in the Brighter icons preview; defaults from tone. */
+  brightCategory?: BrightCategory;
 }
 
 // Controlled, intentional palette. No "disabled-looking" greys.
@@ -40,7 +44,14 @@ export const TONE_CLASSES: Record<MetricTone, string> = {
 };
 const TONES = TONE_CLASSES;
 
-export function MetricCard({ label, value, icon: Icon, hint, info, to, tone = "primary" }: MetricCardProps) {
+/** Badge classes for a tone, honouring the Brighter icons preview. */
+export function useIconBadgeClass(tone: MetricTone, category?: BrightCategory): string {
+  const { bright } = useBrightIcons();
+  return bright ? brightBadgeClass(category ?? TONE_TO_BRIGHT[tone]) : TONE_CLASSES[tone];
+}
+
+export function MetricCard({ label, value, icon: Icon, hint, info, to, tone = "primary", brightCategory }: MetricCardProps) {
+  const badgeClass = useIconBadgeClass(tone, brightCategory);
   const body = (
     <div
       className={cn(
@@ -49,7 +60,7 @@ export function MetricCard({ label, value, icon: Icon, hint, info, to, tone = "p
       )}
     >
       <div className="flex items-start gap-3">
-        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full", TONES[tone])}>
+        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full", badgeClass)} data-icon-badge>
           <Icon className="h-5 w-5" strokeWidth={2} />
         </div>
         <div className="min-w-0 flex-1">

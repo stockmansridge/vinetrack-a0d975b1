@@ -1,3 +1,5 @@
+import { useBrightIcons } from "@/context/BrightIconsContext";
+import { brightBadgeClass, NAV_ACTIVITY_BRIGHT, type BrightCategory } from "@/lib/brightIcons";
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { BrandName } from "@/components/BrandName";
@@ -110,6 +112,7 @@ export function AppSidebar() {
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const { data: unresolvedSupport = 0 } = useUnresolvedSupportCount();
   const { state } = useSidebar();
+  const { bright } = useBrightIcons();
   const collapsed = state === "collapsed";
 
   const active = resolveLocation(pathname);
@@ -130,7 +133,7 @@ export function AppSidebar() {
       <SidebarMenuItem key={activity.id}>
         <SidebarMenuButton asChild isActive={isActive} tooltip={activity.label} className={buttonClass(isActive)}>
           <NavLink to={target} className="flex items-center gap-2.5">
-            <Icon className="h-4 w-4" />
+            <NavIcon Icon={Icon} category={bright ? NAV_ACTIVITY_BRIGHT[activity.id] : undefined} />
             <span className="flex-1 truncate">{activity.label}</span>
           </NavLink>
         </SidebarMenuButton>
@@ -286,5 +289,17 @@ export function AppSidebar() {
       </SidebarFooter>
       <SupportRequestSheet open={supportOpen} onOpenChange={setSupportOpen} />
     </Sidebar>
+  );
+}
+
+function NavIcon({ Icon, category }: { Icon: React.ComponentType<{ className?: string }>; category?: BrightCategory }) {
+  if (!category) return <Icon className="h-4 w-4" />;
+  return (
+    <span
+      data-icon-badge
+      className={`-ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${brightBadgeClass(category)} [&_svg]:!text-white`}
+    >
+      <Icon className="h-3.5 w-3.5" />
+    </span>
   );
 }

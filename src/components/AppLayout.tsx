@@ -20,12 +20,15 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown, Search } from "lucide-react";
 import { BrandName } from "@/components/BrandName";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useBrightIcons } from "@/context/BrightIconsContext";
 import { ELStagesButton } from "@/components/ELStagesButton";
 import { DemoModeToggle } from "@/components/DemoModeToggle";
 import { SupportAlertPill } from "@/components/support/SupportAlertPill";
@@ -57,6 +60,7 @@ export default function AppLayout() {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const displayName = displayNameFor(profile, user?.email);
   const navViewer = useNavViewer();
+  const brightIcons = useBrightIcons();
   const location = useLocation();
   const billingViews = accessibleViews(ACCOUNT_ACTIVITY, navViewer);
 
@@ -175,6 +179,22 @@ export default function AppLayout() {
                       <Link to={v.path}>{v.label}</Link>
                     </DropdownMenuItem>
                   ))}
+                  {brightIcons.canPreview && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuCheckboxItem
+                        checked={brightIcons.prefOn}
+                        onCheckedChange={(v) => brightIcons.setPrefOn(v === true)}
+                        onSelect={(e) => e.preventDefault()}
+                      >
+                        <span className="flex flex-col">
+                          <span>Brighter icons (preview): {brightIcons.prefOn ? "On" : "Off"}</span>
+                          <span className="text-xs text-muted-foreground">System Admin preview — only you see this</span>
+                        </span>
+                      </DropdownMenuCheckboxItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
                   <DropdownMenuItem onClick={() => signOut()}>Sign out</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

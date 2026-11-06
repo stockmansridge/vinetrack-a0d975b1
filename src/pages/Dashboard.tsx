@@ -13,7 +13,8 @@ import { useMemo } from "react";
 import VineyardOverviewMap from "@/components/dashboard/VineyardOverviewMap";
 import VintageOverviewSection from "@/components/dashboard/VintageOverviewSection";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
-import { MetricCard, PageHeader, TONE_CLASSES, type MetricTone } from "@/components/ui/metric-card";
+import { MetricCard, PageHeader, useIconBadgeClass, type MetricTone } from "@/components/ui/metric-card";
+import type { BrightCategory } from "@/lib/brightIcons";
 import { Badge } from "@/components/ui/badge";
 
 const fmt = (n: number, digits = 0) =>
@@ -24,25 +25,30 @@ const QuickLink = ({
   label,
   Icon,
   tone = "primary",
+  bright,
 }: {
   to: string;
   label: string;
   Icon: any;
   tone?: MetricTone;
-}) => (
+  bright?: BrightCategory;
+}) => {
+  const badgeClass = useIconBadgeClass(tone, bright);
+  return (
   <Link
     to={to}
     className="group flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm hover:bg-muted/40 hover:border-primary/30 transition"
   >
     <span className="flex items-center gap-2.5">
-      <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${TONE_CLASSES[tone]}`}>
+      <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${badgeClass}`} data-icon-badge>
         <Icon className="h-4 w-4" />
       </span>
       <span className="font-medium text-foreground">{label}</span>
     </span>
     <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-0.5 group-hover:text-primary transition" />
   </Link>
-);
+  );
+};
 
 export default function Dashboard() {
   const { selectedVineyardId, memberships, currentRole } = useVineyard();
@@ -187,12 +193,12 @@ export default function Dashboard() {
       <section className="space-y-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Daily management</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <QuickLink to="/dashboard/live" label="Live Dashboard" Icon={Activity} />
-          <QuickLink to="/trips" label="Today's Trips" Icon={Sprout} />
-          <QuickLink to="/spray-jobs" label="Spray Jobs" Icon={Layers} />
-          <QuickLink to="/reports/trips" label="Trip Reports" Icon={Route} />
-          <QuickLink to="/pins" label="Pins / Repairs" Icon={MapPin} />
-          <QuickLink to="/reports/documents" label="Documents & Exports" Icon={FolderOpen} />
+          <QuickLink to="/dashboard/live" label="Live Dashboard" Icon={Activity} bright="insights" />
+          <QuickLink to="/trips" label="Today's Trips" Icon={Sprout} bright="trips" />
+          <QuickLink to="/spray-jobs" label="Spray Jobs" Icon={Layers} bright="spray" />
+          <QuickLink to="/reports/trips" label="Trip Reports" Icon={Route} bright="trips" />
+          <QuickLink to="/pins" label="Pins / Repairs" Icon={MapPin} bright="observations" />
+          <QuickLink to="/reports/documents" label="Documents & Exports" Icon={FolderOpen} bright="insights" />
         </div>
       </section>
 
@@ -201,7 +207,7 @@ export default function Dashboard() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <QuickLink to="/setup/paddocks" label={rf.blocksLabel} Icon={Map} tone="primary" />
           <QuickLink to="/setup/tractors" label="Tractors" Icon={Tractor} tone="equipment" />
-          <QuickLink to="/setup/spray-equipment" label="Spray equipment" Icon={Droplet} tone="equipment" />
+          <QuickLink to="/setup/spray-equipment" label="Spray equipment" Icon={Droplet} tone="equipment" bright="equipment" />
           <QuickLink to="/team" label="Team" Icon={Users} tone="team" />
         </div>
       </section>
