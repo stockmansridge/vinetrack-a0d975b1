@@ -183,6 +183,7 @@ export default function AppLayout() {
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuCheckboxItem
+                        className="pl-2 pr-8 [&>span:first-child]:left-auto [&>span:first-child]:right-2"
                         checked={brightIcons.prefOn}
                         onCheckedChange={(v) => brightIcons.setPrefOn(v === true)}
                         onSelect={(e) => e.preventDefault()}
