@@ -1,10 +1,10 @@
-// "Brighter icons" visual mode — System Admin preview only.
+// "Brighter icons" visual mode — optional per-user preference for every
+// signed-in Portal user (default off).
 //
 // Single source of truth for the vivid two-colour diagonal gradient icon
 // badges used by the iOS/Android apps (rork-vinetrack-june26 4e08d0d5).
-// Effective mode = knownIsSystemAdmin && per-user stored preference. The
-// stored bit alone is never trusted. To roll out to all users later, change
-// only `resolveBrightIcons` (and the toggle's visibility).
+// Effective mode = signed in && this user's stored preference. v2 is a clean
+// all-user namespace; the old admin-only v1 bit is never read.
 import type { MetricTone } from "@/components/ui/metric-card";
 
 export type BrightCategory =
@@ -86,7 +86,7 @@ export const NAV_ACTIVITY_BRIGHT: Record<string, BrightCategory> = {
 
 // ---- Per-user preference storage --------------------------------------------
 
-export const BRIGHT_PREF_PREFIX = "vt.brightIcons.v1:";
+export const BRIGHT_PREF_PREFIX = "vt.brightIcons.v2:";
 
 export function brightPrefKey(userId: string): string {
   return `${BRIGHT_PREF_PREFIX}${userId}`;
@@ -111,11 +111,7 @@ export function writeBrightPref(userId: string | null | undefined, on: boolean):
   }
 }
 
-/** Fail closed: only a known (loaded) System Admin with the preference on. */
-export function resolveBrightIcons(args: {
-  isSystemAdmin: boolean;
-  adminLoading: boolean;
-  prefOn: boolean;
-}): boolean {
-  return !args.adminLoading && args.isSystemAdmin === true && args.prefOn === true;
+/** Off unless a signed-in user has explicitly opted in. */
+export function resolveBrightIcons(args: { signedIn: boolean; prefOn: boolean }): boolean {
+  return args.signedIn === true && args.prefOn === true;
 }
