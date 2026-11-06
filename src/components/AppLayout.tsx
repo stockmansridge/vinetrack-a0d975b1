@@ -183,15 +183,25 @@ export default function AppLayout() {
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuCheckboxItem
+                        disabled={brightIcons.blockedByDemo}
                         checked={brightIcons.prefOn}
                         onCheckedChange={(v) => brightIcons.setPrefOn(v === true)}
                         onSelect={(e) => e.preventDefault()}
                       >
                         <span className="flex flex-col">
                           <span>Brighter icons (preview): {brightIcons.prefOn ? "On" : "Off"}</span>
-                          <span className="text-xs text-muted-foreground">System Admin preview — only you see this</span>
+                          <span className="text-xs text-muted-foreground">
+                            {brightIcons.blockedByDemo
+                              ? "Exit Demo Mode to preview brighter icons"
+                              : "System Admin preview — only you see this"}
+                          </span>
                         </span>
                       </DropdownMenuCheckboxItem>
+                      {brightIcons.blockedByDemo && (
+                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); brightIcons.exitDemoMode(); }}>
+                          Exit Demo Mode
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuSeparator />
                     </>
                   )}

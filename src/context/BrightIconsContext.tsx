@@ -1,24 +1,30 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import { useIsSystemAdmin, useIsSystemAdminRaw } from "@/lib/systemAdmin";
+import { useDemoMode } from "@/context/DemoModeContext";
 import { readBrightPref, resolveBrightIcons, writeBrightPref } from "@/lib/brightIcons";
 
 interface BrightIconsValue {
   /** Effective mode — safe to style with. */
   bright: boolean;
-  /** Whether the toggle may be shown (known System Admin). */
+  /** Whether the toggle may be shown (confirmed raw System Admin). */
   canPreview: boolean;
+  /** Toggle shown but disabled: Demo Mode hides System Admin. */
+  blockedByDemo: boolean;
+  exitDemoMode: () => void;
   prefOn: boolean;
   setPrefOn: (on: boolean) => void;
 }
 
-const OFF: BrightIconsValue = { bright: false, canPreview: false, prefOn: false, setPrefOn: () => {} };
+const OFF: BrightIconsValue = { bright: false, canPreview: false, blockedByDemo: false, exitDemoMode: () => {}, prefOn: false, setPrefOn: () => {} };
 const Ctx = createContext<BrightIconsValue>(OFF);
 
 export function BrightIconsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const userId = user?.id ?? null;
   const { isAdmin, loading } = useIsSystemAdmin();
+  const raw = useIsSystemAdminRaw();
+  const { demoMode, setDemoMode } = useDemoMode();
   // Preference is tracked together with the user it was read for, so a
   // previous user's bit can never apply to the next account.
   const [pref, setPref] = useState<{ userId: string | null; on: boolean }>(() => ({
@@ -32,22 +38,26 @@ export function BrightIconsProvider({ children }: { children: ReactNode }) {
 
   const setPrefOn = useCallback(
     (on: boolean) => {
-      if (!userId) return;
+      if (!userId || demoMode) return;
       writeBrightPref(userId, on);
       setPref({ userId, on });
     },
-    [userId],
+    [userId, demoMode],
   );
 
-  const canPreview = !loading && isAdmin === true && !!userId;
+  const canPreview = !raw.loading && raw.isAdmin === true && !!userId;
+  const blockedByDemo = canPreview && demoMode;
+  const exitDemoMode = useCallback(() => setDemoMode(false), [setDemoMode]);
   const value = useMemo<BrightIconsValue>(
     () => ({
-      bright: !!userId && resolveBrightIcons({ isSystemAdmin: isAdmin, adminLoading: loading, prefOn }),
+      bright: !!userId && !demoMode && resolveBrightIcons({ isSystemAdmin: isAdmin, adminLoading: loading, prefOn }),
       canPreview,
+      blockedByDemo,
+      exitDemoMode,
       prefOn,
       setPrefOn,
     }),
-    [userId, isAdmin, loading, prefOn, canPreview, setPrefOn],
+    [userId, isAdmin, loading, prefOn, canPreview, blockedByDemo, exitDemoMode, setPrefOn],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
