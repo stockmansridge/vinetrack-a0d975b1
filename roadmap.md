@@ -1,5 +1,9 @@
 # Roadmap
 
+## App Releases
+- [ ] Add admin-only navigation and platform policy forms using the existing read/save RPCs, validation and mandatory confirmation.
+- [ ] Verify focused policy/access/confirmation tests and automatic compilation; no backend changes or publication.
+
 ## Contour draft member access release
 - [x] Remove contour-only System Admin gates for signed-in selected-active-vineyard members; shared membership hook excludes anonymous/non-member/support-only/cross-vineyard access. Keep Owner/Manager block creation, mandatory straight rows, draft-only operational separation and scope/CAS safety.
 - [x] 152 tests across 12 contour/block/membership suites passed; automatic typecheck/build OK. No backend changes, SQL, mobile changes or publication.
