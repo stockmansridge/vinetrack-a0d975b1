@@ -28,6 +28,7 @@ async function editIOS() {
   fireEvent.change(screen.getByLabelText("Reason for change (required)"), { target: { value: "Release verified in store" } });
 }
 beforeEach(() => {
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   vi.clearAllMocks(); mocks.access = { isAdmin: true, loading: false }; mocks.user = { id: "admin-a" };
   mocks.rpc.mockImplementation(async (name: string) => name === "admin_list_app_release_policies" ? { data: [ios, android], error: null } : { data: ios, error: null });
 });
