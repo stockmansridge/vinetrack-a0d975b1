@@ -110,6 +110,7 @@ import UnsubscribePage from "./pages/UnsubscribePage";
 import FeatureFlagsPage from "./pages/admin/FeatureFlagsPage";
 import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
 import AppNoticesPage from "./pages/admin/AppNoticesPage";
+import AppReleasesPage from "./pages/admin/AppReleasesPage";
 import MaintenanceModePage from "./pages/admin/MaintenanceModePage";
 import AdminUsersPage from "./pages/admin/AdminUsersPage";
 import AdminUserDetailPage from "./pages/admin/AdminUserDetailPage";
@@ -354,6 +355,9 @@ const App = () => (
                     <Route path="/admin/integrations" element={<AdminIntegrationsPage />} />
                     <Route path="/admin/integrations/:clientId" element={<AdminIntegrationDetailPage />} />
                     <Route path="/admin/notices" element={<AppNoticesPage />} />
+                    <Route element={<RequireSystemAdmin />}>
+                      <Route path="/admin/app-releases" element={<AppReleasesPage />} />
+                    </Route>
                     <Route path="/admin/maintenance" element={<MaintenanceModePage />} />
                     <Route path="/admin/feature-flags" element={<FeatureFlagsPage />} />
                     <Route path="/admin/canopy-images" element={<CanopyImagesPage />} />

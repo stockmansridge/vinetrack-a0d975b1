@@ -33,6 +33,7 @@ import {
   Scissors,
   Settings2,
   ShieldCheck,
+  Smartphone,
   Sprout,
   Tractor,
   UserCog,
@@ -654,6 +655,7 @@ const SYSTEM_ADMIN_ITEM_LIST: SystemAdminItem[] = [
   { label: "Paid Customers", path: "/admin/paid-customers", icon: DollarSign },
   { label: "Billing (customer view)", path: "/admin/billing-preview", icon: DollarSign },
   { label: "App Notices", path: "/admin/notices", icon: Globe2 },
+  { label: "App Releases", path: "/admin/app-releases", icon: Smartphone },
   { label: "Maintenance Mode", path: "/admin/maintenance", icon: Settings2 },
   { label: "Feature Flags", path: "/admin/feature-flags", icon: ShieldCheck },
   { label: "Canopy Reference Images", path: "/admin/canopy-images", icon: Satellite },
@@ -718,6 +720,7 @@ export const SYSTEM_ADMIN_GROUPS: SystemAdminGroup[] = [
   {
     label: "Platform",
     items: [
+      systemAdminItem("App Releases"),
       systemAdminItem("Integrations"),
       systemAdminItem("Feature Flags"),
       systemAdminItem("Maintenance Mode"),
